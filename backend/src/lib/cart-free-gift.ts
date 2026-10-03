@@ -86,11 +86,13 @@ export function validateCartFreeGiftLine(input: {
   productId: string;
   tiers: CartGiftTier[];
   paidSubtotal: number;
+  currency?: string;
 }): string | null {
   const tier = input.tiers[input.tierIndex];
   if (!tier) return "Invalid free gift tier";
   if (input.paidSubtotal + 0.001 < tier.minCartTotal) {
-    return `Cart total must be at least CHF ${tier.minCartTotal.toFixed(2)} for this free gift`;
+    const cur = input.currency || "CHF";
+    return `Cart total must be at least ${formatShopMoney(tier.minCartTotal, cur)} for this free gift`;
   }
   if (!tier.productIds.includes(input.productId)) {
     return "Product is not allowed for this free gift tier";

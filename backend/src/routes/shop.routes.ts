@@ -34,6 +34,7 @@ import {
   normalizeCartGiftTiers,
   validateCartFreeGiftLine,
 } from "@/lib/cart-free-gift";
+import { formatShopMoney, inferShopCurrency } from "@/lib/shop-currency";
 import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
@@ -831,6 +832,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         city: merchant.city,
         country: merchant.country,
         phone: merchant.phone,
+        currency: inferShopCurrency({ country: merchant.country }),
         latitude: merchant.latitude,
         longitude: merchant.longitude,
         shopLogoUrl: resolvePublicAssetUrl(req, merchant.shopLogoUrl) || merchant.shopLogoUrl,
@@ -873,7 +875,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
           cash: true,
           card: true,
           cardReady: shopAdyenCardReady(merchant),
-          currency: "CHF",
+          currency: inferShopCurrency({ country: merchant.country }),
         },
         loyalty: ShopLoyaltyService.programFromMerchant(merchant),
         giftCards: ShopGiftCardService.publicSettings(
@@ -1281,6 +1283,7 @@ async function handleShopMenu(req: Request, res: Response, locationSlugParam?: s
       (o) =>
         o.offerType === "cart_free_gift" && normalizeCartGiftTiers(o.rules).length > 0
     )
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.name.localeCompare(b.name))
     .map((o) => ({
       id: o.id,
       name: o.name,
@@ -2110,7 +2113,7 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
         payLater: true,
         card: true,
         cardReady,
-        currency: "CHF",
+        currency: inferShopCurrency({ country: merchant.country }),
         clientKey: cardReady ? merchant.adyenClientId : null,
         environment: AdyenService.environmentFromClientKey(merchant.adyenClientId),
         cardFeeFixed: Number(merchant.onlineCardFeeFixed || 0) || 0,
@@ -2835,6 +2838,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         productId: g.productId,
         tiers,
         paidSubtotal: paidSubtotalForGifts,
+        currency: inferShopCurrency({ country: merchant.country }),
       });
       if (err) return res.status(400).json({ error: err });
       const giftProduct = await db.query.products.findFirst({

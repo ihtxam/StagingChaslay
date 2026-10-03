@@ -10,6 +10,7 @@ type Props = {
   offerDescription?: string | null;
   tiers: CartGiftTierStatus[];
   productName: ProductLookup;
+  formatMoney: (amount: number) => string;
   onChooseTier: (tierIndex: number) => void;
   compact?: boolean;
 };
@@ -19,6 +20,7 @@ export default function ShopCartFreeGiftPanel({
   offerDescription,
   tiers,
   productName,
+  formatMoney,
   onChooseTier,
   compact = false,
 }: Props) {
@@ -50,12 +52,10 @@ export default function ShopCartFreeGiftPanel({
 
       <ul className="mt-3 space-y-2">
         {tiers.map((tier) => {
+          const minLabel = formatMoney(tier.minCartTotal);
           const label =
             tier.label ||
-            t('shopCartFreeGiftTierDefault').replace(
-              '{amount}',
-              tier.minCartTotal.toFixed(2)
-            );
+            t('shopCartFreeGiftTierDefault').replace('{min}', minLabel);
           if (tier.claimedProductId) {
             const name = productName(tier.claimedProductId)?.name || t('shopFreeProduct');
             return (
@@ -87,8 +87,8 @@ export default function ShopCartFreeGiftPanel({
               className="rounded-lg border border-dashed border-stone-600 px-3 py-2 text-xs text-stone-400"
             >
               {t('shopCartFreeGiftLocked')
-                .replace('{amount}', tier.remaining.toFixed(2))
-                .replace('{min}', tier.minCartTotal.toFixed(2))}
+                .replace('{amount}', formatMoney(tier.remaining))
+                .replace('{min}', minLabel)}
             </li>
           );
         })}
@@ -96,8 +96,10 @@ export default function ShopCartFreeGiftPanel({
 
       {nextLocked && hasUnlockedUnclaimed ? null : nextLocked ? (
         <p className="mt-2 text-[11px] text-stone-400">
-          {t('shopCartFreeGiftNext')
-            .replace('{amount}', roundMoney2(nextLocked.remaining).toFixed(2))}
+          {t('shopCartFreeGiftNext').replace(
+            '{amount}',
+            formatMoney(roundMoney2(nextLocked.remaining))
+          )}
         </p>
       ) : null}
     </div>

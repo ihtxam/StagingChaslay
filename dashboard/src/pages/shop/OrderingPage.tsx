@@ -73,6 +73,7 @@ import {
   normalizeCartGiftTiers,
   type LiveCartFreeGiftOffer,
 } from '@/lib/cart-free-gift';
+import { formatShopMoney, inferShopCurrency } from '@/lib/shop-currency';
 import ShopCartFreeGiftPanel from '@/components/shop/ShopCartFreeGiftPanel';
 import ShopFreeGiftPickerModal from '@/components/shop/ShopFreeGiftPickerModal';
 import {
@@ -373,55 +374,71 @@ export default function OrderingPage() {
   const channel = draft.channel;
   const cart = draft.items;
 
-  const cartFreeGiftOffer = useMemo(
-    () => activeCartFreeGiftOffers(cartFreeGiftOffers, channel)[0] ?? null,
+  const shopCurrency = useMemo(
+    () =>
+      inferShopCurrency({
+        country: merchant?.country,
+        currency: merchant?.currency ?? merchant?.payment?.currency,
+      }),
+    [merchant]
+  );
+
+  const formatMoney = (amount: number) => formatShopMoney(amount, shopCurrency, locale);
+
+  const activeCartGiftOffers = useMemo(
+    () => activeCartFreeGiftOffers(cartFreeGiftOffers, channel),
     [cartFreeGiftOffers, channel]
   );
 
   const paidCartSubtotal = useMemo(() => cartPaidSubtotal(cart), [cart]);
 
-  const cartFreeGiftTierStatus = useMemo(() => {
-    if (!cartFreeGiftOffer) return [];
-    const tiers = normalizeCartGiftTiers(cartFreeGiftOffer.rules);
-    const claimed = new Map<number, string>();
-    for (const item of cart) {
-      if (
-        item.cartFreeGiftOfferId === cartFreeGiftOffer.id &&
-        item.cartFreeGiftTierIndex != null
-      ) {
-        claimed.set(item.cartFreeGiftTierIndex, item.id);
+  const cartFreeGiftCampaigns = useMemo(() => {
+    return activeCartGiftOffers.map((offer) => {
+      const tiers = normalizeCartGiftTiers(offer.rules);
+      const claimed = new Map<number, string>();
+      for (const item of cart) {
+        if (
+          item.cartFreeGiftOfferId === offer.id &&
+          item.cartFreeGiftTierIndex != null
+        ) {
+          claimed.set(item.cartFreeGiftTierIndex, item.id);
+        }
       }
-    }
-    return evaluateCartGiftTiers({
-      tiers,
-      subtotal: paidCartSubtotal,
-      claimedByTier: claimed,
+      return {
+        offer,
+        tiers: evaluateCartGiftTiers({
+          tiers,
+          subtotal: paidCartSubtotal,
+          claimedByTier: claimed,
+        }),
+      };
     });
-  }, [cart, cartFreeGiftOffer, paidCartSubtotal]);
+  }, [activeCartGiftOffers, cart, paidCartSubtotal]);
 
   useEffect(() => {
-    if (!cartFreeGiftOffer) return;
-    const tiers = normalizeCartGiftTiers(cartFreeGiftOffer.rules);
+    if (!activeCartGiftOffers.length) return;
     const paid = cartPaidSubtotal(cart);
-    const hasInvalid = cart.some(
-      (i) =>
-        i.cartFreeGiftOfferId === cartFreeGiftOffer.id &&
-        i.cartFreeGiftTierIndex != null &&
-        tiers[i.cartFreeGiftTierIndex] &&
-        paid + 0.001 < tiers[i.cartFreeGiftTierIndex].minCartTotal
-    );
+    const hasInvalid = cart.some((i) => {
+      if (!i.cartFreeGiftOfferId || i.cartFreeGiftTierIndex == null) return false;
+      const offer = activeCartGiftOffers.find((o) => o.id === i.cartFreeGiftOfferId);
+      if (!offer) return true;
+      const tiers = normalizeCartGiftTiers(offer.rules);
+      const tier = tiers[i.cartFreeGiftTierIndex];
+      return !tier || paid + 0.001 < tier.minCartTotal;
+    });
     if (!hasInvalid) return;
     setDraft((prev) => ({
       ...prev,
       items: prev.items.filter((i) => {
-        if (i.cartFreeGiftOfferId !== cartFreeGiftOffer.id || i.cartFreeGiftTierIndex == null) {
-          return true;
-        }
+        if (!i.cartFreeGiftOfferId || i.cartFreeGiftTierIndex == null) return true;
+        const offer = activeCartGiftOffers.find((o) => o.id === i.cartFreeGiftOfferId);
+        if (!offer) return false;
+        const tiers = normalizeCartGiftTiers(offer.rules);
         const tier = tiers[i.cartFreeGiftTierIndex];
         return tier && paid + 0.001 >= tier.minCartTotal;
       }),
     }));
-  }, [cart, cartFreeGiftOffer, paidCartSubtotal]);
+  }, [cart, activeCartGiftOffers, paidCartSubtotal]);
 
   const categoryPricingEnabled = merchant?.categoryPricingEnabled === true;
   const deliveryMenuMarkup = useMemo(() => {
@@ -807,8 +824,9 @@ export default function OrderingPage() {
 
   const productNameById = (id: string) => findMenuProduct(id);
 
-  const addCartFreeGift = (tierIndex: number, productId: string) => {
-    if (!cartFreeGiftOffer) return;
+  const addCartFreeGift = (offerId: string, tierIndex: number, productId: string) => {
+    const offer = activeCartGiftOffers.find((o) => o.id === offerId);
+    if (!offer) return;
     const product = findMenuProduct(productId);
     if (!product) return;
     setDraft((prev) => ({
@@ -816,10 +834,7 @@ export default function OrderingPage() {
       items: [
         ...prev.items.filter(
           (i) =>
-            !(
-              i.cartFreeGiftOfferId === cartFreeGiftOffer.id &&
-              i.cartFreeGiftTierIndex === tierIndex
-            )
+            !(i.cartFreeGiftOfferId === offerId && i.cartFreeGiftTierIndex === tierIndex)
         ),
         {
           lineId: newCartLineId(),
@@ -831,20 +846,19 @@ export default function OrderingPage() {
           quantity: 1,
           description: product.description,
           image: product.image,
-          cartFreeGiftOfferId: cartFreeGiftOffer.id,
+          cartFreeGiftOfferId: offerId,
           cartFreeGiftTierIndex: tierIndex,
-          offerId: cartFreeGiftOffer.id,
+          offerId: offer.id,
           offerBadge: t('shopFree'),
-          offerName: cartFreeGiftOffer.name,
+          offerName: offer.name,
         },
       ],
     }));
     setFreeGiftPicker(null);
   };
 
-  const openFreeGiftPicker = (tierIndex: number) => {
-    if (!cartFreeGiftOffer) return;
-    setFreeGiftPicker({ offerId: cartFreeGiftOffer.id, tierIndex });
+  const openFreeGiftPicker = (offerId: string, tierIndex: number) => {
+    setFreeGiftPicker({ offerId, tierIndex });
   };
 
   const cartSimilarProducts = useMemo(() => {
@@ -1469,18 +1483,22 @@ export default function OrderingPage() {
       ) : null}
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {cartFreeGiftOffer && cartFreeGiftTierStatus.length > 0 ? (
-          <div className="mb-4">
-            <ShopCartFreeGiftPanel
-              offerName={cartFreeGiftOffer.name}
-              offerDescription={cartFreeGiftOffer.description}
-              tiers={cartFreeGiftTierStatus}
-              productName={(id) => {
-                const p = productNameById(id);
-                return p ? { name: p.name } : null;
-              }}
-              onChooseTier={openFreeGiftPicker}
-            />
+        {cartFreeGiftCampaigns.length > 0 ? (
+          <div className="mb-4 space-y-3">
+            {cartFreeGiftCampaigns.map(({ offer, tiers }) => (
+              <ShopCartFreeGiftPanel
+                key={offer.id}
+                offerName={offer.name}
+                offerDescription={offer.description}
+                tiers={tiers}
+                formatMoney={formatMoney}
+                productName={(id) => {
+                  const p = productNameById(id);
+                  return p ? { name: p.name } : null;
+                }}
+                onChooseTier={(tierIndex) => openFreeGiftPicker(offer.id, tierIndex)}
+              />
+            ))}
           </div>
         ) : null}
         {cart.length === 0 ? (
@@ -1856,19 +1874,23 @@ export default function OrderingPage() {
                 ) : null}
               </div>
 
-              {cartFreeGiftOffer && cartFreeGiftTierStatus.length > 0 ? (
-                <div className="mt-3">
-                  <ShopCartFreeGiftPanel
-                    compact
-                    offerName={cartFreeGiftOffer.name}
-                    offerDescription={cartFreeGiftOffer.description}
-                    tiers={cartFreeGiftTierStatus}
-                    productName={(id) => {
-                      const p = productNameById(id);
-                      return p ? { name: p.name } : null;
-                    }}
-                    onChooseTier={() => setCartSlideOpen(true)}
-                  />
+              {cartFreeGiftCampaigns.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {cartFreeGiftCampaigns.map(({ offer, tiers }) => (
+                    <ShopCartFreeGiftPanel
+                      key={offer.id}
+                      compact
+                      offerName={offer.name}
+                      offerDescription={offer.description}
+                      tiers={tiers}
+                      formatMoney={formatMoney}
+                      productName={(id) => {
+                        const p = productNameById(id);
+                        return p ? { name: p.name } : null;
+                      }}
+                      onChooseTier={() => setCartSlideOpen(true)}
+                    />
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -2290,19 +2312,22 @@ export default function OrderingPage() {
         />
       )}
 
-      {freeGiftPicker && cartFreeGiftOffer ? (
+      {freeGiftPicker ? (
         <ShopFreeGiftPickerModal
           title={t('shopChooseFreeProduct')}
           subtitle={t('shopCartFreeGiftHint')}
           options={(
-            cartFreeGiftTierStatus.find((x) => x.tierIndex === freeGiftPicker.tierIndex)
-              ?.productIds || []
+            cartFreeGiftCampaigns.find((c) => c.offer.id === freeGiftPicker.offerId)?.tiers.find(
+              (x) => x.tierIndex === freeGiftPicker.tierIndex
+            )?.productIds || []
           ).map((id) => {
             const p = findMenuProduct(id);
             return { id, name: p?.name || id };
           })}
           onClose={() => setFreeGiftPicker(null)}
-          onConfirm={(productId) => addCartFreeGift(freeGiftPicker.tierIndex, productId)}
+          onConfirm={(productId) =>
+            addCartFreeGift(freeGiftPicker.offerId, freeGiftPicker.tierIndex, productId)
+          }
         />
       ) : null}
 
