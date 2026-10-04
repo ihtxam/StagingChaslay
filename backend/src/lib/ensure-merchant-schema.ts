@@ -1697,14 +1697,27 @@ function isOrderItemsColumnSchemaError(raw: string): boolean {
   );
 }
 
-/** Idempotent products/categories columns used by the public shop menu and loyalty rewards query. */
+const SHOP_CATEGORY_HEAL_COLUMNS = [
+  "client_id",
+  "is_offers_category",
+  "sort_order",
+  "description",
+  "color",
+  "image_url",
+  "visibility",
+  "shop_schedule",
+  "delivery_pricing_enabled",
+  "extra_delivery_price",
+] as const;
+
+/** Idempotent products/categories columns used by the shop menu, loyalty rewards, and merchant catalog. */
 export async function ensureShopCatalogColumnsSchema(): Promise<void> {
   for (const column of shopProductHealColumnNames()) {
     await runPatch(column, "products");
   }
-  await runPatch("client_id", "categories");
-  await runPatch("visibility", "categories");
-  await runPatch("shop_schedule", "categories");
+  for (const column of SHOP_CATEGORY_HEAL_COLUMNS) {
+    await runPatch(column, "categories");
+  }
 }
 
 /**
@@ -2039,7 +2052,7 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       const subscriptionMissing = isSubscriptionSchemaError(raw);
       const posSessionsMissing = isPosSessionsSchemaError(raw);
       const chaslayPagebuilderMissing = isChaslayPagebuilderSchemaError(raw);
-      const catalogMissing = isShopCatalogSchemaError(error) && isMissingSchemaError(raw);
+      const catalogMissing = isShopCatalogSchemaError(error);
       const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
       if (locationsMissing) {
         await ensureLocationsSchema();

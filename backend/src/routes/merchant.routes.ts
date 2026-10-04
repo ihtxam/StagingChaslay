@@ -29,6 +29,7 @@ import { geocodeQuery } from "@/lib/geocode";
 import { isAllowedImageMime, isAllowedFaviconMime, saveMerchantImage, saveMerchantFavicon } from "@/services/media-upload.service";
 import path from "path";
 import { getDb, schema } from "@/db";
+import { publicShopDbError } from "@/lib/public-shop-error";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import posSessionsRoutes from "@/routes/pos-sessions.routes";
@@ -519,7 +520,7 @@ router.get("/products", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error getting products:", error);
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get products" });
+    res.status(500).json({ error: publicShopDbError(error, "Failed to get products") });
   }
 });
 

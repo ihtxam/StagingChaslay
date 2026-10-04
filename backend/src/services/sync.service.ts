@@ -1,4 +1,5 @@
 import { repairCatalogText } from "@/lib/text-encoding";
+import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { getDb, schema } from "@/db";
 import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { FloorPlanService } from "@/services/floor-plan.service";
@@ -263,12 +264,16 @@ export class SyncService {
     const sinceDate = since || new Date(0);
 
     const [categories, products, terminals, readers, merchant, onlineOrders] = await Promise.all([
-      db.query.categories.findMany({
-        where: and(eq(schema.categories.merchantId, merchantId), gt(schema.categories.updatedAt, sinceDate)),
-      }),
-      db.query.products.findMany({
-        where: and(eq(schema.products.merchantId, merchantId), gt(schema.products.updatedAt, sinceDate)),
-      }),
+      withShopCatalogSchemaRetry(() =>
+        db.query.categories.findMany({
+          where: and(eq(schema.categories.merchantId, merchantId), gt(schema.categories.updatedAt, sinceDate)),
+        })
+      ),
+      withShopCatalogSchemaRetry(() =>
+        db.query.products.findMany({
+          where: and(eq(schema.products.merchantId, merchantId), gt(schema.products.updatedAt, sinceDate)),
+        })
+      ),
       db.query.paymentTerminals.findMany({
         where: eq(schema.paymentTerminals.merchantId, merchantId),
       }),

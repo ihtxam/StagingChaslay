@@ -110,6 +110,13 @@ export const SHOP_CATALOG_EXTRA_PATCHES: Record<string, string> = {
   products_dietary_tags:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS dietary_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
   categories_client_id: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS client_id varchar(64)",
+  categories_is_offers_category:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_offers_category boolean NOT NULL DEFAULT false",
+  categories_sort_order:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order integer NOT NULL DEFAULT 0",
+  categories_description: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS description text",
+  categories_color: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS color varchar(7)",
+  categories_image_url: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url varchar(500)",
 };
 
 export function shopProductHealColumnNames(): string[] {

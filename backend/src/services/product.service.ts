@@ -1,4 +1,5 @@
 import { getDb, schema } from "@/db";
+import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { repairCatalogText } from "@/lib/text-encoding";
 import { BarcodeService, barcodeMatchVariants } from "@/services/barcode.service";
 import { eq, and, like, desc, asc, or, max, sql, lt, count } from "drizzle-orm";
@@ -164,15 +165,17 @@ export class ProductService {
       const offset = (page - 1) * limit;
       const where = this.productListWhere(merchantId, search, categoryId);
 
-      const products = await db.query.products.findMany({
-        where,
-        with: {
-          category: true,
-        },
-        limit,
-        offset,
-        orderBy: [asc(schema.products.sortOrder), desc(schema.products.createdAt)],
-      });
+      const products = await withShopCatalogSchemaRetry(() =>
+        db.query.products.findMany({
+          where,
+          with: {
+            category: true,
+          },
+          limit,
+          offset,
+          orderBy: [asc(schema.products.sortOrder), desc(schema.products.createdAt)],
+        })
+      );
 
       return products.map((p) => ({
         ...p,
@@ -408,13 +411,15 @@ export class ProductService {
     const db = getDb();
 
     try {
-      const products = await db.query.products.findMany({
-        where: and(
-          eq(schema.products.merchantId, merchantId),
-          lt(schema.products.stock, schema.products.lowStockThreshold)
-        ),
-        orderBy: asc(schema.products.stock),
-      });
+      const products = await withShopCatalogSchemaRetry(() =>
+        db.query.products.findMany({
+          where: and(
+            eq(schema.products.merchantId, merchantId),
+            lt(schema.products.stock, schema.products.lowStockThreshold)
+          ),
+          orderBy: asc(schema.products.stock),
+        })
+      );
 
       return products;
     } catch (error) {
@@ -430,9 +435,11 @@ export class ProductService {
     const db = getDb();
 
     try {
-      const products = await db.query.products.findMany({
-        where: eq(schema.products.merchantId, merchantId),
-      });
+      const products = await withShopCatalogSchemaRetry(() =>
+        db.query.products.findMany({
+          where: eq(schema.products.merchantId, merchantId),
+        })
+      );
 
       const totalProducts = products.length;
       const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
