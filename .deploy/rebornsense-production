@@ -4,3 +4,5 @@
 # Deploy 2026-09-24T23:33:40Z — desktop hub, POS settings, receipt header, cash modal
 # Deploy 2026-10-03T22:11:00Z — catering, gift cards, dietary filters, PIN tablet layout, Reborn footer, Fiskaly DE signing
 # Deploy retry 2026-10-03T22:13:00Z — production deploy after installer-fetch fix
+
+# Deploy 2026-10-04T07:30:00Z — restore merchant and shop catalogs when products columns are missing
