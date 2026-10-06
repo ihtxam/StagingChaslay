@@ -2,7 +2,7 @@
  * Navbar extract — run: npx tsx dashboard/src/chaslay-pagebuilder/extract-navbar-state.test.ts
  */
 import assert from 'node:assert/strict';
-import { extractNavbarEditorState } from './extract-navbar-state';
+import { extractNavbarEditorState, stripNavbarFromEditorState } from './extract-navbar-state';
 import { buildTemplateEditorState } from './data/templates/build-template-state';
 
 const full = buildTemplateEditorState({
@@ -19,5 +19,17 @@ const navId = parsed.ROOT.nodes[0];
 assert.equal(parsed[navId].type.resolvedName, 'NavbarClassic');
 assert.equal(extractNavbarEditorState('{}'), null);
 assert.equal(extractNavbarEditorState('not-json'), null);
+
+const fullParsed = JSON.parse(full);
+const bodyOnly = stripNavbarFromEditorState(full);
+const bodyParsed = JSON.parse(bodyOnly);
+assert.ok(bodyParsed.ROOT);
+assert.equal(bodyParsed.ROOT.nodes.length, fullParsed.ROOT.nodes.length - 1);
+for (const id of Object.keys(bodyParsed)) {
+  if (id === 'ROOT') continue;
+  const name = bodyParsed[id].type?.resolvedName || bodyParsed[id].type;
+  assert.notEqual(name, 'NavbarClassic');
+}
+assert.equal(stripNavbarFromEditorState('not-json'), 'not-json');
 
 console.log('extract-navbar-state tests passed');

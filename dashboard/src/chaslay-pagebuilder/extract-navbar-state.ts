@@ -41,12 +41,16 @@ function collectDescendants(nodes: Record<string, CraftNode>, id: string, keep: 
   }
 }
 
+function navbarRootIds(nodes: Record<string, CraftNode>): string[] {
+  return Object.keys(nodes).filter((id) => id !== 'ROOT' && NAVBAR_NAMES.has(resolvedName(nodes[id])));
+}
+
 /** Build a Craft.js document that contains only homepage navbar node(s). */
 export function extractNavbarEditorState(editorState: string): string | null {
   const nodes = parseEditorState(editorState);
   if (!nodes) return null;
 
-  const navbarIds = Object.keys(nodes).filter((id) => id !== 'ROOT' && NAVBAR_NAMES.has(resolvedName(nodes[id])));
+  const navbarIds = navbarRootIds(nodes);
   if (!navbarIds.length) return null;
 
   const keep = new Set<string>();
@@ -71,3 +75,33 @@ export function extractNavbarEditorState(editorState: string): string | null {
 
   return JSON.stringify(next);
 }
+
+/** Remove navbar block(s) from a full page document (sticky header renders them separately). */
+export function stripNavbarFromEditorState(editorState: string): string {
+  const nodes = parseEditorState(editorState);
+  if (!nodes) return editorState;
+
+  const navbarIds = navbarRootIds(nodes);
+  if (!navbarIds.length) return editorState;
+
+  const remove = new Set<string>();
+  for (const id of navbarIds) collectDescendants(nodes, id, remove);
+
+  const next: Record<string, CraftNode> = {};
+  for (const [id, node] of Object.entries(nodes)) {
+    if (remove.has(id)) continue;
+    next[id] = { ...node };
+  }
+
+  const root = next.ROOT;
+  if (root) {
+    next.ROOT = {
+      ...root,
+      nodes: (root.nodes || []).filter((childId) => !remove.has(childId)),
+    };
+  }
+
+  return JSON.stringify(next);
+}
+
+export { NAVBAR_NAMES };

@@ -11,6 +11,7 @@ import ChaslayStorefrontNavbar from '@/chaslay-pagebuilder/ChaslayStorefrontNavb
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
 import { normalizeShopSiteSettings, type ShopSiteSettings } from '@/lib/shop-site-settings';
 import ChaslayHomepageRenderer from '@/chaslay-pagebuilder/ChaslayHomepageRenderer';
+import { stripNavbarFromEditorState } from '@/chaslay-pagebuilder/extract-navbar-state';
 import type { SitePageLink, MerchantContact } from '@/chaslay-pagebuilder/StorefrontContext';
 import { BuilderLanguageProvider } from '@/chaslay-pagebuilder/BuilderLanguageContext';
 
@@ -183,6 +184,11 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
 
   const site = pageSite || shopSite;
 
+  const bodyEditorState = useMemo(
+    () => stripNavbarFromEditorState(editorState),
+    [editorState]
+  );
+
   useEffect(() => {
     document.documentElement.lang = chaslayLocale;
     document.documentElement.classList.add('shop-shell');
@@ -265,7 +271,7 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
           <ShopHomepageErrorBoundary menuHref={`${base}/menu`} fallbackLabel={t('shopOrderNow')}>
             <ChaslayHomepageRenderer
               key={`${pageSlug}-${chaslayLocale}`}
-              editorState={editorState}
+              editorState={bodyEditorState}
               shopKey={shopKey}
               basePath={base}
               locale={chaslayLocale}
