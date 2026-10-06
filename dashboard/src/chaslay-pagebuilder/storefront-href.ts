@@ -1,5 +1,7 @@
 /** Prefix internal shop links with the storefront base path (e.g. /shop/my-cafe). */
 
+import { shopMerchantWideBasePath } from '../lib/shop-base-path';
+
 export type StorefrontSurface = 'home' | 'shop';
 
 function stripOrigin(path: string): string {
@@ -65,6 +67,7 @@ export function resolveStorefrontHref(
 
   const surface: StorefrontSurface = opts?.surface || 'home';
   const menuUrl = `${basePath}/menu`;
+  const merchantWideBase = shopMerchantWideBasePath(basePath);
 
   if (isShopMenuNavLink(raw)) return menuUrl;
 
@@ -80,9 +83,9 @@ export function resolveStorefrontHref(
 
   if (raw.startsWith('/')) {
     if (raw === '/' || raw === '/home') return basePath || '/';
-    if (raw.startsWith('/pages/')) return `${basePath}${raw}`;
+    if (raw.startsWith('/pages/')) return `${merchantWideBase}${raw}`;
     return `${basePath}${raw}`;
   }
-  if (raw.startsWith('pages/')) return `${basePath}/${raw}`;
+  if (raw.startsWith('pages/')) return `${merchantWideBase}/${raw}`;
   return `${basePath}/${raw}`;
 }

@@ -38,6 +38,11 @@ assert.equal(resolveStorefrontHref('#home', base, true, { surface: 'shop' }), ba
 assert.equal(resolveStorefrontHref('#home', base, true, { surface: 'home' }), '#home');
 assert.equal(resolveStorefrontHref('/', base, true), base);
 assert.equal(resolveStorefrontHref('/pages/about', base, true), `${base}/pages/about`);
+const locBase = '/shop/demo/l/geneva';
+assert.equal(
+  resolveStorefrontHref('/pages/privacy-policy', locBase, true),
+  '/shop/demo/pages/privacy-policy'
+);
 assert.equal(resolveStorefrontHref('#contact', base, false), '#contact');
 
 console.log('storefront-href tests passed');

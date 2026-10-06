@@ -2,6 +2,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext } from 'react';
+import { shopMerchantWideBasePath } from '@/lib/shop-cart';
 import { resolveStorefrontHref, type StorefrontSurface } from './storefront-href';
 import { useShopLoggedIn } from '@/hooks/useShopLoggedIn';
 
@@ -97,7 +98,8 @@ export function StorefrontProvider({
   const pageHref = useCallback(
     (slug: string, isHomepage?: boolean) => {
       if (isHomepage || slug === 'home') return basePath || '/';
-      return `${basePath}/pages/${slug}`;
+      const legalBase = shopMerchantWideBasePath(basePath);
+      return `${legalBase}/pages/${slug}`;
     },
     [basePath]
   );

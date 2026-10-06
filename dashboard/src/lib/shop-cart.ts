@@ -412,6 +412,8 @@ export function shopBasePath(shopKey: string, locationSlug?: string | null) {
   return base;
 }
 
+export { shopMerchantWideBasePath } from '@/lib/shop-base-path';
+
 /** Menu API path — per-location when locationSlug is set. */
 export function shopMenuApiPath(shopKey: string, locationSlug?: string | null) {
   const loc = String(locationSlug || '').trim();

@@ -767,7 +767,7 @@ export default function CheckoutPage() {
       const token = loadCustomerToken(shopKey);
       const res = await axios.post(
         `/api/shop/${shopKey}/vouchers/validate`,
-        { code, subtotal },
+        { code, subtotal, orderType: draft.channel },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       patch({
@@ -798,11 +798,15 @@ export default function CheckoutPage() {
       try {
         const res = await axios.post(
           `/api/shop/${shopKey}/vouchers/validate`,
-          { code: draft.voucherCode, subtotal },
+          { code: draft.voucherCode, subtotal, orderType: draft.channel },
           token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
         );
         if (cancelled) return;
         const nextDiscount = Number(res.data.discount) || 0;
+        if (nextDiscount <= 0) {
+          if (!cancelled) removeVoucher();
+          return;
+        }
         if (nextDiscount !== voucherDiscount) {
           patch({ voucherDiscount: nextDiscount, voucherName: res.data.name || draft.voucherCode });
         }
@@ -813,8 +817,7 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subtotal, draft.voucherCode]);
+  }, [subtotal, draft.voucherCode, draft.channel, shopKey, voucherDiscount]);
 
   const setLineQty = (lineId: string, quantity: number) => {
     setDraft((d) => {
