@@ -612,25 +612,13 @@ export default function OrderingPage() {
     return mins.length ? Math.min(...mins) : 0;
   }, [channel, effectiveDeliveryInfo, deliveryZones]);
 
-  const popularProducts = useMemo(() => {
-    const list: Product[] = [];
-    for (const cat of menu) {
-      for (const p of cat.items || []) {
-        if (list.length >= 8) break;
-        list.push(p);
-      }
-      if (list.length >= 8) break;
-    }
-    return list;
-  }, [menu]);
-
   const shopOrderMode = useMemo(
     () => loadShopLocationSession(shopKey)?.orderMode || 'menu',
     [shopKey, locSlug]
   );
 
-  /** Hide backend "Offers" catalog bucket — promos live in the shopOffers shelf. */
-  const visibleMenuCategories = useMemo(() => {
+  /** Category nav + sections: base list ignores dietary filters (toolbar stays usable). */
+  const menuCategoryNav = useMemo(() => {
     let cats = menu.filter((cat) => !cat.isOffersCategory && (cat.items?.length ?? 0) > 0);
     if (shopOrderMode === 'catering') {
       cats = cats
@@ -642,24 +630,41 @@ export default function OrderingPage() {
         }))
         .filter((cat) => (cat.items?.length ?? 0) > 0);
     }
-    if (dietaryFilters.length) {
-      cats = cats
-        .map((cat) => ({
-          ...cat,
-          items: (cat.items || []).filter((p) =>
-            productMatchesDietaryFilters(p.dietaryTags, dietaryFilters)
-          ),
-        }))
-        .filter((cat) => (cat.items?.length ?? 0) > 0);
-    }
     return cats;
-  }, [menu, shopOrderMode, dietaryFilters]);
+  }, [menu, shopOrderMode]);
+
+  const filteredMenuCategories = useMemo(() => {
+    if (!dietaryFilters.length) return menuCategoryNav;
+    return menuCategoryNav
+      .map((cat) => ({
+        ...cat,
+        items: (cat.items || []).filter((p) =>
+          productMatchesDietaryFilters(p.dietaryTags, dietaryFilters)
+        ),
+      }))
+      .filter((cat) => (cat.items?.length ?? 0) > 0);
+  }, [menuCategoryNav, dietaryFilters]);
+
+  const popularProducts = useMemo(() => {
+    const list: Product[] = [];
+    for (const cat of menuCategoryNav) {
+      for (const p of cat.items || []) {
+        if (dietaryFilters.length && !productMatchesDietaryFilters(p.dietaryTags, dietaryFilters)) {
+          continue;
+        }
+        if (list.length >= 8) break;
+        list.push(p);
+      }
+      if (list.length >= 8) break;
+    }
+    return list;
+  }, [menuCategoryNav, dietaryFilters]);
 
   const menuSearchResults = useMemo(() => {
     const q = menuSearchQuery.trim().toLowerCase();
     if (!q) return null;
     const results: Array<{ product: Product; categoryId: string }> = [];
-    for (const cat of visibleMenuCategories) {
+    for (const cat of menuCategoryNav) {
       for (const product of cat.items || []) {
         const haystack = `${product.name} ${product.description || ''}`.toLowerCase();
         if (haystack.includes(q)) {
@@ -670,7 +675,7 @@ export default function OrderingPage() {
       }
     }
     return results;
-  }, [menuSearchQuery, visibleMenuCategories, dietaryFilters]);
+  }, [menuSearchQuery, menuCategoryNav, dietaryFilters]);
 
   const openMenuSearch = () => {
     setMenuSearchOpen(true);
@@ -1280,7 +1285,7 @@ export default function OrderingPage() {
   ]);
 
   useEffect(() => {
-    if (!visibleMenuCategories.length || menuSearchOpen || menuSearchQuery.trim()) return;
+    if (!menuCategoryNav.length || menuSearchOpen || menuSearchQuery.trim()) return;
 
     const getHeaderOffset = () =>
       parseFloat(
@@ -1302,7 +1307,7 @@ export default function OrderingPage() {
       }
 
       let activeId = 'all';
-      for (const cat of visibleMenuCategories) {
+      for (const cat of filteredMenuCategories) {
         const el = document.getElementById(`shop-cat-${cat.id}`);
         if (!el) continue;
         if (el.getBoundingClientRect().top <= offset + 4) {
@@ -1319,7 +1324,7 @@ export default function OrderingPage() {
       window.removeEventListener('scroll', syncCategoryFromScroll);
       window.removeEventListener('resize', syncCategoryFromScroll);
     };
-  }, [visibleMenuCategories, menuSearchOpen, menuSearchQuery]);
+  }, [filteredMenuCategories, menuCategoryNav.length, menuSearchOpen, menuSearchQuery]);
 
   useEffect(() => {
     if (categoryScrollLock.current) return;
@@ -1958,7 +1963,7 @@ export default function OrderingPage() {
                 >
                   <Search className="h-4 w-4" strokeWidth={2} />
                 </button>
-                {visibleMenuCategories.map((cat) => (
+                {menuCategoryNav.map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
@@ -1976,7 +1981,7 @@ export default function OrderingPage() {
               </>
             )}
           </div>
-          {visibleMenuCategories.length > 0 ? (
+          {menuCategoryNav.length > 0 ? (
             <>
               {!menuSearchOpen ? (
                 <ShopMenuDietaryFilter
@@ -1985,31 +1990,35 @@ export default function OrderingPage() {
                   t={t}
                 />
               ) : null}
-            <div className="shop-product-view-toggle shrink-0" role="group" aria-label={t('shopProductViewLabel')}>
-              <button
-                type="button"
-                className={productView === 'list' ? 'is-active' : ''}
-                onClick={() => setProductView('list')}
-                aria-label={t('shopProductViewList')}
-                title={t('shopProductViewList')}
+              <div
+                className="shop-product-view-toggle shrink-0"
+                role="group"
+                aria-label={t('shopProductViewLabel')}
               >
-                <Rows3 className="h-4 w-4" strokeWidth={2} />
-              </button>
-              <button
-                type="button"
-                className={`relative ${productView === 'grid' || productView === 'grid5' ? 'is-active' : ''}`}
-                onClick={() => setProductView((prev) => (prev === 'grid' ? 'grid5' : 'grid'))}
-                aria-label={productView === 'grid5' ? t('shopGridFiveCols') : t('shopGridFourCols')}
-                title={productView === 'grid5' ? t('shopGridFiveCols') : t('shopGridFourCols')}
-              >
-                <LayoutGrid className="h-4 w-4" strokeWidth={2} />
-                {productView === 'grid' || productView === 'grid5' ? (
-                  <span className="absolute bottom-0 right-0.5 text-[8px] font-bold leading-none">
-                    {productView === 'grid5' ? '5' : '4'}
-                  </span>
-                ) : null}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className={productView === 'list' ? 'is-active' : ''}
+                  onClick={() => setProductView('list')}
+                  aria-label={t('shopProductViewList')}
+                  title={t('shopProductViewList')}
+                >
+                  <Rows3 className="h-4 w-4" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  className={`relative ${productView === 'grid' || productView === 'grid5' ? 'is-active' : ''}`}
+                  onClick={() => setProductView((prev) => (prev === 'grid' ? 'grid5' : 'grid'))}
+                  aria-label={productView === 'grid5' ? t('shopGridFiveCols') : t('shopGridFourCols')}
+                  title={productView === 'grid5' ? t('shopGridFiveCols') : t('shopGridFourCols')}
+                >
+                  <LayoutGrid className="h-4 w-4" strokeWidth={2} />
+                  {productView === 'grid' || productView === 'grid5' ? (
+                    <span className="absolute bottom-0 right-0.5 text-[8px] font-bold leading-none">
+                      {productView === 'grid5' ? '5' : '4'}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
             </>
           ) : null}
         </div>
@@ -2159,7 +2168,7 @@ export default function OrderingPage() {
             <p className="py-12 text-center text-sm text-stone-500">{t('shopSearchMenuHint')}</p>
           ) : (
             <>
-          {visibleMenuCategories.map((cat) => {
+          {filteredMenuCategories.map((cat) => {
             const items = cat.items || [];
             return (
               <section key={cat.id} id={`shop-cat-${cat.id}`} className="shop-menu-section">
@@ -2177,10 +2186,21 @@ export default function OrderingPage() {
               </section>
             );
           })}
-          {visibleMenuCategories.length === 0 ? (
-            <p className="text-stone-500 py-12 text-center">
-              {dietaryFilters.length ? t('shopDietaryNoResults') : t('shopNoProducts')}
-            </p>
+          {filteredMenuCategories.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-stone-500">
+                {dietaryFilters.length ? t('shopDietaryNoResults') : t('shopNoProducts')}
+              </p>
+              {dietaryFilters.length ? (
+                <button
+                  type="button"
+                  className="mt-4 inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:border-stone-400 hover:bg-stone-50"
+                  onClick={() => setDietaryFilters([])}
+                >
+                  {t('shopDietaryClearFilters')}
+                </button>
+              ) : null}
+            </div>
           ) : null}
             </>
           )}
