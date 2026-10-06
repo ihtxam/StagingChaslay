@@ -2770,9 +2770,6 @@ export default function CheckoutPage() {
       </div>
 
       <div className="shop-checkout-mobile-stack lg:hidden">
-        {cartFreeGiftCampaigns.length > 0 ? (
-          <div className="shop-mobile-cart-stack__gifts">{renderCartFreeGiftBlock('strip')}</div>
-        ) : null}
         <div className="shop-checkout-sticky-bar shop-checkout-sticky-bar--in-stack">
           <button
             type="button"
