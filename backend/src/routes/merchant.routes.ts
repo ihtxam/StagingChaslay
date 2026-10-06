@@ -2258,6 +2258,54 @@ router.put("/settings", async (req: Request, res: Response) => {
  * Requires VIEW_REPORTS or END_OF_DAY.
  * Company-wide totals need VIEW_ALL_SALES; otherwise scoped to PIN staff (own sales).
  */
+/**
+ * GET /api/merchant/reports/sales-mix
+ * Sales mix & advanced analytics (Growth Analytics add-on).
+ */
+router.get(
+  "/reports/sales-mix",
+  requirePermission("VIEW_REPORTS", "END_OF_DAY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { merchantHasGrowthAnalyticsLicense } = await import("@/lib/growth-analytics-addon");
+      if (!(await merchantHasGrowthAnalyticsLicense(merchantId))) {
+        return res.status(403).json({
+          error: "Sales mix & analytics requires the Growth Analytics add-on",
+          code: "GROWTH_ANALYTICS_ADDON",
+        });
+      }
+      const { resolveReportActor, salesScopeForActor } = await import("@/lib/report-sales-scope");
+      const actor = resolveReportActor(req);
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({ error: "Own-sales reports require a staff PIN session" });
+      }
+      const preset = String(req.query.preset || "today") as import("@/services/pos-reports.service").ReportPreset;
+      const { SalesMixService } = await import("@/services/sales-mix.service");
+      const report = await SalesMixService.getSalesMixReport(merchantId, {
+        preset,
+        from: req.query.from ? String(req.query.from) : undefined,
+        to: req.query.to ? String(req.query.to) : undefined,
+        staffId: scope.viewAll ? (req.query.staffId ? String(req.query.staffId) : null) : scope.staffId,
+        locationId:
+          req.query.scope === "location"
+            ? (req.locationId as string | undefined) || undefined
+            : req.query.locationId
+              ? String(req.query.locationId)
+              : undefined,
+      });
+      res.json({ success: true, report });
+    } catch (error) {
+      console.error("Sales mix report failed:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load sales mix report",
+      });
+    }
+  }
+);
+
 router.get(
   "/reports/eod",
   requirePermission("VIEW_REPORTS", "END_OF_DAY"),

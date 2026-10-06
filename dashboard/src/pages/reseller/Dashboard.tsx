@@ -129,6 +129,7 @@ function MerchantsPage() {
     bexioAddonEnabled: false,
     odooAddonEnabled: false,
     storekeeperAddonEnabled: false,
+    growthAnalyticsAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -145,6 +146,7 @@ function MerchantsPage() {
     bexioAddonEnabled: boolean;
     odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
+    growthAnalyticsAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
     id: string;
@@ -300,6 +302,7 @@ function MerchantsPage() {
         kdsAddonEnabled: !!(merchant.kdsAddonEnabled || merchant.kdsEnabled),
         odsAddonEnabled: !!(merchant.odsAddonEnabled || merchant.odsEnabled),
         storekeeperAddonEnabled: !!merchant.storekeeperAddonEnabled,
+        growthAnalyticsAddonEnabled: !!merchant.growthAnalyticsAddonEnabled,
         maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
       });
       toast.success(t('resellerOpenMerchant'));
@@ -326,6 +329,7 @@ function MerchantsPage() {
         bexioAddonEnabled: !!limitsFor.bexioAddonEnabled,
         odooAddonEnabled: !!limitsFor.odooAddonEnabled,
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
+        growthAnalyticsAddonEnabled: !!limitsFor.growthAnalyticsAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -679,6 +683,20 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!form.growthAnalyticsAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, growthAnalyticsAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">Sales mix & analytics</span>
+                <span className="text-xs text-stone-500">CHF 28/mo growth add-on</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!form.kdsAddonEnabled}
                 onChange={(e) => setForm((f) => ({ ...f, kdsAddonEnabled: e.target.checked }))}
               />
@@ -867,6 +885,7 @@ function MerchantsPage() {
                         bexioAddonEnabled: m.bexioAddonEnabled === true,
                         odooAddonEnabled: m.odooAddonEnabled === true,
                         storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
+                        growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
                       })
                     }
                   >
@@ -1044,6 +1063,20 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('signageTitle')}</span>
                 <span className="text-xs text-stone-500">{t('signageAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.growthAnalyticsAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, growthAnalyticsAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">Sales mix & analytics</span>
+                <span className="text-xs text-stone-500">CHF 28/mo growth add-on</span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">

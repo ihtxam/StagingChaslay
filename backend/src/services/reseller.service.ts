@@ -424,6 +424,7 @@ export class ResellerService {
       storekeeperAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
+      growthAnalyticsAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -472,6 +473,7 @@ export class ResellerService {
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
         bexioAddonEnabled: input.bexioAddonEnabled,
         odooAddonEnabled: input.odooAddonEnabled,
+        growthAnalyticsAddonEnabled: input.growthAnalyticsAddonEnabled,
       }
     );
     return created;
@@ -494,6 +496,7 @@ export class ResellerService {
       kioskAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
+      growthAnalyticsAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -512,6 +515,7 @@ export class ResellerService {
       kioskAddonEnabled: limits.kioskAddonEnabled,
       bexioAddonEnabled: limits.bexioAddonEnabled,
       odooAddonEnabled: limits.odooAddonEnabled,
+      growthAnalyticsAddonEnabled: limits.growthAnalyticsAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }

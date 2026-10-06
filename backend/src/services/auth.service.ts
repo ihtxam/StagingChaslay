@@ -316,6 +316,9 @@ export class AuthService {
       isOdsAddonEnabled(merchant.ods_addon_enabled)
     );
     const maxLocations = await readMerchantMaxLocations(merchant.id);
+    const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
+      m.readGrowthAnalyticsAddonEnabled(merchant.id).catch(() => false)
+    );
     return {
       token,
       merchant: {
@@ -325,6 +328,7 @@ export class AuthService {
         status: merchant.status,
         roleName: "Owner",
         inventoryAddonEnabled: inventoryOn,
+        growthAnalyticsAddonEnabled: growthAnalyticsOn,
         inventoryEnabled: inventoryOn,
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
@@ -369,6 +373,9 @@ export class AuthService {
     const kdsOn = await readKdsAddonEnabled(staff.merchantId).catch(() => false);
     const odsOn = await readOdsAddonEnabled(staff.merchantId).catch(() => false);
     const maxLocations = await readMerchantMaxLocations(staff.merchantId);
+    const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
+      m.readGrowthAnalyticsAddonEnabled(staff.merchantId).catch(() => false)
+    );
     return {
       token,
       merchant: {
@@ -380,6 +387,7 @@ export class AuthService {
         roleName: role?.name,
         permissions,
         inventoryAddonEnabled: inventoryOn,
+        growthAnalyticsAddonEnabled: growthAnalyticsOn,
         inventoryEnabled: inventoryOn,
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
@@ -650,6 +658,9 @@ export class AuthService {
         isOdsAddonEnabled(merchant.ods_addon_enabled)
       );
       const maxLocations = await readMerchantMaxLocations(merchantId);
+      const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
+        m.readGrowthAnalyticsAddonEnabled(merchantId).catch(() => false)
+      );
       return {
         id: merchant.id,
         email: merchant.email,
@@ -664,6 +675,7 @@ export class AuthService {
         kdsEnabled: kdsOn,
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
+        growthAnalyticsAddonEnabled: growthAnalyticsOn,
         maxLocations,
       };
     } catch (error) {

@@ -184,6 +184,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   /** Paid addon flag — default false for every merchant; Superadmin/reseller toggle it. */
   inventory_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_addon_enabled boolean NOT NULL DEFAULT false",
+  growth_analytics_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS growth_analytics_addon_enabled boolean NOT NULL DEFAULT false",
   inventory_waste_factor:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_waste_factor numeric(5,4) NOT NULL DEFAULT 0.20",
   inventory_auto_reorder_email_enabled:
@@ -1451,6 +1453,11 @@ export async function ensureSignageAddonColumn(): Promise<void> {
 
 export async function ensureKdsAddonColumn(): Promise<void> {
   await runPatch("kds_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureGrowthAnalyticsAddonColumn(): Promise<void> {
+  await runPatch("growth_analytics_addon_enabled");
   await ensureMerchantTables();
 }
 

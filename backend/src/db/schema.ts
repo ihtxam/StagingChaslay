@@ -308,6 +308,7 @@ export const merchants = pgTable(
      * Paid restaurant inventory + recipes addon. Superadmin/reseller only (like POS seats).
      */
     inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
+    growthAnalyticsAddonEnabled: boolean("growth_analytics_addon_enabled").default(false).notNull(),
     /**
      * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
