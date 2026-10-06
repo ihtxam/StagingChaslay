@@ -1924,6 +1924,28 @@ export default function OrderingPage() {
                 ) : null}
               </div>
 
+              {cartFreeGiftCampaigns.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {cartFreeGiftCampaigns.map(({ offer, tiers }) => (
+                    <ShopCartFreeGiftPanel
+                      key={offer.id}
+                      layout="strip"
+                      offerName={offer.name}
+                      offerDescription={offer.description}
+                      tiers={tiers}
+                      formatMoney={formatMoney}
+                      productName={(id) => {
+                        const p = productNameById(id);
+                        return p ? { name: p.name } : null;
+                      }}
+                      onChooseTier={(tierIndex) => {
+                        openFreeGiftPicker(offer.id, tierIndex);
+                        setCartSlideOpen(true);
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -2025,9 +2047,7 @@ export default function OrderingPage() {
       </div>
 
       <div
-        className={`shop-page-content py-6 ${
-          itemCount > 0 || cartFreeGiftCampaigns.length > 0 ? 'pb-40 md:pb-6' : ''
-        }`}
+        className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-40 md:pb-6' : ''}`}
       >
         {!menuSearchQuery.trim() && popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
@@ -2209,31 +2229,8 @@ export default function OrderingPage() {
 
       {itemCount > 0 ? <CartIconButton /> : null}
 
-      {itemCount > 0 || cartFreeGiftCampaigns.length > 0 ? (
+      {itemCount > 0 ? (
         <div className="shop-mobile-cart-stack md:hidden">
-          {cartFreeGiftCampaigns.length > 0 ? (
-            <div className="shop-mobile-cart-stack__gifts">
-              {cartFreeGiftCampaigns.map(({ offer, tiers }) => (
-                <ShopCartFreeGiftPanel
-                  key={offer.id}
-                  layout="strip"
-                  offerName={offer.name}
-                  offerDescription={offer.description}
-                  tiers={tiers}
-                  formatMoney={formatMoney}
-                  productName={(id) => {
-                    const p = productNameById(id);
-                    return p ? { name: p.name } : null;
-                  }}
-                  onChooseTier={(tierIndex) => {
-                    openFreeGiftPicker(offer.id, tierIndex);
-                    setCartSlideOpen(true);
-                  }}
-                />
-              ))}
-            </div>
-          ) : null}
-          {itemCount > 0 ? (
           <div className="shop-mobile-cart-stack__progress">
             <ShopCartThresholdSlot
               channel={channel}
@@ -2242,11 +2239,9 @@ export default function OrderingPage() {
               freeDeliveryFrom={freeDeliveryThreshold}
             />
           </div>
-          ) : null}
-          {itemCount > 0 && checkoutBlockedMessage ? (
+          {checkoutBlockedMessage ? (
             <p className="shop-mobile-cart-stack__closed-msg">{checkoutBlockedMessage}</p>
           ) : null}
-          {itemCount > 0 ? (
           <div className="shop-mobile-cart-bar">
             <button
               type="button"
@@ -2266,7 +2261,6 @@ export default function OrderingPage() {
               {t('shopGoCheckout')} · CHF {cartTotal.toFixed(2)}
             </button>
           </div>
-          ) : null}
         </div>
       ) : null}
 
