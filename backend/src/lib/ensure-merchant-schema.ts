@@ -188,6 +188,20 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS growth_analytics_addon_enabled boolean NOT NULL DEFAULT false",
   guest_crm_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS guest_crm_addon_enabled boolean NOT NULL DEFAULT false",
+  marketing_automation_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_automation_addon_enabled boolean NOT NULL DEFAULT false",
+  smart_segments_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS smart_segments_addon_enabled boolean NOT NULL DEFAULT false",
+  reservation_campaigns_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservation_campaigns_addon_enabled boolean NOT NULL DEFAULT false",
+  ai_coach_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_coach_addon_enabled boolean NOT NULL DEFAULT false",
+  marketing_automation_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_automation_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
+  smart_segments_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS smart_segments_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
+  ai_coach_cache:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_coach_cache jsonb NOT NULL DEFAULT '{}'::jsonb",
   customers_crm_tags:
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
   inventory_waste_factor:
@@ -1339,6 +1353,21 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)`,
   `CREATE INDEX IF NOT EXISTS held_orders_merchant_open_idx ON held_orders(merchant_id, closed_at)`,
   `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'::jsonb`,
+  `CREATE TABLE IF NOT EXISTS reservation_growth_campaigns (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    code varchar(40) NOT NULL,
+    name varchar(200) NOT NULL,
+    perk_label varchar(200),
+    message text,
+    click_count integer NOT NULL DEFAULT 0,
+    booking_count integer NOT NULL DEFAULT 0,
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_code_uq ON reservation_growth_campaigns(merchant_id, code)`,
+  `CREATE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_idx ON reservation_growth_campaigns(merchant_id, active)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1467,6 +1496,29 @@ export async function ensureGrowthAnalyticsAddonColumn(): Promise<void> {
 
 export async function ensureGuestCrmAddonColumn(): Promise<void> {
   await runPatch("guest_crm_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureMarketingAutomationAddonColumn(): Promise<void> {
+  await runPatch("marketing_automation_addon_enabled");
+  await runPatch("marketing_automation_settings");
+  await ensureMerchantTables();
+}
+
+export async function ensureSmartSegmentsAddonColumn(): Promise<void> {
+  await runPatch("smart_segments_addon_enabled");
+  await runPatch("smart_segments_settings");
+  await ensureMerchantTables();
+}
+
+export async function ensureReservationCampaignsAddonColumn(): Promise<void> {
+  await runPatch("reservation_campaigns_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureAiCoachAddonColumn(): Promise<void> {
+  await runPatch("ai_coach_addon_enabled");
+  await runPatch("ai_coach_cache");
   await ensureMerchantTables();
 }
 

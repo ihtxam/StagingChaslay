@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import ReservationCampaignsPanel from '@/components/growth/ReservationCampaignsPanel';
 import { useI18n } from '@/lib/i18n';
 import ReservationCancelModal from '@/components/reservations/ReservationCancelModal';
 import ReservationCreateSheet, {
@@ -39,6 +40,7 @@ type Table = { id: string; label: string; capacity: number; status: string; floo
 export default function Reservations() {
   const { t, formatDate, formatDateTime, formatTime } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [campaignsLicensed, setCampaignsLicensed] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -61,7 +63,11 @@ export default function Reservations() {
   });
 
   const loadConfig = useCallback(async () => {
-    const res = await api.get('/merchant/reservations/config');
+    const [res, settingsRes] = await Promise.all([
+      api.get('/merchant/reservations/config'),
+      api.get('/merchant/settings'),
+    ]);
+    setCampaignsLicensed(settingsRes.data?.settings?.reservationCampaignsAddonEnabled === true);
     setEnabled(!!res.data.config?.enabled);
     setMaxDaysAhead(res.data.config?.settings?.maxDaysAhead || 30);
     setTables(res.data.tables || []);
@@ -250,6 +256,8 @@ export default function Reservations() {
           </span>
         ) : null}
       </div>
+
+      {campaignsLicensed ? <ReservationCampaignsPanel /> : null}
 
       <div className="space-y-4">
           {!enabled && (

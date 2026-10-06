@@ -33,6 +33,7 @@ import {
 } from '@/components/reports/CashDrawerBreakdown';
 import ReportsRevenuePanel from '@/components/reports/ReportsRevenuePanel';
 import SalesMixPanel from '@/components/reports/SalesMixPanel';
+import AiCoachPanel from '@/components/growth/AiCoachPanel';
 import ReportCollapsibleSection from '@/components/reports/ReportCollapsibleSection';
 
 type EodShiftCash = CashDrawerShift;
@@ -85,7 +86,7 @@ type EodReport = {
 };
 
 type Preset = 'today' | 'yesterday' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months' | 'custom';
-type Tab = 'eod' | 'sales' | 'products' | 'users' | 'revenue' | 'mix';
+type Tab = 'eod' | 'sales' | 'products' | 'users' | 'revenue' | 'mix' | 'coach';
 
 type ReportEmailSettings = {
   language: 'en' | 'fr' | 'de';
@@ -120,6 +121,7 @@ export default function ReportsPage() {
   const [bexioLicensed, setBexioLicensed] = useState(false);
   const [odooLicensed, setOdooLicensed] = useState(false);
   const [growthAnalyticsLicensed, setGrowthAnalyticsLicensed] = useState(false);
+  const [aiCoachLicensed, setAiCoachLicensed] = useState(false);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ preset });
@@ -150,6 +152,7 @@ export default function ReportsPage() {
       setBexioLicensed(isBexioLicensed(s));
       setOdooLicensed(isOdooLicensed(s));
       setGrowthAnalyticsLicensed(s?.growthAnalyticsAddonEnabled === true);
+      setAiCoachLicensed(s?.aiCoachAddonEnabled === true);
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('reportsLoadFailed'));
     } finally {
@@ -388,6 +391,7 @@ export default function ReportsPage() {
     { id: 'sales', label: t('reportsTabSales') },
     { id: 'revenue', label: t('reportsTabRevenue') },
     { id: 'mix', label: t('reportsTabSalesMix') },
+    ...(aiCoachLicensed ? [{ id: 'coach' as const, label: 'AI coach' }] : []),
     { id: 'products', label: t('reportsTabProducts') },
     ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
   ];
@@ -547,6 +551,8 @@ export default function ReportsPage() {
 
       {tab === 'revenue' ? (
         <ReportsRevenuePanel />
+      ) : tab === 'coach' ? (
+        <AiCoachPanel />
       ) : tab === 'mix' ? (
         <>
           {preset === 'custom' && (

@@ -49,6 +49,10 @@ import { normalizeGiftCardSettings } from "@/lib/gift-card-settings";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { isGrowthAnalyticsAddonEnabled } from "@/lib/growth-analytics-addon";
 import { isGuestCrmAddonEnabled } from "@/lib/guest-crm-addon";
+import { isMarketingAutomationAddonEnabled } from "@/lib/marketing-automation-addon";
+import { isSmartSegmentsAddonEnabled } from "@/lib/smart-segments-addon";
+import { isReservationCampaignsAddonEnabled } from "@/lib/reservation-campaigns-addon";
+import { isAiCoachAddonEnabled } from "@/lib/ai-coach-addon";
 import { normalizeShopSiteSettings, type ShopSiteSettings } from "@/lib/shop-site-settings";
 import {
   normalizeCustomerDisplaySettings,
@@ -152,6 +156,18 @@ export class MerchantSettingsService {
     );
     const guestCrmOn = isGuestCrmAddonEnabled(
       (merchant as { guestCrmAddonEnabled?: boolean }).guestCrmAddonEnabled
+    );
+    const marketingAutomationOn = isMarketingAutomationAddonEnabled(
+      (merchant as { marketingAutomationAddonEnabled?: boolean }).marketingAutomationAddonEnabled
+    );
+    const smartSegmentsOn = isSmartSegmentsAddonEnabled(
+      (merchant as { smartSegmentsAddonEnabled?: boolean }).smartSegmentsAddonEnabled
+    );
+    const reservationCampaignsOn = isReservationCampaignsAddonEnabled(
+      (merchant as { reservationCampaignsAddonEnabled?: boolean }).reservationCampaignsAddonEnabled
+    );
+    const aiCoachOn = isAiCoachAddonEnabled(
+      (merchant as { aiCoachAddonEnabled?: boolean }).aiCoachAddonEnabled
     );
 
     const shopHost = resolveShopPublicHost();
@@ -264,6 +280,10 @@ export class MerchantSettingsService {
       kioskEnabled: kioskOn,
       growthAnalyticsAddonEnabled: growthAnalyticsOn,
       guestCrmAddonEnabled: guestCrmOn,
+      marketingAutomationAddonEnabled: marketingAutomationOn,
+      smartSegmentsAddonEnabled: smartSegmentsOn,
+      reservationCampaignsAddonEnabled: reservationCampaignsOn,
+      aiCoachAddonEnabled: aiCoachOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),

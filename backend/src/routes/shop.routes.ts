@@ -1997,6 +1997,26 @@ router.get("/:slug/reservations/slots", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/shop/:slug/growth/reservation-campaign/:code
+ * Public campaign metadata + click tracking.
+ */
+router.get("/:slug/growth/reservation-campaign/:code", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Not found" });
+    const { ReservationCampaignsService } = await import(
+      "@/services/reservation-campaigns.service"
+    );
+    await ReservationCampaignsService.trackClick(merchant.id, req.params.code);
+    const campaign = await ReservationCampaignsService.publicInfo(merchant.id, req.params.code);
+    if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+    res.json({ success: true, campaign });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+/**
  * POST /api/shop/:slug/reservations
  */
 router.post("/:slug/reservations", async (req: Request, res: Response) => {
@@ -2044,6 +2064,7 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
       notes: req.body.notes,
       source: "web",
       customerId: auth.customerId || null,
+      campaignCode: req.body.campaignCode || req.body.campaign || null,
     });
     res.status(201).json({
       success: true,
@@ -3362,6 +3383,24 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       });
     } catch {
       /* non-fatal */
+    }
+
+    const orderPaidNow =
+      paymentStatus === "paid" ||
+      paymentStatus === "completed" ||
+      (paymentStatus === "cash" && payMethod !== "card");
+    if (orderPaidNow && emailNorm) {
+      try {
+        const { MarketingAutomationService } = await import(
+          "@/services/marketing-automation.service"
+        );
+        await MarketingAutomationService.trigger(merchant.id, "order_paid", {
+          email: emailNorm,
+          name: resolvedCustomerName,
+        });
+      } catch {
+        /* non-fatal */
+      }
     }
 
     for (const line of lineItems) {

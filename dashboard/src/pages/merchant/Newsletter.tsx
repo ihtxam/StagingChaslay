@@ -19,6 +19,7 @@ import {
   type NativeNewsletterDesign,
 } from '@/lib/newsletter/email-html';
 import { buildPuckNewsletterEmailHtml } from '@/lib/newsletter/puck-email-html';
+import MarketingAutomationPanel from '@/components/growth/MarketingAutomationPanel';
 
 type AudienceRow = {
   id: string | null;
@@ -94,7 +95,8 @@ export default function Newsletter() {
   const [emailStatus, setEmailStatus] = useState<{ configured?: boolean; provider?: string | null }>(
     {}
   );
-  const [mainPanel, setMainPanel] = useState<'campaigns' | 'reminders'>('campaigns');
+  const [mainPanel, setMainPanel] = useState<'campaigns' | 'reminders' | 'automations'>('campaigns');
+  const [marketingAutomationLicensed, setMarketingAutomationLicensed] = useState(false);
   const [designMode, setDesignMode] = useState<'simple' | 'visual'>('simple');
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [title, setTitle] = useState('Newsletter');
@@ -137,6 +139,7 @@ export default function Newsletter() {
         reorderReminderSubject: ms.reorderReminderSubject || '',
         reorderReminderBody: ms.reorderReminderBody || '',
       });
+      setMarketingAutomationLicensed(settingsRes.data?.settings?.marketingAutomationAddonEnabled === true);
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('newsletterLoadFailed'));
     } finally {
@@ -342,6 +345,15 @@ export default function Newsletter() {
         >
           {t('reorderReminder')}
         </button>
+        {marketingAutomationLicensed ? (
+          <button
+            type="button"
+            className={mainPanel === 'automations' ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
+            onClick={() => setMainPanel('automations')}
+          >
+            Automations
+          </button>
+        ) : null}
       </div>
 
       {!emailStatus.configured ? (
@@ -353,6 +365,8 @@ export default function Newsletter() {
           {t('newsletterEmailReady')} ({emailStatus.provider || 'mailco'})
         </p>
       )}
+
+      {mainPanel === 'automations' ? <MarketingAutomationPanel /> : null}
 
       {mainPanel === 'reminders' ? (
         <form onSubmit={saveReminders} className="card max-w-2xl space-y-4">

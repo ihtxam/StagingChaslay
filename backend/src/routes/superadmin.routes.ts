@@ -504,6 +504,10 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled,
+      marketingAutomationAddonEnabled,
+      smartSegmentsAddonEnabled,
+      reservationCampaignsAddonEnabled,
+      aiCoachAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -546,6 +550,10 @@ router.post("/merchants", async (req: Request, res: Response) => {
         odooAddonEnabled: odooAddonEnabled === true,
         growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: guestCrmAddonEnabled === true,
+        marketingAutomationAddonEnabled: marketingAutomationAddonEnabled === true,
+        smartSegmentsAddonEnabled: smartSegmentsAddonEnabled === true,
+        reservationCampaignsAddonEnabled: reservationCampaignsAddonEnabled === true,
+        aiCoachAddonEnabled: aiCoachAddonEnabled === true,
       }
     );
 
@@ -618,7 +626,11 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.kioskAddonEnabled != null ||
       updates.kioskEnabled != null ||
       updates.growthAnalyticsAddonEnabled != null ||
-      updates.guestCrmAddonEnabled != null
+      updates.guestCrmAddonEnabled != null ||
+      updates.marketingAutomationAddonEnabled != null ||
+      updates.smartSegmentsAddonEnabled != null ||
+      updates.reservationCampaignsAddonEnabled != null ||
+      updates.aiCoachAddonEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -678,6 +690,20 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
           updates.guestCrmAddonEnabled != null
             ? updates.guestCrmAddonEnabled === true
             : undefined,
+        marketingAutomationAddonEnabled:
+          updates.marketingAutomationAddonEnabled != null
+            ? updates.marketingAutomationAddonEnabled === true
+            : undefined,
+        smartSegmentsAddonEnabled:
+          updates.smartSegmentsAddonEnabled != null
+            ? updates.smartSegmentsAddonEnabled === true
+            : undefined,
+        reservationCampaignsAddonEnabled:
+          updates.reservationCampaignsAddonEnabled != null
+            ? updates.reservationCampaignsAddonEnabled === true
+            : undefined,
+        aiCoachAddonEnabled:
+          updates.aiCoachAddonEnabled != null ? updates.aiCoachAddonEnabled === true : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -699,6 +725,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.kioskEnabled;
       delete updates.growthAnalyticsAddonEnabled;
       delete updates.guestCrmAddonEnabled;
+      delete updates.marketingAutomationAddonEnabled;
+      delete updates.smartSegmentsAddonEnabled;
+      delete updates.reservationCampaignsAddonEnabled;
+      delete updates.aiCoachAddonEnabled;
     }
 
     const merchant =
