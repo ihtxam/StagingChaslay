@@ -326,6 +326,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageEnabled: merchant.signageEnabled === true,
           signageScreenLimit: merchant.signageScreenLimit ?? 2,
           storekeeperAddonEnabled: merchant.storekeeperAddonEnabled === true,
+          growthAnalyticsAddonEnabled: merchant.growthAnalyticsAddonEnabled === true,
           maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
         },
         role: "merchant",
@@ -355,6 +356,9 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
       }));
       const { readStorekeeperAddonEnabled } = await import("@/lib/storekeeper-addon");
       const storekeeperOn = await readStorekeeperAddonEnabled(req.user.merchantId).catch(() => false);
+      const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
+        m.readGrowthAnalyticsAddonEnabled(req.user!.merchantId!).catch(() => false)
+      );
       res.json({
         user: {
           id: profile.id,
@@ -372,6 +376,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageEnabled: signage.enabled,
           signageScreenLimit: signage.screenLimit,
           storekeeperAddonEnabled: storekeeperOn,
+          growthAnalyticsAddonEnabled: growthAnalyticsOn,
           maxLocations: await (async () => {
             try {
               const merch = await AuthService.getMerchantById(req.user!.merchantId!);

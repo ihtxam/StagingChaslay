@@ -32,6 +32,7 @@ import {
   type CashDrawerShift,
 } from '@/components/reports/CashDrawerBreakdown';
 import ReportsRevenuePanel from '@/components/reports/ReportsRevenuePanel';
+import SalesMixPanel from '@/components/reports/SalesMixPanel';
 import ReportCollapsibleSection from '@/components/reports/ReportCollapsibleSection';
 
 type EodShiftCash = CashDrawerShift;
@@ -84,7 +85,7 @@ type EodReport = {
 };
 
 type Preset = 'today' | 'yesterday' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months' | 'custom';
-type Tab = 'eod' | 'sales' | 'products' | 'users' | 'revenue';
+type Tab = 'eod' | 'sales' | 'products' | 'users' | 'revenue' | 'mix';
 
 type ReportEmailSettings = {
   language: 'en' | 'fr' | 'de';
@@ -118,6 +119,7 @@ export default function ReportsPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [bexioLicensed, setBexioLicensed] = useState(false);
   const [odooLicensed, setOdooLicensed] = useState(false);
+  const [growthAnalyticsLicensed, setGrowthAnalyticsLicensed] = useState(false);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ preset });
@@ -147,6 +149,7 @@ export default function ReportsPage() {
       setShopLogoUrl(s?.shopLogoUrl || s?.posPrintSettings?.receiptLogoUrl || null);
       setBexioLicensed(isBexioLicensed(s));
       setOdooLicensed(isOdooLicensed(s));
+      setGrowthAnalyticsLicensed(s?.growthAnalyticsAddonEnabled === true);
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('reportsLoadFailed'));
     } finally {
@@ -384,6 +387,7 @@ export default function ReportsPage() {
     { id: 'eod', label: t('reportsTabEod') },
     { id: 'sales', label: t('reportsTabSales') },
     { id: 'revenue', label: t('reportsTabRevenue') },
+    { id: 'mix', label: t('reportsTabSalesMix') },
     { id: 'products', label: t('reportsTabProducts') },
     ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
   ];
@@ -416,7 +420,7 @@ export default function ReportsPage() {
             type="button"
             className="btn-secondary inline-flex items-center gap-1.5"
             onClick={() => void printEod()}
-            disabled={!report || loading || tab === 'revenue'}
+            disabled={!report || loading || tab === 'revenue' || tab === 'mix'}
           >
             <Printer className="w-4 h-4" />
             {t('reportsPrintEod')}
@@ -543,6 +547,37 @@ export default function ReportsPage() {
 
       {tab === 'revenue' ? (
         <ReportsRevenuePanel />
+      ) : tab === 'mix' ? (
+        <>
+          {preset === 'custom' && (
+            <div className="flex flex-wrap gap-3 items-end">
+              <label className="text-sm space-y-1">
+                <span className="muted">{t('reportsFrom')}</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+              </label>
+              <label className="text-sm space-y-1">
+                <span className="muted">{t('reportsTo')}</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
+          <SalesMixPanel
+            preset={preset}
+            from={from}
+            to={to}
+            licensed={growthAnalyticsLicensed}
+          />
+        </>
       ) : (
         <>
       {preset === 'custom' && (

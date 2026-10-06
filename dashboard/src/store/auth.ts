@@ -25,6 +25,7 @@ export interface User {
   kdsAddonEnabled?: boolean;
   odsAddonEnabled?: boolean;
   storekeeperAddonEnabled?: boolean;
+  growthAnalyticsAddonEnabled?: boolean;
   maxLocations?: number;
 }
 
@@ -141,6 +142,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         inventoryAddonEnabled: !!(user.inventoryAddonEnabled || user.inventoryEnabled),
         signageAddonEnabled: !!(user.signageAddonEnabled || user.signageEnabled),
         storekeeperAddonEnabled: !!user.storekeeperAddonEnabled,
+        growthAnalyticsAddonEnabled: !!user.growthAnalyticsAddonEnabled,
         maxLocations: Math.max(0, Number(user.maxLocations ?? 1)),
       };
 

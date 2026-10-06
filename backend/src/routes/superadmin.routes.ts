@@ -502,6 +502,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       kioskAddonEnabled,
       bexioAddonEnabled,
       odooAddonEnabled,
+      growthAnalyticsAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -542,6 +543,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         kioskAddonEnabled: isKioskAddonEnabled(kioskAddonEnabled),
         bexioAddonEnabled: bexioAddonEnabled === true,
         odooAddonEnabled: odooAddonEnabled === true,
+        growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
       }
     );
 
@@ -612,7 +614,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.odooAddonEnabled != null ||
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
-      updates.kioskEnabled != null
+      updates.kioskEnabled != null ||
+      updates.growthAnalyticsAddonEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -664,6 +667,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.kioskEnabled != null
               ? isKioskAddonEnabled(updates.kioskEnabled)
               : undefined,
+        growthAnalyticsAddonEnabled:
+          updates.growthAnalyticsAddonEnabled != null
+            ? updates.growthAnalyticsAddonEnabled === true
+            : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -683,6 +690,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.storekeeperAddonEnabled;
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;
+      delete updates.growthAnalyticsAddonEnabled;
     }
 
     const merchant =

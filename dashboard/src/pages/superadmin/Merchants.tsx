@@ -62,6 +62,7 @@ interface Merchant {
   storekeeperAddonEnabled?: boolean;
   kioskAddonEnabled?: boolean;
   kioskEnabled?: boolean;
+  growthAnalyticsAddonEnabled?: boolean;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -126,6 +127,7 @@ const emptyForm = {
   odooAddonEnabled: false,
   storekeeperAddonEnabled: false,
   kioskAddonEnabled: false,
+  growthAnalyticsAddonEnabled: false,
   productSurface: 'full_pos' as MerchantProductSurface,
 };
 
@@ -163,6 +165,7 @@ export default function Merchants() {
     odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
     kioskAddonEnabled: boolean;
+    growthAnalyticsAddonEnabled: boolean;
   }>({
     maxPosPosts: 0,
     maxWaiterPosts: 0,
@@ -177,6 +180,7 @@ export default function Merchants() {
     odooAddonEnabled: false,
     storekeeperAddonEnabled: false,
     kioskAddonEnabled: false,
+    growthAnalyticsAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [planForm, setPlanForm] = useState({
@@ -279,6 +283,7 @@ export default function Merchants() {
         odooAddonEnabled: res.data.merchant?.odooAddonEnabled === true,
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
         kioskAddonEnabled: res.data.merchant?.kioskAddonEnabled === true,
+        growthAnalyticsAddonEnabled: res.data.merchant?.growthAnalyticsAddonEnabled === true,
       });
       const maxPos = Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0);
       const cms = !!res.data.merchant?.cmsHomepageEnabled;
@@ -308,6 +313,7 @@ export default function Merchants() {
         odooAddonEnabled: !!posLimits.odooAddonEnabled,
         storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
         kioskAddonEnabled: !!posLimits.kioskAddonEnabled,
+        growthAnalyticsAddonEnabled: !!posLimits.growthAnalyticsAddonEnabled,
       });
       const saved = res.data?.merchant;
       const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
@@ -316,6 +322,7 @@ export default function Merchants() {
       const odsOn = saved?.odsAddonEnabled === true || saved?.odsEnabled === true;
       const storekeeperOn = saved?.storekeeperAddonEnabled === true;
       const kioskOn = saved?.kioskAddonEnabled === true || saved?.kioskEnabled === true;
+      const growthAnalyticsOn = saved?.growthAnalyticsAddonEnabled === true;
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
@@ -335,6 +342,7 @@ export default function Merchants() {
         odooAddonEnabled: saved?.odooAddonEnabled === true,
         storekeeperAddonEnabled: storekeeperOn,
         kioskAddonEnabled: kioskOn,
+        growthAnalyticsAddonEnabled: growthAnalyticsOn,
       });
       setShowDetail((prev) =>
         prev
@@ -352,6 +360,7 @@ export default function Merchants() {
               storekeeperAddonEnabled: storekeeperOn,
               kioskAddonEnabled: kioskOn,
               kioskEnabled: kioskOn,
+              growthAnalyticsAddonEnabled: growthAnalyticsOn,
             }
           : prev
       );
@@ -536,6 +545,7 @@ export default function Merchants() {
         odooAddonEnabled: !!form.odooAddonEnabled,
         storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
         kioskAddonEnabled: !!form.kioskAddonEnabled,
+        growthAnalyticsAddonEnabled: !!form.growthAnalyticsAddonEnabled,
       });
       const merchantId = res.data.merchant?.id as string | undefined;
       if (merchantId && form.productSurface) {
@@ -628,6 +638,7 @@ export default function Merchants() {
         signageAddonEnabled: !!(account.signageAddonEnabled || account.signageEnabled),
         kdsAddonEnabled: !!(account.kdsAddonEnabled || account.kdsEnabled),
         odsAddonEnabled: !!(account.odsAddonEnabled || account.odsEnabled),
+        growthAnalyticsAddonEnabled: !!account.growthAnalyticsAddonEnabled,
         maxLocations: Math.max(0, Number(account.maxLocations ?? 1)),
       });
       toast.success(`Opened ${account.name}`);
@@ -1191,6 +1202,22 @@ export default function Merchants() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
+                    checked={!!form.growthAnalyticsAddonEnabled}
+                    onChange={(e) =>
+                      setForm({ ...form, growthAnalyticsAddonEnabled: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">Sales mix & analytics (Growth)</span>
+                    <span className="text-xs text-gray-500">
+                      CHF 28/mo — category/product mix, daypart, channel & payment analytics.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
                     checked={!!form.kdsAddonEnabled}
                     onChange={(e) => setForm({ ...form, kdsAddonEnabled: e.target.checked })}
                   />
@@ -1621,6 +1648,34 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.signageAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.growthAnalyticsAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({
+                          ...posLimits,
+                          growthAnalyticsAddonEnabled: e.target.checked,
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Sales mix & analytics (Growth)</span>
+                      <span className="text-xs text-gray-500">
+                        CHF 28/mo — Reports → Sales mix tab.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.growthAnalyticsAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.growthAnalyticsAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

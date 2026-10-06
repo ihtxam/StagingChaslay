@@ -47,6 +47,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { normalizeGiftCardSettings } from "@/lib/gift-card-settings";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { isGrowthAnalyticsAddonEnabled } from "@/lib/growth-analytics-addon";
 import { normalizeShopSiteSettings, type ShopSiteSettings } from "@/lib/shop-site-settings";
 import {
   normalizeCustomerDisplaySettings,
@@ -145,6 +146,9 @@ export class MerchantSettingsService {
     );
     const storekeeperOn = isStorekeeperAddonEnabled(merchant.storekeeperAddonEnabled);
     const kioskOn = isKioskAddonEnabled(merchant.kioskAddonEnabled);
+    const growthAnalyticsOn = isGrowthAnalyticsAddonEnabled(
+      (merchant as { growthAnalyticsAddonEnabled?: boolean }).growthAnalyticsAddonEnabled
+    );
 
     const shopHost = resolveShopPublicHost();
     const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
@@ -254,6 +258,7 @@ export class MerchantSettingsService {
       storekeeperAddonEnabled: storekeeperOn,
       kioskAddonEnabled: kioskOn,
       kioskEnabled: kioskOn,
+      growthAnalyticsAddonEnabled: growthAnalyticsOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
