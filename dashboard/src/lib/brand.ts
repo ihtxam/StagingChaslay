@@ -100,6 +100,13 @@ export function resolvePanelAppOrigin(): string {
   return APP_ORIGIN;
 }
 
+/** Panel-hosted logo URL (shop hosts may not serve `/brand/*`). */
+export function getRebornLogoWhiteUrl(): string {
+  const fromEnv = viteEnv.VITE_REBORN_LOGO_WHITE_URL;
+  if (typeof fromEnv === 'string' && fromEnv.trim()) return fromEnv.trim();
+  return `${resolvePanelAppOrigin()}/brand/reborn-logo-white.png`;
+}
+
 export const PAY_HOST = `pay.${BRAND_DOMAIN}`;
 export const PAY_ORIGIN = (
   viteEnv.VITE_PUBLIC_RECEIPT_BASE_URL || `https://${PAY_HOST}`

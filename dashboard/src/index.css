@@ -2103,6 +2103,21 @@ html.shop-shell #root {
   width: 100%;
 }
 
+/* Match LoginPage: charcoal + burgundy radial glow */
+.shop-platform-footer {
+  position: relative;
+  background-color: #17252b;
+  overflow: hidden;
+}
+
+.shop-platform-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at top, rgba(128, 0, 32, 0.35), transparent 55%);
+}
+
 .cms-homepage .wrap {
   width: 90%;
   max-width: 90rem;
