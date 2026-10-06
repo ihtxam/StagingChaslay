@@ -2712,6 +2712,9 @@ const en: Dict = {
     'Start from a playbook, then set products and save. Cart-gift tiers open in a popup for product picks.',
   offerRestaurantTemplatesSeed: 'Import restaurant offer templates',
   shopCartFreeGiftHint: 'Spend more to unlock free products — pick them in your cart.',
+  shopCartFreeGiftSpendMin:
+    'Spend at least {amount} to get a free product. Pick in your cart.',
+  shopCartFreeGiftPickInCart: 'Choose your free product in the cart.',
   shopCartFreeGiftTierDefault: 'Free from {min}',
   shopCartFreeGiftLocked: 'Add {amount} more ({min}+)',
   shopCartFreeGiftNext: 'Add {amount} for the next gift',
@@ -7275,9 +7278,12 @@ const fr: Dict = {
   offerRestaurantTemplatesHint:
     'Choisissez un modèle, configurez les produits puis enregistrez. Les paliers s’éditent dans une fenêtre.',
   shopCartFreeGiftHint: 'Dépensez plus pour débloquer des produits gratuits — choisissez-les dans le panier.',
-  shopCartFreeGiftTierDefault: 'Gratuit dès CHF {amount}',
-  shopCartFreeGiftLocked: 'Encore CHF {amount} (≥ CHF {min})',
-  shopCartFreeGiftNext: 'Encore CHF {amount} pour le prochain cadeau',
+  shopCartFreeGiftSpendMin:
+    'Dépensez au moins {amount} pour un produit gratuit. Choisissez-le dans le panier.',
+  shopCartFreeGiftPickInCart: 'Choisissez votre produit gratuit dans le panier.',
+  shopCartFreeGiftTierDefault: 'Gratuit dès {min}',
+  shopCartFreeGiftLocked: 'Encore {amount} (≥ {min})',
+  shopCartFreeGiftNext: 'Encore {amount} pour le prochain cadeau',
   shopChooseFreeProduct: 'Choisir un produit gratuit',
   shopAddFreeProductToOrder: 'Ajouter à la commande',
   shopFreeProduct: 'Produit gratuit',
@@ -11716,9 +11722,12 @@ const de: Dict = {
   offerRestaurantTemplatesHint:
     'Vorlage wählen, Produkte setzen, speichern. Stufen bearbeiten Sie im Dialog.',
   shopCartFreeGiftHint: 'Mehr ausgeben, um Gratisprodukte freizuschalten — im Warenkorb auswählen.',
-  shopCartFreeGiftTierDefault: 'Gratis ab CHF {amount}',
-  shopCartFreeGiftLocked: 'Noch CHF {amount} (≥ CHF {min})',
-  shopCartFreeGiftNext: 'Noch CHF {amount} bis zur nächsten Gratis-Stufe',
+  shopCartFreeGiftSpendMin:
+    'Mindestens {amount} ausgeben für ein Gratisprodukt — im Warenkorb wählen.',
+  shopCartFreeGiftPickInCart: 'Gratisprodukt im Warenkorb auswählen.',
+  shopCartFreeGiftTierDefault: 'Gratis ab {min}',
+  shopCartFreeGiftLocked: 'Noch {amount} (≥ {min})',
+  shopCartFreeGiftNext: 'Noch {amount} bis zur nächsten Gratis-Stufe',
   shopChooseFreeProduct: 'Gratisprodukt wählen',
   shopAddFreeProductToOrder: 'Zur Bestellung hinzufügen',
   shopFreeProduct: 'Gratisprodukt',

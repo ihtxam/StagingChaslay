@@ -2222,6 +2222,18 @@ html.shop-shell #root {
   z-index: 45;
 }
 
+.shop-mobile-cart-stack__gifts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem 0;
+  background: #fff;
+}
+
+.shop-mobile-cart-stack__gifts:empty {
+  display: none;
+}
+
 .shop-mobile-cart-stack__progress {
   padding: 0.5rem 1rem 0;
   background: #fff;
@@ -2304,6 +2316,18 @@ html.shop-shell #root {
 
 .shop-mobile-cart-bar__cta:disabled {
   opacity: 0.45;
+}
+
+.shop-checkout-mobile-stack {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 45;
+}
+
+.shop-checkout-sticky-bar--in-stack {
+  position: relative;
+  inset: auto;
 }
 
 .shop-checkout-sticky-bar {

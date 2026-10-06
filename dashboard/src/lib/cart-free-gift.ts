@@ -76,6 +76,43 @@ export function cartPaidSubtotal(
   );
 }
 
+export type CartFreeGiftCampaign = {
+  offer: LiveCartFreeGiftOffer;
+  tiers: CartGiftTierStatus[];
+};
+
+export function computeCartFreeGiftCampaigns(input: {
+  offers: LiveCartFreeGiftOffer[];
+  channel?: string;
+  cartItems: Array<{
+    id: string;
+    cartFreeGiftOfferId?: string;
+    cartFreeGiftTierIndex?: number;
+    price: number;
+    quantity: number;
+    loyaltyReward?: boolean;
+  }>;
+}): CartFreeGiftCampaign[] {
+  const active = activeCartFreeGiftOffers(input.offers, input.channel);
+  const subtotal = cartPaidSubtotal(input.cartItems);
+  return active.map((offer) => {
+    const tiers = normalizeCartGiftTiers(offer.rules);
+    const claimed = new Map<number, string>();
+    for (const item of input.cartItems) {
+      if (
+        item.cartFreeGiftOfferId === offer.id &&
+        item.cartFreeGiftTierIndex != null
+      ) {
+        claimed.set(item.cartFreeGiftTierIndex, item.id);
+      }
+    }
+    return {
+      offer,
+      tiers: evaluateCartGiftTiers({ tiers, subtotal, claimedByTier: claimed }),
+    };
+  });
+}
+
 export function evaluateCartGiftTiers(input: {
   tiers: CartGiftTier[];
   subtotal: number;

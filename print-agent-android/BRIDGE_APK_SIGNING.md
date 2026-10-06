@@ -37,7 +37,7 @@ Release APKs are signed at build time. If a merchant installed Bridge from:
      -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
    ```
 
-2. On build hosts, set in `print-agent-android/local.properties` (or repo-root `local.properties`):
+2. On build hosts, set in `print-agent-android/local.properties` (or repo-root `local.properties`). **The password is chosen when you run `keytool` — it is not stored in git.** Hetzner deploy defaults to `android` for `bridgeStorePassword` / `bridgeKeyPassword` only when those properties are missing; if the keystore was created with a different password, set `BRIDGE_KEYSTORE_PASSWORD` and `BRIDGE_KEY_PASSWORD` in `/root/rebornSense/print-agent-android/local.properties` (or export them before deploy). If the password is lost, generate a **new** keystore and merchants must uninstall/reinstall Bridge once.
 
    ```properties
    bridgeStoreFile=../.secrets/bridge-release.keystore

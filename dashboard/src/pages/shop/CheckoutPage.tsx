@@ -10,6 +10,7 @@ import {
   groupCartForDisplay,
   loadCart,
   loadCustomerToken,
+  newCartLineId,
   removeOfferInstance,
   resolveShopKey,
   resolveShopLocationSlug,
@@ -17,9 +18,17 @@ import {
   saveCustomerToken,
   shopBasePath,
   shopCustomerAuthConfig,
+  shopMenuApiPath,
   type ShopCheckoutDraft,
   type ShopChannel,
 } from '@/lib/shop-cart';
+import {
+  computeCartFreeGiftCampaigns,
+  type LiveCartFreeGiftOffer,
+} from '@/lib/cart-free-gift';
+import { formatShopMoney, inferShopCurrency } from '@/lib/shop-currency';
+import ShopCartFreeGiftPanel from '@/components/shop/ShopCartFreeGiftPanel';
+import ShopFreeGiftPickerModal from '@/components/shop/ShopFreeGiftPickerModal';
 import {
   buildScheduleDays,
   buildScheduleDayForDate,
@@ -185,6 +194,14 @@ export default function CheckoutPage() {
   const [voucherInput, setVoucherInput] = useState('');
   const [applyingVoucher, setApplyingVoucher] = useState(false);
   const [cartPopupOpen, setCartPopupOpen] = useState(false);
+  const [cartFreeGiftOffers, setCartFreeGiftOffers] = useState<LiveCartFreeGiftOffer[]>([]);
+  const [menu, setMenu] = useState<
+    Array<{ id: string; items?: Array<{ id: string; name: string; price: number; categoryId?: string; description?: string; image?: string }> }>
+  >([]);
+  const [freeGiftPicker, setFreeGiftPicker] = useState<{
+    offerId: string;
+    tierIndex: number;
+  } | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -210,11 +227,14 @@ export default function CheckoutPage() {
 
     const boot = async () => {
       try {
-        const [shopRes, payRes] = await Promise.all([
+        const [shopRes, payRes, menuRes] = await Promise.all([
           axios.get(`/api/shop/${shopKey}`),
           axios.get(`/api/shop/${shopKey}/payment-options`),
+          axios.get(shopMenuApiPath(shopKey, locSlug)),
         ]);
         setMerchant(shopRes.data.data);
+        setMenu(menuRes.data.data || []);
+        setCartFreeGiftOffers(menuRes.data.cartFreeGiftOffers || []);
         setGiftCardsEnabled(!!shopRes.data.data?.giftCards?.enabled);
         setPaymentOptions(payRes.data.options);
         if (isLocale(shopRes.data.data?.language)) {
@@ -1304,6 +1324,92 @@ export default function CheckoutPage() {
   const cardSelected = !payWithPoints && draft.paymentMethod === 'card';
   const menuPath = `${shopBasePath(shopKey, locSlug)}/menu`;
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`.replace(/\/+/g, '/');
+
+  const shopCurrency = useMemo(
+    () =>
+      inferShopCurrency({
+        country: merchant?.country,
+        currency: merchant?.currency ?? merchant?.payment?.currency,
+      }),
+    [merchant]
+  );
+  const formatMoney = (amount: number) => formatShopMoney(amount, shopCurrency, locale);
+
+  const cartFreeGiftCampaigns = useMemo(
+    () =>
+      computeCartFreeGiftCampaigns({
+        offers: cartFreeGiftOffers,
+        channel: draft.channel,
+        cartItems: draft.items,
+      }),
+    [cartFreeGiftOffers, draft.channel, draft.items]
+  );
+
+  const findMenuProduct = (id: string) => {
+    for (const cat of menu) {
+      const p = (cat.items || []).find((x) => x.id === id);
+      if (p) return { ...p, categoryId: p.categoryId ?? cat.id };
+    }
+    return null;
+  };
+
+  const addCartFreeGift = (offerId: string, tierIndex: number, productId: string) => {
+    const offer = cartFreeGiftOffers.find((o) => o.id === offerId);
+    const product = findMenuProduct(productId);
+    if (!offer || !product) return;
+    setDraft((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items.filter(
+          (i) =>
+            !(i.cartFreeGiftOfferId === offerId && i.cartFreeGiftTierIndex === tierIndex)
+        ),
+        {
+          lineId: newCartLineId(),
+          id: product.id,
+          name: product.name,
+          categoryId: product.categoryId ?? null,
+          price: 0,
+          basePrice: product.price,
+          quantity: 1,
+          description: product.description,
+          image: product.image,
+          cartFreeGiftOfferId: offerId,
+          cartFreeGiftTierIndex: tierIndex,
+          offerId: offer.id,
+          offerBadge: t('shopFree'),
+          offerName: offer.name,
+        },
+      ],
+    }));
+    setFreeGiftPicker(null);
+  };
+
+  const renderCartFreeGiftBlock = (layout: 'strip' | 'drawer') => {
+    if (!cartFreeGiftCampaigns.length) return null;
+    return (
+      <div className={layout === 'strip' ? 'space-y-2' : 'mb-4 space-y-3'}>
+        {cartFreeGiftCampaigns.map(({ offer, tiers }) => (
+          <ShopCartFreeGiftPanel
+            key={offer.id}
+            layout={layout}
+            offerName={offer.name}
+            offerDescription={offer.description}
+            tiers={tiers}
+            formatMoney={formatMoney}
+            productName={(id) => {
+              const p = findMenuProduct(id);
+              return p ? { name: p.name } : null;
+            }}
+            onChooseTier={(tierIndex) => {
+              setFreeGiftPicker({ offerId: offer.id, tierIndex });
+              if (layout === 'strip') setCartPopupOpen(true);
+            }}
+          />
+        ))}
+      </div>
+    );
+  };
   const tipPresets = [5, 10, 15] as const;
   const activeTipPct = tipPresets.find(
     (pct) => subtotal > 0 && Math.abs(tip - roundTo005((subtotal * pct) / 100)) < 0.02
@@ -2642,6 +2748,7 @@ export default function CheckoutPage() {
               <ShoppingBag className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
               {t('shopYourCart')}
             </h2>
+            {renderCartFreeGiftBlock('drawer')}
             <div className="shop-checkout-desktop-cart__items pr-1">{renderCartItems()}</div>
             <div className="shop-checkout-desktop-cart__footer space-y-3 border-t border-stone-100 pt-3">
               {renderCartTotals()}
@@ -2662,28 +2769,33 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="shop-checkout-sticky-bar lg:hidden">
-        <button
-          type="button"
-          className="shop-checkout-sticky-bar__cart"
-          onClick={() => setCartPopupOpen(true)}
-          aria-label={`${t('shopYourCart')} (${itemCount})`}
-        >
-          <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
-          {itemCount > 0 ? (
-            <span className="shop-checkout-sticky-bar__badge">
-              {itemCount > 99 ? '99+' : itemCount}
-            </span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          className={`shop-checkout-sticky-bar__order ${checkoutReady ? 'is-ready' : 'is-pending'}`}
-          disabled={placeOrderDisabled}
-          onClick={() => void submitCheckout()}
-        >
-          {placeOrderLabel}
-        </button>
+      <div className="shop-checkout-mobile-stack lg:hidden">
+        {cartFreeGiftCampaigns.length > 0 ? (
+          <div className="shop-mobile-cart-stack__gifts">{renderCartFreeGiftBlock('strip')}</div>
+        ) : null}
+        <div className="shop-checkout-sticky-bar shop-checkout-sticky-bar--in-stack">
+          <button
+            type="button"
+            className="shop-checkout-sticky-bar__cart"
+            onClick={() => setCartPopupOpen(true)}
+            aria-label={`${t('shopYourCart')} (${itemCount})`}
+          >
+            <ShoppingBag className="h-5 w-5" strokeWidth={1.9} />
+            {itemCount > 0 ? (
+              <span className="shop-checkout-sticky-bar__badge">
+                {itemCount > 99 ? '99+' : itemCount}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            className={`shop-checkout-sticky-bar__order ${checkoutReady ? 'is-ready' : 'is-pending'}`}
+            disabled={placeOrderDisabled}
+            onClick={() => void submitCheckout()}
+          >
+            {placeOrderLabel}
+          </button>
+        </div>
       </div>
 
       {cartPopupOpen ? (
@@ -2722,7 +2834,10 @@ export default function CheckoutPage() {
                 {t('shopAddMoreItems')}
               </Link>
             </div>
-            <div className="flex-1 overflow-y-auto px-4 py-4">{renderCartItems()}</div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {renderCartFreeGiftBlock('drawer')}
+              {renderCartItems()}
+            </div>
             <div className="border-t border-stone-100 px-4 py-4 space-y-3">
               {renderCartTotals()}
               {renderDiscountControls()}
@@ -2732,6 +2847,26 @@ export default function CheckoutPage() {
           </div>
         </div>
       ) : null}
+
+      {freeGiftPicker ? (
+        <ShopFreeGiftPickerModal
+          title={t('shopChooseFreeProduct')}
+          subtitle={t('shopCartFreeGiftHint')}
+          options={(
+            cartFreeGiftCampaigns
+              .find((c) => c.offer.id === freeGiftPicker.offerId)
+              ?.tiers.find((x) => x.tierIndex === freeGiftPicker.tierIndex)?.productIds || []
+          ).map((id) => {
+            const p = findMenuProduct(id);
+            return { id, name: p?.name || id };
+          })}
+          onClose={() => setFreeGiftPicker(null)}
+          onConfirm={(productId) =>
+            addCartFreeGift(freeGiftPicker.offerId, freeGiftPicker.tierIndex, productId)
+          }
+        />
+      ) : null}
+
       <ShopDeliveryAddressPopup
         open={deliveryAddressOpen}
         shopKey={shopKey}

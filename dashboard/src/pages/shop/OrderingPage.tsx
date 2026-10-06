@@ -76,7 +76,7 @@ import { applyPercent, isPickableDeal, matchingPercentOffer } from '@/lib/shop-o
 import {
   activeCartFreeGiftOffers,
   cartPaidSubtotal,
-  evaluateCartGiftTiers,
+  computeCartFreeGiftCampaigns,
   normalizeCartGiftTiers,
   type LiveCartFreeGiftOffer,
 } from '@/lib/cart-free-gift';
@@ -423,28 +423,15 @@ export default function OrderingPage() {
 
   const paidCartSubtotal = useMemo(() => cartPaidSubtotal(cart), [cart]);
 
-  const cartFreeGiftCampaigns = useMemo(() => {
-    return activeCartGiftOffers.map((offer) => {
-      const tiers = normalizeCartGiftTiers(offer.rules);
-      const claimed = new Map<number, string>();
-      for (const item of cart) {
-        if (
-          item.cartFreeGiftOfferId === offer.id &&
-          item.cartFreeGiftTierIndex != null
-        ) {
-          claimed.set(item.cartFreeGiftTierIndex, item.id);
-        }
-      }
-      return {
-        offer,
-        tiers: evaluateCartGiftTiers({
-          tiers,
-          subtotal: paidCartSubtotal,
-          claimedByTier: claimed,
-        }),
-      };
-    });
-  }, [activeCartGiftOffers, cart, paidCartSubtotal]);
+  const cartFreeGiftCampaigns = useMemo(
+    () =>
+      computeCartFreeGiftCampaigns({
+        offers: cartFreeGiftOffers,
+        channel,
+        cartItems: cart,
+      }),
+    [cartFreeGiftOffers, channel, cart]
+  );
 
   useEffect(() => {
     if (!activeCartGiftOffers.length) return;
@@ -1932,25 +1919,6 @@ export default function OrderingPage() {
                 ) : null}
               </div>
 
-              {cartFreeGiftCampaigns.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {cartFreeGiftCampaigns.map(({ offer, tiers }) => (
-                    <ShopCartFreeGiftPanel
-                      key={offer.id}
-                      compact
-                      offerName={offer.name}
-                      offerDescription={offer.description}
-                      tiers={tiers}
-                      formatMoney={formatMoney}
-                      productName={(id) => {
-                        const p = productNameById(id);
-                        return p ? { name: p.name } : null;
-                      }}
-                      onChooseTier={() => setCartSlideOpen(true)}
-                    />
-                  ))}
-                </div>
-              ) : null}
             </div>
           </div>
         </div>
@@ -2047,7 +2015,11 @@ export default function OrderingPage() {
         </div>
       </div>
 
-      <div className={`shop-page-content py-6 ${itemCount > 0 ? 'pb-40 md:pb-6' : ''}`}>
+      <div
+        className={`shop-page-content py-6 ${
+          itemCount > 0 || cartFreeGiftCampaigns.length > 0 ? 'pb-40 md:pb-6' : ''
+        }`}
+      >
         {!menuSearchQuery.trim() && popularProducts.length > 0 ? (
           <div className="mb-8 space-y-3">
             <h2 className="text-lg font-bold tracking-tight text-stone-900">{t('shopMostPopular')}</h2>
@@ -2217,8 +2189,31 @@ export default function OrderingPage() {
 
       {itemCount > 0 ? <CartIconButton /> : null}
 
-      {itemCount > 0 ? (
+      {itemCount > 0 || cartFreeGiftCampaigns.length > 0 ? (
         <div className="shop-mobile-cart-stack md:hidden">
+          {cartFreeGiftCampaigns.length > 0 ? (
+            <div className="shop-mobile-cart-stack__gifts">
+              {cartFreeGiftCampaigns.map(({ offer, tiers }) => (
+                <ShopCartFreeGiftPanel
+                  key={offer.id}
+                  layout="strip"
+                  offerName={offer.name}
+                  offerDescription={offer.description}
+                  tiers={tiers}
+                  formatMoney={formatMoney}
+                  productName={(id) => {
+                    const p = productNameById(id);
+                    return p ? { name: p.name } : null;
+                  }}
+                  onChooseTier={(tierIndex) => {
+                    openFreeGiftPicker(offer.id, tierIndex);
+                    setCartSlideOpen(true);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          {itemCount > 0 ? (
           <div className="shop-mobile-cart-stack__progress">
             <ShopCartThresholdSlot
               channel={channel}
@@ -2227,9 +2222,11 @@ export default function OrderingPage() {
               freeDeliveryFrom={freeDeliveryThreshold}
             />
           </div>
-          {checkoutBlockedMessage ? (
+          ) : null}
+          {itemCount > 0 && checkoutBlockedMessage ? (
             <p className="shop-mobile-cart-stack__closed-msg">{checkoutBlockedMessage}</p>
           ) : null}
+          {itemCount > 0 ? (
           <div className="shop-mobile-cart-bar">
             <button
               type="button"
@@ -2249,6 +2246,7 @@ export default function OrderingPage() {
               {t('shopGoCheckout')} · CHF {cartTotal.toFixed(2)}
             </button>
           </div>
+          ) : null}
         </div>
       ) : null}
 
