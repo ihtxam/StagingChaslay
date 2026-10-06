@@ -935,6 +935,13 @@ if [[ -f "$REPO_DIR/backend/sql/ensure-gift-cards-ecard.sql" ]]; then
     < "$REPO_DIR/backend/sql/ensure-gift-cards-ecard.sql" || true
 fi
 
+if [[ -f "$REPO_DIR/backend/sql/gift-card-purchase-fees-theme.sql" ]]; then
+  echo "=== Apply gift card purchase fees + theme SQL patches ==="
+  dc exec -T db \
+    psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" \
+    < "$REPO_DIR/backend/sql/gift-card-purchase-fees-theme.sql" || true
+fi
+
 if [[ -f "$REPO_DIR/backend/sql/ensure-refunds.sql" ]]; then
   echo "=== Apply refund / payment breakdown SQL patches ==="
   dc exec -T db \

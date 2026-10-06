@@ -618,6 +618,11 @@ const TABLE_PATCHES: string[] = [
   `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_country varchar(2) DEFAULT 'CH'`,
   `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS fulfillment_status varchar(30)`,
   `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipped_at timestamptz`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS card_theme varchar(32) DEFAULT 'classic'`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_fee decimal(10,2) DEFAULT 0`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS service_fee decimal(10,2) DEFAULT 0`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS payment_fee decimal(10,2) DEFAULT 0`,
+  `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS total_charged decimal(10,2)`,
   `CREATE TABLE IF NOT EXISTS pos_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
