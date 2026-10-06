@@ -1,6 +1,11 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { liveCheckoutApiBase } from "@/lib/adyen-checkout-env";
+import {
+  PLATFORM_LEGAL_SETTING_KEYS,
+  resolvePlatformLegalUrls,
+  type PlatformLegalUrls,
+} from "@/lib/platform-legal-urls";
 
 export const PLATFORM_ADYEN_KEYS = {
   apiKey: "adyen_api_key",
@@ -567,5 +572,31 @@ export class PlatformSettingsService {
       hmacKey,
       apiBase,
     };
+  }
+
+  static async getPlatformLegalUrls(): Promise<PlatformLegalUrls> {
+    const rows = await this.getMany(Object.values(PLATFORM_LEGAL_SETTING_KEYS));
+    return resolvePlatformLegalUrls({
+      privacyUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.privacyUrl],
+      termsUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.termsUrl],
+      cookiesUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl],
+    });
+  }
+
+  static async updatePlatformLegalUrls(input: {
+    privacyUrl?: string;
+    termsUrl?: string;
+    cookiesUrl?: string;
+  }): Promise<PlatformLegalUrls> {
+    if (input.privacyUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.privacyUrl, input.privacyUrl.trim() || null);
+    }
+    if (input.termsUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.termsUrl, input.termsUrl.trim() || null);
+    }
+    if (input.cookiesUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl, input.cookiesUrl.trim() || null);
+    }
+    return this.getPlatformLegalUrls();
   }
 }

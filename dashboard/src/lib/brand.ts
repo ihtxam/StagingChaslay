@@ -117,12 +117,23 @@ export const STATUS_ORIGIN = `https://${STATUS_HOST}`;
 
 export const MARKETING_ORIGIN = `https://${BRAND_DOMAIN}`;
 
-/** Platform legal pages (online shop checkout footer). */
-export const PLATFORM_LEGAL_URLS = {
-  privacy: `${MARKETING_ORIGIN}/privacy-policy`,
-  terms: `${MARKETING_ORIGIN}/terms-of-use`,
-  imprint: `${MARKETING_ORIGIN}/imprint`,
-} as const;
+/** Reborn marketing site for platform legal pages (shop footer). Always rebornsense.com in production. */
+export const PLATFORM_MARKETING_ORIGIN = (
+  viteEnv.VITE_PLATFORM_LEGAL_ORIGIN || 'https://rebornsense.com'
+).replace(/\/+$/, '');
+
+export type PlatformLegalLinks = {
+  privacy: string;
+  terms: string;
+  cookies: string;
+};
+
+/** Default platform legal URLs — overridden by Superadmin → Settings → Platform legal. */
+export const PLATFORM_LEGAL_URLS: PlatformLegalLinks = {
+  privacy: `${PLATFORM_MARKETING_ORIGIN}/privacy-policy`,
+  terms: `${PLATFORM_MARKETING_ORIGIN}/terms-of-use`,
+  cookies: `${PLATFORM_MARKETING_ORIGIN}/cookie-policy`,
+};
 
 /** Legacy hosts still accepted during DNS cutover. */
 export const LEGACY_BRAND_DOMAINS = ['chaslay.com', 'chasly.com'] as const;

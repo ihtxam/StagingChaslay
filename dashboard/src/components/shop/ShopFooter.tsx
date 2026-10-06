@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import { MapPin, Phone } from 'lucide-react';
+import { Mail, MapPin, Phone } from 'lucide-react';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { formatShopPhoneDisplay } from '@/lib/shop-phone-format';
 import { SHOP_HOST } from '@/lib/brand';
+import { useI18n } from '@/lib/i18n';
 import ShopPlatformFooterBand from '@/components/shop/ShopPlatformFooterBand';
 
 type ShopFooterInfo = {
@@ -13,6 +14,8 @@ type ShopFooterInfo = {
   city?: string | null;
   country?: string | null;
   phone?: string | null;
+  email?: string | null;
+  vatNumber?: string | null;
 };
 
 function formatAddressLine(info: ShopFooterInfo): string | null {
@@ -25,6 +28,7 @@ type Props = {
 };
 
 export default function ShopFooter({ shopKey }: Props) {
+  const { t } = useI18n();
   const { merchantSlug } = useParams<{ merchantSlug?: string; locationSlug?: string }>();
   const resolvedKey = shopKey || resolveShopKey(merchantSlug);
 
@@ -51,6 +55,8 @@ export default function ShopFooter({ shopKey }: Props) {
           city: data.city || null,
           country: data.country || null,
           phone: data.phone || null,
+          email: data.email || null,
+          vatNumber: data.vatNumber || null,
         });
       } catch {
         if (!cancelled) setInfo(null);
@@ -66,12 +72,17 @@ export default function ShopFooter({ shopKey }: Props) {
   const addressLine = formatAddressLine(info);
   const phoneDisplay = formatShopPhoneDisplay(info.phone);
   const phoneTel = String(info.phone || '').replace(/\s+/g, '');
+  const vat = String(info.vatNumber || '').trim();
+  const email = String(info.email || '').trim();
 
   return (
     <footer id="contact" className="shop-global-footer mt-auto w-full text-stone-200">
       <div className="shop-page-content pb-0 pt-8">
         <div className="rounded-xl bg-stone-800/95 px-4 py-4 text-white shadow-sm sm:px-5">
-          <p className="text-base font-semibold leading-snug">{info.name}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+            {t('shopFooterMerchantImprint')}
+          </p>
+          <p className="mt-1 text-base font-semibold leading-snug">{info.name}</p>
           {addressLine ? (
             <p className="mt-2 flex items-start gap-2 text-sm text-stone-300">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -85,6 +96,17 @@ export default function ShopFooter({ shopKey }: Props) {
                 {phoneDisplay}
               </a>
             </p>
+          ) : null}
+          {email ? (
+            <p className="mt-2 flex items-center gap-2 text-sm">
+              <Mail className="h-4 w-4 shrink-0 text-stone-300" strokeWidth={2} aria-hidden />
+              <a href={`mailto:${email}`} className="text-stone-100 hover:underline">
+                {email}
+              </a>
+            </p>
+          ) : null}
+          {vat ? (
+            <p className="mt-2 text-sm text-stone-300">{t('shopFooterVatNumber', { vat })}</p>
           ) : null}
         </div>
       </div>

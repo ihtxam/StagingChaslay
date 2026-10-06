@@ -760,6 +760,21 @@ async function findMatchingZone(
 /**
  * GET /api/shop/tls-ask?domain=
  */
+/**
+ * GET /api/shop/platform/legal — platform legal URLs for shop footer (Superadmin-configurable).
+ */
+router.get("/platform/legal", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const legal = await PlatformSettingsService.getPlatformLegalUrls();
+    res.json({ success: true, data: legal });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load platform legal URLs",
+    });
+  }
+});
+
 router.get("/tls-ask", async (req: Request, res: Response) => {
   try {
     const domain = String(req.query.domain || "").toLowerCase().split(":")[0];
@@ -836,6 +851,8 @@ router.get("/:slug", async (req: Request, res: Response) => {
         city: merchant.city,
         country: merchant.country,
         phone: merchant.phone,
+        email: merchant.email,
+        vatNumber: merchant.vatNumber,
         currency: inferShopCurrency({ country: merchant.country }),
         latitude: merchant.latitude,
         longitude: merchant.longitude,

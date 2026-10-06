@@ -282,6 +282,36 @@ router.put("/platform-settings/mailco", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/superadmin/platform-settings/legal
+ */
+router.get("/platform-settings/legal", async (_req: Request, res: Response) => {
+  try {
+    const legal = await PlatformSettingsService.getPlatformLegalUrls();
+    res.json({ success: true, legal });
+  } catch (error) {
+    console.error("Error getting platform legal settings:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load platform legal settings",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/legal
+ */
+router.put("/platform-settings/legal", async (req: Request, res: Response) => {
+  try {
+    const legal = await PlatformSettingsService.updatePlatformLegalUrls(req.body || {});
+    res.json({ success: true, legal });
+  } catch (error) {
+    console.error("Error updating platform legal settings:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save platform legal settings",
+    });
+  }
+});
+
+/**
  * GET /api/superadmin/email/usage — platform email send statistics
  */
 router.get("/email/usage", async (_req: Request, res: Response) => {

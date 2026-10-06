@@ -113,13 +113,24 @@ export default function Settings() {
     message: string;
   } | null>(null);
 
+  type PlatformLegalSettings = {
+    privacy: string;
+    terms: string;
+    cookies: string;
+    origin: string;
+  };
+  const [legal, setLegal] = useState<PlatformLegalSettings | null>(null);
+  const [legalForm, setLegalForm] = useState({ privacy: '', terms: '', cookies: '' });
+  const [savingLegal, setSavingLegal] = useState(false);
+
   const load = async () => {
     try {
       setLoading(true);
-      const [adyenRes, brevoRes, mailcoRes] = await Promise.all([
+      const [adyenRes, brevoRes, mailcoRes, legalRes] = await Promise.all([
         api.get('/superadmin/platform-settings/adyen'),
         api.get('/superadmin/platform-settings/brevo'),
         api.get('/superadmin/platform-settings/mailco'),
+        api.get('/superadmin/platform-settings/legal'),
       ]);
       const a = adyenRes.data.adyen as AdyenSettings;
       setAdyen(a);
@@ -146,6 +157,13 @@ export default function Settings() {
         apiBase: m.apiBase || 'https://ees.mailco.ch/api/v1',
         templateSlug: m.templateSlug || 'platform-transactional',
         emailPrimary: m.emailPrimary === 'brevo' ? 'brevo' : 'mailco',
+      });
+      const leg = legalRes.data.legal as PlatformLegalSettings;
+      setLegal(leg);
+      setLegalForm({
+        privacy: leg.privacy || '',
+        terms: leg.terms || '',
+        cookies: leg.cookies || '',
       });
       await refreshEmailUsage();
     } catch {
@@ -833,6 +851,74 @@ export default function Settings() {
               onClick={() => sendPlatformTestEmail('brevo')}
             >
               {sendingBrevoTestEmail ? 'Sending…' : 'Send Brevo test'}
+            </button>
+          </div>
+        </form>
+
+        <form
+          onSubmit={async (e: FormEvent) => {
+            e.preventDefault();
+            try {
+              setSavingLegal(true);
+              const res = await api.put('/superadmin/platform-settings/legal', legalForm);
+              const leg = res.data.legal as PlatformLegalSettings;
+              setLegal(leg);
+              setLegalForm({
+                privacy: leg.privacy || '',
+                terms: leg.terms || '',
+                cookies: leg.cookies || '',
+              });
+              toast.success('Platform legal URLs saved');
+            } catch {
+              toast.error('Failed to save platform legal URLs');
+            } finally {
+              setSavingLegal(false);
+            }
+          }}
+          className="grid grid-cols-1 gap-4 max-w-3xl border-t border-stone-200 pt-8"
+        >
+          <h3 className="text-lg font-semibold">Platform legal (shop footer)</h3>
+          <p className="text-sm text-stone-600 md:col-span-2">
+            Links shown on every online shop footer (privacy, terms, cookies). Defaults to{' '}
+            <code className="text-xs">rebornsense.com</code>. Merchant imprint (VAT, address) stays on
+            each shop&apos;s own footer block.
+          </p>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">Privacy policy URL</span>
+            <input
+              className="input mt-1"
+              type="url"
+              value={legalForm.privacy}
+              onChange={(e) => setLegalForm({ ...legalForm, privacy: e.target.value })}
+              placeholder="https://rebornsense.com/privacy-policy"
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">Terms of use URL</span>
+            <input
+              className="input mt-1"
+              type="url"
+              value={legalForm.terms}
+              onChange={(e) => setLegalForm({ ...legalForm, terms: e.target.value })}
+              placeholder="https://rebornsense.com/terms-of-use"
+            />
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">Cookie policy URL</span>
+            <input
+              className="input mt-1"
+              type="url"
+              value={legalForm.cookies}
+              onChange={(e) => setLegalForm({ ...legalForm, cookies: e.target.value })}
+              placeholder="https://rebornsense.com/cookie-policy"
+            />
+          </label>
+          {legal?.origin ? (
+            <p className="text-xs text-stone-500 md:col-span-2">Current origin: {legal.origin}</p>
+          ) : null}
+          <div className="md:col-span-2">
+            <button type="submit" className="btn btn-primary" disabled={savingLegal}>
+              {savingLegal ? t('saving') : 'Save legal URLs'}
             </button>
           </div>
         </form>

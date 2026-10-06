@@ -1,6 +1,7 @@
-import { APP_NAME, MARKETING_ORIGIN, PLATFORM_LEGAL_URLS, getRebornLogoWhiteUrl } from '@/lib/brand';
+import { APP_NAME, PLATFORM_MARKETING_ORIGIN, getRebornLogoWhiteUrl } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
 import ShopPaymentMethodIcons from '@/components/shop/ShopPaymentMethodIcons';
+import { usePlatformLegalUrls } from '@/hooks/usePlatformLegalUrls';
 
 type Props = {
   siteHost?: string;
@@ -11,6 +12,7 @@ export default function ShopPlatformFooterBand({ siteHost }: Props) {
   const { t } = useI18n();
   const year = new Date().getFullYear();
   const logoUrl = getRebornLogoWhiteUrl();
+  const legal = usePlatformLegalUrls();
 
   const legalLinkClass =
     'text-stone-300 underline-offset-2 hover:text-white hover:underline transition-colors';
@@ -20,7 +22,7 @@ export default function ShopPlatformFooterBand({ siteHost }: Props) {
       <div className="shop-platform-footer__inner shop-page-content py-6">
         <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
           <a
-            href={MARKETING_ORIGIN}
+            href={PLATFORM_MARKETING_ORIGIN}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex shrink-0 items-center"
@@ -45,7 +47,7 @@ export default function ShopPlatformFooterBand({ siteHost }: Props) {
           <nav className="text-xs sm:text-sm" aria-label={t('shopFooterPlatformLegal')}>
             <p className="flex flex-wrap items-center gap-x-1 gap-y-1">
               <a
-                href={PLATFORM_LEGAL_URLS.privacy}
+                href={legal.privacy}
                 className={legalLinkClass}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -56,7 +58,7 @@ export default function ShopPlatformFooterBand({ siteHost }: Props) {
                 |
               </span>
               <a
-                href={PLATFORM_LEGAL_URLS.terms}
+                href={legal.terms}
                 className={legalLinkClass}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -67,12 +69,12 @@ export default function ShopPlatformFooterBand({ siteHost }: Props) {
                 |
               </span>
               <a
-                href={PLATFORM_LEGAL_URLS.imprint}
+                href={legal.cookies}
                 className={legalLinkClass}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {t('shopFooterPlatformImprint')}
+                {t('shopFooterPlatformCookies')}
               </a>
             </p>
           </nav>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 20" role="img" aria-label="Mastercard">
+  <circle cx="12" cy="10" r="7" fill="#EB001B"/>
+  <circle cx="20" cy="10" r="7" fill="#F79E1B"/>
+  <path fill="#FF5F00" d="M16 4.8a7 7 0 0 0-2.5 5.2A7 7 0 0 0 16 15.2a7 7 0 0 0 2.5-5.2A7 7 0 0 0 16 4.8z"/>
+</svg>
