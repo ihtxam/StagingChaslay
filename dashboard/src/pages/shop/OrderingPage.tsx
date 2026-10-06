@@ -1433,7 +1433,7 @@ export default function OrderingPage() {
     </button>
   );
 
-  const showProductImages = merchant?.menuShowProductImages !== false;
+  const showProductImages = merchant?.menuShowProductImages === true;
   const showCategoryBanners = merchant?.menuShowCategoryBanners !== false;
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
