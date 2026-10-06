@@ -311,6 +311,19 @@ export const merchants = pgTable(
     inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
     growthAnalyticsAddonEnabled: boolean("growth_analytics_addon_enabled").default(false).notNull(),
     guestCrmAddonEnabled: boolean("guest_crm_addon_enabled").default(false).notNull(),
+    marketingAutomationAddonEnabled: boolean("marketing_automation_addon_enabled")
+      .default(false)
+      .notNull(),
+    smartSegmentsAddonEnabled: boolean("smart_segments_addon_enabled").default(false).notNull(),
+    reservationCampaignsAddonEnabled: boolean("reservation_campaigns_addon_enabled")
+      .default(false)
+      .notNull(),
+    aiCoachAddonEnabled: boolean("ai_coach_addon_enabled").default(false).notNull(),
+    marketingAutomationSettings: json("marketing_automation_settings").$type<
+      MarketingAutomationSettings | null
+    >(),
+    smartSegmentsSettings: json("smart_segments_settings").$type<SmartSegmentsSettings | null>(),
+    aiCoachCache: json("ai_coach_cache").$type<AiCoachCache | null>(),
     /**
      * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
@@ -2221,6 +2234,8 @@ export type EmailSendType =
   | "platform_shop_order"
   | "platform_shop_status"
   | "marketing_test"
+  | "marketing_automation_order"
+  | "marketing_automation_reservation"
   | "invoice"
   | "alert";
 
@@ -2264,6 +2279,48 @@ export type MarketingSettings = {
   reorderReminderSubject?: string | null;
   /** Plain text / simple HTML body. Placeholders: {{name}} {{shopUrl}} {{businessName}} */
   reorderReminderBody?: string | null;
+};
+
+export type MarketingAutomationTrigger = "order_paid" | "reservation_confirmed";
+
+export type MarketingAutomationJourney = {
+  id: string;
+  trigger: MarketingAutomationTrigger;
+  enabled: boolean;
+  subject: string;
+  bodyHtml: string;
+};
+
+export type MarketingAutomationSettings = {
+  journeys: MarketingAutomationJourney[];
+};
+
+export type SmartSegmentRuleType = "min_lifetime_spend" | "min_orders" | "lapsed_days";
+
+export type SmartSegmentRule = {
+  id: string;
+  tag: string;
+  type: SmartSegmentRuleType;
+  threshold: number;
+  enabled: boolean;
+};
+
+export type SmartSegmentsSettings = {
+  rules: SmartSegmentRule[];
+  lastAppliedAt?: string | null;
+};
+
+export type AiCoachInsight = {
+  id: string;
+  title: string;
+  detail: string;
+  priority: "high" | "medium" | "low";
+};
+
+export type AiCoachCache = {
+  generatedAt?: string | null;
+  periodLabel?: string | null;
+  insights: AiCoachInsight[];
 };
 
 export type ReportEmailSettings = {
@@ -3417,6 +3474,36 @@ export const deliveryZipRulesRelations = relations(deliveryZipRules, ({ one }) =
 export const paymentTerminalsRelations = relations(paymentTerminals, ({ one }) => ({
   merchant: one(merchants, { fields: [paymentTerminals.merchantId], references: [merchants.id] }),
 }));
+
+/** Trackable reservation invite campaigns (Growth SKU). */
+export const reservationGrowthCampaigns = pgTable(
+  "reservation_growth_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    code: varchar("code", { length: 40 }).notNull(),
+    name: varchar("name", { length: 200 }).notNull(),
+    perkLabel: varchar("perk_label", { length: 200 }),
+    message: text("message"),
+    clickCount: integer("click_count").default(0).notNull(),
+    bookingCount: integer("booking_count").default(0).notNull(),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantCodeUq: uniqueIndex("reservation_growth_campaigns_merchant_code_uq").on(
+      table.merchantId,
+      table.code
+    ),
+    merchantIdx: index("reservation_growth_campaigns_merchant_idx").on(
+      table.merchantId,
+      table.active
+    ),
+  })
+);
 
 /** Newsletter / marketing campaigns designed and sent by merchants */
 export const newsletterCampaigns = pgTable(

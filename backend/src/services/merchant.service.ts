@@ -29,6 +29,26 @@ import {
   writeGuestCrmAddonEnabled,
 } from "@/lib/guest-crm-addon";
 import {
+  isMarketingAutomationAddonEnabled,
+  readMarketingAutomationAddonEnabled,
+  writeMarketingAutomationAddonEnabled,
+} from "@/lib/marketing-automation-addon";
+import {
+  isSmartSegmentsAddonEnabled,
+  readSmartSegmentsAddonEnabled,
+  writeSmartSegmentsAddonEnabled,
+} from "@/lib/smart-segments-addon";
+import {
+  isReservationCampaignsAddonEnabled,
+  readReservationCampaignsAddonEnabled,
+  writeReservationCampaignsAddonEnabled,
+} from "@/lib/reservation-campaigns-addon";
+import {
+  isAiCoachAddonEnabled,
+  readAiCoachAddonEnabled,
+  writeAiCoachAddonEnabled,
+} from "@/lib/ai-coach-addon";
+import {
   isSignageAddonEnabled,
   normalizeSignageScreenLimit,
   readSignageAddon,
@@ -309,6 +329,18 @@ export class MerchantService {
       const guestCrmOn = await readGuestCrmAddonEnabled(merchantId).catch(() =>
         isGuestCrmAddonEnabled(merchant.guestCrmAddonEnabled)
       );
+      const marketingAutomationOn = await readMarketingAutomationAddonEnabled(merchantId).catch(
+        () => isMarketingAutomationAddonEnabled(merchant.marketingAutomationAddonEnabled)
+      );
+      const smartSegmentsOn = await readSmartSegmentsAddonEnabled(merchantId).catch(() =>
+        isSmartSegmentsAddonEnabled(merchant.smartSegmentsAddonEnabled)
+      );
+      const reservationCampaignsOn = await readReservationCampaignsAddonEnabled(merchantId).catch(
+        () => isReservationCampaignsAddonEnabled(merchant.reservationCampaignsAddonEnabled)
+      );
+      const aiCoachOn = await readAiCoachAddonEnabled(merchantId).catch(() =>
+        isAiCoachAddonEnabled(merchant.aiCoachAddonEnabled)
+      );
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
@@ -330,6 +362,10 @@ export class MerchantService {
         accountingAddonEnabled: bexioOn || odooOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
         guestCrmAddonEnabled: guestCrmOn,
+        marketingAutomationAddonEnabled: marketingAutomationOn,
+        smartSegmentsAddonEnabled: smartSegmentsOn,
+        reservationCampaignsAddonEnabled: reservationCampaignsOn,
+        aiCoachAddonEnabled: aiCoachOn,
         editionName: merchant.edition?.name ?? null,
         planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
@@ -386,6 +422,10 @@ export class MerchantService {
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      marketingAutomationAddonEnabled?: boolean;
+      smartSegmentsAddonEnabled?: boolean;
+      reservationCampaignsAddonEnabled?: boolean;
+      aiCoachAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -562,6 +602,18 @@ export class MerchantService {
       if (options?.guestCrmAddonEnabled === true) {
         await writeGuestCrmAddonEnabled(created.id, true);
       }
+      if (options?.marketingAutomationAddonEnabled === true) {
+        await writeMarketingAutomationAddonEnabled(created.id, true);
+      }
+      if (options?.smartSegmentsAddonEnabled === true) {
+        await writeSmartSegmentsAddonEnabled(created.id, true);
+      }
+      if (options?.reservationCampaignsAddonEnabled === true) {
+        await writeReservationCampaignsAddonEnabled(created.id, true);
+      }
+      if (options?.aiCoachAddonEnabled === true) {
+        await writeAiCoachAddonEnabled(created.id, true);
+      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
         enabled: false,
@@ -571,6 +623,14 @@ export class MerchantService {
       const odsOn = await readOdsAddonEnabled(created.id).catch(() => false);
       const growthAnalyticsOn = await readGrowthAnalyticsAddonEnabled(created.id).catch(() => false);
       const guestCrmOn = await readGuestCrmAddonEnabled(created.id).catch(() => false);
+      const marketingAutomationOn = await readMarketingAutomationAddonEnabled(created.id).catch(
+        () => false
+      );
+      const smartSegmentsOn = await readSmartSegmentsAddonEnabled(created.id).catch(() => false);
+      const reservationCampaignsOn = await readReservationCampaignsAddonEnabled(created.id).catch(
+        () => false
+      );
+      const aiCoachOn = await readAiCoachAddonEnabled(created.id).catch(() => false);
 
       // Don't leak password hash to API clients
       const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row as typeof row & {
@@ -591,6 +651,10 @@ export class MerchantService {
         odsEnabled: odsOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
         guestCrmAddonEnabled: guestCrmOn,
+        marketingAutomationAddonEnabled: marketingAutomationOn,
+        smartSegmentsAddonEnabled: smartSegmentsOn,
+        reservationCampaignsAddonEnabled: reservationCampaignsOn,
+        aiCoachAddonEnabled: aiCoachOn,
         justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
@@ -689,6 +753,10 @@ export class MerchantService {
       storekeeperAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      marketingAutomationAddonEnabled?: boolean;
+      smartSegmentsAddonEnabled?: boolean;
+      reservationCampaignsAddonEnabled?: boolean;
+      aiCoachAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -755,9 +823,25 @@ export class MerchantService {
       await writeGuestCrmAddonEnabled(merchantId, limits.guestCrmAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.marketingAutomationAddonEnabled !== undefined) {
+      await writeMarketingAutomationAddonEnabled(merchantId, limits.marketingAutomationAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.smartSegmentsAddonEnabled !== undefined) {
+      await writeSmartSegmentsAddonEnabled(merchantId, limits.smartSegmentsAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.reservationCampaignsAddonEnabled !== undefined) {
+      await writeReservationCampaignsAddonEnabled(merchantId, limits.reservationCampaignsAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.aiCoachAddonEnabled !== undefined) {
+      await writeAiCoachAddonEnabled(merchantId, limits.aiCoachAddonEnabled);
+      wroteAddon = true;
+    }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

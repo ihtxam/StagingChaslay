@@ -488,6 +488,7 @@ export class ReservationService {
       tableId?: string | null;
       status?: ReservationStatus;
       skipSlotCheck?: boolean;
+      campaignCode?: string | null;
     }
   ) {
     const db = getDb();
@@ -598,6 +599,31 @@ export class ReservationService {
 
     if (status === "confirmed") {
       await ReservationService.enqueuePosAlert(merchantId, row.id);
+    }
+
+    if (input.campaignCode) {
+      try {
+        const { ReservationCampaignsService } = await import(
+          "@/services/reservation-campaigns.service"
+        );
+        await ReservationCampaignsService.trackBooking(merchantId, input.campaignCode);
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    if (status === "confirmed" && email) {
+      try {
+        const { MarketingAutomationService } = await import(
+          "@/services/marketing-automation.service"
+        );
+        await MarketingAutomationService.trigger(merchantId, "reservation_confirmed", {
+          email,
+          name,
+        });
+      } catch {
+        /* non-fatal */
+      }
     }
 
     return row;

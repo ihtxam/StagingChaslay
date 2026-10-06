@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import GuestCrmPanel from '@/components/customers/GuestCrmPanel';
+import SmartSegmentsPanel from '@/components/growth/SmartSegmentsPanel';
 
 interface Customer {
   id: string;
@@ -35,6 +36,7 @@ export default function Customers() {
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [guestCrmLicensed, setGuestCrmLicensed] = useState(false);
+  const [smartSegmentsLicensed, setSmartSegmentsLicensed] = useState(false);
 
   const load = async () => {
     try {
@@ -53,6 +55,7 @@ export default function Customers() {
       try {
         const res = await api.get('/merchant/settings');
         setGuestCrmLicensed(res.data.settings?.guestCrmAddonEnabled === true);
+        setSmartSegmentsLicensed(res.data.settings?.smartSegmentsAddonEnabled === true);
       } catch {
         setGuestCrmLicensed(false);
       }
@@ -186,6 +189,11 @@ export default function Customers() {
             28/month). Ask your reseller or Reborn admin to enable it.
           </div>
         )}
+        {smartSegmentsLicensed ? (
+          <div className="mb-6">
+            <SmartSegmentsPanel />
+          </div>
+        ) : null}
         <form onSubmit={onCreate} className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4">
           <input
             className="input"
