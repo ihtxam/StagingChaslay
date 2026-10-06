@@ -89,11 +89,16 @@ shop.chaslay.com {
 		reverse_proxy api:3000
 	}
 
+	handle /shop/payments/* {
+		reverse_proxy dashboard:80
+	}
+
 	@shop_spa {
 		not path /api/*
 		not path /assets/*
 		not path /openpage/*
 		not path /downloads/*
+		not path /shop/payments/*
 		not path /*.*
 	}
 	handle @shop_spa {
