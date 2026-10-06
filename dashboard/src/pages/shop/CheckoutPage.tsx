@@ -1283,6 +1283,25 @@ export default function CheckoutPage() {
     return all.filter((c) => channels[c.id]?.enabled);
   }, [merchant, t]);
 
+  const shopCurrency = useMemo(
+    () =>
+      inferShopCurrency({
+        country: merchant?.country,
+        currency: merchant?.currency ?? merchant?.payment?.currency,
+      }),
+    [merchant]
+  );
+
+  const cartFreeGiftCampaigns = useMemo(
+    () =>
+      computeCartFreeGiftCampaigns({
+        offers: cartFreeGiftOffers,
+        channel: draft.channel,
+        cartItems: draft.items,
+      }),
+    [cartFreeGiftOffers, draft.channel, draft.items]
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f6f5f2] text-stone-600">
@@ -1290,7 +1309,6 @@ export default function CheckoutPage() {
       </div>
     );
   }
-
 
   const channelLabel =
     draft.channel === 'delivery' ? t('shopDelivery') : draft.channel === 'dine_in' ? t('shopDineIn') : t('shopPickup');
@@ -1325,25 +1343,7 @@ export default function CheckoutPage() {
   const menuPath = `${shopBasePath(shopKey, locSlug)}/menu`;
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`.replace(/\/+/g, '/');
 
-  const shopCurrency = useMemo(
-    () =>
-      inferShopCurrency({
-        country: merchant?.country,
-        currency: merchant?.currency ?? merchant?.payment?.currency,
-      }),
-    [merchant]
-  );
   const formatMoney = (amount: number) => formatShopMoney(amount, shopCurrency, locale);
-
-  const cartFreeGiftCampaigns = useMemo(
-    () =>
-      computeCartFreeGiftCampaigns({
-        offers: cartFreeGiftOffers,
-        channel: draft.channel,
-        cartItems: draft.items,
-      }),
-    [cartFreeGiftOffers, draft.channel, draft.items]
-  );
 
   const findMenuProduct = (id: string) => {
     for (const cat of menu) {
