@@ -130,6 +130,7 @@ function MerchantsPage() {
     odooAddonEnabled: false,
     storekeeperAddonEnabled: false,
     growthAnalyticsAddonEnabled: false,
+    guestCrmAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -147,6 +148,7 @@ function MerchantsPage() {
     odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
     growthAnalyticsAddonEnabled: boolean;
+    guestCrmAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
     id: string;
@@ -330,6 +332,7 @@ function MerchantsPage() {
         odooAddonEnabled: !!limitsFor.odooAddonEnabled,
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
         growthAnalyticsAddonEnabled: !!limitsFor.growthAnalyticsAddonEnabled,
+        guestCrmAddonEnabled: !!limitsFor.guestCrmAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -697,6 +700,18 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!form.guestCrmAddonEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, guestCrmAddonEnabled: e.target.checked }))}
+              />
+              <span>
+                <span className="font-medium block">Guest CRM</span>
+                <span className="text-xs text-stone-500">CHF 28/mo growth add-on</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!form.kdsAddonEnabled}
                 onChange={(e) => setForm((f) => ({ ...f, kdsAddonEnabled: e.target.checked }))}
               />
@@ -886,6 +901,7 @@ function MerchantsPage() {
                         odooAddonEnabled: m.odooAddonEnabled === true,
                         storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                         growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
+                        guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
                       })
                     }
                   >
@@ -1076,6 +1092,20 @@ function MerchantsPage() {
               />
               <span>
                 <span className="font-medium block">Sales mix & analytics</span>
+                <span className="text-xs text-stone-500">CHF 28/mo growth add-on</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.guestCrmAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, guestCrmAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">Guest CRM</span>
                 <span className="text-xs text-stone-500">CHF 28/mo growth add-on</span>
               </span>
             </label>

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import GuestCrmPanel from '@/components/customers/GuestCrmPanel';
 
 interface Customer {
   id: string;
@@ -33,6 +34,7 @@ export default function Customers() {
   const [editLastName, setEditLastName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [guestCrmLicensed, setGuestCrmLicensed] = useState(false);
 
   const load = async () => {
     try {
@@ -46,7 +48,15 @@ export default function Customers() {
   };
 
   useEffect(() => {
-    load();
+    void load();
+    void (async () => {
+      try {
+        const res = await api.get('/merchant/settings');
+        setGuestCrmLicensed(res.data.settings?.guestCrmAddonEnabled === true);
+      } catch {
+        setGuestCrmLicensed(false);
+      }
+    })();
   }, []);
 
   const validateContact = (
@@ -165,6 +175,17 @@ export default function Customers() {
       <div className="card">
         <h1 className="text-2xl font-bold mb-2">{t('customersPageTitle')}</h1>
         <p className="text-sm muted mb-2">{t('customersPageSubtitle')}</p>
+        {guestCrmLicensed ? (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold mb-2">Guest CRM</h2>
+            <GuestCrmPanel />
+          </div>
+        ) : (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            Guest profiles, tags, and visit history are available with the Guest CRM add-on (CHF
+            28/month). Ask your reseller or Reborn admin to enable it.
+          </div>
+        )}
         <form onSubmit={onCreate} className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4">
           <input
             className="input"

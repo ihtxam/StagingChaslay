@@ -63,6 +63,7 @@ interface Merchant {
   kioskAddonEnabled?: boolean;
   kioskEnabled?: boolean;
   growthAnalyticsAddonEnabled?: boolean;
+  guestCrmAddonEnabled?: boolean;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -128,6 +129,7 @@ const emptyForm = {
   storekeeperAddonEnabled: false,
   kioskAddonEnabled: false,
   growthAnalyticsAddonEnabled: false,
+  guestCrmAddonEnabled: false,
   productSurface: 'full_pos' as MerchantProductSurface,
 };
 
@@ -166,6 +168,7 @@ export default function Merchants() {
     storekeeperAddonEnabled: boolean;
     kioskAddonEnabled: boolean;
     growthAnalyticsAddonEnabled: boolean;
+    guestCrmAddonEnabled: boolean;
   }>({
     maxPosPosts: 0,
     maxWaiterPosts: 0,
@@ -181,6 +184,7 @@ export default function Merchants() {
     storekeeperAddonEnabled: false,
     kioskAddonEnabled: false,
     growthAnalyticsAddonEnabled: false,
+    guestCrmAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [planForm, setPlanForm] = useState({
@@ -284,6 +288,7 @@ export default function Merchants() {
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
         kioskAddonEnabled: res.data.merchant?.kioskAddonEnabled === true,
         growthAnalyticsAddonEnabled: res.data.merchant?.growthAnalyticsAddonEnabled === true,
+        guestCrmAddonEnabled: res.data.merchant?.guestCrmAddonEnabled === true,
       });
       const maxPos = Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0);
       const cms = !!res.data.merchant?.cmsHomepageEnabled;
@@ -314,6 +319,7 @@ export default function Merchants() {
         storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
         kioskAddonEnabled: !!posLimits.kioskAddonEnabled,
         growthAnalyticsAddonEnabled: !!posLimits.growthAnalyticsAddonEnabled,
+        guestCrmAddonEnabled: !!posLimits.guestCrmAddonEnabled,
       });
       const saved = res.data?.merchant;
       const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
@@ -323,6 +329,7 @@ export default function Merchants() {
       const storekeeperOn = saved?.storekeeperAddonEnabled === true;
       const kioskOn = saved?.kioskAddonEnabled === true || saved?.kioskEnabled === true;
       const growthAnalyticsOn = saved?.growthAnalyticsAddonEnabled === true;
+      const guestCrmOn = saved?.guestCrmAddonEnabled === true;
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
@@ -343,6 +350,7 @@ export default function Merchants() {
         storekeeperAddonEnabled: storekeeperOn,
         kioskAddonEnabled: kioskOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
+        guestCrmAddonEnabled: guestCrmOn,
       });
       setShowDetail((prev) =>
         prev
@@ -361,6 +369,7 @@ export default function Merchants() {
               kioskAddonEnabled: kioskOn,
               kioskEnabled: kioskOn,
               growthAnalyticsAddonEnabled: growthAnalyticsOn,
+              guestCrmAddonEnabled: guestCrmOn,
             }
           : prev
       );
@@ -546,6 +555,7 @@ export default function Merchants() {
         storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
         kioskAddonEnabled: !!form.kioskAddonEnabled,
         growthAnalyticsAddonEnabled: !!form.growthAnalyticsAddonEnabled,
+        guestCrmAddonEnabled: !!form.guestCrmAddonEnabled,
       });
       const merchantId = res.data.merchant?.id as string | undefined;
       if (merchantId && form.productSurface) {
@@ -639,6 +649,7 @@ export default function Merchants() {
         kdsAddonEnabled: !!(account.kdsAddonEnabled || account.kdsEnabled),
         odsAddonEnabled: !!(account.odsAddonEnabled || account.odsEnabled),
         growthAnalyticsAddonEnabled: !!account.growthAnalyticsAddonEnabled,
+        guestCrmAddonEnabled: !!account.guestCrmAddonEnabled,
         maxLocations: Math.max(0, Number(account.maxLocations ?? 1)),
       });
       toast.success(`Opened ${account.name}`);
@@ -1218,6 +1229,20 @@ export default function Merchants() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
+                    checked={!!form.guestCrmAddonEnabled}
+                    onChange={(e) => setForm({ ...form, guestCrmAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">Guest CRM</span>
+                    <span className="text-xs text-gray-500">
+                      CHF 28/mo — tags, visit history, and guest profiles in Customers.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
                     checked={!!form.kdsAddonEnabled}
                     onChange={(e) => setForm({ ...form, kdsAddonEnabled: e.target.checked })}
                   />
@@ -1676,6 +1701,29 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.growthAnalyticsAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.guestCrmAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, guestCrmAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Guest CRM</span>
+                      <span className="text-xs text-gray-500">CHF 28/mo — Customers → Guest CRM.</span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.guestCrmAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.guestCrmAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

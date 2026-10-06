@@ -9,6 +9,7 @@ import {
   integer,
   serial,
   json,
+  jsonb,
   index,
   uniqueIndex,
   foreignKey,
@@ -309,6 +310,7 @@ export const merchants = pgTable(
      */
     inventoryAddonEnabled: boolean("inventory_addon_enabled").default(false).notNull(),
     growthAnalyticsAddonEnabled: boolean("growth_analytics_addon_enabled").default(false).notNull(),
+    guestCrmAddonEnabled: boolean("guest_crm_addon_enabled").default(false).notNull(),
     /**
      * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
@@ -1317,6 +1319,7 @@ export const customers = pgTable(
     lastOrderAt: timestamp("last_order_at"),
     /** Last automatic reorder-reminder email sent */
     lastReorderReminderAt: timestamp("last_reorder_reminder_at"),
+    crmTags: jsonb("crm_tags").$type<string[]>().default([]).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

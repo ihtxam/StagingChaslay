@@ -503,6 +503,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       bexioAddonEnabled,
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
+      guestCrmAddonEnabled,
     } = req.body;
 
     if (!email || !password || !businessName) {
@@ -544,6 +545,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         bexioAddonEnabled: bexioAddonEnabled === true,
         odooAddonEnabled: odooAddonEnabled === true,
         growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
+        guestCrmAddonEnabled: guestCrmAddonEnabled === true,
       }
     );
 
@@ -615,7 +617,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
       updates.kioskEnabled != null ||
-      updates.growthAnalyticsAddonEnabled != null
+      updates.growthAnalyticsAddonEnabled != null ||
+      updates.guestCrmAddonEnabled != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -671,6 +674,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
           updates.growthAnalyticsAddonEnabled != null
             ? updates.growthAnalyticsAddonEnabled === true
             : undefined,
+        guestCrmAddonEnabled:
+          updates.guestCrmAddonEnabled != null
+            ? updates.guestCrmAddonEnabled === true
+            : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -691,6 +698,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;
       delete updates.growthAnalyticsAddonEnabled;
+      delete updates.guestCrmAddonEnabled;
     }
 
     const merchant =

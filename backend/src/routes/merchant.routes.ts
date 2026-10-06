@@ -2306,6 +2306,93 @@ router.get(
   }
 );
 
+/**
+ * GET /api/merchant/guest-crm/profiles
+ * Guest CRM profiles (paid add-on).
+ */
+router.get(
+  "/guest-crm/profiles",
+  requirePermission("MANAGE_CUSTOMERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { merchantHasGuestCrmLicense } = await import("@/lib/guest-crm-addon");
+      if (!(await merchantHasGuestCrmLicense(merchantId))) {
+        return res.status(403).json({
+          error: "Guest CRM requires the Guest CRM add-on",
+          code: "GUEST_CRM_ADDON",
+        });
+      }
+      const { GuestCrmService } = await import("@/services/guest-crm.service");
+      const result = await GuestCrmService.listProfiles(merchantId, {
+        page: req.query.page ? Number(req.query.page) : 1,
+        limit: req.query.limit ? Number(req.query.limit) : 25,
+        search: req.query.search ? String(req.query.search) : undefined,
+      });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error("Guest CRM list failed:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load guest profiles",
+      });
+    }
+  }
+);
+
+router.get(
+  "/guest-crm/profiles/:customerId",
+  requirePermission("MANAGE_CUSTOMERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { merchantHasGuestCrmLicense } = await import("@/lib/guest-crm-addon");
+      if (!(await merchantHasGuestCrmLicense(merchantId))) {
+        return res.status(403).json({
+          error: "Guest CRM requires the Guest CRM add-on",
+          code: "GUEST_CRM_ADDON",
+        });
+      }
+      const { GuestCrmService } = await import("@/services/guest-crm.service");
+      const data = await GuestCrmService.getProfile(merchantId, req.params.customerId);
+      res.json({ success: true, ...data });
+    } catch (error) {
+      console.error("Guest CRM profile failed:", error);
+      res.status(404).json({
+        error: error instanceof Error ? error.message : "Guest not found",
+      });
+    }
+  }
+);
+
+router.patch(
+  "/guest-crm/profiles/:customerId/tags",
+  requirePermission("MANAGE_CUSTOMERS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { merchantHasGuestCrmLicense } = await import("@/lib/guest-crm-addon");
+      if (!(await merchantHasGuestCrmLicense(merchantId))) {
+        return res.status(403).json({
+          error: "Guest CRM requires the Guest CRM add-on",
+          code: "GUEST_CRM_ADDON",
+        });
+      }
+      const tags = Array.isArray(req.body?.tags) ? req.body.tags : [];
+      const { GuestCrmService } = await import("@/services/guest-crm.service");
+      const result = await GuestCrmService.updateTags(merchantId, req.params.customerId, tags);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error("Guest CRM tags update failed:", error);
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to update tags",
+      });
+    }
+  }
+);
+
 router.get(
   "/reports/eod",
   requirePermission("VIEW_REPORTS", "END_OF_DAY"),

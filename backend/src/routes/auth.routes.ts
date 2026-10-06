@@ -327,6 +327,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageScreenLimit: merchant.signageScreenLimit ?? 2,
           storekeeperAddonEnabled: merchant.storekeeperAddonEnabled === true,
           growthAnalyticsAddonEnabled: merchant.growthAnalyticsAddonEnabled === true,
+          guestCrmAddonEnabled: merchant.guestCrmAddonEnabled === true,
           maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
         },
         role: "merchant",
@@ -359,6 +360,9 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
       const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
         m.readGrowthAnalyticsAddonEnabled(req.user!.merchantId!).catch(() => false)
       );
+      const guestCrmOn = await import("@/lib/guest-crm-addon").then((m) =>
+        m.readGuestCrmAddonEnabled(req.user!.merchantId!).catch(() => false)
+      );
       res.json({
         user: {
           id: profile.id,
@@ -377,6 +381,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
           signageScreenLimit: signage.screenLimit,
           storekeeperAddonEnabled: storekeeperOn,
           growthAnalyticsAddonEnabled: growthAnalyticsOn,
+          guestCrmAddonEnabled: guestCrmOn,
           maxLocations: await (async () => {
             try {
               const merch = await AuthService.getMerchantById(req.user!.merchantId!);

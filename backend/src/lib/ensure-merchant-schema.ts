@@ -186,6 +186,10 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_addon_enabled boolean NOT NULL DEFAULT false",
   growth_analytics_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS growth_analytics_addon_enabled boolean NOT NULL DEFAULT false",
+  guest_crm_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS guest_crm_addon_enabled boolean NOT NULL DEFAULT false",
+  customers_crm_tags:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
   inventory_waste_factor:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_waste_factor numeric(5,4) NOT NULL DEFAULT 0.20",
   inventory_auto_reorder_email_enabled:
@@ -1459,6 +1463,15 @@ export async function ensureKdsAddonColumn(): Promise<void> {
 export async function ensureGrowthAnalyticsAddonColumn(): Promise<void> {
   await runPatch("growth_analytics_addon_enabled");
   await ensureMerchantTables();
+}
+
+export async function ensureGuestCrmAddonColumn(): Promise<void> {
+  await runPatch("guest_crm_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensureCustomerCrmTagsColumn(): Promise<void> {
+  await runPatch("customers_crm_tags");
 }
 
 export async function ensureOdsAddonColumn(): Promise<void> {

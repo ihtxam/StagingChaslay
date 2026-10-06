@@ -24,6 +24,11 @@ import {
   writeGrowthAnalyticsAddonEnabled,
 } from "@/lib/growth-analytics-addon";
 import {
+  isGuestCrmAddonEnabled,
+  readGuestCrmAddonEnabled,
+  writeGuestCrmAddonEnabled,
+} from "@/lib/guest-crm-addon";
+import {
   isSignageAddonEnabled,
   normalizeSignageScreenLimit,
   readSignageAddon,
@@ -301,6 +306,9 @@ export class MerchantService {
       const growthAnalyticsOn = await readGrowthAnalyticsAddonEnabled(merchantId).catch(() =>
         isGrowthAnalyticsAddonEnabled(merchant.growthAnalyticsAddonEnabled)
       );
+      const guestCrmOn = await readGuestCrmAddonEnabled(merchantId).catch(() =>
+        isGuestCrmAddonEnabled(merchant.guestCrmAddonEnabled)
+      );
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
@@ -321,6 +329,7 @@ export class MerchantService {
         odooAddonEnabled: odooOn,
         accountingAddonEnabled: bexioOn || odooOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
+        guestCrmAddonEnabled: guestCrmOn,
         editionName: merchant.edition?.name ?? null,
         planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
@@ -376,6 +385,7 @@ export class MerchantService {
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
+      guestCrmAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -549,6 +559,9 @@ export class MerchantService {
       if (options?.growthAnalyticsAddonEnabled === true) {
         await writeGrowthAnalyticsAddonEnabled(created.id, true);
       }
+      if (options?.guestCrmAddonEnabled === true) {
+        await writeGuestCrmAddonEnabled(created.id, true);
+      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
         enabled: false,
@@ -557,6 +570,7 @@ export class MerchantService {
       const kdsOn = await readKdsAddonEnabled(created.id).catch(() => false);
       const odsOn = await readOdsAddonEnabled(created.id).catch(() => false);
       const growthAnalyticsOn = await readGrowthAnalyticsAddonEnabled(created.id).catch(() => false);
+      const guestCrmOn = await readGuestCrmAddonEnabled(created.id).catch(() => false);
 
       // Don't leak password hash to API clients
       const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row as typeof row & {
@@ -576,6 +590,7 @@ export class MerchantService {
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
+        guestCrmAddonEnabled: guestCrmOn,
         justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
@@ -673,6 +688,7 @@ export class MerchantService {
       odooAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
+      guestCrmAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -735,9 +751,13 @@ export class MerchantService {
       await writeGrowthAnalyticsAddonEnabled(merchantId, limits.growthAnalyticsAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.guestCrmAddonEnabled !== undefined) {
+      await writeGuestCrmAddonEnabled(merchantId, limits.guestCrmAddonEnabled);
+      wroteAddon = true;
+    }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

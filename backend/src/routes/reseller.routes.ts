@@ -198,6 +198,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       bexioAddonEnabled,
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
+      guestCrmAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -232,6 +233,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       bexioAddonEnabled: bexioAddonEnabled === true,
       odooAddonEnabled: odooAddonEnabled === true,
       growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
+      guestCrmAddonEnabled: guestCrmAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -265,6 +267,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       bexioAddonEnabled,
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
+      guestCrmAddonEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
@@ -316,6 +319,8 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
         odooAddonEnabled: odooAddonEnabled != null ? odooAddonEnabled === true : undefined,
         growthAnalyticsAddonEnabled:
           growthAnalyticsAddonEnabled != null ? growthAnalyticsAddonEnabled === true : undefined,
+        guestCrmAddonEnabled:
+          guestCrmAddonEnabled != null ? guestCrmAddonEnabled === true : undefined,
       }
     );
     res.json({ success: true, merchant });
