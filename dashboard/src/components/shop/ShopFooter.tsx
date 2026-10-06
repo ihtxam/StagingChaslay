@@ -1,22 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import { resolveShopKey, resolveShopLocationSlug, shopBasePath } from '@/lib/shop-cart';
+import { MapPin, Phone } from 'lucide-react';
+import { resolveShopKey } from '@/lib/shop-cart';
 import { formatShopPhoneDisplay } from '@/lib/shop-phone-format';
 import { useI18n } from '@/lib/i18n';
-import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
+import {
+  APP_NAME,
+  MARKETING_ORIGIN,
+  PLATFORM_LEGAL_URLS,
+  REBORN_LOGO_WHITE,
+  SHOP_HOST,
+} from '@/lib/brand';
+import ShopPaymentMethodIcons from '@/components/shop/ShopPaymentMethodIcons';
 
 type ShopFooterInfo = {
   name: string;
-  description?: string | null;
   address?: string | null;
   city?: string | null;
   country?: string | null;
-  email?: string | null;
   phone?: string | null;
 };
 
-function formatAddress(info: ShopFooterInfo): string | null {
+function formatAddressLine(info: ShopFooterInfo): string | null {
   const parts = [info.address, info.city, info.country].map((p) => String(p || '').trim()).filter(Boolean);
   return parts.length ? parts.join(', ') : null;
 }
@@ -29,10 +35,15 @@ export default function ShopFooter({ shopKey }: Props) {
   const { t } = useI18n();
   const { merchantSlug, locationSlug } = useParams<{ merchantSlug?: string; locationSlug?: string }>();
   const resolvedKey = shopKey || resolveShopKey(merchantSlug);
-  const locSlug = resolveShopLocationSlug({ locationSlug });
-  const basePath = useMemo(() => shopBasePath(resolvedKey, locSlug), [resolvedKey, locSlug]);
 
   const [info, setInfo] = useState<ShopFooterInfo | null>(null);
+  const [siteHost, setSiteHost] = useState(SHOP_HOST);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSiteHost(window.location.hostname || SHOP_HOST);
+    }
+  }, []);
 
   useEffect(() => {
     if (!resolvedKey) return;
@@ -44,11 +55,9 @@ export default function ShopFooter({ shopKey }: Props) {
         if (cancelled || !data) return;
         setInfo({
           name: data.name || '',
-          description: data.description || null,
           address: data.address || null,
           city: data.city || null,
           country: data.country || null,
-          email: data.email || null,
           phone: data.phone || null,
         });
       } catch {
@@ -60,80 +69,95 @@ export default function ShopFooter({ shopKey }: Props) {
     };
   }, [resolvedKey]);
 
+  const year = useMemo(() => new Date().getFullYear(), []);
+
   if (!resolvedKey || !info?.name) return null;
 
-  const addressLine = formatAddress(info);
-  const year = new Date().getFullYear();
-  const description =
-    String(info.description || '').trim() ||
-    t('shopFooterAboutFallback', { shopName: info.name });
+  const addressLine = formatAddressLine(info);
   const phoneDisplay = formatShopPhoneDisplay(info.phone);
   const phoneTel = String(info.phone || '').replace(/\s+/g, '');
 
-  const linkClass =
-    'text-sm text-[#666666] hover:text-stone-900 transition-colors underline-offset-2 hover:underline';
+  const legalLinkClass =
+    'text-stone-300 underline-offset-2 hover:text-white hover:underline transition-colors';
 
   return (
-    <footer id="contact" className="shop-global-footer mt-auto w-full border-t border-stone-200 bg-white text-stone-700">
-      <div className="shop-page-content py-10">
-        <div className="grid grid-cols-1 gap-6 border-b border-stone-200 pb-8 lg:grid-cols-3 lg:gap-8">
-          <div>
-            <h2 className="text-base font-bold text-stone-900">{info.name}</h2>
-            <p className="mt-3 text-sm leading-relaxed text-[#666666]">{description}</p>
+    <footer id="contact" className="shop-global-footer mt-auto w-full text-stone-200">
+      <div className="shop-page-content pb-0 pt-8">
+        <div className="rounded-xl bg-stone-800/95 px-4 py-4 text-white shadow-sm sm:px-5">
+          <p className="text-base font-semibold leading-snug">{info.name}</p>
+          {addressLine ? (
+            <p className="mt-2 flex items-start gap-2 text-sm text-stone-300">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              <span>{addressLine}</span>
+            </p>
+          ) : null}
+          {phoneDisplay ? (
+            <p className="mt-2 flex items-center gap-2 text-sm">
+              <Phone className="h-4 w-4 shrink-0 text-stone-300" strokeWidth={2} aria-hidden />
+              <a href={`tel:${phoneTel}`} className="text-stone-100 hover:underline">
+                {phoneDisplay}
+              </a>
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="shop-platform-footer mt-6 bg-stone-950 text-stone-300">
+        <div className="shop-page-content py-6">
+          <div className="flex flex-col gap-4 border-b border-stone-800 pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <a
+              href={MARKETING_ORIGIN}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center"
+              aria-label={APP_NAME}
+            >
+              <img
+                src={REBORN_LOGO_WHITE}
+                alt={APP_NAME}
+                width={140}
+                height={36}
+                className="h-8 w-auto max-w-[160px] sm:h-9"
+                loading="lazy"
+                decoding="async"
+              />
+            </a>
+            <p className="text-xs text-stone-500 sm:text-sm">
+              {t('shopFooterPlatformCopyright', { year: String(year), brand: APP_NAME })}
+            </p>
           </div>
 
-          <div>
-            <h2 className="text-base font-bold text-stone-900">{t('shopFooterQuickLinks')}</h2>
-            <ul className="mt-3 space-y-2">
-              <li>
-                <Link to={basePath || '/'} className={linkClass}>
-                  {t('shopHome')}
-                </Link>
-              </li>
-              <li>
-                <Link to={`${basePath}/menu`} className={linkClass}>
-                  {t('shopFooterMenu')}
-                </Link>
-              </li>
-              <li>
-                <Link to={`${basePath}/checkout`} className={linkClass}>
-                  {t('shopBasket')}
-                </Link>
-              </li>
-            </ul>
-          </div>
+          <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8">
+            <nav className="space-y-2 text-xs sm:text-sm" aria-label={t('shopFooterPlatformLegal')}>
+              <p className="flex flex-wrap items-center gap-x-1 gap-y-1">
+                <a href={PLATFORM_LEGAL_URLS.privacy} className={legalLinkClass} target="_blank" rel="noopener noreferrer">
+                  {t('shopFooterPlatformPrivacy')}
+                </a>
+                <span className="text-stone-600" aria-hidden>
+                  |
+                </span>
+                <a href={PLATFORM_LEGAL_URLS.terms} className={legalLinkClass} target="_blank" rel="noopener noreferrer">
+                  {t('shopFooterPlatformTerms')}
+                </a>
+                <span className="text-stone-600" aria-hidden>
+                  |
+                </span>
+                <a href={PLATFORM_LEGAL_URLS.imprint} className={legalLinkClass} target="_blank" rel="noopener noreferrer">
+                  {t('shopFooterPlatformImprint')}
+                </a>
+              </p>
+            </nav>
 
-          <div>
-            <h2 className="text-base font-bold text-stone-900">{t('shopContact')}</h2>
-            <ul className="mt-3 space-y-2 text-sm text-[#666666]">
-              {addressLine ? <li>{addressLine}</li> : null}
-              {info.email ? (
-                <li>
-                  <a href={`mailto:${info.email}`} className={linkClass}>
-                    {info.email}
-                  </a>
-                </li>
-              ) : null}
-              {phoneDisplay ? (
-                <li>
-                  <a href={`tel:${phoneTel}`} className={linkClass}>
-                    {phoneDisplay}
-                  </a>
-                </li>
-              ) : null}
-            </ul>
+            <div className="sm:text-right">
+              <ShopPaymentMethodIcons className="sm:justify-end" />
+              <p className="mt-2 text-[11px] text-stone-500 sm:text-xs">{t('shopFooterPricesIncludeVat')}</p>
+            </div>
           </div>
         </div>
 
-        <div className="pt-6 text-center text-xs text-stone-500 sm:text-sm">
-          <p>
-            {t('shopFooterCopyright', { year: String(year), shopName: info.name })}{' '}
-            <Link to={`${basePath}/pages/privacy-policy`} className="underline-offset-2 hover:underline">
-              {t('shopFooterPrivacyPolicy')}
-            </Link>
-          </p>
+        <div className="border-t border-stone-900 bg-white py-2.5 text-center">
+          <p className="text-xs font-medium text-stone-800">{siteHost}</p>
         </div>
-        <RebornPoweredByFooter variant="shop" className="-mx-[var(--shop-page-gutter,1rem)] border-t-0 bg-transparent" />
       </div>
     </footer>
   );

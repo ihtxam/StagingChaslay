@@ -110,6 +110,13 @@ export const STATUS_ORIGIN = `https://${STATUS_HOST}`;
 
 export const MARKETING_ORIGIN = `https://${BRAND_DOMAIN}`;
 
+/** Platform legal pages (online shop checkout footer). */
+export const PLATFORM_LEGAL_URLS = {
+  privacy: `${MARKETING_ORIGIN}/privacy-policy`,
+  terms: `${MARKETING_ORIGIN}/terms-of-use`,
+  imprint: `${MARKETING_ORIGIN}/imprint`,
+} as const;
+
 /** Legacy hosts still accepted during DNS cutover. */
 export const LEGACY_BRAND_DOMAINS = ['chaslay.com', 'chasly.com'] as const;
 
