@@ -425,6 +425,7 @@ export class ResellerService {
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
+      guestCrmAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -474,6 +475,7 @@ export class ResellerService {
         bexioAddonEnabled: input.bexioAddonEnabled,
         odooAddonEnabled: input.odooAddonEnabled,
         growthAnalyticsAddonEnabled: input.growthAnalyticsAddonEnabled,
+        guestCrmAddonEnabled: input.guestCrmAddonEnabled,
       }
     );
     return created;
@@ -497,6 +499,7 @@ export class ResellerService {
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
+      guestCrmAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -516,6 +519,7 @@ export class ResellerService {
       bexioAddonEnabled: limits.bexioAddonEnabled,
       odooAddonEnabled: limits.odooAddonEnabled,
       growthAnalyticsAddonEnabled: limits.growthAnalyticsAddonEnabled,
+      guestCrmAddonEnabled: limits.guestCrmAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }

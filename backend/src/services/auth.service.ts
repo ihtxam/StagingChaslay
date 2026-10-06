@@ -319,6 +319,9 @@ export class AuthService {
     const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
       m.readGrowthAnalyticsAddonEnabled(merchant.id).catch(() => false)
     );
+    const guestCrmOn = await import("@/lib/guest-crm-addon").then((m) =>
+      m.readGuestCrmAddonEnabled(merchant.id).catch(() => false)
+    );
     return {
       token,
       merchant: {
@@ -329,6 +332,7 @@ export class AuthService {
         roleName: "Owner",
         inventoryAddonEnabled: inventoryOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
+        guestCrmAddonEnabled: guestCrmOn,
         inventoryEnabled: inventoryOn,
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
@@ -376,6 +380,9 @@ export class AuthService {
     const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
       m.readGrowthAnalyticsAddonEnabled(staff.merchantId).catch(() => false)
     );
+    const guestCrmOn = await import("@/lib/guest-crm-addon").then((m) =>
+      m.readGuestCrmAddonEnabled(staff.merchantId).catch(() => false)
+    );
     return {
       token,
       merchant: {
@@ -388,6 +395,7 @@ export class AuthService {
         permissions,
         inventoryAddonEnabled: inventoryOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
+        guestCrmAddonEnabled: guestCrmOn,
         inventoryEnabled: inventoryOn,
         signageAddonEnabled: signage.enabled,
         signageEnabled: signage.enabled,
@@ -661,6 +669,9 @@ export class AuthService {
       const growthAnalyticsOn = await import("@/lib/growth-analytics-addon").then((m) =>
         m.readGrowthAnalyticsAddonEnabled(merchantId).catch(() => false)
       );
+      const guestCrmOn = await import("@/lib/guest-crm-addon").then((m) =>
+        m.readGuestCrmAddonEnabled(merchantId).catch(() => false)
+      );
       return {
         id: merchant.id,
         email: merchant.email,
@@ -676,6 +687,7 @@ export class AuthService {
         odsAddonEnabled: odsOn,
         odsEnabled: odsOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
+        guestCrmAddonEnabled: guestCrmOn,
         maxLocations,
       };
     } catch (error) {
