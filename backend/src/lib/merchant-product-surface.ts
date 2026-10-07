@@ -86,6 +86,15 @@ export function isMerchantProductSurface(raw: unknown): raw is MerchantProductSu
   return typeof raw === "string" && MERCHANT_PRODUCT_SURFACES.includes(raw as MerchantProductSurface);
 }
 
+/** Platform packaging editions (shop-only / CMS / no-POS bundles) — not merchant POS feature tiers. */
+export function productSurfacePackagingEditionNames(): string[] {
+  return MERCHANT_PRODUCT_SURFACES.map((s) => PRODUCT_SURFACE_PRESETS[s].editionName);
+}
+
+export function isProductSurfacePackagingEditionName(name: string): boolean {
+  return productSurfacePackagingEditionNames().includes(name);
+}
+
 /** Guess surface from merchant flags (for display). */
 export function inferProductSurface(input: {
   shopEnabled?: boolean | null;

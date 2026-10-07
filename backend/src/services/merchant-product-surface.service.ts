@@ -2,6 +2,7 @@ import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import {
   isMerchantProductSurface,
+  isProductSurfacePackagingEditionName,
   PRODUCT_SURFACE_PRESETS,
   type MerchantProductSurface,
 } from "@/lib/merchant-product-surface";
@@ -9,15 +10,39 @@ import { EditionService } from "@/services/edition.service";
 import { MerchantService } from "@/services/merchant.service";
 
 export class MerchantProductSurfaceService {
-  static async apply(merchantId: string, surface: MerchantProductSurface) {
+  static async apply(
+    merchantId: string,
+    surface: MerchantProductSurface,
+    opts?: { posEditionId?: string | null }
+  ) {
     if (!isMerchantProductSurface(surface)) {
       throw new Error("Invalid product surface");
     }
     const preset = PRODUCT_SURFACE_PRESETS[surface];
     await EditionService.ensureProductSurfaceEditions();
-    const edition = await EditionService.getPlatformEditionByName(preset.editionName);
-    if (!edition) {
-      throw new Error(`Edition not found: ${preset.editionName}`);
+
+    let editionId: string;
+    let editionName: string;
+
+    if (surface === "full_pos" && opts?.posEditionId) {
+      const posEditionId = String(opts.posEditionId).trim();
+      if (!posEditionId) throw new Error("POS version is required");
+      const posEdition = await EditionService.getById(posEditionId);
+      if (!posEdition || !posEdition.isActive) {
+        throw new Error("POS version not found or inactive");
+      }
+      if (isProductSurfacePackagingEditionName(posEdition.name)) {
+        throw new Error("Choose a POS version (Restaurant Pro, Retail Basic, etc.), not a shop-only package edition");
+      }
+      editionId = posEdition.id;
+      editionName = posEdition.name;
+    } else {
+      const edition = await EditionService.getPlatformEditionByName(preset.editionName);
+      if (!edition) {
+        throw new Error(`Edition not found: ${preset.editionName}`);
+      }
+      editionId = edition.id;
+      editionName = edition.name;
     }
 
     const db = getDb();
@@ -26,7 +51,7 @@ export class MerchantProductSurfaceService {
       .set({
         shopEnabled: preset.shopEnabled,
         cmsHomepageEnabled: preset.cmsHomepageEnabled,
-        editionId: edition.id,
+        editionId,
         maxPosPosts: preset.maxPosPosts,
         updatedAt: new Date(),
       })
@@ -35,11 +60,20 @@ export class MerchantProductSurfaceService {
 
     if (!merchant) throw new Error("Merchant not found");
 
+    await EditionService.applyEditionDefaultsToMerchant(merchantId, editionId);
+    const { PackageProvisioningService } = await import("./package-provisioning.service");
+    const appliedEdition = await EditionService.getById(editionId);
+    await PackageProvisioningService.applyEditionFeatureAddons(
+      merchantId,
+      (appliedEdition?.features as import("@/lib/edition-features").EditionFeatureKey[] | null) ??
+        null
+    );
+
     return {
       surface,
       merchantId,
-      editionId: edition.id,
-      editionName: edition.name,
+      editionId,
+      editionName,
       shopEnabled: preset.shopEnabled,
       cmsHomepageEnabled: preset.cmsHomepageEnabled,
       maxPosPosts: preset.maxPosPosts,

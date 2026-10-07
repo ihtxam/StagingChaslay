@@ -60,3 +60,25 @@ export const PRODUCT_SURFACE_PRESETS: Record<MerchantProductSurface, ProductSurf
 export function isMerchantProductSurface(raw: unknown): raw is MerchantProductSurface {
   return typeof raw === 'string' && MERCHANT_PRODUCT_SURFACES.includes(raw as MerchantProductSurface);
 }
+
+export function productSurfacePackagingEditionNames(): string[] {
+  return MERCHANT_PRODUCT_SURFACES.map((s) => PRODUCT_SURFACE_PRESETS[s].editionName);
+}
+
+export function isProductSurfacePackagingEditionName(name: string): boolean {
+  return productSurfacePackagingEditionNames().includes(name);
+}
+
+export function filterEditionsForProductSurface<
+  T extends { id: string; name: string; businessCategory: string },
+>(editions: T[], surface: MerchantProductSurface, businessCategory: string): T[] {
+  const byCategory = editions.filter(
+    (ed) => ed.businessCategory === 'both' || ed.businessCategory === businessCategory
+  );
+  if (surface === 'full_pos') {
+    return byCategory.filter((ed) => !isProductSurfacePackagingEditionName(ed.name));
+  }
+  const targetName = PRODUCT_SURFACE_PRESETS[surface].editionName;
+  const match = byCategory.find((ed) => ed.name === targetName);
+  return match ? [match] : byCategory.filter((ed) => isProductSurfacePackagingEditionName(ed.name));
+}

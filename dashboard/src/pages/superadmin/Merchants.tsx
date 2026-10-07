@@ -8,6 +8,8 @@ import { useI18n } from '@/lib/i18n';
 import {
   MERCHANT_PRODUCT_SURFACES,
   PRODUCT_SURFACE_PRESETS,
+  filterEditionsForProductSurface,
+  isProductSurfacePackagingEditionName,
   type MerchantProductSurface,
 } from '@/lib/merchant-product-surface';
 import {
@@ -206,14 +208,25 @@ export default function Merchants() {
 
   const applyProductSurfaceToForm = (surface: MerchantProductSurface) => {
     const preset = PRODUCT_SURFACE_PRESETS[surface];
-    const edition = editions.find((e) => e.name === preset.editionName);
-    setForm((f) => ({
-      ...f,
-      productSurface: surface,
-      shopEnabled: preset.shopEnabled,
-      maxPosPosts: preset.maxPosPosts,
-      editionId: edition?.id || f.editionId,
-    }));
+    setForm((f) => {
+      let editionId = f.editionId;
+      if (surface === 'full_pos') {
+        const selected = editions.find((e) => e.id === f.editionId);
+        if (!selected || isProductSurfacePackagingEditionName(selected.name)) {
+          editionId = '';
+        }
+      } else {
+        const edition = editions.find((e) => e.name === preset.editionName);
+        editionId = edition?.id || '';
+      }
+      return {
+        ...f,
+        productSurface: surface,
+        shopEnabled: preset.shopEnabled,
+        maxPosPosts: preset.maxPosPosts,
+        editionId,
+      };
+    });
   };
 
   useEffect(() => {
@@ -485,6 +498,9 @@ export default function Merchants() {
     try {
       await api.put(`/superadmin/merchants/${showDetail.id}/product-surface`, {
         surface: detailSurface,
+        ...(detailSurface === 'full_pos' && planForm.editionId
+          ? { posEditionId: planForm.editionId }
+          : {}),
       });
       toast.success('Product package updated');
       await openDetail(showDetail);
@@ -519,6 +535,11 @@ export default function Merchants() {
     }
     setSaving(true);
     try {
+      if (form.productSurface === 'full_pos' && !form.editionId) {
+        toast.error('Select a POS version for Shop + Website + POS');
+        setSaving(false);
+        return;
+      }
       if (!form.editionId && !form.productSurface) {
         toast.error('Select a product package or POS version');
         setSaving(false);
@@ -561,6 +582,9 @@ export default function Merchants() {
       if (merchantId && form.productSurface) {
         await api.put(`/superadmin/merchants/${merchantId}/product-surface`, {
           surface: form.productSurface,
+          ...(form.productSurface === 'full_pos' && form.editionId
+            ? { posEditionId: form.editionId }
+            : {}),
         });
       }
       const issued = res.data.merchant?.issuedLicenses || [];
@@ -1034,25 +1058,37 @@ export default function Merchants() {
                   </p>
                 </label>
                 <label className="block">
-                  <span className="text-sm font-medium">POS version *</span>
+                  <span className="text-sm font-medium">
+                    {form.productSurface === 'full_pos' ? 'POS version *' : 'Edition (package)'}
+                  </span>
                   <select
-                    className="input mt-1"
+                    className="input mt-1 w-full min-w-0"
                     value={form.editionId}
                     onChange={(e) => setForm({ ...form, editionId: e.target.value })}
-                    required
+                    required={form.productSurface === 'full_pos'}
+                    disabled={form.productSurface !== 'full_pos'}
                   >
-                    <option value="">Select POS version…</option>
-                    {editions
-                      .filter(
-                        (ed) =>
-                          ed.businessCategory === 'both' || ed.businessCategory === form.businessCategory
-                      )
-                      .map((ed) => (
+                    <option value="">
+                      {form.productSurface === 'full_pos'
+                        ? 'Select POS version…'
+                        : 'Set by product package'}
+                    </option>
+                    {filterEditionsForProductSurface(
+                      editions,
+                      form.productSurface,
+                      form.businessCategory
+                    ).map((ed) => (
                       <option key={ed.id} value={ed.id}>
                         {ed.name}
                       </option>
                     ))}
                   </select>
+                  {form.productSurface === 'full_pos' ? (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Restaurant Pro, Retail Basic, or your reseller POS version — separate from the
+                      shop/website package flags above.
+                    </p>
+                  ) : null}
                 </label>
                 <label className="block">
                   <span className="text-sm font-medium">Reseller / dealer</span>
@@ -1529,10 +1565,36 @@ export default function Merchants() {
                         ))}
                       </select>
                     </label>
+                    {detailSurface === 'full_pos' ? (
+                      <label className="block text-xs flex-1 min-w-[12rem]">
+                        POS version
+                        <select
+                          className="input mt-1 w-full min-w-0"
+                          value={planForm.editionId}
+                          onChange={(e) =>
+                            setPlanForm((p) => ({ ...p, editionId: e.target.value }))
+                          }
+                        >
+                          <option value="">Select POS version…</option>
+                          {filterEditionsForProductSurface(
+                            editions,
+                            'full_pos',
+                            showDetail?.businessCategory === 'retail' ? 'retail' : 'restaurant'
+                          ).map((ed) => (
+                            <option key={ed.id} value={ed.id}>
+                              {ed.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
                     <button
                       type="button"
                       className="btn-primary text-sm"
-                      disabled={applyingSurface}
+                      disabled={
+                        applyingSurface ||
+                        (detailSurface === 'full_pos' && !planForm.editionId)
+                      }
                       onClick={() => void handleApplyProductSurface()}
                     >
                       {applyingSurface ? '…' : 'Apply package'}
