@@ -4,6 +4,8 @@ exports.CategoryService = void 0;
 const db_1 = require("@/db");
 const category_colors_1 = require("@/lib/category-colors");
 const text_encoding_1 = require("@/lib/text-encoding");
+const catalog_visibility_1 = require("@/lib/catalog-visibility");
+const category_shop_schedule_1 = require("@/lib/category-shop-schedule");
 const drizzle_orm_1 = require("drizzle-orm");
 class CategoryService {
     /**
@@ -141,6 +143,9 @@ class CategoryService {
                 }
                 patched.extraDeliveryPrice = n.toFixed(2);
             }
+            if (patched.shopSchedule !== undefined) {
+                patched.shopSchedule = (0, category_shop_schedule_1.normalizeCategoryShopSchedule)(patched.shopSchedule);
+            }
             const category = await db
                 .update(db_1.schema.categories)
                 .set(patched)
@@ -155,6 +160,25 @@ class CategoryService {
             console.error("Error updating category:", error);
             throw error;
         }
+    }
+    /** Merge channels into category visibility when a product is enabled on those channels. */
+    static async ensureChannelsEnabled(merchantId, categoryId, channels) {
+        if (!channels.length)
+            return;
+        const db = (0, db_1.getDb)();
+        const category = await db.query.categories.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.categories.id, categoryId), (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId)),
+            columns: { id: true, visibility: true },
+        });
+        if (!category)
+            return;
+        const current = (0, catalog_visibility_1.normalizeCatalogVisibility)(category.visibility);
+        const merged = new Set([...current.channels, ...channels]);
+        if (merged.size === current.channels.length)
+            return;
+        await this.updateCategory(merchantId, categoryId, {
+            visibility: { channels: [...merged] },
+        });
     }
     /**
      * Delete category

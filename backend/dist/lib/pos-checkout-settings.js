@@ -29,9 +29,20 @@ exports.DEFAULT_POS_CHECKOUT = {
     retailDeliveryEnabled: false,
     retailDineInEnabled: false,
     requireTableForDineIn: true,
+    requireCustomerForDelivery: true,
     actionButtonSize: "md",
     expressCheckoutEnabled: true,
     showPosToasts: false,
+    retailLayoutEnabled: true,
+    retailScannerFirst: true,
+    retailTileSize: "lg",
+    retailPaymentBar: true,
+    retailClearSearchAfterAdd: true,
+    retailShowStockOnTiles: false,
+    retailShowProductPhotos: true,
+    retailQuickTiles: [],
+    retailProductSortMode: "catalog_order",
+    retailRegisterProfiles: [],
 };
 function asNumberArray(v, fallback) {
     if (!Array.isArray(v))
@@ -102,11 +113,56 @@ function normalizePosCheckoutSettings(raw) {
         retailDeliveryEnabled: src.retailDeliveryEnabled === true,
         retailDineInEnabled: src.retailDineInEnabled === true,
         requireTableForDineIn,
+        requireCustomerForDelivery: src.requireCustomerForDelivery !== false,
         actionButtonSize: src.actionButtonSize === "sm" || src.actionButtonSize === "lg"
             ? src.actionButtonSize
             : exports.DEFAULT_POS_CHECKOUT.actionButtonSize,
         expressCheckoutEnabled: resolveExpressCheckoutEnabled(src),
         showPosToasts: src.showPosToasts === true,
+        retailLayoutEnabled: src.retailLayoutEnabled === undefined ? posMode === "retail" : src.retailLayoutEnabled !== false,
+        retailScannerFirst: src.retailScannerFirst !== false,
+        retailTileSize: src.retailTileSize === "sm" || src.retailTileSize === "md" || src.retailTileSize === "lg"
+            ? src.retailTileSize
+            : exports.DEFAULT_POS_CHECKOUT.retailTileSize,
+        retailPaymentBar: src.retailPaymentBar !== false,
+        retailClearSearchAfterAdd: src.retailClearSearchAfterAdd !== false,
+        retailShowStockOnTiles: src.retailShowStockOnTiles === true,
+        retailShowProductPhotos: src.retailShowProductPhotos !== false,
+        retailQuickTiles: Array.isArray(src.retailQuickTiles)
+            ? src.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
+            : [],
+        retailProductSortMode: src.retailProductSortMode === "most_sold" ||
+            src.retailProductSortMode === "alphabetical" ||
+            src.retailProductSortMode === "catalog_order"
+            ? src.retailProductSortMode
+            : exports.DEFAULT_POS_CHECKOUT.retailProductSortMode,
+        retailRegisterProfiles: Array.isArray(src.retailRegisterProfiles)
+            ? src.retailRegisterProfiles
+                .map((row, i) => {
+                const o = (row && typeof row === "object" ? row : {});
+                return {
+                    id: String(o.id || `reg-${i + 1}`).trim().slice(0, 40) || `reg-${i + 1}`,
+                    name: String(o.name || `Register ${i + 1}`).trim().slice(0, 40) || `Register ${i + 1}`,
+                    cartSide: o.cartSide === "left" ? "left" : "right",
+                    retailTileSize: (o.retailTileSize === "sm" || o.retailTileSize === "md" || o.retailTileSize === "lg"
+                        ? o.retailTileSize
+                        : "lg"),
+                    retailScannerFirst: o.retailScannerFirst !== false,
+                    retailPaymentBar: o.retailPaymentBar !== false,
+                    retailShowStockOnTiles: o.retailShowStockOnTiles === true,
+                    retailShowProductPhotos: o.retailShowProductPhotos !== false,
+                    retailQuickTiles: Array.isArray(o.retailQuickTiles)
+                        ? o.retailQuickTiles.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 24)
+                        : [],
+                    retailProductSortMode: o.retailProductSortMode === "most_sold" ||
+                        o.retailProductSortMode === "alphabetical" ||
+                        o.retailProductSortMode === "catalog_order"
+                        ? o.retailProductSortMode
+                        : exports.DEFAULT_POS_CHECKOUT.retailProductSortMode,
+                };
+            })
+                .slice(0, 12)
+            : [],
     };
 }
 //# sourceMappingURL=pos-checkout-settings.js.map

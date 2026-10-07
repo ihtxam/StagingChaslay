@@ -9,6 +9,8 @@ export type CartSide = "left" | "right";
 export type PostSuccessTarget = "register" | "tables";
 export type PosMode = "restaurant" | "retail";
 export type ActionButtonSize = "sm" | "md" | "lg";
+export type RetailTileSize = "sm" | "md" | "lg";
+export type RetailProductSortMode = "most_sold" | "alphabetical" | "catalog_order";
 export type PosCheckoutSettings = {
     tipsEnabled: boolean;
     tipPresetsPercent: number[];
@@ -51,12 +53,43 @@ export type PosCheckoutSettings = {
      * Default: true for restaurant mode, false for retail.
      */
     requireTableForDineIn: boolean;
+    /**
+     * When true, POS delivery orders require a selected customer before checkout.
+     * When false, delivery can be sold without linking a client record.
+     */
+    requireCustomerForDelivery: boolean;
     /** Express checkout + cart action buttons (Send, Payment, Tab). */
     actionButtonSize: ActionButtonSize;
     /** Show quick Cash/Card/Terminal bar under products on WebPOS / Android register. */
     expressCheckoutEnabled: boolean;
     /** Show POS toast notifications. Off by default — they block the till. */
     showPosToasts: boolean;
+    /** Retail register: three-column layout (categories | products | cart). */
+    retailLayoutEnabled: boolean;
+    /** Retail register: auto-focus scan/search field on register view. */
+    retailScannerFirst: boolean;
+    /** Retail register: product tile size in the retail layout grid. */
+    retailTileSize: RetailTileSize;
+    /** Retail register: Cash / Card / Pay bar at bottom of cart panel. */
+    retailPaymentBar: boolean;
+    /** Retail register: clear search after adding a product. */
+    retailClearSearchAfterAdd: boolean;
+    retailShowStockOnTiles: boolean;
+    retailShowProductPhotos: boolean;
+    retailQuickTiles: string[];
+    retailProductSortMode: RetailProductSortMode;
+    retailRegisterProfiles: Array<{
+        id: string;
+        name: string;
+        cartSide: CartSide;
+        retailTileSize: RetailTileSize;
+        retailScannerFirst: boolean;
+        retailPaymentBar: boolean;
+        retailShowStockOnTiles: boolean;
+        retailShowProductPhotos: boolean;
+        retailQuickTiles: string[];
+        retailProductSortMode: RetailProductSortMode;
+    }>;
 };
 export declare const DEFAULT_POS_CHECKOUT: PosCheckoutSettings;
 export declare function isRetailPosMode(raw: unknown): boolean;

@@ -15,6 +15,7 @@ exports.isWaiterRestrictedStaff = isWaiterRestrictedStaff;
 exports.isWaiterPanelPath = isWaiterPanelPath;
 exports.waiterRestrictedHomePath = waiterRestrictedHomePath;
 exports.applyRolePermissionPolicy = applyRolePermissionPolicy;
+exports.resolveStaffPermissions = resolveStaffPermissions;
 /** POS + panel permissions (aligned with Android PosPermission + panel extras). */
 exports.PERMISSIONS = [
     "USE_POS",
@@ -47,6 +48,8 @@ exports.PERMISSIONS = [
     "END_OF_DAY",
     "MANAGE_INVENTORY",
     "STOREKEEPER_INTAKE",
+    /** Correct a product saved in the current storekeeper session (qty, expiry, category). */
+    "STOREKEEPER_EDIT_INTAKE",
     "MANAGE_KIOSK",
 ];
 function parsePermissions(raw) {
@@ -441,5 +444,12 @@ function applyRolePermissionPolicy(roleName, permissions) {
         return permissions.filter((p) => !blocked.has(p));
     }
     return permissions;
+}
+/** Merge role permissions with per-user extras, then apply runtime policy. */
+function resolveStaffPermissions(roleName, rolePermissionsRaw, extraPermissionsRaw) {
+    const rolePerms = parsePermissions(rolePermissionsRaw);
+    const extra = parsePermissions(extraPermissionsRaw);
+    const merged = exports.PERMISSIONS.filter((p) => rolePerms.includes(p) || extra.includes(p));
+    return applyRolePermissionPolicy(roleName, merged);
 }
 //# sourceMappingURL=permissions.js.map

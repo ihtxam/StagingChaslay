@@ -853,6 +853,7 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const moreOptionsLinks = [
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
+        { label: t('cateringGuideNav'), path: '/merchant/products/catering-guide', icon: '🍱' },
         { label: t('scheduledMenusTitle'), path: MERCHANT_SCHEDULED_MENUS_PATH, icon: '🕐' },
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('pizzaBuilderTitle'), path: MERCHANT_PIZZA_BUILDER_PATH, icon: '🍕' }]

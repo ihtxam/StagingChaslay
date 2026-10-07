@@ -99,7 +99,7 @@ router.post("/terminal", async (req, res) => {
 router.post("/terminal/poi", async (req, res) => {
     try {
         const merchantId = req.merchantId;
-        const { amount, terminalId, currency, saleRef } = req.body;
+        const { amount, terminalId, currency, saleRef, askGratuity, posTipAmount } = req.body;
         if (!merchantId) {
             return res.status(400).json({ error: "Merchant ID is required" });
         }
@@ -109,11 +109,15 @@ router.post("/terminal/poi", async (req, res) => {
         const result = await adyen_terminal_poi_service_1.AdyenTerminalPoiService.processTerminalPayment(merchantId, Number(amount), {
             terminalId,
             currency: currency || "CHF",
+            askGratuity: askGratuity === true ? true : askGratuity === false ? false : undefined,
+            posTipAmount: posTipAmount != null ? Number(posTipAmount) : undefined,
         });
+        const terminalTip = Math.max(0, Number(result.tipAmount) || 0);
+        const capturedAmount = terminalTip > 0 ? Math.round((Number(amount) + terminalTip) * 100) / 100 : Number(amount);
         // Order is created after terminal approval (WebPOS finalizeSale). Logging must not fail the payment.
         if (result.status === "approved" && saleRef) {
             try {
-                await adyen_service_1.AdyenService.recordPaymentTransactionByClientRef(merchantId, String(saleRef), Number(amount), "terminal", result.reference || `terminal-${Date.now()}`, "captured", {
+                await adyen_service_1.AdyenService.recordPaymentTransactionByClientRef(merchantId, String(saleRef), capturedAmount, "terminal", result.reference || `terminal-${Date.now()}`, "captured", {
                     poiTransactionTimestamp: result.poiTransactionTimestamp,
                     currency: currency || "CHF",
                 });

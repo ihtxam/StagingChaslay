@@ -186,6 +186,7 @@ export declare class OrderService {
             marketingOptIn: boolean;
             lastOrderAt: Date | null;
             lastReorderReminderAt: Date | null;
+            crmTags: string[];
         } | null;
         items: {
             id: string;
@@ -215,12 +216,14 @@ export declare class OrderService {
                     price: number;
                 }>;
             }[] | null;
+            cateringGuestCount: number | null;
             seatNumber: number | null;
             refundedQuantity: string | null;
             product: {
                 id: string;
                 name: string;
                 imageUrl: string | null;
+                brand: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
@@ -264,6 +267,7 @@ export declare class OrderService {
                     productId?: string;
                     quantity?: number;
                 }[] | null;
+                cateringConfig: Record<string, unknown> | null;
                 specifications: {
                     id: string;
                     name: string;
@@ -277,6 +281,12 @@ export declare class OrderService {
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
                 similarProductIds: string[] | null;
+                dietaryTags: string[] | null;
+                extraBarcodes: string[] | null;
+                timeSlotPrices: Record<string, {
+                    price?: number;
+                    multiplier?: number;
+                }> | null;
             } | null;
         }[];
     }[]>;
@@ -382,6 +392,7 @@ export declare class OrderService {
             marketingOptIn: boolean;
             lastOrderAt: Date | null;
             lastReorderReminderAt: Date | null;
+            crmTags: string[];
         } | null;
         items: {
             id: string;
@@ -411,12 +422,14 @@ export declare class OrderService {
                     price: number;
                 }>;
             }[] | null;
+            cateringGuestCount: number | null;
             seatNumber: number | null;
             refundedQuantity: string | null;
             product: {
                 id: string;
                 name: string;
                 imageUrl: string | null;
+                brand: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
@@ -460,6 +473,7 @@ export declare class OrderService {
                     productId?: string;
                     quantity?: number;
                 }[] | null;
+                cateringConfig: Record<string, unknown> | null;
                 specifications: {
                     id: string;
                     name: string;
@@ -473,6 +487,12 @@ export declare class OrderService {
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
                 similarProductIds: string[] | null;
+                dietaryTags: string[] | null;
+                extraBarcodes: string[] | null;
+                timeSlotPrices: Record<string, {
+                    price?: number;
+                    multiplier?: number;
+                }> | null;
             } | null;
         }[];
     }[]>;
@@ -576,6 +596,7 @@ export declare class OrderService {
             marketingOptIn: boolean;
             lastOrderAt: Date | null;
             lastReorderReminderAt: Date | null;
+            crmTags: string[];
         } | null;
         paymentTransactions: {
             id: string;
@@ -619,12 +640,14 @@ export declare class OrderService {
                     price: number;
                 }>;
             }[] | null;
+            cateringGuestCount: number | null;
             seatNumber: number | null;
             refundedQuantity: string | null;
             product: {
                 id: string;
                 name: string;
                 imageUrl: string | null;
+                brand: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
@@ -668,6 +691,7 @@ export declare class OrderService {
                     productId?: string;
                     quantity?: number;
                 }[] | null;
+                cateringConfig: Record<string, unknown> | null;
                 specifications: {
                     id: string;
                     name: string;
@@ -681,10 +705,17 @@ export declare class OrderService {
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
                 similarProductIds: string[] | null;
+                dietaryTags: string[] | null;
+                extraBarcodes: string[] | null;
+                timeSlotPrices: Record<string, {
+                    price?: number;
+                    multiplier?: number;
+                }> | null;
             } | null;
         }[];
     } & {
         giftCardRemainingBalance?: number | null;
+        giftCardRedeemNumbers?: string[] | null;
     }>;
     /**
      * Update order status
@@ -788,6 +819,8 @@ export declare class OrderService {
         etaAdjustMinutes?: number | null;
         /** WebPOS already printed the guest receipt locally on collect. */
         skipReceiptPrint?: boolean;
+        /** Order Center local printer — skip server kitchen enqueue (client prints once). */
+        skipAutoPrintKitchen?: boolean;
     }): Promise<{
         id: string;
         merchantId: string;

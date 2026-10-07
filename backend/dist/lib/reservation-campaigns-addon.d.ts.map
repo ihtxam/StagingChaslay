@@ -1,0 +1,1 @@
+{"version":3,"file":"reservation-campaigns-addon.d.ts","sourceRoot":"","sources":["../../src/lib/reservation-campaigns-addon.ts"],"names":[],"mappings":"AACA,OAAO,EAAwB,uBAAuB,EAAE,MAAM,4BAA4B,CAAC;AAQ3F,OAAO,EAAE,uBAAuB,IAAI,kCAAkC,EAAE,CAAC;AACzE,eAAO,MAAM,oCAAoC,0CAAkB,CAAC;AACpE,eAAO,MAAM,qCAAqC,4DAAmB,CAAC;AACtE,eAAO,MAAM,sCAAsC,0CAAyB,CAAC"}

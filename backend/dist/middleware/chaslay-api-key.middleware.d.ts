@@ -75,6 +75,7 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     adyenMerchantAccount: string | null;
     adyenApiKey: string | null;
     adyenClientId: string | null;
+    adyenStoreReference: string | null;
     adyenHmacKey: string | null;
     tapToPayEnabled: boolean;
     adyenLiveEnvironment: boolean;
@@ -113,6 +114,19 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     maxStaff: number;
     maxLocations: number;
     inventoryAddonEnabled: boolean;
+    growthAnalyticsAddonEnabled: boolean;
+    guestCrmAddonEnabled: boolean;
+    marketingAutomationAddonEnabled: boolean;
+    smartSegmentsAddonEnabled: boolean;
+    reservationCampaignsAddonEnabled: boolean;
+    aiCoachAddonEnabled: boolean;
+    googleReputationAddonEnabled: boolean;
+    aiWebSeoAddonEnabled: boolean;
+    marketingAutomationSettings: schema.MarketingAutomationSettings | null;
+    smartSegmentsSettings: schema.SmartSegmentsSettings | null;
+    aiCoachCache: schema.AiCoachCache | null;
+    googleReputationSettings: schema.GoogleReputationSettings | null;
+    aiWebSeoSettings: schema.AiWebSeoSettings | null;
     signageAddonEnabled: boolean;
     signageScreenLimit: number;
     kdsAddonEnabled: boolean;
@@ -122,6 +136,8 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     customerDisplaySettings: import("../lib/customer-display-settings").CustomerDisplaySettings | null;
     justEatAddonEnabled: boolean;
     uberEatsAddonEnabled: boolean;
+    bexioAddonEnabled: boolean;
+    odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
     inventoryWasteFactor: string;
     inventoryAutoReorderEmailEnabled: boolean;
@@ -138,7 +154,9 @@ export declare function resolveChaslayMerchantBySlug(slug?: string | null): Prom
     posPrintSettings: import("../lib/pos-print-settings").PosPrintSettings | null;
     tableQrSettings: import("../lib/table-qr-settings").TableQrSettings | null;
     posCheckoutSettings: Record<string, unknown> | null;
+    timeSlotPricingSettings: Record<string, unknown> | null;
     deliveryPlatformSettings: Record<string, unknown> | null;
+    accountingIntegrationSettings: Record<string, unknown> | null;
     authEpoch: number;
     subscriptionPlan: string | null;
     trialEndsAt: Date | null;

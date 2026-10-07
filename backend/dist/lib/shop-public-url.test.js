@@ -37,7 +37,7 @@ strict_1.default.equal((0, shop_public_url_ts_1.shopOrderPaymentReturnUrl)(merch
 strict_1.default.equal((0, shop_public_url_ts_1.shopGiftCardPaymentReturnUrl)(merchant, "gc-1", {
     origin: "https://shop.chaslay.com",
     shopPath: "/demo",
-}), "https://shop.chaslay.com/demo/gift-cards/confirm/gc-1?paid=1");
+}), "https://shop.chaslay.com/demo/gift-cards/confirm/gc-1");
 strict_1.default.match((0, shop_public_url_ts_1.shopTablePaymentReturnUrl)(merchant, "t1", { sessionToken: "abc" }), /\/table\/t1\?paid=1&s=abc$/);
 console.log("shop-public-url.test.ts OK");
 //# sourceMappingURL=shop-public-url.test.js.map

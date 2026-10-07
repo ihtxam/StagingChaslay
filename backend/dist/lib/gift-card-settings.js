@@ -14,6 +14,11 @@ exports.DEFAULT_GIFT_CARD_SETTINGS = {
     onlinePurchaseEnabled: true,
     digitalVoucherEnabled: true,
     physicalPostEnabled: false,
+    physicalPostFee: 0,
+    serviceFeeFlat: 0,
+    serviceFeePercent: 0,
+    passCardFeeToCustomer: false,
+    cardFeePercent: 0,
     membershipEnabled: false,
     membershipPlans: [],
 };
@@ -52,6 +57,11 @@ function normalizeGiftCardSettings(raw) {
         onlinePurchaseEnabled: src.onlinePurchaseEnabled !== false,
         digitalVoucherEnabled: src.digitalVoucherEnabled !== false,
         physicalPostEnabled: src.physicalPostEnabled === true,
+        physicalPostFee: roundMoney2(Math.max(0, Number(src.physicalPostFee) || 0)),
+        serviceFeeFlat: roundMoney2(Math.max(0, Number(src.serviceFeeFlat) || 0)),
+        serviceFeePercent: Math.max(0, Math.min(100, Number(src.serviceFeePercent) || 0)),
+        passCardFeeToCustomer: src.passCardFeeToCustomer === true,
+        cardFeePercent: Math.max(0, Math.min(100, Number(src.cardFeePercent) || 0)),
         membershipEnabled: src.membershipEnabled === true,
         membershipPlans,
     };

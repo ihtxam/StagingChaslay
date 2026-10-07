@@ -166,6 +166,7 @@ export declare class TableSessionService {
                     price: number;
                 }>;
             }[] | null;
+            cateringGuestCount: number | null;
             seatNumber: number | null;
             refundedQuantity: string | null;
         }[];
@@ -302,6 +303,7 @@ export declare class TableSessionService {
                         price: number;
                     }>;
                 }[] | null;
+                cateringGuestCount: number | null;
                 seatNumber: number | null;
                 refundedQuantity: string | null;
             }[];
@@ -429,6 +431,7 @@ export declare class TableSessionService {
                         price: number;
                     }>;
                 }[] | null;
+                cateringGuestCount: number | null;
                 seatNumber: number | null;
                 refundedQuantity: string | null;
             }[];

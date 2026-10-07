@@ -49,16 +49,26 @@ const modifier_service_1 = require("@/services/modifier.service");
 const cms_service_1 = require("@/services/cms.service");
 const chaslay_pagebuilder_service_1 = require("@/services/chaslay-pagebuilder.service");
 const combo_1 = require("@/lib/combo");
+const catering_config_1 = require("@/lib/catering-config");
+const catering_pricing_1 = require("@/lib/catering-pricing");
 const vacation_1 = require("@/lib/vacation");
 const geocode_1 = require("@/lib/geocode");
 const location_service_1 = require("@/lib/location-service");
 const offers_service_1 = require("@/services/offers.service");
+const cart_free_gift_1 = require("@/lib/cart-free-gift");
+const shop_currency_1 = require("@/lib/shop-currency");
 const voucher_service_1 = require("@/services/voucher.service");
 const shop_gift_card_service_1 = require("@/services/shop-gift-card.service");
 const gift_card_addon_1 = require("@/lib/gift-card-addon");
+const product_dietary_1 = require("@/lib/product-dietary");
 const web_order_number_1 = require("@/lib/web-order-number");
+const shop_product_specifications_1 = require("@/lib/shop-product-specifications");
+const modifier_nos_1 = require("@/lib/modifier-nos");
 const catalog_visibility_1 = require("@/lib/catalog-visibility");
+const scheduled_menu_1 = require("@/lib/scheduled-menu");
+const category_shop_schedule_1 = require("@/lib/category-shop-schedule");
 const shop_delivery_pricing_1 = require("@/lib/shop-delivery-pricing");
+const merchant_channels_1 = require("@/lib/merchant-channels");
 const table_qr_settings_1 = require("@/lib/table-qr-settings");
 const table_qr_token_1 = require("@/lib/table-qr-token");
 const shop_rate_limit_1 = require("@/lib/shop-rate-limit");
@@ -66,6 +76,9 @@ const table_session_service_1 = require("@/services/table-session.service");
 const public_url_1 = require("@/lib/public-url");
 const shop_site_settings_1 = require("@/lib/shop-site-settings");
 const shop_public_url_1 = require("@/lib/shop-public-url");
+const shop_privacy_policy_1 = require("@/lib/shop-privacy-policy");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const public_shop_error_1 = require("@/lib/public-shop-error");
 const router = (0, express_1.Router)();
 function shopCheckoutRequestMeta(req) {
     const body = (req.body || {});
@@ -103,6 +116,7 @@ function serializeShopModifierGroup(g) {
         selectionType: g.selectionType || "optional",
         minSelectable: Number(g.minSelectable) || 0,
         maxSelectable: Number(g.maxSelectable) || 1,
+        priceScope: String(g.priceScope || "fixed").toLowerCase() === "per_guest" ? "per_guest" : "fixed",
         allowMultipleSameItem: !!g.allowMultipleSameItem,
         options: (g.options || [])
             .filter((o) => (o.saleStatus || "in_stock") !== "out_of_stock")
@@ -178,10 +192,12 @@ function mapShopProduct(p, modifierGroups, catalogById, groupsByProduct) {
         specifications,
         modifierGroups,
         comboSlots: isCombo ? comboSlots : [],
+        cateringConfig: (0, catering_config_1.normalizeCateringConfig)(p.cateringConfig),
         loyaltyRewardPoints: rewardPts != null && Number.isFinite(rewardPts) && rewardPts >= 1 ? Math.floor(rewardPts) : null,
         similarProductIds: Array.isArray(p.similarProductIds)
             ? p.similarProductIds.filter((id) => typeof id === "string" && id.trim())
             : [],
+        dietaryTags: (0, product_dietary_1.normalizeDietaryTags)(p.dietaryTags),
     };
 }
 function withPublicShopImageUrls(req, item) {
@@ -214,41 +230,7 @@ function withPublicShopImageUrls(req, item) {
     };
 }
 async function earnLoyaltyForOrder(merchant, order) {
-    if (!order.customerId)
-        return order;
-    if ((order.pointsEarned || 0) > 0)
-        return order;
-    const program = shop_loyalty_service_1.ShopLoyaltyService.programFromMerchant(merchant);
-    if (!program.enabled)
-        return order;
-    const subtotal = parseFloat(order.subtotal?.toString() || "0");
-    const pointsDiscount = parseFloat(order.pointsDiscount?.toString() || "0");
-    const paidFood = Math.max(0, subtotal - pointsDiscount);
-    const points = shop_loyalty_service_1.ShopLoyaltyService.computeEarnPoints(paidFood, program.earnPointsPerChf);
-    if (points <= 0) {
-        const db = (0, db_1.getDb)();
-        const [updated] = await db
-            .update(db_1.schema.orders)
-            .set({ pointsEarned: 0 })
-            .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id))
-            .returning();
-        return updated || order;
-    }
-    await shop_loyalty_service_1.ShopLoyaltyService.earnPoints({
-        merchantId: merchant.id,
-        customerId: order.customerId,
-        orderId: order.id,
-        points,
-        expiryDays: program.expiryDays,
-        source: "earn",
-    });
-    const db = (0, db_1.getDb)();
-    const [updated] = await db
-        .update(db_1.schema.orders)
-        .set({ pointsEarned: points })
-        .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id))
-        .returning();
-    return updated || { ...order, pointsEarned: points };
+    return shop_loyalty_service_1.ShopLoyaltyService.earnForPaidOrder(merchant, order);
 }
 async function resolveShopComboSelections(merchantId, comboProduct, requested) {
     const rawSlots = (0, combo_1.normalizeComboSlots)(comboProduct.comboItems);
@@ -403,6 +385,12 @@ async function loadModifierGroupsByProduct(merchantId, productIds) {
 /** Resolve and price selected extras from DB (never trust client prices). */
 async function resolveShopLineExtras(merchantId, product, requested, opts) {
     const groups = await modifier_service_1.ModifierService.getGroupsForProduct(merchantId, product.id);
+    const groupScopeById = new Map(groups.map((g) => [
+        g.id,
+        String(g.priceScope || "fixed").toLowerCase() === "per_guest"
+            ? "per_guest"
+            : "fixed",
+    ]));
     const optionById = new Map();
     const optionsByGroup = new Map();
     for (const g of groups) {
@@ -421,6 +409,26 @@ async function resolveShopLineExtras(merchantId, product, requested, opts) {
             list.push({ id: o.id, name: o.name, price, isDefault: !!o.isDefault });
         }
         optionsByGroup.set(g.id, list);
+    }
+    const basePrice = parseFloat(product.price.toString());
+    const specRows = (0, shop_product_specifications_1.inStockProductSpecifications)(product.specifications);
+    if (specRows.length) {
+        const sizeOptions = specRows.map((s) => ({
+            id: s.id,
+            name: s.name,
+            price: (0, shop_product_specifications_1.specificationOptionPriceDelta)(basePrice, s.price),
+            isDefault: s.isDefault,
+        }));
+        optionsByGroup.set(shop_product_specifications_1.SHOP_SIZE_MODIFIER_GROUP_ID, sizeOptions);
+        for (const o of sizeOptions) {
+            optionById.set(o.id, {
+                id: o.id,
+                name: o.name,
+                price: o.price,
+                groupId: shop_product_specifications_1.SHOP_SIZE_MODIFIER_GROUP_ID,
+                groupTitle: "Sizes",
+            });
+        }
     }
     // Legacy flat extras (no groups)
     if (!groups.length && Array.isArray(product.extras)) {
@@ -446,13 +454,56 @@ async function resolveShopLineExtras(merchantId, product, requested, opts) {
             // Ignore stale combo-flattened ids if they leaked into parent extras
             if (String(id).startsWith("combo:"))
                 continue;
-            return { extras: [], error: `Invalid extra selected for ${product.name}` };
+            return {
+                extras: [],
+                error: `Invalid option selected for ${product.name}. Remove it from your cart and add it again.`,
+            };
         }
         if (seen.has(opt.id))
             continue;
         seen.add(opt.id);
-        extras.push({ id: opt.id, name: opt.name, price: (0, money_1.roundMoney2)(opt.price) });
+        const scope = groupScopeById.get(opt.groupId) || "fixed";
+        extras.push({
+            id: opt.id,
+            name: (0, modifier_nos_1.modifierOptionTicketName)(opt.name, opt.groupTitle),
+            price: (0, catering_pricing_1.scaleModifierPrice)(opt.price, scope, opts?.cateringGuestCount ?? 1, !!opts?.cateringEnabled),
+        });
         countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
+    }
+    if (specRows.length > 1 && opts?.fillDefaultsIfMissing) {
+        const specIdSet = new Set(specRows.map((s) => s.id));
+        let pickedSpecs = extras.filter((e) => specIdSet.has(e.id)).length;
+        if (pickedSpecs < 1) {
+            const defaults = specRows.filter((s) => s.isDefault);
+            const fillFrom = defaults.length ? defaults : [specRows[0]];
+            for (const s of fillFrom) {
+                if (pickedSpecs >= 1)
+                    break;
+                if (seen.has(s.id))
+                    continue;
+                const opt = optionById.get(s.id);
+                if (!opt)
+                    continue;
+                seen.add(opt.id);
+                extras.push({
+                    id: opt.id,
+                    name: (0, modifier_nos_1.modifierOptionTicketName)(opt.name, opt.groupTitle),
+                    price: (0, catering_pricing_1.scaleModifierPrice)(opt.price, groupScopeById.get(opt.groupId) || "fixed", opts?.cateringGuestCount ?? 1, !!opts?.cateringEnabled),
+                });
+                countsByGroup.set(opt.groupId, (countsByGroup.get(opt.groupId) || 0) + 1);
+                pickedSpecs += 1;
+            }
+        }
+    }
+    if (specRows.length > 1) {
+        const specIdSet = new Set(specRows.map((s) => s.id));
+        const pickedSpecs = extras.filter((e) => specIdSet.has(e.id)).length;
+        if (pickedSpecs < 1) {
+            return { extras: [], error: `Please choose a size for ${product.name}` };
+        }
+        if (pickedSpecs > 1) {
+            return { extras: [], error: `Please choose only one size for ${product.name}` };
+        }
     }
     for (const g of groups) {
         let count = countsByGroup.get(g.id) || 0;
@@ -470,7 +521,11 @@ async function resolveShopLineExtras(merchantId, product, requested, opts) {
                 if (seen.has(o.id))
                     continue;
                 seen.add(o.id);
-                extras.push({ id: o.id, name: o.name, price: (0, money_1.roundMoney2)(o.price) });
+                extras.push({
+                    id: o.id,
+                    name: (0, modifier_nos_1.modifierOptionTicketName)(o.name, g.title),
+                    price: (0, catering_pricing_1.scaleModifierPrice)(o.price, groupScopeById.get(g.id) || "fixed", opts?.cateringGuestCount ?? 1, !!opts?.cateringEnabled),
+                });
                 count += 1;
             }
             countsByGroup.set(g.id, count);
@@ -498,6 +553,45 @@ async function resolveMerchant(slugOrHost) {
         return null;
     return merchant;
 }
+async function resolvePrivacyManagerName(merchantId) {
+    const db = (0, db_1.getDb)();
+    const managerRole = await db.query.merchantRoles.findFirst({
+        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.merchantId, merchantId), (0, drizzle_orm_1.sql) `lower(trim(${db_1.schema.merchantRoles.name})) = 'manager'`),
+        columns: { id: true },
+    });
+    if (!managerRole)
+        return null;
+    const staff = await db.query.merchantStaff.findFirst({
+        where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.roleId, managerRole.id), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.isActive, true)),
+        columns: { name: true },
+        orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.merchantStaff.createdAt)],
+    });
+    return staff?.name ? String(staff.name).trim() : null;
+}
+function shopPageMerchantPayload(req, merchant, seo) {
+    return {
+        id: merchant.id,
+        name: merchant.name,
+        slug: merchant.slug,
+        subdomain: merchant.subdomain,
+        customDomain: merchant.customDomain,
+        shopLogoUrl: merchant.shopLogoUrl,
+        shopBannerUrl: merchant.shopBannerUrl,
+        site: seo.site,
+        storeHours: merchant.storeHours || {},
+        address: merchant.address,
+        city: merchant.city,
+        country: merchant.country,
+        phone: merchant.phone,
+        email: merchant.email,
+        reservationsEnabled: !!merchant.reservationsEnabled,
+        giftCards: shop_gift_card_service_1.ShopGiftCardService.publicSettings(shop_gift_card_service_1.ShopGiftCardService.settingsFromMerchant(merchant)),
+        acceptingOrders: merchant.acceptingOrders !== false,
+        acceptingReservations: merchant.acceptingReservations !== false,
+        vacation: (0, vacation_1.vacationPublicPayload)(merchant.vacationSettings),
+        language: merchant.shopLanguage || merchant.panelLanguage || "en",
+    };
+}
 async function resolveShopLocationId(merchantId, locationSlug, queryLocation) {
     const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
     const slug = String(locationSlug || queryLocation || "")
@@ -521,11 +615,7 @@ async function resolveShopLocationId(merchantId, locationSlug, queryLocation) {
     };
 }
 function channelEnabled(merchant, channel) {
-    if (channel === "delivery")
-        return merchant.deliveryEnabled;
-    if (channel === "dine_in")
-        return merchant.dineInEnabled !== false;
-    return merchant.pickupEnabled;
+    return (0, merchant_channels_1.isMerchantFulfillmentChannelEnabled)(merchant, channel);
 }
 function mapChannelKey(channel) {
     return channel === "dine_in" ? "dine_in" : channel === "delivery" ? "delivery" : "takeaway";
@@ -536,6 +626,21 @@ async function findMatchingZone(merchant, lng, lat, zip) {
 /**
  * GET /api/shop/tls-ask?domain=
  */
+/**
+ * GET /api/shop/platform/legal — platform legal URLs for shop footer (Superadmin-configurable).
+ */
+router.get("/platform/legal", async (_req, res) => {
+    try {
+        const { PlatformSettingsService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-settings.service")));
+        const legal = await PlatformSettingsService.getPlatformLegalUrls();
+        res.json({ success: true, data: legal });
+    }
+    catch (error) {
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load platform legal URLs",
+        });
+    }
+});
 router.get("/tls-ask", async (req, res) => {
     try {
         const domain = String(req.query.domain || "").toLowerCase().split(":")[0];
@@ -608,6 +713,9 @@ router.get("/:slug", async (req, res) => {
                 city: merchant.city,
                 country: merchant.country,
                 phone: merchant.phone,
+                email: merchant.email,
+                vatNumber: merchant.vatNumber,
+                currency: (0, shop_currency_1.inferShopCurrency)({ country: merchant.country }),
                 latitude: merchant.latitude,
                 longitude: merchant.longitude,
                 shopLogoUrl: (0, public_url_1.resolvePublicAssetUrl)(req, merchant.shopLogoUrl) || merchant.shopLogoUrl,
@@ -650,7 +758,7 @@ router.get("/:slug", async (req, res) => {
                     cash: true,
                     card: true,
                     cardReady: (0, shop_public_url_1.shopAdyenCardReady)(merchant),
-                    currency: "CHF",
+                    currency: (0, shop_currency_1.inferShopCurrency)({ country: merchant.country }),
                 },
                 loyalty: shop_loyalty_service_1.ShopLoyaltyService.programFromMerchant(merchant),
                 giftCards: shop_gift_card_service_1.ShopGiftCardService.publicSettings(shop_gift_card_service_1.ShopGiftCardService.settingsFromMerchant(merchant)),
@@ -711,6 +819,7 @@ router.get("/:slug/pages/home", async (req, res) => {
                         phone: merchant.phone,
                         email: merchant.email,
                         reservationsEnabled: !!merchant.reservationsEnabled,
+                        giftCards: shop_gift_card_service_1.ShopGiftCardService.publicSettings(shop_gift_card_service_1.ShopGiftCardService.settingsFromMerchant(merchant)),
                         acceptingOrders: merchant.acceptingOrders !== false,
                         acceptingReservations: merchant.acceptingReservations !== false,
                         vacation: (0, vacation_1.vacationPublicPayload)(merchant.vacationSettings),
@@ -779,30 +888,36 @@ router.get("/:slug/pages/:pageSlug", async (req, res) => {
                         seoTitle: seo.seoTitle,
                         seoDescription: seo.seoDescription,
                         publishedAt: chaslayPage.updated_at,
-                        merchant: {
-                            id: merchant.id,
-                            name: merchant.name,
-                            slug: merchant.slug,
-                            subdomain: merchant.subdomain,
-                            customDomain: merchant.customDomain,
-                            shopLogoUrl: merchant.shopLogoUrl,
-                            shopBannerUrl: merchant.shopBannerUrl,
-                            site: seo.site,
-                            storeHours: merchant.storeHours || {},
-                            address: merchant.address,
-                            city: merchant.city,
-                            country: merchant.country,
-                            phone: merchant.phone,
-                            email: merchant.email,
-                            reservationsEnabled: !!merchant.reservationsEnabled,
-                            acceptingOrders: merchant.acceptingOrders !== false,
-                            acceptingReservations: merchant.acceptingReservations !== false,
-                            vacation: (0, vacation_1.vacationPublicPayload)(merchant.vacationSettings),
-                            language: merchant.shopLanguage || merchant.panelLanguage || "en",
-                        },
+                        merchant: shopPageMerchantPayload(req, merchant, seo),
                     },
                 });
             }
+        }
+        if (pageSlug === shop_privacy_policy_1.SHOP_PRIVACY_POLICY_SLUG) {
+            const managerName = await resolvePrivacyManagerName(merchant.id);
+            const policy = (0, shop_privacy_policy_1.buildDefaultPrivacyPolicyHtml)({
+                name: merchant.name,
+                email: merchant.email,
+                phone: merchant.phone,
+                address: merchant.address,
+                city: merchant.city,
+                country: merchant.country,
+                shopLanguage: merchant.shopLanguage,
+                panelLanguage: merchant.panelLanguage,
+            }, managerName);
+            const seo = shopSeoFromMerchant(req, merchant, policy.title, "");
+            return res.json({
+                success: true,
+                data: {
+                    engine: "legal",
+                    title: policy.title,
+                    slug: shop_privacy_policy_1.SHOP_PRIVACY_POLICY_SLUG,
+                    htmlContent: policy.htmlContent,
+                    seoTitle: `${policy.title} — ${merchant.name}`,
+                    seoDescription: seo.seoDescription,
+                    merchant: shopPageMerchantPayload(req, merchant, seo),
+                },
+            });
         }
         return res.status(404).json({ error: "Page not found" });
     }
@@ -827,7 +942,19 @@ router.get("/:slug/loyalty", async (req, res) => {
         res.json({ success: true, ...pub });
     }
     catch (error) {
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load loyalty" });
+        // Rewards are optional. Log the real error and keep the shop menu usable.
+        console.error("[shop] loyalty failed:", error);
+        res.json({
+            success: true,
+            program: { enabled: false, earnPointsPerChf: 1, redeemPointsPerChf: 100, expiryDays: 30 },
+            rewards: [],
+            balance: 0,
+            unlockedRewards: [],
+            nextReward: null,
+            progress: 0,
+            progressPercent: 0,
+            expiringSoon: null,
+        });
     }
 });
 /**
@@ -842,8 +969,15 @@ router.get("/:slug/my-orders", async (req, res) => {
         if (!customerId)
             return res.status(401).json({ error: "Not logged in" });
         const db = (0, db_1.getDb)();
+        const profile = await db.query.customers.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.id, customerId), (0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchant.id)),
+            columns: { email: true },
+        });
+        const email = String(profile?.email || "").trim().toLowerCase();
         const orders = await db.query.orders.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.orders.customerId, customerId), (0, drizzle_orm_1.eq)(db_1.schema.orders.orderType, "web_shop")),
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.orders.orderType, "web_shop"), email
+                ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.orders.customerId, customerId), (0, drizzle_orm_1.eq)(db_1.schema.orders.customerEmail, email))
+                : (0, drizzle_orm_1.eq)(db_1.schema.orders.customerId, customerId)),
             with: { items: true },
             orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.orders.createdAt)],
             limit: 50,
@@ -891,10 +1025,25 @@ router.get("/:slug/locations", async (req, res) => {
         }
         const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
         const locations = await LocationsService.listPublicForShop(merchant.id);
-        res.json({ success: true, locations });
+        const db = (0, db_1.getDb)();
+        const cateringProducts = await (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(() => db.query.products.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.products.productType, "combo"), (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true)),
+            columns: { cateringConfig: true },
+            limit: 100,
+        }));
+        const hasCatering = cateringProducts.some((p) => {
+            const c = p.cateringConfig;
+            return c?.enabled === true;
+        });
+        res.json({
+            success: true,
+            hasCatering,
+            locations: locations.map((loc) => ({ ...loc, hasCatering })),
+        });
     }
     catch (error) {
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load locations" });
+        console.error("[shop] locations failed:", error);
+        res.status(500).json({ error: (0, public_shop_error_1.publicShopDbError)(error, "Failed to load locations") });
     }
 });
 async function handleShopMenu(req, res, locationSlugParam) {
@@ -905,7 +1054,7 @@ async function handleShopMenu(req, res, locationSlugParam) {
     const db = (0, db_1.getDb)();
     const catalogChannel = (0, catalog_visibility_1.shopMenuCatalogChannel)(String(req.query.channel || ""), typeof req.query.table === "string" ? req.query.table : null);
     const { locationId, locationSlug, locationName } = await resolveShopLocationId(merchant.id, locationSlugParam, typeof req.query.location === "string" ? req.query.location : null);
-    const [categories, products] = await Promise.all([
+    const [categories, products] = await (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(() => Promise.all([
         db.query.categories.findMany({
             where: (0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchant.id),
             orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.categories.sortOrder)],
@@ -914,17 +1063,27 @@ async function handleShopMenu(req, res, locationSlugParam) {
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true)),
             orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.products.sortOrder), (0, drizzle_orm_1.asc)(db_1.schema.products.name)],
         }),
-    ]);
+    ]));
     const { CatalogLocationService } = await Promise.resolve().then(() => __importStar(require("@/services/catalog-location.service")));
     const { HqMenuService } = await Promise.resolve().then(() => __importStar(require("@/services/hq-menu.service")));
     const withOverrides = await CatalogLocationService.applyLocationOverrides(merchant.id, locationId, products);
     const filtered = (0, catalog_visibility_1.filterCatalogForChannel)(withOverrides, categories, catalogChannel);
-    const menuProductIds = await HqMenuService.resolveActiveProductIds(merchant.id, locationId, catalogChannel);
-    const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(filtered.products, menuProductIds);
+    let menuTimezone = "Europe/Zurich";
+    if (locationId) {
+        const locRow = await db.query.locations.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.locations.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.locations.id, locationId)),
+            columns: { timezone: true },
+        });
+        menuTimezone = locRow?.timezone || menuTimezone;
+    }
+    const activeMenu = await HqMenuService.resolveActiveMenu(merchant.id, locationId, catalogChannel, new Date(), menuTimezone);
+    const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(filtered.products, activeMenu.productIds);
     const categoryIdsWithProducts = new Set(visibleProducts.map((p) => p.categoryId).filter(Boolean));
-    const visibleCategories = filtered.categories.filter((c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory);
-    const groupsByProduct = await loadModifierGroupsByProduct(merchant.id, visibleProducts.map((p) => p.id));
-    const catalogById = new Map(visibleProducts.map((p) => [p.id, p]));
+    const visibleCategories = filtered.categories.filter((c) => (categoryIdsWithProducts.has(c.id) || c.isOffersCategory) &&
+        (0, category_shop_schedule_1.isCategoryShopScheduleVisible)(c.shopSchedule, new Date(), menuTimezone));
+    const pricedProducts = HqMenuService.applyMenuPrices(visibleProducts, activeMenu.productPrices);
+    const groupsByProduct = await loadModifierGroupsByProduct(merchant.id, pricedProducts.map((p) => p.id));
+    const catalogById = new Map(pricedProducts.map((p) => [p.id, p]));
     const toItem = (p) => withPublicShopImageUrls(req, mapShopProduct(p, groupsByProduct.get(p.id) || [], catalogById, groupsByProduct));
     const menu = visibleCategories.map((cat) => ({
         id: cat.id,
@@ -933,9 +1092,9 @@ async function handleShopMenu(req, res, locationSlugParam) {
         isOffersCategory: !!cat.isOffersCategory,
         deliveryPricingEnabled: cat.deliveryPricingEnabled === true,
         extraDeliveryPrice: Number(cat.extraDeliveryPrice ?? 0) || 0,
-        items: visibleProducts.filter((p) => p.categoryId === cat.id).map(toItem),
+        items: pricedProducts.filter((p) => p.categoryId === cat.id).map(toItem),
     }));
-    const uncategorized = visibleProducts.filter((p) => !p.categoryId);
+    const uncategorized = pricedProducts.filter((p) => !p.categoryId);
     if (uncategorized.length) {
         menu.push({
             id: "uncategorized",
@@ -947,7 +1106,27 @@ async function handleShopMenu(req, res, locationSlugParam) {
     }
     const activeOffers = await offers_service_1.OffersService.listActivePublic(merchant.id);
     const featured = activeOffers
-        .filter((o) => o.featured)
+        .filter((o) => o.featured && o.offerType !== "cart_free_gift")
+        .map((o) => ({
+        id: o.id,
+        name: o.name,
+        description: o.description,
+        badgeLabel: o.badgeLabel,
+        offerType: o.offerType,
+        rules: o.rules,
+        productIds: o.productIds || [],
+        categoryIds: o.categoryIds || [],
+        channels: o.channels,
+        daysOfWeek: o.daysOfWeek,
+        timeStart: o.timeStart,
+        timeEnd: o.timeEnd,
+        scheduleMode: o.scheduleMode,
+        validFrom: o.validFrom,
+        validTo: o.validTo,
+    }));
+    const cartFreeGiftOffers = activeOffers
+        .filter((o) => o.offerType === "cart_free_gift" && (0, cart_free_gift_1.normalizeCartGiftTiers)(o.rules).length > 0)
+        .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.name.localeCompare(b.name))
         .map((o) => ({
         id: o.id,
         name: o.name,
@@ -969,6 +1148,7 @@ async function handleShopMenu(req, res, locationSlugParam) {
         success: true,
         data: menu.filter((c) => c.items.length > 0 || c.isOffersCategory),
         offers: featured,
+        cartFreeGiftOffers,
         catalogChannel,
         location: { id: locationId, slug: locationSlug, name: locationName },
     });
@@ -981,7 +1161,10 @@ router.get("/:slug/l/:locationSlug/menu", async (req, res) => {
         await handleShopMenu(req, res, req.params.locationSlug);
     }
     catch (error) {
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+        console.error("[shop] menu failed:", error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: (0, public_shop_error_1.publicShopDbError)(error, "Failed to load menu") });
+        }
     }
 });
 /**
@@ -992,7 +1175,10 @@ router.get("/:slug/menu", async (req, res) => {
         await handleShopMenu(req, res);
     }
     catch (error) {
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load menu" });
+        console.error("[shop] menu failed:", error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: (0, public_shop_error_1.publicShopDbError)(error, "Failed to load menu") });
+        }
     }
 });
 /**
@@ -1077,7 +1263,8 @@ router.post("/:slug/table/:tableId/payment-session", async (req, res) => {
             sessionToken,
             extraCandidates: [meta.headerOrigin, meta.referer],
         });
-        const paySession = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, anchor.id, total, "CHF", returnUrl, checkoutOrigin);
+        const { customerId } = optionalCustomer(req);
+        const paySession = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, anchor.id, total, "CHF", returnUrl, checkoutOrigin, { customerId });
         res.json({
             success: true,
             sessionId: session.id,
@@ -1088,6 +1275,7 @@ router.post("/:slug/table/:tableId/payment-session", async (req, res) => {
                 sessionData: paySession.sessionData,
                 clientKey: paySession.clientKey || merchant.adyenClientId,
                 environment: paySession.environment || adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
+                storePaymentMethod: paySession.storePaymentMethod === true,
             },
         });
     }
@@ -1115,6 +1303,39 @@ router.post("/:slug/table/:tableId/confirm-payment", async (req, res) => {
     }
     catch (error) {
         res.status(400).json({ error: error instanceof Error ? error.message : "Confirm payment failed" });
+    }
+});
+/**
+ * GET /api/shop/:slug/delivery-zip-rules
+ * Public PLZ-based delivery fees (when deliveryMode = zipcode).
+ */
+router.get("/:slug/delivery-zip-rules", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant || !merchant.shopEnabled) {
+            return res.status(404).json({ error: "Shop not found or closed" });
+        }
+        const db = (0, db_1.getDb)();
+        const rules = await db.query.deliveryZipRules.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.deliveryZipRules.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.deliveryZipRules.isActive, true)),
+            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.deliveryZipRules.sortOrder)],
+        });
+        res.json({
+            success: true,
+            data: rules.map((r) => ({
+                id: r.id,
+                name: r.name,
+                city: r.city,
+                zipCode: r.zipCode,
+                minOrderAmount: r.minOrderAmount,
+                deliveryFee: r.deliveryFee,
+                freeDeliveryMinOrder: r.freeDeliveryMinOrder,
+                estimatedMinutes: r.estimatedMinutes,
+            })),
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load ZIP rules" });
     }
 });
 /**
@@ -1204,6 +1425,36 @@ router.get("/:slug/address-suggest", async (req, res) => {
         res.status(500).json({
             error: error instanceof Error ? error.message : "Address lookup failed",
             suggestions: [],
+        });
+    }
+});
+/**
+ * GET /api/shop/:slug/house-number-suggest?street=&city=&zip=
+ */
+router.get("/:slug/house-number-suggest", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant || !merchant.shopEnabled) {
+            return res.status(404).json({ error: "Shop not found" });
+        }
+        const street = String(req.query.street || "").trim();
+        if (!street) {
+            return res.json({ success: true, numbers: [] });
+        }
+        const lang = String(req.query.lang || "").trim().slice(0, 2) || undefined;
+        const numbers = await (0, location_service_1.suggestHouseNumbers)({
+            street,
+            city: String(req.query.city || "").trim() || undefined,
+            postcode: String(req.query.zip || req.query.postcode || "").trim() || undefined,
+            countryCode: merchant.country,
+            lang,
+        });
+        res.json({ success: true, numbers });
+    }
+    catch (error) {
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "House number lookup failed",
+            numbers: [],
         });
     }
 });
@@ -1525,6 +1776,26 @@ router.get("/:slug/reservations/slots", async (req, res) => {
     }
 });
 /**
+ * GET /api/shop/:slug/growth/reservation-campaign/:code
+ * Public campaign metadata + click tracking.
+ */
+router.get("/:slug/growth/reservation-campaign/:code", async (req, res) => {
+    try {
+        const merchant = await resolveMerchant(req.params.slug);
+        if (!merchant?.shopEnabled)
+            return res.status(404).json({ error: "Not found" });
+        const { ReservationCampaignsService } = await Promise.resolve().then(() => __importStar(require("@/services/reservation-campaigns.service")));
+        await ReservationCampaignsService.trackClick(merchant.id, req.params.code);
+        const campaign = await ReservationCampaignsService.publicInfo(merchant.id, req.params.code);
+        if (!campaign)
+            return res.status(404).json({ error: "Campaign not found" });
+        res.json({ success: true, campaign });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+    }
+});
+/**
  * POST /api/shop/:slug/reservations
  */
 router.post("/:slug/reservations", async (req, res) => {
@@ -1568,6 +1839,7 @@ router.post("/:slug/reservations", async (req, res) => {
             notes: req.body.notes,
             source: "web",
             customerId: auth.customerId || null,
+            campaignCode: req.body.campaignCode || req.body.campaign || null,
         });
         res.status(201).json({
             success: true,
@@ -1681,7 +1953,7 @@ router.get("/:slug/payment-options", async (req, res) => {
                 payLater: true,
                 card: true,
                 cardReady,
-                currency: "CHF",
+                currency: (0, shop_currency_1.inferShopCurrency)({ country: merchant.country }),
                 clientKey: cardReady ? merchant.adyenClientId : null,
                 environment: adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
                 cardFeeFixed: Number(merchant.onlineCardFeeFixed || 0) || 0,
@@ -1749,6 +2021,7 @@ router.post("/:slug/gift-cards/purchase", async (req, res) => {
         }
         const body = req.body || {};
         const deliveryType = body.deliveryType === "physical" ? "physical" : "digital";
+        const { customerId } = optionalCustomer(req);
         const result = await shop_gift_card_service_1.ShopGiftCardService.createOnlinePurchase(merchant, req.params.slug, {
             amount: Number(body.amount),
             deliveryType,
@@ -1761,9 +2034,23 @@ router.post("/:slug/gift-cards/purchase", async (req, res) => {
             shippingZip: body.shippingZip,
             shippingCity: body.shippingCity,
             shippingCountry: body.shippingCountry,
+            cardTheme: body.cardTheme,
             origin: body.origin,
             shopPath: body.shopPath,
+            customerId,
         });
+        if (customerId && deliveryType === "physical") {
+            try {
+                await shop_customer_service_1.ShopCustomerService.rememberCheckoutAddress(customerId, merchant.id, {
+                    address: String(body.shippingAddress || ""),
+                    zipCode: body.shippingZip || null,
+                    city: body.shippingCity || null,
+                });
+            }
+            catch {
+                /* address save is optional */
+            }
+        }
         res.status(201).json({
             success: true,
             purchase: {
@@ -1774,6 +2061,7 @@ router.post("/:slug/gift-cards/purchase", async (req, res) => {
                 paymentStatus: result.purchase.paymentStatus,
             },
             paymentSession: result.paymentSession,
+            breakdown: result.breakdown,
         });
     }
     catch (error) {
@@ -1814,6 +2102,16 @@ router.post("/:slug/gift-cards/purchase/:purchaseId/confirm-payment", async (req
         const merchant = await resolveMerchant(req.params.slug);
         if (!merchant?.shopEnabled)
             return res.status(404).json({ error: "Shop not found" });
+        const isDemo = req.body?.demo === true;
+        if (!isDemo) {
+            const { isAdyenPaymentSuccess } = await Promise.resolve().then(() => __importStar(require("@/lib/adyen-result-codes")));
+            const resultCode = String(req.body?.resultCode || "").trim();
+            if (!isAdyenPaymentSuccess(resultCode)) {
+                return res.status(400).json({
+                    error: `Payment not authorised (${resultCode || "unknown"})`,
+                });
+            }
+        }
         const result = await shop_gift_card_service_1.ShopGiftCardService.confirmPurchasePayment(merchant.id, req.params.purchaseId, req.body?.pspReference || req.body?.adyenReference);
         res.json({
             success: true,
@@ -2005,11 +2303,51 @@ router.post("/:slug/orders", async (req, res) => {
             categoryPricingEnabled: merchant.categoryPricingEnabled === true,
             deliveryMenuMarkup: merchant.deliveryMenuMarkup,
         };
+        let shopOrderTimezone = "Europe/Zurich";
+        let shopOrderLocationId = "";
+        try {
+            const resolvedLoc = await resolveShopLocationId(merchant.id, req.body?.locationSlug, typeof req.query.location === "string" ? req.query.location : null);
+            shopOrderLocationId = resolvedLoc.locationId;
+            const locRow = await db.query.locations.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.locations.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.locations.id, resolvedLoc.locationId)),
+                columns: { timezone: true },
+            });
+            shopOrderTimezone = locRow?.timezone || shopOrderTimezone;
+        }
+        catch {
+            const { LocationsService } = await Promise.resolve().then(() => __importStar(require("@/services/locations.service")));
+            try {
+                const defaultId = await LocationsService.getDefaultId(merchant.id);
+                shopOrderLocationId = defaultId;
+                const locRow = await db.query.locations.findFirst({
+                    where: (0, drizzle_orm_1.eq)(db_1.schema.locations.id, defaultId),
+                    columns: { timezone: true },
+                });
+                shopOrderTimezone = locRow?.timezone || shopOrderTimezone;
+            }
+            catch {
+                /* keep Europe/Zurich */
+            }
+        }
+        const orderCatalogChannel = isKioskOrder
+            ? "kiosk"
+            : isQrTableOrder
+                ? "qr_table"
+                : channel === "delivery"
+                    ? "delivery"
+                    : "shop";
+        const orderMenuAt = isScheduled && scheduledFor ? new Date(scheduledFor) : new Date();
+        const { HqMenuService: HqMenuServiceOrder } = await Promise.resolve().then(() => __importStar(require("@/services/hq-menu.service")));
+        const activeOrderMenu = shopOrderLocationId
+            ? await HqMenuServiceOrder.resolveActiveMenu(merchant.id, shopOrderLocationId, orderCatalogChannel, orderMenuAt, shopOrderTimezone)
+            : { productPrices: {} };
+        const orderMenuPrices = (0, scheduled_menu_1.normalizeProductPrices)(activeOrderMenu.productPrices);
         let subtotal = 0;
         let taxAmount = 0;
         let rewardPointsNeeded = 0;
         const rewardLines = [];
         const lineItems = [];
+        const pendingCartFreeGifts = [];
         for (const item of items) {
             const product = await db.query.products.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.id, item.productId), (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchant.id)),
@@ -2052,8 +2390,25 @@ router.post("/:slug/orders", async (req, res) => {
                 });
                 continue;
             }
+            const giftOfferId = String(item.cartFreeGiftOfferId || "").trim();
+            const giftTierRaw = item.cartFreeGiftTierIndex;
+            if (giftOfferId && giftTierRaw != null && Number.isFinite(Number(giftTierRaw))) {
+                pendingCartFreeGifts.push({
+                    productId: product.id,
+                    offerId: giftOfferId,
+                    tierIndex: Math.floor(Number(giftTierRaw)),
+                    quantity: qty,
+                });
+                continue;
+            }
             let comboSelections = [];
             let comboSurcharge = 0;
+            const cateringOn = (0, catering_config_1.isCateringProduct)(product.productType, product.cateringConfig);
+            const cateringCfg = (0, catering_config_1.normalizeCateringConfig)(product.cateringConfig);
+            let cateringGuests = null;
+            if (cateringOn) {
+                cateringGuests = (0, catering_config_1.clampGuestCount)(cateringCfg, Number(item.cateringGuestCount) || 0);
+            }
             if (product.productType === "combo") {
                 const comboResolved = await resolveShopComboSelections(merchant.id, product, item.comboSelections);
                 if (comboResolved.error) {
@@ -2062,13 +2417,49 @@ router.post("/:slug/orders", async (req, res) => {
                 comboSelections = comboResolved.selections;
                 comboSurcharge = comboResolved.surcharge;
             }
-            const resolved = await resolveShopLineExtras(merchant.id, product, item.selectedExtras);
+            let tierPerPersonRate = null;
+            if (cateringOn && cateringGuests != null && product.productType === "combo") {
+                const split = (0, catering_pricing_1.resolveCateringComboPricing)({
+                    cateringConfig: cateringCfg,
+                    guestCount: cateringGuests,
+                    comboPicks: comboSelections.map((sel) => ({
+                        slotId: sel.slotId,
+                        extraPrice: sel.extraPrice,
+                        qty: 1,
+                        selectedExtras: sel.selectedExtras,
+                    })),
+                });
+                tierPerPersonRate = split.tierPerPersonRate;
+                comboSurcharge = split.comboSurchargeFlat;
+            }
+            const resolved = await resolveShopLineExtras(merchant.id, product, item.selectedExtras, {
+                fillDefaultsIfMissing: true,
+                cateringEnabled: cateringOn,
+                cateringGuestCount: cateringGuests ?? 1,
+            });
             if (resolved.error) {
                 return res.status(400).json({ error: resolved.error });
             }
             const extrasTotal = (0, money_1.roundMoney2)(resolved.extras.reduce((s, e) => s + e.price, 0));
             const deliveryMarkup = (0, shop_delivery_pricing_1.resolveShopItemDeliveryMarkup)(deliveryPricingConfig, channel, product.categoryId, categoryDeliveryMap);
-            const unitPrice = (0, money_1.roundMoney2)(parseFloat(product.price.toString()) + deliveryMarkup + extrasTotal + comboSurcharge);
+            const baseCatalogUnit = (0, money_1.roundMoney2)(Number(product.price) || 0);
+            const menuUnit = orderMenuPrices[product.id];
+            const catalogUnit = menuUnit != null && Number.isFinite(menuUnit) ? menuUnit : baseCatalogUnit;
+            let unitPrice;
+            if (cateringOn && cateringGuests != null) {
+                unitPrice = (0, catering_pricing_1.computeCateringLineUnitPrice)({
+                    listPrice: catalogUnit,
+                    cateringConfig: cateringCfg,
+                    guestCount: cateringGuests,
+                    comboSurcharge,
+                    extrasTotal,
+                    deliveryMarkup,
+                    tierPerPersonRate,
+                }).unitPrice;
+            }
+            else {
+                unitPrice = (0, money_1.roundMoney2)(catalogUnit + deliveryMarkup + extrasTotal + comboSurcharge);
+            }
             const totalPrice = (0, money_1.roundMoney2)(unitPrice * qty);
             const lineTax = product.isTaxable
                 ? vatIncluded
@@ -2105,14 +2496,82 @@ router.post("/:slug/orders", async (req, res) => {
                 rewardPointsCost: 0,
                 selectedExtras: flatExtras,
                 comboSelections,
+                cateringGuestCount: cateringGuests,
+            });
+        }
+        if (!lineItems.length && !pendingCartFreeGifts.length) {
+            return res.status(400).json({ error: "No valid items" });
+        }
+        const offerAt = scheduledFor ? new Date(scheduledFor) : new Date();
+        const activeOffers = await offers_service_1.OffersService.list(merchant.id);
+        const paidSubtotalForGifts = (0, cart_free_gift_1.cartPaidSubtotal)(lineItems.map((l) => ({
+            unitPrice: l.unitPrice,
+            quantity: l.quantity,
+            loyaltyReward: l.loyaltyReward,
+        })));
+        const giftTierCounts = new Map();
+        for (const g of pendingCartFreeGifts) {
+            if (g.quantity !== 1) {
+                return res.status(400).json({ error: "Free gift lines must have quantity 1" });
+            }
+            const tierKey = `${g.offerId}:${g.tierIndex}`;
+            giftTierCounts.set(tierKey, (giftTierCounts.get(tierKey) || 0) + 1);
+            if ((giftTierCounts.get(tierKey) || 0) > 1) {
+                return res.status(400).json({ error: "Only one free gift per tier is allowed" });
+            }
+            const offer = activeOffers.find((o) => o.id === g.offerId);
+            if (!offer || offer.offerType !== "cart_free_gift") {
+                return res.status(400).json({ error: "Invalid free gift offer" });
+            }
+            if (!offers_service_1.OffersService.isOfferActiveAt(offer, Number.isNaN(offerAt.getTime()) ? new Date() : offerAt, channel)) {
+                return res.status(400).json({ error: "Free gift offer is not active" });
+            }
+            const tiers = (0, cart_free_gift_1.normalizeCartGiftTiers)(offer.rules);
+            const err = (0, cart_free_gift_1.validateCartFreeGiftLine)({
+                offerId: g.offerId,
+                tierIndex: g.tierIndex,
+                productId: g.productId,
+                tiers,
+                paidSubtotal: paidSubtotalForGifts,
+                currency: (0, shop_currency_1.inferShopCurrency)({ country: merchant.country }),
+            });
+            if (err)
+                return res.status(400).json({ error: err });
+            const giftProduct = await db.query.products.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.id, g.productId), (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchant.id)),
+            });
+            if (!giftProduct) {
+                return res.status(400).json({ error: "Free gift product not found" });
+            }
+            const tier = tiers[g.tierIndex];
+            lineItems.push({
+                productId: giftProduct.id,
+                categoryId: giftProduct.categoryId,
+                productName: giftProduct.name,
+                quantity: 1,
+                unitPrice: 0,
+                totalPrice: 0,
+                taxAmount: 0,
+                loyaltyReward: false,
+                rewardPointsCost: 0,
+                selectedExtras: [
+                    {
+                        id: `free_gift:${g.offerId}:${g.tierIndex}`,
+                        name: tier?.label
+                            ? `Free: ${tier.label}`
+                            : `Free gift (≥ CHF ${(tier?.minCartTotal || 0).toFixed(2)})`,
+                        price: 0,
+                    },
+                ],
+                comboSelections: [],
+                cartFreeGiftOfferId: g.offerId,
+                cartFreeGiftTierIndex: g.tierIndex,
             });
         }
         if (!lineItems.length) {
             return res.status(400).json({ error: "No valid items" });
         }
         // Promotional offers (before loyalty points)
-        const offerAt = scheduledFor ? new Date(scheduledFor) : new Date();
-        const activeOffers = await offers_service_1.OffersService.list(merchant.id);
         const offerEval = offers_service_1.OffersService.evaluateCart(activeOffers, lineItems.map((l) => ({
             productId: l.productId,
             categoryId: l.categoryId,
@@ -2215,17 +2674,41 @@ router.post("/:slug/orders", async (req, res) => {
         let customerId = authCustomer.customerId;
         const emailNorm = customerEmail?.trim().toLowerCase();
         try {
-            const { CustomerService } = await Promise.resolve().then(() => __importStar(require("@/services/customer.service")));
-            const upserted = await CustomerService.upsertFromGuest(merchant.id, {
-                name: customerName,
-                phone: customerPhone,
-                email: emailNorm,
-                address: typeof shippingAddress === "string" ? shippingAddress : undefined,
-                zip: zipCode,
-                city,
-            });
-            if (!customerId && upserted?.id)
-                customerId = upserted.id;
+            if (customerId) {
+                await shop_customer_service_1.ShopCustomerService.syncFromCheckout(customerId, merchant.id, {
+                    name: customerName,
+                    phone: customerPhone,
+                    email: emailNorm,
+                });
+                if (channel === "delivery") {
+                    const rawAddr = typeof shippingAddress === "string"
+                        ? shippingAddress
+                        : shippingAddress && typeof shippingAddress === "object"
+                            ? String(shippingAddress.address ||
+                                Object.values(shippingAddress).filter(Boolean).join(", "))
+                            : "";
+                    await shop_customer_service_1.ShopCustomerService.rememberCheckoutAddress(customerId, merchant.id, {
+                        address: rawAddr,
+                        zipCode: zipCode || null,
+                        city: city || null,
+                        latitude: lat != null && Number.isFinite(Number(lat)) ? Number(lat) : null,
+                        longitude: lng != null && Number.isFinite(Number(lng)) ? Number(lng) : null,
+                    });
+                }
+            }
+            else {
+                const { CustomerService } = await Promise.resolve().then(() => __importStar(require("@/services/customer.service")));
+                const upserted = await CustomerService.upsertFromGuest(merchant.id, {
+                    name: customerName,
+                    phone: customerPhone,
+                    email: emailNorm,
+                    address: typeof shippingAddress === "string" ? shippingAddress : undefined,
+                    zip: zipCode,
+                    city,
+                });
+                if (upserted?.id)
+                    customerId = upserted.id;
+            }
         }
         catch (custErr) {
             console.warn("Shop order customer upsert failed:", custErr);
@@ -2279,7 +2762,7 @@ router.post("/:slug/orders", async (req, res) => {
                 : channel === "takeaway" || channel === "dine_in"
                     ? `Pickup: ${merchant.address || merchant.name}${merchant.city ? `, ${merchant.city}` : ""}`
                     : null;
-        const paymentStatus = payMethod === "card" || payMethod === "pay_later"
+        const paymentStatus = payMethod === "card"
             ? "awaiting_payment"
             : giftCardDiscount > 0 && preCardTotal <= 0
                 ? "completed"
@@ -2320,13 +2803,24 @@ router.post("/:slug/orders", async (req, res) => {
             customerId = authCustomer.customerId;
         }
         const { normalizeDeliveryPlatformSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/delivery-platform-settings")));
+        const { shouldAutoAcceptOnlineShopOrder } = await Promise.resolve().then(() => __importStar(require("@/lib/online-shop-auto-accept")));
         const deliverySettings = normalizeDeliveryPlatformSettings(merchant.deliveryPlatformSettings);
         const qrSettings = (0, table_qr_settings_1.normalizeTableQrSettings)(merchant.tableQrSettings);
-        const shopAutoAccept = deliverySettings.onlineShopAutoAccept;
+        const shopAutoAcceptSetting = deliverySettings.onlineShopAutoAccept === true;
+        const shopAutoAccept = shopAutoAcceptSetting &&
+            shouldAutoAcceptOnlineShopOrder(merchant, {
+                fulfillmentChannel: channel,
+                scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+            });
         const qrAutoAccept = isQrTableOrder && qrSettings.qrAutoApprove;
         const kioskCashNeedsApproval = kioskSettings?.kioskCashNeedsApproval !== false;
         const kioskAutoAcceptCash = isKioskOrder && payMethod === "cash" && !kioskCashNeedsApproval;
-        const initialOrderStatus = shopAutoAccept || qrAutoAccept || kioskAutoAcceptCash ? "preparing" : "pending_approval";
+        const cardPaymentPending = payMethod === "card" && preCardTotal > 0;
+        const initialOrderStatus = cardPaymentPending
+            ? "awaiting_payment"
+            : shopAutoAccept || qrAutoAccept || kioskAutoAcceptCash
+                ? "preparing"
+                : "pending_approval";
         const resolvedOrderSource = isKioskOrder
             ? "kiosk"
             : isQrTableOrder
@@ -2404,6 +2898,21 @@ router.post("/:slug/orders", async (req, res) => {
         catch {
             /* non-fatal */
         }
+        const orderPaidNow = paymentStatus === "paid" ||
+            paymentStatus === "completed" ||
+            (paymentStatus === "cash" && payMethod !== "card");
+        if (orderPaidNow && emailNorm) {
+            try {
+                const { MarketingAutomationService } = await Promise.resolve().then(() => __importStar(require("@/services/marketing-automation.service")));
+                await MarketingAutomationService.trigger(merchant.id, "order_paid", {
+                    email: emailNorm,
+                    name: resolvedCustomerName,
+                });
+            }
+            catch {
+                /* non-fatal */
+            }
+        }
         for (const line of lineItems) {
             await db.insert(db_1.schema.orderItems).values({
                 orderId: order.id,
@@ -2415,6 +2924,7 @@ router.post("/:slug/orders", async (req, res) => {
                 taxAmount: line.taxAmount.toFixed(2),
                 selectedExtras: line.selectedExtras,
                 comboSelections: line.comboSelections,
+                cateringGuestCount: line.cateringGuestCount ?? null,
             });
         }
         if (appliedVoucher && voucherDiscount > 0) {
@@ -2499,7 +3009,7 @@ router.post("/:slug/orders", async (req, res) => {
         if (payMethod === "cash" && customerId && loyaltyProgram.enabled) {
             finalOrder = (await earnLoyaltyForOrder(merchant, order));
         }
-        if (shopAutoAccept) {
+        if (shopAutoAccept && !cardPaymentPending) {
             const { enterKitchenFromOrder } = await Promise.resolve().then(() => __importStar(require("@/services/kitchen-ingress.service")));
             void enterKitchenFromOrder(merchant.id, order.id, {
                 printKitchen: true,
@@ -2539,39 +3049,13 @@ router.post("/:slug/orders", async (req, res) => {
                 console.warn("Kiosk order print enqueue failed:", printErr);
             }
         }
-        // Till notification on arrival; kitchen ticket when auto-accept, on-arrival setting, or later on Accept.
-        const { normalizePosPrintSettings } = await Promise.resolve().then(() => __importStar(require("@/lib/pos-print-settings")));
-        const arrivalPrint = normalizePosPrintSettings(merchant.posPrintSettings);
-        const kitchenOnArrival = !shopAutoAccept && arrivalPrint.autoPrintOnlineOrdersOnArrival === true;
-        try {
-            const { DeliveryPlatformService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-platform.service")));
-            if (!isKioskOrder) {
-                await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-                    printDeliveryReceipt: order.fulfillmentChannel === "delivery",
-                    printNotification: !shopAutoAccept && order.fulfillmentChannel !== "delivery",
-                    printKitchen: kitchenOnArrival,
-                    printReceipt: false,
-                    independentOfMasterAutoPrint: kitchenOnArrival,
-                });
-            }
-        }
-        catch (printErr) {
-            console.warn("Shop order notification print enqueue failed:", printErr);
-        }
-        try {
-            const { ShopOrderEmailService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-order-email.service")));
+        // Card orders defer POS notification, emails, and kitchen until payment is confirmed.
+        if (!cardPaymentPending && !isKioskOrder) {
             const guestLocale = String(req.body?.locale || req.headers["x-shop-locale"] || "");
-            await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "received", {
+            const { runOnlineShopOrderArrivalSideEffects } = await Promise.resolve().then(() => __importStar(require("@/services/shop-online-order-arrival.service")));
+            await runOnlineShopOrderArrivalSideEffects(merchant, order, {
                 guestLocale: guestLocale || null,
             });
-            if (shopAutoAccept) {
-                await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "confirmed", {
-                    guestLocale: guestLocale || null,
-                });
-            }
-        }
-        catch (mailErr) {
-            console.warn("Shop order confirmation email failed:", mailErr);
         }
         let paymentSession = null;
         if (payMethod === "card" && preCardTotal > 0) {
@@ -2583,12 +3067,13 @@ router.post("/:slug/orders", async (req, res) => {
                     shopPath: meta.shopPath,
                     extraCandidates: [meta.headerOrigin, meta.referer],
                 });
-                const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(finalOrder.total.toString()), "CHF", returnUrl, checkoutOrigin);
+                const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(finalOrder.total.toString()), "CHF", returnUrl, checkoutOrigin, { customerId: authCustomer.customerId || customerId, authenticated: Boolean(authCustomer.customerId) });
                 paymentSession = {
                     id: session.id,
                     sessionData: session.sessionData,
                     clientKey: session.clientKey || merchant.adyenClientId,
                     environment: session.environment || adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
+                    storePaymentMethod: session.storePaymentMethod === true,
                 };
             }
             catch (e) {
@@ -2735,7 +3220,8 @@ router.post("/:slug/orders/:orderId/payment-session", async (req, res) => {
             shopPath: meta.shopPath,
             extraCandidates: [meta.headerOrigin, meta.referer],
         });
-        const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(order.total.toString()), "CHF", returnUrl, checkoutOrigin);
+        const { customerId: authCustomerId } = optionalCustomer(req);
+        const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, order.id, parseFloat(order.total.toString()), "CHF", returnUrl, checkoutOrigin, { customerId: authCustomerId || order.customerId, authenticated: Boolean(authCustomerId) });
         res.json({
             success: true,
             paymentSession: {
@@ -2743,6 +3229,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req, res) => {
                 sessionData: session.sessionData,
                 clientKey: session.clientKey || merchant.adyenClientId,
                 environment: session.environment || adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
+                storePaymentMethod: session.storePaymentMethod === true,
             },
         });
     }
@@ -2768,21 +3255,31 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req, res) => {
         });
         if (!order)
             return res.status(404).json({ error: "Order not found" });
-        const [updated] = await db
-            .update(db_1.schema.orders)
-            .set({
-            paymentStatus: "completed",
-            paymentMethod: "card",
-            adyenReference: req.body.pspReference || req.body.adyenReference || order.adyenReference,
-            // Keep kitchen lifecycle — paid card orders still need staff accept
-            status: order.status === "awaiting_payment" || order.status === "pending"
-                ? "pending_approval"
-                : order.status,
-        })
-            .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id))
-            .returning();
+        const isDemo = req.body?.demo === true;
+        if (!isDemo) {
+            const { isAdyenPaymentSuccess } = await Promise.resolve().then(() => __importStar(require("@/lib/adyen-result-codes")));
+            const resultCode = String(req.body?.resultCode || "").trim();
+            if (!isAdyenPaymentSuccess(resultCode)) {
+                return res.status(400).json({
+                    error: `Payment not authorised (${resultCode || "unknown"})`,
+                });
+            }
+        }
+        const guestLocale = String(req.body?.locale || req.headers["x-shop-locale"] || "");
+        const { finalizePaidOnlineShopCardOrder } = await Promise.resolve().then(() => __importStar(require("@/services/shop-online-order-arrival.service")));
+        let updated = await finalizePaidOnlineShopCardOrder(merchant, order, {
+            guestLocale: guestLocale || null,
+            pspReference: req.body.pspReference || req.body.adyenReference || order.adyenReference,
+            adyenPaymentMethod: req.body?.paymentMethod ||
+                req.body?.adyenPaymentMethod ||
+                req.body?.paymentMethodType,
+        });
         try {
-            await adyen_service_1.AdyenService.recordPaymentTransaction(merchant.id, order.id, parseFloat(order.total.toString()), "card", String(req.body.pspReference || `DEMO-${order.orderNumber}`), "completed");
+            const { isUsableAdyenPspReference } = await Promise.resolve().then(() => __importStar(require("@/lib/online-payment-refund")));
+            const psp = String(req.body.pspReference || req.body.adyenReference || "").trim();
+            if (isDemo || isUsableAdyenPspReference(psp)) {
+                await adyen_service_1.AdyenService.recordPaymentTransaction(merchant.id, order.id, parseFloat(order.total.toString()), "card", isDemo ? String(req.body.pspReference || `DEMO-${order.orderNumber}`) : psp, "completed");
+            }
         }
         catch {
             /* optional */
@@ -2793,18 +3290,6 @@ router.post("/:slug/orders/:orderId/confirm-payment", async (req, res) => {
         }
         catch (earnErr) {
             console.error("Loyalty earn on confirm-payment failed:", earnErr);
-        }
-        try {
-            const { DeliveryPlatformService } = await Promise.resolve().then(() => __importStar(require("@/services/delivery-platform.service")));
-            await DeliveryPlatformService.enqueueAutoPrint(merchant.id, order.id, "online_shop", {
-                printKitchen: false,
-                printDeliveryReceipt: updated.fulfillmentChannel === "delivery",
-                printNotification: false,
-                printReceipt: updated.fulfillmentChannel !== "delivery",
-            });
-        }
-        catch (printErr) {
-            console.warn("Confirm-payment receipt print enqueue failed:", printErr);
         }
         res.json({ success: true, order: finalOrder });
     }

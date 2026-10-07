@@ -1,4 +1,5 @@
 import { schema } from "@/db";
+import { type CatalogChannel } from "@/lib/catalog-visibility";
 export declare class CategoryService {
     /**
      * Create category
@@ -17,6 +18,7 @@ export declare class CategoryService {
         visibility: {
             channels: string[];
         };
+        shopSchedule: Record<string, unknown>;
         deliveryPricingEnabled: boolean;
         extraDeliveryPrice: string | null;
         clientId: string | null;
@@ -38,6 +40,7 @@ export declare class CategoryService {
         visibility: {
             channels: string[];
         };
+        shopSchedule: Record<string, unknown>;
         deliveryPricingEnabled: boolean;
         extraDeliveryPrice: string | null;
         clientId: string | null;
@@ -59,6 +62,7 @@ export declare class CategoryService {
         visibility: {
             channels: string[];
         };
+        shopSchedule: Record<string, unknown>;
         deliveryPricingEnabled: boolean;
         extraDeliveryPrice: string | null;
         clientId: string | null;
@@ -80,6 +84,7 @@ export declare class CategoryService {
         visibility: {
             channels: string[];
         };
+        shopSchedule: Record<string, unknown>;
         deliveryPricingEnabled: boolean;
         extraDeliveryPrice: string | null;
         clientId: string | null;
@@ -98,6 +103,7 @@ export declare class CategoryService {
         visibility: {
             channels: string[];
         };
+        shopSchedule: Record<string, unknown>;
         deliveryPricingEnabled: boolean;
         extraDeliveryPrice: string | null;
         sortOrder: number;
@@ -105,6 +111,8 @@ export declare class CategoryService {
         createdAt: Date;
         updatedAt: Date;
     }>;
+    /** Merge channels into category visibility when a product is enabled on those channels. */
+    static ensureChannelsEnabled(merchantId: string, categoryId: string, channels: CatalogChannel[]): Promise<void>;
     /**
      * Delete category
      */
@@ -129,6 +137,7 @@ export declare class CategoryService {
             visibility: {
                 channels: string[];
             };
+            shopSchedule: Record<string, unknown>;
             deliveryPricingEnabled: boolean;
             extraDeliveryPrice: string | null;
             clientId: string | null;
@@ -137,6 +146,7 @@ export declare class CategoryService {
             id: string;
             name: string;
             imageUrl: string | null;
+            brand: string | null;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
@@ -180,6 +190,7 @@ export declare class CategoryService {
                 productId?: string;
                 quantity?: number;
             }[] | null;
+            cateringConfig: Record<string, unknown> | null;
             specifications: {
                 id: string;
                 name: string;
@@ -193,6 +204,12 @@ export declare class CategoryService {
             loyaltyRewardPoints: number | null;
             recipeYield: string;
             similarProductIds: string[] | null;
+            dietaryTags: string[] | null;
+            extraBarcodes: string[] | null;
+            timeSlotPrices: Record<string, {
+                price?: number;
+                multiplier?: number;
+            }> | null;
         }[];
         productCount: number;
     }>;

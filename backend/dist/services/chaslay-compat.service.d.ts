@@ -83,7 +83,7 @@ export declare class ChaslayCompatService {
             staffId: string;
             isOwner: boolean;
             roleName: string;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "STOREKEEPER_EDIT_INTAKE")[];
         };
         dashboardUrl: string;
     }>;
@@ -246,9 +246,31 @@ export declare class ChaslayCompatService {
                 retailDeliveryEnabled: boolean;
                 retailDineInEnabled: boolean;
                 requireTableForDineIn: boolean;
+                requireCustomerForDelivery: boolean;
                 actionButtonSize: import("@/lib/pos-checkout-settings").ActionButtonSize;
                 expressCheckoutEnabled: boolean;
                 showPosToasts: boolean;
+                retailLayoutEnabled: boolean;
+                retailScannerFirst: boolean;
+                retailTileSize: import("@/lib/pos-checkout-settings").RetailTileSize;
+                retailPaymentBar: boolean;
+                retailClearSearchAfterAdd: boolean;
+                retailShowStockOnTiles: boolean;
+                retailShowProductPhotos: boolean;
+                retailQuickTiles: string[];
+                retailProductSortMode: import("@/lib/pos-checkout-settings").RetailProductSortMode;
+                retailRegisterProfiles: Array<{
+                    id: string;
+                    name: string;
+                    cartSide: import("@/lib/pos-checkout-settings").CartSide;
+                    retailTileSize: import("@/lib/pos-checkout-settings").RetailTileSize;
+                    retailScannerFirst: boolean;
+                    retailPaymentBar: boolean;
+                    retailShowStockOnTiles: boolean;
+                    retailShowProductPhotos: boolean;
+                    retailQuickTiles: string[];
+                    retailProductSortMode: import("@/lib/pos-checkout-settings").RetailProductSortMode;
+                }>;
             };
             receipt_base_url: string;
             scale: {
@@ -333,9 +355,31 @@ export declare class ChaslayCompatService {
             retailDeliveryEnabled: boolean;
             retailDineInEnabled: boolean;
             requireTableForDineIn: boolean;
+            requireCustomerForDelivery: boolean;
             actionButtonSize: import("@/lib/pos-checkout-settings").ActionButtonSize;
             expressCheckoutEnabled: boolean;
             showPosToasts: boolean;
+            retailLayoutEnabled: boolean;
+            retailScannerFirst: boolean;
+            retailTileSize: import("@/lib/pos-checkout-settings").RetailTileSize;
+            retailPaymentBar: boolean;
+            retailClearSearchAfterAdd: boolean;
+            retailShowStockOnTiles: boolean;
+            retailShowProductPhotos: boolean;
+            retailQuickTiles: string[];
+            retailProductSortMode: import("@/lib/pos-checkout-settings").RetailProductSortMode;
+            retailRegisterProfiles: Array<{
+                id: string;
+                name: string;
+                cartSide: import("@/lib/pos-checkout-settings").CartSide;
+                retailTileSize: import("@/lib/pos-checkout-settings").RetailTileSize;
+                retailScannerFirst: boolean;
+                retailPaymentBar: boolean;
+                retailShowStockOnTiles: boolean;
+                retailShowProductPhotos: boolean;
+                retailQuickTiles: string[];
+                retailProductSortMode: import("@/lib/pos-checkout-settings").RetailProductSortMode;
+            }>;
         };
         receipt_base_url: string;
         scale: {

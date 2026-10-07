@@ -3,16 +3,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CdsService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
+const brand_1 = require("@/lib/brand");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const customer_display_settings_1 = require("@/lib/customer-display-settings");
-const cds_live_state_1 = require("@/lib/cds-live-state");
 const display_short_code_1 = require("@/lib/display-short-code");
+const cds_live_state_1 = require("@/lib/cds-live-state");
 async function ensureCdsShortCode(merchantId, settings) {
     if (settings.shortCode)
         return settings;
     const db = (0, db_1.getDb)();
     const shortCode = await (0, display_short_code_1.allocateDisplayShortCode)(db);
     const next = { ...settings, shortCode };
+    await db
+        .update(db_1.schema.merchants)
+        .set({ customerDisplaySettings: next, updatedAt: new Date() })
+        .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId));
+    return next;
+}
+async function ensureCdsAccessToken(merchantId, settings) {
+    if (String(settings.accessToken || "").trim())
+        return settings;
+    const next = { ...settings, accessToken: (0, customer_display_settings_1.generateCdsToken)() };
+    const db = (0, db_1.getDb)();
     await db
         .update(db_1.schema.merchants)
         .set({ customerDisplaySettings: next, updatedAt: new Date() })
@@ -41,12 +53,57 @@ async function loadMerchantByAccessKey(accessKey) {
         throw new Error("Customer display not found");
     if (!settings.enabled)
         throw new Error("Customer display is disabled");
+    settings = await ensureCdsAccessToken(merchant.id, settings);
     settings = await ensureCdsShortCode(merchant.id, settings);
     return { merchant, settings };
 }
+async function loadMerchantBySlug(slug) {
+    await (0, ensure_merchant_schema_1.ensureCustomerDisplaySettingsColumn)();
+    const trimmed = String(slug || "").trim();
+    if (!trimmed)
+        throw new Error("Customer display not found");
+    const db = (0, db_1.getDb)();
+    const merchant = await db.query.merchants.findFirst({
+        where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.slug, trimmed),
+        columns: {
+            id: true,
+            name: true,
+            slug: true,
+            shopLogoUrl: true,
+            customerDisplaySettings: true,
+        },
+    });
+    if (!merchant)
+        throw new Error("Customer display not found");
+    let settings = (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(merchant.customerDisplaySettings);
+    if (!settings.enabled)
+        throw new Error("Customer display is disabled");
+    settings = await ensureCdsAccessToken(merchant.id, settings);
+    settings = await ensureCdsShortCode(merchant.id, settings);
+    return {
+        merchant: {
+            id: merchant.id,
+            name: merchant.name,
+            slug: merchant.slug || trimmed,
+            shopLogoUrl: merchant.shopLogoUrl,
+            customer_display_settings: merchant.customerDisplaySettings,
+        },
+        settings,
+    };
+}
 class CdsService {
+    static buildPublicUrl(merchantSlug, settings) {
+        return (0, customer_display_settings_1.buildCdsPublicUrl)(merchantSlug, settings?.shortCode, brand_1.APP_ORIGIN);
+    }
     static async configForToken(accessKey) {
         const { merchant, settings } = await loadMerchantByAccessKey(accessKey);
+        return this.formatConfigResponse(merchant, settings);
+    }
+    static async configForSlug(slug) {
+        const { merchant, settings } = await loadMerchantBySlug(slug);
+        return this.formatConfigResponse(merchant, settings);
+    }
+    static formatConfigResponse(merchant, settings) {
         const logoUrl = merchant.shop_logo_url ?? merchant.shopLogoUrl ?? null;
         return {
             merchant: {
@@ -61,24 +118,35 @@ class CdsService {
                 theme: settings.theme === "dark" ? "dark" : "light",
                 shortCode: settings.shortCode || null,
                 syncToken: settings.accessToken,
+                displayUrl: (0, customer_display_settings_1.buildCdsPublicUrl)(merchant.slug, settings.shortCode, brand_1.APP_ORIGIN),
             },
         };
     }
     static async getSettings(merchantId) {
         await (0, ensure_merchant_schema_1.ensureCustomerDisplaySettingsColumn)();
-        const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT customer_display_settings FROM merchants WHERE id = $1 LIMIT 1`, [merchantId]);
+        const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT customer_display_settings, slug FROM merchants WHERE id = $1 LIMIT 1`, [merchantId]);
         if (rows[0]?.customer_display_settings == null) {
             const defaults = (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(null);
-            const withCode = await ensureCdsShortCode(merchantId, defaults);
-            const db = (0, db_1.getDb)();
-            await db
-                .update(db_1.schema.merchants)
-                .set({ customerDisplaySettings: withCode, updatedAt: new Date() })
-                .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId));
-            return withCode;
+            let withToken = await ensureCdsAccessToken(merchantId, defaults);
+            withToken = await ensureCdsShortCode(merchantId, withToken);
+            return withToken;
         }
-        const settings = (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(rows[0]?.customer_display_settings);
+        let settings = (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(rows[0]?.customer_display_settings);
+        settings = await ensureCdsAccessToken(merchantId, settings);
         return ensureCdsShortCode(merchantId, settings);
+    }
+    static async getSettingsMeta(merchantId) {
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { slug: true },
+        });
+        const settings = await this.getSettings(merchantId);
+        return {
+            settings,
+            merchantSlug: merchant?.slug || null,
+            displayUrl: (0, customer_display_settings_1.buildCdsPublicUrl)(merchant?.slug, settings.shortCode, brand_1.APP_ORIGIN),
+        };
     }
     static async updateSettings(merchantId, raw) {
         await (0, ensure_merchant_schema_1.ensureCustomerDisplaySettingsColumn)();
@@ -95,7 +163,7 @@ class CdsService {
     }
     static async rotateToken(merchantId) {
         const settings = await this.getSettings(merchantId);
-        settings.accessToken = (0, customer_display_settings_1.normalizeCustomerDisplaySettings)({}).accessToken;
+        settings.accessToken = (0, customer_display_settings_1.generateCdsToken)();
         const db = (0, db_1.getDb)();
         await db
             .update(db_1.schema.merchants)
@@ -116,6 +184,11 @@ class CdsService {
     static async liveStateForToken(accessKey) {
         (0, cds_live_state_1.sweepExpiredCdsLiveState)();
         const { settings } = await loadMerchantByAccessKey(accessKey);
+        return (0, cds_live_state_1.getCdsLiveState)(settings.accessToken);
+    }
+    static async liveStateForSlug(slug) {
+        (0, cds_live_state_1.sweepExpiredCdsLiveState)();
+        const { settings } = await loadMerchantBySlug(slug);
         return (0, cds_live_state_1.getCdsLiveState)(settings.accessToken);
     }
 }

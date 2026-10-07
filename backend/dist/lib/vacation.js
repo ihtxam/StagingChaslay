@@ -203,6 +203,10 @@ function vacationPublicPayload(raw, at = new Date()) {
         popupTitle: settings.popupTitle,
         popupImageUrl: settings.popupImageUrl,
         periods: settings.periods,
+        returnDate: activePeriod?.endDate ?? null,
+        returnTime: activePeriod
+            ? normalizeTime(activePeriod.endTime, "23:59")
+            : null,
     };
 }
 exports.VACATION_BLOCK_MESSAGE = "We are currently on vacation. Online orders and reservations are temporarily unavailable.";

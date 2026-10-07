@@ -5,6 +5,8 @@ const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const chaslay_default_template_1 = require("@/lib/chaslay-default-template");
+const chaslay_editor_state_1 = require("@/lib/chaslay-editor-state");
+const chaslay_homepage_heal_1 = require("@/lib/chaslay-homepage-heal");
 const cms_service_1 = require("@/services/cms.service");
 const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
     ROOT: {
@@ -18,55 +20,71 @@ const DEFAULT_EMPTY_CANVAS_STATE = JSON.stringify({
         linkedNodes: {},
     },
 });
-function normalizeEditorState(state) {
-    if (state == null)
-        return null;
-    const trimmed = state.trim();
-    if (!trimmed || trimmed === "{}")
-        return null;
-    try {
-        JSON.parse(trimmed);
-        return trimmed;
-    }
-    catch {
-        return null;
-    }
-}
 function editorStateForCreate(state) {
-    return normalizeEditorState(state) ?? DEFAULT_EMPTY_CANVAS_STATE;
-}
-function editorStateForUpdate(state) {
-    if (state === undefined)
-        return undefined;
-    const normalized = normalizeEditorState(state);
-    return normalized ?? DEFAULT_EMPTY_CANVAS_STATE;
+    const editorState = (0, chaslay_editor_state_1.normalizeEditorState)(state) ?? DEFAULT_EMPTY_CANVAS_STATE;
+    const patch = { editorState };
+    if (!(0, chaslay_editor_state_1.isEffectivelyEmptyEditorState)(editorState)) {
+        patch.lastGoodEditorState = editorState;
+    }
+    return patch;
 }
 class ChaslayPagebuilderService {
-    /** Prefer the homepage row in chaslay_homepage_builder_pages; fall back to builder.editor_state. */
+    /**
+     * Auto-bootstrap from legacy CMS is disabled on production by default.
+     * Client website content must not be created or replaced without explicit merchant action.
+     * Set CHASLAY_AUTO_BOOTSTRAP=1 to allow on any env, or run outside NODE_ENV=production.
+     */
+    static isAutoBootstrapAllowed() {
+        if (process.env.CHASLAY_AUTO_BOOTSTRAP === "1")
+            return true;
+        return process.env.NODE_ENV !== "production";
+    }
+    /** Prefer homepage page row when it has real blocks; fall back to builder.editor_state. */
     static async resolvePublishedEditorState(builderId, fallback) {
         const db = (0, db_1.getDb)();
+        const builder = await db.query.chaslayHomepageBuilders.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, builderId),
+            columns: { editorState: true, lastGoodEditorState: true },
+        });
         const homepagePage = await db.query.chaslayHomepageBuilderPages.findFirst({
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilderPages.isHomepage, true)),
-            columns: { editorState: true },
+            columns: { id: true, editorState: true, lastGoodEditorState: true },
         });
-        const fromPage = normalizeEditorState(homepagePage?.editorState);
-        if (fromPage)
-            return fromPage;
-        return normalizeEditorState(fallback);
+        const heal = await (0, chaslay_homepage_heal_1.maybePersistHomepageSplitBrainHeal)(homepagePage?.id, builderId, homepagePage?.editorState ?? null, builder?.editorState ?? fallback, homepagePage?.lastGoodEditorState ?? null, builder?.lastGoodEditorState ?? null);
+        return (heal.resolved ??
+            (0, chaslay_editor_state_1.pickPublishedEditorState)(homepagePage?.editorState ?? null, builder?.editorState ?? fallback, homepagePage?.lastGoodEditorState ?? null, builder?.lastGoodEditorState ?? null));
+    }
+    /** Repair missing/wiped Chaslay state before reads (legacy CMS bootstrap, split-brain heal). */
+    static async ensureHomepageRepaired(merchantId) {
+        await (0, chaslay_homepage_heal_1.repairMerchantChaslayHomepage)(merchantId);
     }
     /** Keep builder.editor_state aligned with the homepage page row (editor saves to pages). */
-    static async syncHomepagePageToBuilder(builderId, editorState) {
-        const normalized = normalizeEditorState(editorState);
-        if (!normalized)
+    static async syncHomepagePageToBuilder(builderId, editorState, lastGoodEditorState) {
+        const normalized = (0, chaslay_editor_state_1.normalizeEditorState)(editorState);
+        if (!normalized || (0, chaslay_editor_state_1.isEffectivelyEmptyEditorState)(normalized))
             return;
         const db = (0, db_1.getDb)();
+        const patch = {
+            editorState: normalized,
+            updatedAt: new Date(),
+        };
+        if (lastGoodEditorState && !(0, chaslay_editor_state_1.isEffectivelyEmptyEditorState)(lastGoodEditorState)) {
+            patch.lastGoodEditorState = lastGoodEditorState;
+        }
+        else if (!(0, chaslay_editor_state_1.isEffectivelyEmptyEditorState)(normalized)) {
+            patch.lastGoodEditorState = normalized;
+        }
         await db
             .update(db_1.schema.chaslayHomepageBuilders)
-            .set({ editorState: normalized, updatedAt: new Date() })
+            .set(patch)
             .where((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, builderId));
     }
     /** One-time bootstrap when a merchant had the classic CMS homepage but no Chaslay builder yet. */
     static async ensureBootstrappedFromLegacy(merchantId) {
+        // NEVER auto-create or overwrite client CMS layouts on production.
+        // Merchants must opt in explicitly (CHASLAY_AUTO_BOOTSTRAP=1) or use non-production env.
+        if (!ChaslayPagebuilderService.isAutoBootstrapAllowed())
+            return false;
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
             const db = (0, db_1.getDb)();
             const existing = await db.query.chaslayHomepageBuilders.findFirst({
@@ -115,6 +133,7 @@ class ChaslayPagebuilderService {
     static async list(merchantId) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
             await this.ensureBootstrappedFromLegacy(merchantId);
+            await this.ensureHomepageRepaired(merchantId);
             const db = (0, db_1.getDb)();
             const rows = await db.query.chaslayHomepageBuilders.findMany({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId),
@@ -138,16 +157,18 @@ class ChaslayPagebuilderService {
     }
     static async get(merchantId, id) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            await this.ensureHomepageRepaired(merchantId);
             const db = (0, db_1.getDb)();
             const row = await db.query.chaslayHomepageBuilders.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId)),
             });
             if (!row)
                 throw new Error("Homepage builder not found");
+            const editor_state = await this.resolvePublishedEditorState(row.id, row.editorState);
             return {
                 id: row.id,
                 name: row.name,
-                editor_state: row.editorState,
+                editor_state,
                 is_active: row.isActive,
                 created_at: row.createdAt.toISOString(),
                 updated_at: row.updatedAt.toISOString(),
@@ -157,6 +178,7 @@ class ChaslayPagebuilderService {
     static async getActive(merchantId) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
             await this.ensureBootstrappedFromLegacy(merchantId);
+            await this.ensureHomepageRepaired(merchantId);
             const db = (0, db_1.getDb)();
             const row = await db.query.chaslayHomepageBuilders.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.isActive, true)),
@@ -177,12 +199,14 @@ class ChaslayPagebuilderService {
     static async create(merchantId, input) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
             const db = (0, db_1.getDb)();
+            const initialState = editorStateForCreate(input.editor_state);
             const [row] = await db
                 .insert(db_1.schema.chaslayHomepageBuilders)
                 .values({
                 merchantId,
                 name: input.name,
-                editorState: editorStateForCreate(input.editor_state),
+                editorState: initialState.editorState,
+                lastGoodEditorState: initialState.lastGoodEditorState,
                 isActive: false,
             })
                 .returning();
@@ -199,20 +223,24 @@ class ChaslayPagebuilderService {
     static async update(merchantId, id, input) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
             const db = (0, db_1.getDb)();
+            const existing = await db.query.chaslayHomepageBuilders.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId)),
+            });
+            if (!existing)
+                throw new Error("Homepage builder not found");
             const patch = {
                 updatedAt: new Date(),
             };
             if (input.name !== undefined)
                 patch.name = input.name;
-            if (input.editor_state !== undefined)
-                patch.editorState = editorStateForUpdate(input.editor_state);
+            if (input.editor_state !== undefined) {
+                Object.assign(patch, (0, chaslay_editor_state_1.buildEditorStateWritePatch)(existing.editorState, existing.lastGoodEditorState, input.editor_state, DEFAULT_EMPTY_CANVAS_STATE));
+            }
             const [row] = await db
                 .update(db_1.schema.chaslayHomepageBuilders)
                 .set(patch)
-                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, id), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId)))
+                .where((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, id))
                 .returning();
-            if (!row)
-                throw new Error("Homepage builder not found");
             return {
                 id: row.id,
                 name: row.name,
@@ -242,6 +270,11 @@ class ChaslayPagebuilderService {
             });
             if (!existing)
                 throw new Error("Homepage builder not found");
+            const homepagePage = await db.query.chaslayHomepageBuilderPages.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilderPages.homepageBuilderId, id), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilderPages.isHomepage, true)),
+                columns: { editorState: true, lastGoodEditorState: true },
+            });
+            (0, chaslay_editor_state_1.assertPublishableHomepage)(homepagePage?.editorState ?? null, existing.editorState, homepagePage?.lastGoodEditorState ?? null, existing.lastGoodEditorState);
             await db
                 .update(db_1.schema.chaslayHomepageBuilders)
                 .set({ isActive: false, updatedAt: new Date() })
@@ -252,8 +285,10 @@ class ChaslayPagebuilderService {
                 .where((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, id))
                 .returning();
             const publishedState = await this.resolvePublishedEditorState(row.id, row.editorState);
-            if (publishedState && publishedState !== row.editorState) {
-                await this.syncHomepagePageToBuilder(row.id, publishedState);
+            if (publishedState &&
+                publishedState !== row.editorState &&
+                !(0, chaslay_editor_state_1.isEffectivelyEmptyEditorState)(publishedState)) {
+                await this.syncHomepagePageToBuilder(row.id, publishedState, row.lastGoodEditorState);
             }
             await db
                 .update(db_1.schema.merchants)
@@ -287,21 +322,39 @@ class ChaslayPagebuilderService {
     }
     static async listPages(merchantId, builderId) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            await this.ensureHomepageRepaired(merchantId);
             const db = (0, db_1.getDb)();
-            await this.assertBuilder(merchantId, builderId);
+            const builder = await db.query.chaslayHomepageBuilders.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.id, builderId), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId)),
+                columns: { id: true, editorState: true, lastGoodEditorState: true },
+            });
+            if (!builder)
+                throw new Error("Homepage builder not found");
             const rows = await db.query.chaslayHomepageBuilderPages.findMany({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId),
                 orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.chaslayHomepageBuilderPages.sortOrder)],
             });
-            return rows.map((p) => ({
-                id: p.id,
-                homepage_builder_id: p.homepageBuilderId,
-                title: p.title,
-                slug: p.slug,
-                editor_state: p.editorState,
-                is_homepage: p.isHomepage,
-                sort_order: p.sortOrder,
-            }));
+            const pages = [];
+            for (const p of rows) {
+                let editor_state = p.editorState;
+                if (p.isHomepage) {
+                    const { resolved } = await (0, chaslay_homepage_heal_1.maybePersistHomepageSplitBrainHeal)(p.id, builder.id, p.editorState, builder.editorState, p.lastGoodEditorState, builder.lastGoodEditorState);
+                    editor_state =
+                        resolved ??
+                            (0, chaslay_editor_state_1.pickPublishedEditorState)(p.editorState, builder.editorState, p.lastGoodEditorState, builder.lastGoodEditorState) ??
+                            p.editorState;
+                }
+                pages.push({
+                    id: p.id,
+                    homepage_builder_id: p.homepageBuilderId,
+                    title: p.title,
+                    slug: p.slug,
+                    editor_state,
+                    is_homepage: p.isHomepage,
+                    sort_order: p.sortOrder,
+                });
+            }
+            return pages;
         });
     }
     static async createPage(merchantId, builderId, input) {
@@ -319,6 +372,7 @@ class ChaslayPagebuilderService {
                     .set({ isHomepage: false })
                     .where((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilderPages.homepageBuilderId, builderId));
             }
+            const initialState = editorStateForCreate(input.editor_state);
             const [row] = await db
                 .insert(db_1.schema.chaslayHomepageBuilderPages)
                 .values({
@@ -326,7 +380,8 @@ class ChaslayPagebuilderService {
                 merchantId,
                 title: input.title,
                 slug: input.slug,
-                editorState: editorStateForCreate(input.editor_state),
+                editorState: initialState.editorState,
+                lastGoodEditorState: initialState.lastGoodEditorState,
                 isHomepage: input.is_homepage ?? false,
                 sortOrder: input.sort_order ?? 0,
             })
@@ -371,8 +426,9 @@ class ChaslayPagebuilderService {
                 patch.title = input.title;
             if (input.slug !== undefined)
                 patch.slug = input.slug;
-            if (input.editor_state !== undefined)
-                patch.editorState = editorStateForUpdate(input.editor_state);
+            if (input.editor_state !== undefined) {
+                Object.assign(patch, (0, chaslay_editor_state_1.buildEditorStateWritePatch)(page.editorState, page.lastGoodEditorState, input.editor_state, DEFAULT_EMPTY_CANVAS_STATE));
+            }
             if (input.is_homepage !== undefined)
                 patch.isHomepage = input.is_homepage;
             if (input.sort_order !== undefined)
@@ -383,7 +439,7 @@ class ChaslayPagebuilderService {
                 .where((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilderPages.id, pageId))
                 .returning();
             if (row.isHomepage && (input.editor_state !== undefined || input.is_homepage === true)) {
-                await this.syncHomepagePageToBuilder(builderId, row.editorState);
+                await this.syncHomepagePageToBuilder(builderId, row.editorState, row.lastGoodEditorState);
             }
             return {
                 id: row.id,
@@ -428,6 +484,7 @@ class ChaslayPagebuilderService {
     /** Published pages from the merchant's active builder layout (empty when none active). */
     static async listActivePublishedPages(merchantId) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            await this.ensureHomepageRepaired(merchantId);
             const db = (0, db_1.getDb)();
             const builder = await db.query.chaslayHomepageBuilders.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.isActive, true)),
@@ -463,6 +520,7 @@ class ChaslayPagebuilderService {
     /** Resolve one published page from the active builder by slug (`home` maps to homepage row). */
     static async getActivePublishedPage(merchantId, pageSlug) {
         return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            await this.ensureHomepageRepaired(merchantId);
             const db = (0, db_1.getDb)();
             const builder = await db.query.chaslayHomepageBuilders.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.chaslayHomepageBuilders.isActive, true)),
@@ -479,8 +537,8 @@ class ChaslayPagebuilderService {
                 });
             if (!page)
                 return null;
-            const editor_state = normalizeEditorState(page.editorState);
-            if (!editor_state)
+            const editor_state = (0, chaslay_editor_state_1.pickPublishedEditorState)(page.editorState, builder.editorState, page.lastGoodEditorState, builder.lastGoodEditorState);
+            if (!editor_state || (0, chaslay_editor_state_1.isEffectivelyEmptyEditorState)(editor_state))
                 return null;
             return {
                 builder_id: builder.id,

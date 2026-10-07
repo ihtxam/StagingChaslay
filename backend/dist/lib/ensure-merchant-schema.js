@@ -1,17 +1,34 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.queryRaw = queryRaw;
+exports.mapMerchantRowKeys = mapMerchantRowKeys;
+exports.loadMerchantRowById = loadMerchantRowById;
+exports.loadMerchantRowByEmail = loadMerchantRowByEmail;
 exports.ensureMerchantTables = ensureMerchantTables;
 exports.ensureInventoryAddonColumn = ensureInventoryAddonColumn;
 exports.ensureInventoryDemoColumns = ensureInventoryDemoColumns;
 exports.ensureSignageAddonColumn = ensureSignageAddonColumn;
 exports.ensureKdsAddonColumn = ensureKdsAddonColumn;
+exports.ensureGrowthAnalyticsAddonColumn = ensureGrowthAnalyticsAddonColumn;
+exports.ensureGuestCrmAddonColumn = ensureGuestCrmAddonColumn;
+exports.ensureMarketingAutomationAddonColumn = ensureMarketingAutomationAddonColumn;
+exports.ensureSmartSegmentsAddonColumn = ensureSmartSegmentsAddonColumn;
+exports.ensureReservationCampaignsAddonColumn = ensureReservationCampaignsAddonColumn;
+exports.ensureAiCoachAddonColumn = ensureAiCoachAddonColumn;
+exports.ensureGoogleReputationAddonColumn = ensureGoogleReputationAddonColumn;
+exports.ensureAiWebSeoAddonColumn = ensureAiWebSeoAddonColumn;
+exports.ensureCustomerCrmTagsColumn = ensureCustomerCrmTagsColumn;
+exports.ensureCustomersColumnsSchema = ensureCustomersColumnsSchema;
+exports.ensureVouchersColumnsSchema = ensureVouchersColumnsSchema;
 exports.ensureOdsAddonColumn = ensureOdsAddonColumn;
 exports.ensureKioskAddonColumn = ensureKioskAddonColumn;
 exports.ensureKioskSettingsColumn = ensureKioskSettingsColumn;
 exports.ensureCustomerDisplaySettingsColumn = ensureCustomerDisplaySettingsColumn;
 exports.ensureJustEatAddonColumn = ensureJustEatAddonColumn;
 exports.ensureUberEatsAddonColumn = ensureUberEatsAddonColumn;
+exports.ensureBexioAddonColumn = ensureBexioAddonColumn;
+exports.ensureOdooAddonColumn = ensureOdooAddonColumn;
+exports.ensureAccountingIntegrationSettingsColumn = ensureAccountingIntegrationSettingsColumn;
 exports.ensureStorekeeperAddonColumn = ensureStorekeeperAddonColumn;
 exports.ensureGiftCardAddonColumn = ensureGiftCardAddonColumn;
 exports.ensureMerchantColumnsSchema = ensureMerchantColumnsSchema;
@@ -21,6 +38,8 @@ exports.ensureSubscriptionPlansSchema = ensureSubscriptionPlansSchema;
 exports.ensureLocationsSchema = ensureLocationsSchema;
 exports.ensurePosSessionsSchema = ensurePosSessionsSchema;
 exports.backfillDefaultLocations = backfillDefaultLocations;
+exports.ensureShopCatalogColumnsSchema = ensureShopCatalogColumnsSchema;
+exports.withShopCatalogSchemaRetry = withShopCatalogSchemaRetry;
 exports.listMissingTableColumns = listMissingTableColumns;
 exports.listMissingMerchantColumns = listMissingMerchantColumns;
 exports.backfillKioskCatalogVisibility = backfillKioskCatalogVisibility;
@@ -30,6 +49,9 @@ exports.withMerchantSchemaRetry = withMerchantSchemaRetry;
 exports.patchMerchantSchemaFromError = patchMerchantSchemaFromError;
 const pg_1 = require("pg");
 const db_schema_errors_1 = require("@/lib/db-schema-errors");
+const chaslay_homepage_heal_1 = require("@/lib/chaslay-homepage-heal");
+const product_column_patches_1 = require("@/lib/product-column-patches");
+const public_shop_error_1 = require("@/lib/public-shop-error");
 /** Raw pg pool for DDL — Drizzle execute() often fails/no-ops on ALTER TABLE. */
 let ddlPool = null;
 function getDdlPool() {
@@ -48,6 +70,26 @@ async function execSql(statement) {
 async function queryRaw(text, params = []) {
     const { rows } = await getDdlPool().query(text, params);
     return rows;
+}
+/** Map a pg merchants row (snake_case) to camelCase keys expected by app code. */
+function mapMerchantRowKeys(raw) {
+    const out = { ...raw };
+    for (const [key, value] of Object.entries(raw)) {
+        const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+        if (camel !== key)
+            out[camel] = value;
+    }
+    return out;
+}
+/** Load one merchant row using only columns that exist in Postgres today. */
+async function loadMerchantRowById(merchantId) {
+    const rows = await queryRaw(`SELECT * FROM merchants WHERE id = $1 LIMIT 1`, [merchantId]);
+    return rows[0] ? mapMerchantRowKeys(rows[0]) : null;
+}
+/** Load one merchant row by email (auth / password reset). */
+async function loadMerchantRowByEmail(email) {
+    const rows = await queryRaw(`SELECT * FROM merchants WHERE lower(email) = $1 LIMIT 1`, [email.trim().toLowerCase()]);
+    return rows[0] ? mapMerchantRowKeys(rows[0]) : null;
 }
 /**
  * Idempotent ALTER statements for merchant columns added after initial deploy.
@@ -69,6 +111,7 @@ const MERCHANT_COLUMN_PATCHES = {
     email_delivery_mode: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS email_delivery_mode varchar(20) NOT NULL DEFAULT 'platform'",
     gift_card_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_settings jsonb",
     pos_checkout_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_checkout_settings jsonb",
+    time_slot_pricing_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS time_slot_pricing_settings jsonb",
     pos_print_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_print_settings jsonb",
     table_qr_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS table_qr_settings jsonb",
     tax_included_in_price: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tax_included_in_price boolean NOT NULL DEFAULT false",
@@ -92,9 +135,14 @@ const MERCHANT_COLUMN_PATCHES = {
     delivery_mode: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS delivery_mode varchar(20) NOT NULL DEFAULT 'zones'",
     min_pre_order_delay_minutes: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS min_pre_order_delay_minutes integer DEFAULT 30",
     category_pricing_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS category_pricing_enabled boolean NOT NULL DEFAULT false",
+    webpos_express_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_express_enabled boolean NOT NULL DEFAULT true",
+    webpos_cash_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_cash_enabled boolean NOT NULL DEFAULT true",
+    webpos_card_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_card_enabled boolean NOT NULL DEFAULT true",
+    webpos_terminal_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_terminal_enabled boolean NOT NULL DEFAULT true",
     webpos_gift_card_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_gift_card_enabled boolean NOT NULL DEFAULT false",
     adyen_use_legacy_endpoint: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_use_legacy_endpoint boolean NOT NULL DEFAULT false",
     adyen_hmac_key: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_hmac_key text",
+    adyen_store_reference: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_store_reference varchar(255)",
     tap_to_pay_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tap_to_pay_enabled boolean NOT NULL DEFAULT false",
     courses_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS courses_enabled boolean NOT NULL DEFAULT false",
     max_pos_posts: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_pos_posts integer NOT NULL DEFAULT 0",
@@ -109,6 +157,20 @@ const MERCHANT_COLUMN_PATCHES = {
     invoice_sequence: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS invoice_sequence integer NOT NULL DEFAULT 0",
     /** Paid addon flag — default false for every merchant; Superadmin/reseller toggle it. */
     inventory_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_addon_enabled boolean NOT NULL DEFAULT false",
+    growth_analytics_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS growth_analytics_addon_enabled boolean NOT NULL DEFAULT false",
+    guest_crm_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS guest_crm_addon_enabled boolean NOT NULL DEFAULT false",
+    marketing_automation_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_automation_addon_enabled boolean NOT NULL DEFAULT false",
+    smart_segments_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS smart_segments_addon_enabled boolean NOT NULL DEFAULT false",
+    reservation_campaigns_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservation_campaigns_addon_enabled boolean NOT NULL DEFAULT false",
+    ai_coach_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_coach_addon_enabled boolean NOT NULL DEFAULT false",
+    marketing_automation_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_automation_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
+    smart_segments_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS smart_segments_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
+    ai_coach_cache: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_coach_cache jsonb NOT NULL DEFAULT '{}'::jsonb",
+    google_reputation_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS google_reputation_addon_enabled boolean NOT NULL DEFAULT false",
+    google_reputation_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS google_reputation_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
+    ai_web_seo_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_web_seo_addon_enabled boolean NOT NULL DEFAULT false",
+    ai_web_seo_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_web_seo_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
+    customers_crm_tags: "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
     inventory_waste_factor: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_waste_factor numeric(5,4) NOT NULL DEFAULT 0.20",
     inventory_auto_reorder_email_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_auto_reorder_email_enabled boolean NOT NULL DEFAULT false",
     inventory_expiry_alert_days: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_expiry_alert_days integer NOT NULL DEFAULT 30",
@@ -121,6 +183,9 @@ const MERCHANT_COLUMN_PATCHES = {
     customer_display_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS customer_display_settings jsonb",
     just_eat_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS just_eat_addon_enabled boolean NOT NULL DEFAULT false",
     uber_eats_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS uber_eats_addon_enabled boolean NOT NULL DEFAULT false",
+    bexio_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS bexio_addon_enabled boolean NOT NULL DEFAULT false",
+    odoo_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS odoo_addon_enabled boolean NOT NULL DEFAULT false",
+    accounting_integration_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS accounting_integration_settings jsonb",
     storekeeper_addon_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS storekeeper_addon_enabled boolean NOT NULL DEFAULT false",
     panel_nav_hidden: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS panel_nav_hidden jsonb",
     shop_commission_percent: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS shop_commission_percent numeric(6,3)",
@@ -143,6 +208,8 @@ const MERCHANT_COLUMN_PATCHES = {
 };
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES = {
+    chaslay_homepage_builders_last_good_editor_state: "ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text",
+    chaslay_homepage_builder_pages_last_good_editor_state: "ALTER TABLE chaslay_homepage_builder_pages ADD COLUMN IF NOT EXISTS last_good_editor_state text",
     recipe_yield: "ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1",
     products_barcode: "ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode varchar(255)",
     inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
@@ -171,15 +238,31 @@ const EXTRA_COLUMN_PATCHES = {
     delivery_per_order_fee_override: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS delivery_per_order_fee_override numeric(10,2)",
     login_home: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS login_home varchar(20) NOT NULL DEFAULT 'auto'",
     merchant_staff_pin_display: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_display varchar(8)",
-    products_visibility: "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
+    merchant_staff_extra_permissions: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS extra_permissions text",
+    merchant_staff_phone: "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS phone varchar(32)",
+    merchant_staff_phone_uidx: "CREATE UNIQUE INDEX IF NOT EXISTS merchant_staff_merchant_phone_idx ON merchant_staff (merchant_id, phone) WHERE phone IS NOT NULL",
+    products_visibility: "ALTER TABLE products ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb",
     products_similar_product_ids: "ALTER TABLE products ADD COLUMN IF NOT EXISTS similar_product_ids jsonb NOT NULL DEFAULT '[]'::jsonb",
-    categories_visibility: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb",
+    products_brand: "ALTER TABLE products ADD COLUMN IF NOT EXISTS brand varchar(255)",
+    products_extra_barcodes: "ALTER TABLE products ADD COLUMN IF NOT EXISTS extra_barcodes jsonb NOT NULL DEFAULT '[]'::jsonb",
+    products_time_slot_prices: "ALTER TABLE products ADD COLUMN IF NOT EXISTS time_slot_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
+    products_catering_config: "ALTER TABLE products ADD COLUMN IF NOT EXISTS catering_config jsonb NOT NULL DEFAULT '{}'::jsonb",
+    ...product_column_patches_1.SHOP_CATALOG_EXTRA_PATCHES,
+    modifier_groups_price_scope: "ALTER TABLE modifier_groups ADD COLUMN IF NOT EXISTS price_scope varchar(20) NOT NULL DEFAULT 'fixed'",
+    categories_visibility: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS visibility jsonb NOT NULL DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb",
     categories_delivery_pricing_enabled: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS delivery_pricing_enabled boolean NOT NULL DEFAULT false",
     categories_extra_delivery_price: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS extra_delivery_price numeric(10,2) DEFAULT 0",
+    categories_shop_schedule: "ALTER TABLE categories ADD COLUMN IF NOT EXISTS shop_schedule jsonb NOT NULL DEFAULT '{}'::jsonb",
     orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
     orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
     pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",
     pos_sessions_print_agent_online: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS print_agent_online boolean",
+    hq_menus_category_ids: "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS category_ids jsonb NOT NULL DEFAULT '[]'::jsonb",
+    hq_menus_schedule_type: "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS schedule_type varchar(16) NOT NULL DEFAULT 'weekly'",
+    hq_menus_days_of_month: "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS days_of_month jsonb NOT NULL DEFAULT '[]'::jsonb",
+    hq_menus_time_ranges: "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS time_ranges jsonb NOT NULL DEFAULT '[]'::jsonb",
+    hq_menus_product_prices: "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS product_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
+    hq_menus_is_default: "ALTER TABLE hq_menus ADD COLUMN IF NOT EXISTS is_default boolean NOT NULL DEFAULT false",
     orders_order_source: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_source varchar(50)",
     orders_fulfillment_channel: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_channel varchar(50) DEFAULT 'takeaway'",
     orders_external_order_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_order_id varchar(255)",
@@ -228,6 +311,7 @@ const EXTRA_COLUMN_PATCHES = {
     order_items_selected_extras: "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS selected_extras jsonb DEFAULT '[]'::jsonb",
     order_items_seat_number: "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS seat_number integer",
     order_items_refunded_quantity: "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS refunded_quantity numeric(12,3) DEFAULT 0",
+    order_items_catering_guest_count: "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS catering_guest_count integer",
     merchants_reservations_enabled: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS reservations_enabled boolean NOT NULL DEFAULT false",
     merchants_subscription_billing_cycle: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS subscription_billing_cycle varchar(20)",
     merchants_adyen_recurring_detail_reference: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS adyen_recurring_detail_reference varchar(255)",
@@ -415,6 +499,11 @@ const TABLE_PATCHES = [
     `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_country varchar(2) DEFAULT 'CH'`,
     `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS fulfillment_status varchar(30)`,
     `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipped_at timestamptz`,
+    `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS card_theme varchar(32) DEFAULT 'classic'`,
+    `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS shipping_fee decimal(10,2) DEFAULT 0`,
+    `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS service_fee decimal(10,2) DEFAULT 0`,
+    `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS payment_fee decimal(10,2) DEFAULT 0`,
+    `ALTER TABLE gift_card_purchases ADD COLUMN IF NOT EXISTS total_charged decimal(10,2)`,
     `CREATE TABLE IF NOT EXISTS pos_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -948,6 +1037,7 @@ const TABLE_PATCHES = [
     `CREATE TABLE IF NOT EXISTS email_send_log (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid REFERENCES merchants(id) ON DELETE SET NULL,
+    order_id uuid,
     provider varchar(20) NOT NULL,
     source varchar(30) NOT NULL,
     email_type varchar(50) NOT NULL DEFAULT 'general',
@@ -957,7 +1047,9 @@ const TABLE_PATCHES = [
     error text,
     created_at timestamptz NOT NULL DEFAULT now()
   )`,
+    `ALTER TABLE email_send_log ADD COLUMN IF NOT EXISTS order_id uuid`,
     `CREATE INDEX IF NOT EXISTS email_send_log_merchant_idx ON email_send_log(merchant_id)`,
+    `CREATE INDEX IF NOT EXISTS email_send_log_order_idx ON email_send_log(order_id)`,
     `CREATE INDEX IF NOT EXISTS email_send_log_type_idx ON email_send_log(email_type)`,
     `CREATE INDEX IF NOT EXISTS email_send_log_created_idx ON email_send_log(created_at)`,
     `CREATE INDEX IF NOT EXISTS email_send_log_merchant_created_idx ON email_send_log(merchant_id, created_at)`,
@@ -988,6 +1080,8 @@ const TABLE_PATCHES = [
   )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS chaslay_homepage_builder_pages_slug_uq ON chaslay_homepage_builder_pages(homepage_builder_id, slug)`,
     `CREATE INDEX IF NOT EXISTS chaslay_homepage_builder_pages_sort_idx ON chaslay_homepage_builder_pages(homepage_builder_id, sort_order)`,
+    `ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text`,
+    `ALTER TABLE chaslay_homepage_builder_pages ADD COLUMN IF NOT EXISTS last_good_editor_state text`,
     `CREATE TABLE IF NOT EXISTS locations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -1079,6 +1173,7 @@ const TABLE_PATCHES = [
     location_ids jsonb NOT NULL DEFAULT '[]',
     hq_version_id uuid REFERENCES hq_catalog_versions(id) ON DELETE SET NULL,
     product_ids jsonb NOT NULL DEFAULT '[]',
+    category_ids jsonb NOT NULL DEFAULT '[]',
     is_active boolean NOT NULL DEFAULT true,
     sort_order integer NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -1119,6 +1214,21 @@ const TABLE_PATCHES = [
     `ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS paid_total numeric(10,2)`,
     `CREATE INDEX IF NOT EXISTS held_orders_merchant_open_idx ON held_orders(merchant_id, closed_at)`,
     `ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'::jsonb`,
+    `CREATE TABLE IF NOT EXISTS reservation_growth_campaigns (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    code varchar(40) NOT NULL,
+    name varchar(200) NOT NULL,
+    perk_label varchar(200),
+    message text,
+    click_count integer NOT NULL DEFAULT 0,
+    booking_count integer NOT NULL DEFAULT 0,
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_code_uq ON reservation_growth_campaigns(merchant_id, code)`,
+    `CREATE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_idx ON reservation_growth_campaigns(merchant_id, active)`,
 ];
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
 const LOCATIONS_SCHEMA_PATTERN = /\blocations\b|merchant_staff_locations|hq_catalog_versions|location_catalog_links|location_product_overrides|pricing_bulk_jobs|hq_menus|inventory_location_stock|inventory_transfers|pos_shifts|pos_cash_movements/;
@@ -1237,6 +1347,53 @@ async function ensureKdsAddonColumn() {
     await runPatch("kds_addon_enabled");
     await ensureMerchantTables();
 }
+async function ensureGrowthAnalyticsAddonColumn() {
+    await runPatch("growth_analytics_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureGuestCrmAddonColumn() {
+    await runPatch("guest_crm_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureMarketingAutomationAddonColumn() {
+    await runPatch("marketing_automation_addon_enabled");
+    await runPatch("marketing_automation_settings");
+    await ensureMerchantTables();
+}
+async function ensureSmartSegmentsAddonColumn() {
+    await runPatch("smart_segments_addon_enabled");
+    await runPatch("smart_segments_settings");
+    await ensureMerchantTables();
+}
+async function ensureReservationCampaignsAddonColumn() {
+    await runPatch("reservation_campaigns_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureAiCoachAddonColumn() {
+    await runPatch("ai_coach_addon_enabled");
+    await runPatch("ai_coach_cache");
+    await ensureMerchantTables();
+}
+async function ensureGoogleReputationAddonColumn() {
+    await runPatch("google_reputation_addon_enabled");
+    await runPatch("google_reputation_settings");
+    await ensureMerchantTables();
+}
+async function ensureAiWebSeoAddonColumn() {
+    await runPatch("ai_web_seo_addon_enabled");
+    await runPatch("ai_web_seo_settings");
+    await ensureMerchantTables();
+}
+async function ensureCustomerCrmTagsColumn() {
+    await runPatch("customers_crm_tags");
+}
+/** Ensure optional customers columns (Guest CRM tags, etc.). */
+async function ensureCustomersColumnsSchema() {
+    await ensureCustomerCrmTagsColumn();
+}
+async function ensureVouchersColumnsSchema() {
+    await runPatch("vouchers_order_types");
+}
 async function ensureOdsAddonColumn() {
     await runPatch("ods_addon_enabled");
     await ensureMerchantTables();
@@ -1259,6 +1416,18 @@ async function ensureJustEatAddonColumn() {
 }
 async function ensureUberEatsAddonColumn() {
     await runPatch("uber_eats_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureBexioAddonColumn() {
+    await runPatch("bexio_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureOdooAddonColumn() {
+    await runPatch("odoo_addon_enabled");
+    await ensureMerchantTables();
+}
+async function ensureAccountingIntegrationSettingsColumn() {
+    await runPatch("accounting_integration_settings");
     await ensureMerchantTables();
 }
 async function ensureStorekeeperAddonColumn() {
@@ -1365,6 +1534,12 @@ async function ensureLocationsSchema() {
     }
     await runPatch("orders_location_id");
     await runPatch("pos_sessions_location_id");
+    await runPatch("hq_menus_category_ids");
+    await runPatch("hq_menus_schedule_type");
+    await runPatch("hq_menus_days_of_month");
+    await runPatch("hq_menus_time_ranges");
+    await runPatch("hq_menus_product_prices");
+    await runPatch("hq_menus_is_default");
     await runPatch("max_locations", "merchants");
     await runPatch("subscription_plans_max_locations");
     await ensurePosSessionsSchema();
@@ -1440,18 +1615,84 @@ async function backfillDefaultLocations() {
         console.warn("[schema] default location backfill failed:", err);
     }
 }
+function mentionsOrdersTable(raw) {
+    return (/relation ["']?orders["']?/i.test(raw) ||
+        /from ["']?orders["']?/i.test(raw) ||
+        /"orders"\."orders"/i.test(raw) ||
+        /column "[^"]+" of relation "orders"/i.test(raw) ||
+        /relation ["']?order_items["']?/i.test(raw) ||
+        /column "[^"]+" of relation "order_items"/i.test(raw));
+}
 function isOrdersColumnSchemaError(raw) {
-    return ((0, db_schema_errors_1.isMissingSchemaError)(raw) &&
-        (/relation ["']?orders["']?/i.test(raw) ||
-            /from ["']?orders["']?/i.test(raw) ||
-            /column "[^"]+" of relation "orders"/i.test(raw) ||
-            /relation ["']?order_items["']?/i.test(raw) ||
-            /column "[^"]+" of relation "order_items"/i.test(raw)));
+    if (!mentionsOrdersTable(raw))
+        return false;
+    return (0, db_schema_errors_1.isMissingSchemaError)(raw) || /Failed query/i.test(raw);
 }
 function isOrderItemsColumnSchemaError(raw) {
-    return ((0, db_schema_errors_1.isMissingSchemaError)(raw) &&
-        (/relation ["']?order_items["']?/i.test(raw) ||
-            /column "[^"]+" of relation "order_items"/i.test(raw)));
+    if (!/relation ["']?order_items["']?/i.test(raw) &&
+        !/column "[^"]+" of relation "order_items"/i.test(raw)) {
+        return false;
+    }
+    return (0, db_schema_errors_1.isMissingSchemaError)(raw) || /Failed query/i.test(raw);
+}
+function mentionsCustomersTable(raw) {
+    return (/relation ["']?customers["']?/i.test(raw) ||
+        /from ["']?customers["']?/i.test(raw) ||
+        /"customers"\."customers"/i.test(raw) ||
+        /column "[^"]+" of relation "customers"/i.test(raw));
+}
+function isCustomersColumnSchemaError(raw) {
+    if (!mentionsCustomersTable(raw))
+        return false;
+    return (0, db_schema_errors_1.isMissingSchemaError)(raw) || /Failed query/i.test(raw);
+}
+function isVouchersColumnSchemaError(raw) {
+    if (!/vouchers/i.test(raw))
+        return false;
+    return (0, db_schema_errors_1.isMissingSchemaError)(raw) || /Failed query/i.test(raw);
+}
+const SHOP_CATEGORY_HEAL_COLUMNS = [
+    "client_id",
+    "is_offers_category",
+    "sort_order",
+    "description",
+    "color",
+    "image_url",
+    "visibility",
+    "shop_schedule",
+    "delivery_pricing_enabled",
+    "extra_delivery_price",
+];
+/** Idempotent products/categories columns used by the shop menu, loyalty rewards, and merchant catalog. */
+async function ensureShopCatalogColumnsSchema() {
+    for (const column of (0, product_column_patches_1.shopProductHealColumnNames)()) {
+        await runPatch(column, "products");
+    }
+    for (const column of SHOP_CATEGORY_HEAL_COLUMNS) {
+        await runPatch(column, "categories");
+    }
+}
+/**
+ * Run a shop catalog query, and on a missing products/categories column (or a Drizzle
+ * "Failed query" against those tables) apply the heal and retry once.
+ */
+async function withShopCatalogSchemaRetry(fn) {
+    try {
+        return await fn();
+    }
+    catch (error) {
+        if (!(0, public_shop_error_1.isShopCatalogSchemaError)(error))
+            throw error;
+        console.error("[schema] shop catalog query failed; healing columns and retrying once:", error);
+        try {
+            await ensureShopCatalogColumnsSchema();
+        }
+        catch (healError) {
+            console.error("[schema] shop catalog column heal failed:", healError);
+            throw error;
+        }
+        return fn();
+    }
 }
 const REQUIRED_MERCHANT_COLUMNS = Object.keys(MERCHANT_COLUMN_PATCHES);
 const REQUIRED_ORDERS_COLUMNS = Object.entries(EXTRA_COLUMN_PATCHES)
@@ -1517,8 +1758,8 @@ async function backfillKioskCatalogVisibility() {
     WHERE NOT coalesce(visibility->'channels', '[]'::jsonb) ? 'kiosk'
   `;
     try {
-        await execSql("ALTER TABLE products ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb");
-        await execSql("ALTER TABLE categories ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"delivery\",\"kiosk\"]}'::jsonb");
+        await execSql("ALTER TABLE products ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb");
+        await execSql("ALTER TABLE categories ALTER COLUMN visibility SET DEFAULT '{\"channels\":[\"pos\",\"shop\",\"qr_table\",\"kiosk\"]}'::jsonb");
         const products = await getDdlPool().query(appendKiosk);
         const categories = await getDdlPool().query(appendKioskCategories);
         const total = (products.rowCount || 0) + (categories.rowCount || 0);
@@ -1532,9 +1773,12 @@ async function backfillKioskCatalogVisibility() {
 }
 /** Apply all idempotent schema patches (safe to run on every boot). */
 async function ensureAllMerchantSchema() {
+    patchedColumns.clear();
+    patchedTables = false;
     const missingBefore = await listMissingMerchantColumns().catch(() => []);
     await ensureMerchantColumnsSchema();
     await runAlterTablePatches();
+    await ensureShopCatalogColumnsSchema();
     for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
         if (column.startsWith("orders_")) {
             await runPatch(column.slice("orders_".length), "orders");
@@ -1554,6 +1798,8 @@ async function ensureAllMerchantSchema() {
     }
     await ensureOrdersColumnsSchema();
     await ensureOrderItemsColumnsSchema();
+    await ensureCustomersColumnsSchema();
+    await ensureVouchersColumnsSchema();
     await ensureMerchantTables();
     await ensureSubscriptionPlansSchema();
     await ensureLocationsSchema();
@@ -1580,26 +1826,15 @@ async function ensureAllMerchantSchema() {
     const missingAfter = await listMissingMerchantColumns().catch(() => []);
     const ordersMissing = await listMissingTableColumns("orders", REQUIRED_ORDERS_COLUMNS).catch(() => []);
     const orderItemsMissing = await listMissingTableColumns("order_items", REQUIRED_ORDER_ITEMS_COLUMNS).catch(() => []);
-    const stillProducts = await listMissingTableColumns("products", [
-        "visibility",
-        "recipe_yield",
-        "barcode",
-    ]).catch(() => []);
+    const requiredProductColumns = (0, product_column_patches_1.shopProductHealColumnNames)();
+    const stillProducts = await listMissingTableColumns("products", requiredProductColumns).catch(() => []);
     for (const col of stillProducts) {
         patchedColumns.delete(col);
         patchedColumns.delete(`products_${col}`);
-        if (col === "visibility")
-            await runPatch("products_visibility");
-        else if (col === "barcode")
-            await runPatch("products_barcode");
-        else
-            await runPatch("recipe_yield");
+        patchedColumns.delete(`products.${col}`);
+        await runPatch(col, "products");
     }
-    const productsMissing = await listMissingTableColumns("products", [
-        "visibility",
-        "recipe_yield",
-        "barcode",
-    ]).catch(() => []);
+    const productsMissing = await listMissingTableColumns("products", requiredProductColumns).catch(() => []);
     const editionsExists = await tableExists("editions").catch(() => false);
     const editionsMissing = editionsExists
         ? await listMissingTableColumns("editions", REQUIRED_EDITIONS_COLUMNS).catch(() => [])
@@ -1640,6 +1875,16 @@ async function ensureAllMerchantSchema() {
             posSessions: posSessionsMissingAfter,
         });
     }
+    let chaslayHomepageRepair = { scanned: 0, repaired: [] };
+    try {
+        chaslayHomepageRepair = await (0, chaslay_homepage_heal_1.repairAllChaslayHomepages)();
+        if (chaslayHomepageRepair.repaired.length) {
+            console.info("[schema] chaslay homepage repair:", chaslayHomepageRepair);
+        }
+    }
+    catch (err) {
+        console.warn("[schema] chaslay homepage repair failed:", err);
+    }
     return {
         missingBefore,
         missingAfter,
@@ -1649,6 +1894,7 @@ async function ensureAllMerchantSchema() {
         editionsMissing: editionsMissingAfter,
         subscriptionPlansMissing: subscriptionPlansMissingAfter,
         posSessionsMissing: posSessionsMissingAfter,
+        chaslayHomepageRepair,
     };
 }
 /** Run schema patches at startup — await before accepting traffic. */
@@ -1664,10 +1910,12 @@ function ensureMerchantSchemaAtStartup() {
     return startupPatchPromise;
 }
 function isMerchantsColumnSchemaError(raw) {
-    return ((0, db_schema_errors_1.isMissingSchemaError)(raw) &&
-        (/relation ["']?merchants["']?/i.test(raw) ||
-            /from ["']?merchants["']?/i.test(raw) ||
-            /merchants\./i.test(raw)));
+    const mentionsMerchants = /relation ["']?merchants["']?/i.test(raw) ||
+        /from ["']?merchants["']?/i.test(raw) ||
+        /merchants\./i.test(raw);
+    if (!mentionsMerchants)
+        return false;
+    return (0, db_schema_errors_1.isMissingSchemaError)(raw) || /Failed query/i.test(raw);
 }
 function isSubscriptionSchemaError(raw) {
     const mentionsPlans = /subscription_plans|subscriptionPlans|"editions"/i.test(raw);
@@ -1697,9 +1945,12 @@ async function withMerchantSchemaRetry(fn) {
             const locationsMissing = (0, db_schema_errors_1.isLocationsSchemaError)(raw);
             const merchantsColumnMissing = isMerchantsColumnSchemaError(raw);
             const ordersColumnMissing = isOrdersColumnSchemaError(raw);
+            const customersColumnMissing = isCustomersColumnSchemaError(raw);
+            const vouchersColumnMissing = isVouchersColumnSchemaError(raw);
             const subscriptionMissing = isSubscriptionSchemaError(raw);
             const posSessionsMissing = isPosSessionsSchemaError(raw);
             const chaslayPagebuilderMissing = isChaslayPagebuilderSchemaError(raw);
+            const catalogMissing = (0, public_shop_error_1.isShopCatalogSchemaError)(error);
             const inventoryTableMissing = /relation ["']?(inventory_|product_recipes|signage_)/i.test(raw);
             if (locationsMissing) {
                 await ensureLocationsSchema();
@@ -1723,6 +1974,15 @@ async function withMerchantSchemaRetry(fn) {
                 await ensureOrderItemsColumnsSchema();
                 await runAlterTablePatches();
             }
+            else if (customersColumnMissing) {
+                await ensureCustomersColumnsSchema();
+            }
+            else if (vouchersColumnMissing) {
+                await ensureVouchersColumnsSchema();
+            }
+            else if (catalogMissing) {
+                await ensureShopCatalogColumnsSchema();
+            }
             else if (chaslayPagebuilderMissing || inventoryTableMissing) {
                 patchedTables = false;
                 await ensureMerchantTables();
@@ -1733,6 +1993,9 @@ async function withMerchantSchemaRetry(fn) {
                 !locationsMissing &&
                 !merchantsColumnMissing &&
                 !ordersColumnMissing &&
+                !customersColumnMissing &&
+                !vouchersColumnMissing &&
+                !catalogMissing &&
                 !subscriptionMissing &&
                 !posSessionsMissing) {
                 throw error;
@@ -1747,6 +2010,30 @@ async function withMerchantSchemaRetry(fn) {
  */
 async function patchMerchantSchemaFromError(error) {
     const raw = (0, db_schema_errors_1.dbErrorChain)(error);
+    if (/Failed query/i.test(raw)) {
+        if (isCustomersColumnSchemaError(raw)) {
+            await ensureCustomersColumnsSchema();
+            return true;
+        }
+        if (isOrdersColumnSchemaError(raw) || isOrderItemsColumnSchemaError(raw)) {
+            await ensureOrdersColumnsSchema();
+            await ensureOrderItemsColumnsSchema();
+            await runAlterTablePatches();
+            return true;
+        }
+        if (isVouchersColumnSchemaError(raw)) {
+            await ensureVouchersColumnsSchema();
+            return true;
+        }
+        if (/gift_cards/i.test(raw) && mentionsCustomersTable(raw)) {
+            await ensureCustomersColumnsSchema();
+            return true;
+        }
+        if ((0, public_shop_error_1.isShopCatalogSchemaError)(error)) {
+            await ensureShopCatalogColumnsSchema();
+            return true;
+        }
+    }
     if (!(0, db_schema_errors_1.isMissingSchemaError)(raw))
         return false;
     if ((0, db_schema_errors_1.isLocationsSchemaError)(raw)) {
@@ -1774,6 +2061,18 @@ async function patchMerchantSchemaFromError(error) {
         await ensureOrdersColumnsSchema();
         await ensureOrderItemsColumnsSchema();
         await runAlterTablePatches();
+        return true;
+    }
+    if (isCustomersColumnSchemaError(raw)) {
+        await ensureCustomersColumnsSchema();
+        return true;
+    }
+    if (isVouchersColumnSchemaError(raw)) {
+        await ensureVouchersColumnsSchema();
+        return true;
+    }
+    if ((0, public_shop_error_1.isShopCatalogSchemaError)(error)) {
+        await ensureShopCatalogColumnsSchema();
         return true;
     }
     const { table, column } = (0, db_schema_errors_1.missingTableColumnFromDbError)(error);

@@ -8,7 +8,9 @@ export declare class AdyenMerchantWebhookService {
     static webhookUrlFromRequest(merchantId: string, req: RequestLike): string;
     static processWebhook(merchantId: string, body: unknown): Promise<void>;
     private static handleNotificationItem;
+    private static purchaseIdFromReference;
     private static findOrderByReference;
+    private static findGiftCardPurchaseByReference;
     private static recordAuthorisedPayment;
     private static markTransactionCaptured;
     private static recordRefund;

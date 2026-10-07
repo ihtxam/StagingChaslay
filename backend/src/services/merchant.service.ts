@@ -49,6 +49,16 @@ import {
   writeAiCoachAddonEnabled,
 } from "@/lib/ai-coach-addon";
 import {
+  isGoogleReputationAddonEnabled,
+  readGoogleReputationAddonEnabled,
+  writeGoogleReputationAddonEnabled,
+} from "@/lib/google-reputation-addon";
+import {
+  isAiWebSeoAddonEnabled,
+  readAiWebSeoAddonEnabled,
+  writeAiWebSeoAddonEnabled,
+} from "@/lib/ai-web-seo-addon";
+import {
   isSignageAddonEnabled,
   normalizeSignageScreenLimit,
   readSignageAddon,
@@ -341,6 +351,12 @@ export class MerchantService {
       const aiCoachOn = await readAiCoachAddonEnabled(merchantId).catch(() =>
         isAiCoachAddonEnabled(merchant.aiCoachAddonEnabled)
       );
+      const googleReputationOn = await readGoogleReputationAddonEnabled(merchantId).catch(() =>
+        isGoogleReputationAddonEnabled(merchant.googleReputationAddonEnabled)
+      );
+      const aiWebSeoOn = await readAiWebSeoAddonEnabled(merchantId).catch(() =>
+        isAiWebSeoAddonEnabled(merchant.aiWebSeoAddonEnabled)
+      );
       return {
         ...merchant,
         inventoryAddonEnabled: inventoryOn,
@@ -366,6 +382,8 @@ export class MerchantService {
         smartSegmentsAddonEnabled: smartSegmentsOn,
         reservationCampaignsAddonEnabled: reservationCampaignsOn,
         aiCoachAddonEnabled: aiCoachOn,
+        googleReputationAddonEnabled: googleReputationOn,
+        aiWebSeoAddonEnabled: aiWebSeoOn,
         editionName: merchant.edition?.name ?? null,
         planBillingPaid: merchant.planBillingPaid !== false,
         lastAppVersion: lastSeen.lastAppVersion,
@@ -426,6 +444,8 @@ export class MerchantService {
       smartSegmentsAddonEnabled?: boolean;
       reservationCampaignsAddonEnabled?: boolean;
       aiCoachAddonEnabled?: boolean;
+      googleReputationAddonEnabled?: boolean;
+      aiWebSeoAddonEnabled?: boolean;
     }
   ) {
     const db = getDb();
@@ -614,6 +634,12 @@ export class MerchantService {
       if (options?.aiCoachAddonEnabled === true) {
         await writeAiCoachAddonEnabled(created.id, true);
       }
+      if (options?.googleReputationAddonEnabled === true) {
+        await writeGoogleReputationAddonEnabled(created.id, true);
+      }
+      if (options?.aiWebSeoAddonEnabled === true) {
+        await writeAiWebSeoAddonEnabled(created.id, true);
+      }
       const inventoryOn = await readInventoryAddonEnabled(created.id).catch(() => false);
       const signage = await readSignageAddon(created.id).catch(() => ({
         enabled: false,
@@ -631,6 +657,10 @@ export class MerchantService {
         () => false
       );
       const aiCoachOn = await readAiCoachAddonEnabled(created.id).catch(() => false);
+      const googleReputationOn = await readGoogleReputationAddonEnabled(created.id).catch(
+        () => false
+      );
+      const aiWebSeoOn = await readAiWebSeoAddonEnabled(created.id).catch(() => false);
 
       // Don't leak password hash to API clients
       const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row as typeof row & {
@@ -655,6 +685,8 @@ export class MerchantService {
         smartSegmentsAddonEnabled: smartSegmentsOn,
         reservationCampaignsAddonEnabled: reservationCampaignsOn,
         aiCoachAddonEnabled: aiCoachOn,
+        googleReputationAddonEnabled: googleReputationOn,
+        aiWebSeoAddonEnabled: aiWebSeoOn,
         justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
         deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
@@ -757,6 +789,8 @@ export class MerchantService {
       smartSegmentsAddonEnabled?: boolean;
       reservationCampaignsAddonEnabled?: boolean;
       aiCoachAddonEnabled?: boolean;
+      googleReputationAddonEnabled?: boolean;
+      aiWebSeoAddonEnabled?: boolean;
     }
   ) {
     const patch: Partial<typeof schema.merchants.$inferInsert> = {};
@@ -837,6 +871,14 @@ export class MerchantService {
     }
     if (limits.aiCoachAddonEnabled !== undefined) {
       await writeAiCoachAddonEnabled(merchantId, limits.aiCoachAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.googleReputationAddonEnabled !== undefined) {
+      await writeGoogleReputationAddonEnabled(merchantId, limits.googleReputationAddonEnabled);
+      wroteAddon = true;
+    }
+    if (limits.aiWebSeoAddonEnabled !== undefined) {
+      await writeAiWebSeoAddonEnabled(merchantId, limits.aiWebSeoAddonEnabled);
       wroteAddon = true;
     }
     if (!wroteAddon && Object.keys(patch).length === 0) {

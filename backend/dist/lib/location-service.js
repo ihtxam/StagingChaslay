@@ -11,6 +11,7 @@ exports.photonFeatureToSuggestion = photonFeatureToSuggestion;
 exports.nominatimHitToSuggestion = nominatimHitToSuggestion;
 exports.filterAndDedupeSuggestions = filterAndDedupeSuggestions;
 exports.autocompleteAddress = autocompleteAddress;
+exports.suggestHouseNumbers = suggestHouseNumbers;
 const USER_AGENT = "Reborn-POS/1.0 (https://app.rebornsense.com)";
 const CACHE_TTL_MS = 60000;
 const FETCH_MS = 4000;
@@ -226,7 +227,61 @@ async function autocompleteAddress(opts) {
             suggestions = [];
         }
     }
-    cache.set(cacheKey, { at: Date.now(), suggestions });
-    return suggestions;
+    const numbered = suggestions.filter((s) => s.houseNumber);
+    if (numbered.length < Math.min(3, limit) && !/\d+[a-zA-Z]?\s*$/.test(q)) {
+        try {
+            const extra = await nominatimAutocomplete({ q, countryCode, limit: Math.max(limit, 12) });
+            suggestions = filterAndDedupeSuggestions([...suggestions, ...extra], countryCode);
+        }
+        catch {
+            /* keep primary results */
+        }
+    }
+    suggestions = [...suggestions].sort((a, b) => {
+        const ah = a.houseNumber ? 0 : 1;
+        const bh = b.houseNumber ? 0 : 1;
+        return ah - bh;
+    });
+    cache.set(cacheKey, { at: Date.now(), suggestions: suggestions.slice(0, limit) });
+    return suggestions.slice(0, limit);
+}
+function normalizeStreetToken(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+}
+function streetMatchesSuggestion(street, suggestionStreet) {
+    const want = normalizeStreetToken(street);
+    const got = normalizeStreetToken(suggestionStreet || "");
+    if (!want || !got)
+        return true;
+    return got === want || got.startsWith(want) || want.startsWith(got);
+}
+/** List distinct house numbers for a street (Photon / Nominatim). */
+async function suggestHouseNumbers(opts) {
+    const street = String(opts.street || "").trim();
+    if (!street)
+        return [];
+    const q = [street, opts.postcode, opts.city].filter(Boolean).join(", ");
+    const suggestions = await autocompleteAddress({
+        q,
+        countryCode: opts.countryCode,
+        limit: 24,
+        lang: opts.lang,
+    });
+    const seen = new Set();
+    const numbers = [];
+    for (const suggestion of suggestions) {
+        if (!streetMatchesSuggestion(street, suggestion.street))
+            continue;
+        const num = String(suggestion.houseNumber || "").trim();
+        if (!num || seen.has(num))
+            continue;
+        seen.add(num);
+        numbers.push(num);
+    }
+    return numbers.slice(0, opts.limit ?? 12);
 }
 //# sourceMappingURL=location-service.js.map

@@ -11,6 +11,8 @@ const adyen_service_1 = require("@/services/adyen.service");
 const email_service_1 = require("@/services/email.service");
 const adyen_checkout_env_1 = require("@/lib/adyen-checkout-env");
 const shop_public_url_1 = require("@/lib/shop-public-url");
+const gift_card_checkout_1 = require("@/lib/gift-card-checkout");
+const gift_card_themes_1 = require("@/lib/gift-card-themes");
 function maskEmail(email) {
     const e = String(email || "").trim();
     if (!e.includes("@"))
@@ -49,6 +51,12 @@ class ShopGiftCardService {
             minAmount: settings.minAmount,
             maxAmount: settings.maxAmount,
             customAmountEnabled: settings.customAmountEnabled,
+            physicalPostFee: settings.physicalPostFee ?? 0,
+            serviceFeeFlat: settings.serviceFeeFlat ?? 0,
+            serviceFeePercent: settings.serviceFeePercent ?? 0,
+            passCardFeeToCustomer: settings.passCardFeeToCustomer === true,
+            cardFeePercent: settings.cardFeePercent ?? 0,
+            themes: ["classic", "birthday", "anniversary", "wedding", "promotion", "thank_you"],
         };
     }
     /** Public balance lookup — returns balance + masked holder email */
@@ -89,6 +97,8 @@ class ShopGiftCardService {
         const check = (0, gift_card_settings_1.validateGiftAmount)(input.amount, settings);
         if (!check.ok)
             throw new Error(check.error);
+        const cardTheme = (0, gift_card_themes_1.normalizeGiftCardTheme)(input.cardTheme);
+        const breakdown = (0, gift_card_checkout_1.computeGiftCardCheckout)(check.amount, deliveryType, settings);
         const recipientEmail = String(input.recipientEmail || "").trim().toLowerCase();
         if (!recipientEmail.includes("@")) {
             throw new Error("Valid recipient email is required");
@@ -106,7 +116,12 @@ class ShopGiftCardService {
             .insert(db_1.schema.giftCardPurchases)
             .values({
             merchantId: merchant.id,
-            amount: check.amount.toFixed(2),
+            amount: breakdown.faceAmount.toFixed(2),
+            cardTheme,
+            shippingFee: breakdown.shippingFee.toFixed(2),
+            serviceFee: breakdown.serviceFee.toFixed(2),
+            paymentFee: breakdown.paymentFee.toFixed(2),
+            totalCharged: breakdown.totalCharged.toFixed(2),
             deliveryType,
             recipientEmail,
             recipientName: input.recipientName?.trim() || null,
@@ -140,12 +155,13 @@ class ShopGiftCardService {
                     origin: input.origin,
                     shopPath: input.shopPath,
                 });
-                const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, purchase.id, check.amount, "CHF", returnUrl, checkoutOrigin);
+                const session = await adyen_service_1.AdyenService.initializePaymentSession(merchant.id, purchase.id, breakdown.totalCharged, "CHF", returnUrl, checkoutOrigin, { customerId: input.customerId });
                 paymentSession = {
                     id: session.id,
                     sessionData: session.sessionData,
                     clientKey: session.clientKey || merchant.adyenClientId,
                     environment: session.environment || adyen_service_1.AdyenService.environmentFromClientKey(merchant.adyenClientId),
+                    storePaymentMethod: session.storePaymentMethod === true,
                 };
             }
             catch (e) {
@@ -161,7 +177,7 @@ class ShopGiftCardService {
                 demoConfirmAvailable: true,
             };
         }
-        return { purchase, paymentSession, amount: check.amount };
+        return { purchase, paymentSession, amount: breakdown.faceAmount, breakdown };
     }
     static async getPurchase(merchantId, purchaseId) {
         const db = (0, db_1.getDb)();
@@ -178,6 +194,13 @@ class ShopGiftCardService {
         return {
             id: purchase.id,
             amount: purchase.amount,
+            totalCharged: purchase.totalCharged != null
+                ? purchase.totalCharged
+                : purchase.amount,
+            shippingFee: purchase.shippingFee,
+            serviceFee: purchase.serviceFee,
+            paymentFee: purchase.paymentFee,
+            cardTheme: purchase.cardTheme || "classic",
             deliveryType: purchase.deliveryType || "digital",
             recipientEmail: purchase.recipientEmail,
             recipientName: purchase.recipientName,
@@ -202,6 +225,9 @@ class ShopGiftCardService {
     static async confirmPurchasePayment(merchantId, purchaseId, pspReference) {
         const db = (0, db_1.getDb)();
         const purchase = await this.getPurchase(merchantId, purchaseId);
+        if (purchase.paymentStatus === "failed" || purchase.paymentStatus === "cancelled") {
+            throw new Error("Payment was not completed");
+        }
         if (purchase.paymentStatus === "completed" && purchase.cardId) {
             const card = await gift_card_service_1.GiftCardService.getById(merchantId, purchase.cardId);
             return { purchase, card, alreadyFulfilled: true };
@@ -225,6 +251,9 @@ class ShopGiftCardService {
                     code: card.ecardCode || card.cardNumber,
                     balance: (0, money_1.roundMoney2)(Number(card.balance)),
                     holderName: purchase.recipientName || undefined,
+                    senderName: purchase.senderName || undefined,
+                    message: purchase.message || undefined,
+                    cardTheme: (0, gift_card_themes_1.normalizeGiftCardTheme)(purchase.cardTheme),
                 });
             }
             catch (err) {

@@ -11,6 +11,7 @@ import ZoneMapEditor, {
 import { useI18n } from '@/lib/i18n';
 import { compressImageIfNeeded, ensureImageFileType } from '@/lib/compress-image';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
+import GoogleReputationPanel from '@/components/growth/GoogleReputationPanel';
 import {
   DEFAULT_SHOP_FAVICON,
   SHOP_SEO_LOCALES,
@@ -1066,6 +1067,8 @@ export default function OnlineShop() {
           Save shop settings above after changing the delivery mode.
         </p>
       </div>
+
+      {settings.googleReputationAddonEnabled === true ? <GoogleReputationPanel /> : null}
 
       {deliveryMode === 'zones' ? (
       <div className="card space-y-4">

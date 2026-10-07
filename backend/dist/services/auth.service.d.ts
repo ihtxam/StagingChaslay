@@ -58,6 +58,8 @@ export declare class AuthService {
             status: string;
             roleName: string;
             inventoryAddonEnabled: boolean;
+            growthAnalyticsAddonEnabled: boolean;
+            guestCrmAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
@@ -78,8 +80,10 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "STOREKEEPER_EDIT_INTAKE")[];
             inventoryAddonEnabled: boolean;
+            growthAnalyticsAddonEnabled: boolean;
+            guestCrmAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
@@ -102,6 +106,8 @@ export declare class AuthService {
             status: string;
             roleName: string;
             inventoryAddonEnabled: boolean;
+            growthAnalyticsAddonEnabled: boolean;
+            guestCrmAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
@@ -123,8 +129,10 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "STOREKEEPER_EDIT_INTAKE")[];
             inventoryAddonEnabled: boolean;
+            growthAnalyticsAddonEnabled: boolean;
+            guestCrmAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
@@ -160,6 +168,8 @@ export declare class AuthService {
             status: string;
             roleName: string;
             inventoryAddonEnabled: boolean;
+            growthAnalyticsAddonEnabled: boolean;
+            guestCrmAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
@@ -183,8 +193,10 @@ export declare class AuthService {
             status: string;
             staffId: string;
             roleName: string | undefined;
-            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY")[];
+            permissions: ("USE_WEBPOS" | "MANAGE_TABLES" | "STOREKEEPER_INTAKE" | "DELIVERY_ORDERS" | "ACCESS_PANEL" | "MANAGE_PRODUCTS" | "MANAGE_INVENTORY" | "VIEW_ORDER_HISTORY" | "MANAGE_KIOSK" | "USE_POS" | "PROCESS_PAYMENTS" | "APPLY_DISCOUNTS" | "OPEN_CASH_DRAWER" | "SEND_KITCHEN" | "TAKEAWAY_ORDERS" | "VIEW_DELIVERY_TRACKING" | "CANCEL_ORDERS" | "REFUND_ORDERS" | "VIEW_REPORTS" | "VIEW_ALL_SALES" | "GANDOLA_PURGE" | "MANAGE_CUSTOMERS" | "MANAGE_OFFERS" | "MANAGE_ONLINE_SHOP" | "MANAGE_SETTINGS" | "MANAGE_STAFF" | "MANAGE_ROLES" | "MANAGE_BILLING" | "END_OF_DAY" | "STOREKEEPER_EDIT_INTAKE")[];
             inventoryAddonEnabled: boolean;
+            growthAnalyticsAddonEnabled: boolean;
+            guestCrmAddonEnabled: boolean;
             inventoryEnabled: boolean;
             signageAddonEnabled: boolean;
             signageEnabled: boolean;
@@ -274,6 +286,8 @@ export declare class AuthService {
         kdsEnabled: boolean;
         odsAddonEnabled: boolean;
         odsEnabled: boolean;
+        growthAnalyticsAddonEnabled: boolean;
+        guestCrmAddonEnabled: boolean;
         maxLocations: number;
     }>;
     /**

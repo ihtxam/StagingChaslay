@@ -37,7 +37,6 @@ const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const reservation_service_1 = require("@/services/reservation.service");
 const floor_plan_service_1 = require("@/services/floor-plan.service");
-const reservation_service_2 = require("@/services/reservation.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
@@ -122,8 +121,10 @@ router.post("/", async (req, res) => {
     try {
         let reservedAt = req.body.reservedAt;
         if (req.body.date && req.body.time) {
-            reservedAt = (0, reservation_service_2.zurichLocalToDate)(String(req.body.date), String(req.body.time));
+            reservedAt = (0, reservation_service_1.zurichLocalToDate)(String(req.body.date), String(req.body.time));
         }
+        const at = reservedAt instanceof Date ? reservedAt : new Date(String(reservedAt ?? ""));
+        (0, reservation_service_1.assertReservationNotInPast)(at);
         const reservation = await reservation_service_1.ReservationService.create(req.merchantId, {
             guestName: req.body.guestName,
             guestEmail: req.body.guestEmail,

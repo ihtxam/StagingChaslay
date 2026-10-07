@@ -47,10 +47,19 @@ const ensure_licenses_schema_1 = require("@/lib/ensure-licenses-schema");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const business_module_1 = require("@/lib/business-module");
 const inventory_addon_1 = require("@/lib/inventory-addon");
+const growth_analytics_addon_1 = require("@/lib/growth-analytics-addon");
+const guest_crm_addon_1 = require("@/lib/guest-crm-addon");
+const marketing_automation_addon_1 = require("@/lib/marketing-automation-addon");
+const smart_segments_addon_1 = require("@/lib/smart-segments-addon");
+const reservation_campaigns_addon_1 = require("@/lib/reservation-campaigns-addon");
+const ai_coach_addon_1 = require("@/lib/ai-coach-addon");
+const google_reputation_addon_1 = require("@/lib/google-reputation-addon");
+const ai_web_seo_addon_1 = require("@/lib/ai-web-seo-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
 const delivery_platform_addon_1 = require("@/lib/delivery-platform-addon");
+const accounting_integration_addon_1 = require("@/lib/accounting-integration-addon");
 const kiosk_addon_1 = require("@/lib/kiosk-addon");
 const merchant_support_code_1 = require("@/lib/merchant-support-code");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
@@ -97,7 +106,7 @@ class MerchantService {
             const where = search
                 ? (0, drizzle_orm_1.or)((0, drizzle_orm_1.like)(db_1.schema.merchants.name, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.email, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.slug, `%${search}%`), (0, drizzle_orm_1.like)(db_1.schema.merchants.supportCode, `%${search}%`))
                 : undefined;
-            const merchants = await (0, ensure_licenses_schema_1.withLicenseSchemaRetry)(() => db.query.merchants.findMany({
+            const merchants = await (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(() => (0, ensure_licenses_schema_1.withLicenseSchemaRetry)(() => db.query.merchants.findMany({
                 where,
                 limit,
                 offset,
@@ -107,13 +116,19 @@ class MerchantService {
                     licenses: true,
                     edition: true,
                 },
-            }));
+            })));
             const merchantIds = merchants.map((m) => m.id);
-            const floorDevices = merchantIds.length > 0
-                ? await db.query.chaslayFloorDevices.findMany({
-                    where: (0, drizzle_orm_1.inArray)(db_1.schema.chaslayFloorDevices.merchantId, merchantIds),
-                })
-                : [];
+            let floorDevices = [];
+            if (merchantIds.length > 0) {
+                try {
+                    floorDevices = await db.query.chaslayFloorDevices.findMany({
+                        where: (0, drizzle_orm_1.inArray)(db_1.schema.chaslayFloorDevices.merchantId, merchantIds),
+                    });
+                }
+                catch (floorErr) {
+                    console.warn("[merchants] chaslay_floor_devices query skipped:", floorErr);
+                }
+            }
             const floorByMerchant = new Map();
             for (const row of floorDevices) {
                 const list = floorByMerchant.get(row.merchantId) ?? [];
@@ -219,6 +234,16 @@ class MerchantService {
             const kioskOn = await (0, kiosk_addon_1.readKioskAddonEnabled)(merchantId).catch(() => (0, kiosk_addon_1.isKioskAddonEnabled)(merchant.kioskAddonEnabled));
             const justEatOn = await (0, delivery_platform_addon_1.readJustEatAddonEnabled)(merchantId).catch(() => (0, delivery_platform_addon_1.isJustEatAddonEnabled)(merchant.justEatAddonEnabled));
             const uberEatsOn = await (0, delivery_platform_addon_1.readUberEatsAddonEnabled)(merchantId).catch(() => (0, delivery_platform_addon_1.isUberEatsAddonEnabled)(merchant.uberEatsAddonEnabled));
+            const bexioOn = await (0, accounting_integration_addon_1.readBexioAddonEnabled)(merchantId).catch(() => (0, accounting_integration_addon_1.isBexioAddonEnabled)(merchant.bexioAddonEnabled));
+            const odooOn = await (0, accounting_integration_addon_1.readOdooAddonEnabled)(merchantId).catch(() => (0, accounting_integration_addon_1.isOdooAddonEnabled)(merchant.odooAddonEnabled));
+            const growthAnalyticsOn = await (0, growth_analytics_addon_1.readGrowthAnalyticsAddonEnabled)(merchantId).catch(() => (0, growth_analytics_addon_1.isGrowthAnalyticsAddonEnabled)(merchant.growthAnalyticsAddonEnabled));
+            const guestCrmOn = await (0, guest_crm_addon_1.readGuestCrmAddonEnabled)(merchantId).catch(() => (0, guest_crm_addon_1.isGuestCrmAddonEnabled)(merchant.guestCrmAddonEnabled));
+            const marketingAutomationOn = await (0, marketing_automation_addon_1.readMarketingAutomationAddonEnabled)(merchantId).catch(() => (0, marketing_automation_addon_1.isMarketingAutomationAddonEnabled)(merchant.marketingAutomationAddonEnabled));
+            const smartSegmentsOn = await (0, smart_segments_addon_1.readSmartSegmentsAddonEnabled)(merchantId).catch(() => (0, smart_segments_addon_1.isSmartSegmentsAddonEnabled)(merchant.smartSegmentsAddonEnabled));
+            const reservationCampaignsOn = await (0, reservation_campaigns_addon_1.readReservationCampaignsAddonEnabled)(merchantId).catch(() => (0, reservation_campaigns_addon_1.isReservationCampaignsAddonEnabled)(merchant.reservationCampaignsAddonEnabled));
+            const aiCoachOn = await (0, ai_coach_addon_1.readAiCoachAddonEnabled)(merchantId).catch(() => (0, ai_coach_addon_1.isAiCoachAddonEnabled)(merchant.aiCoachAddonEnabled));
+            const googleReputationOn = await (0, google_reputation_addon_1.readGoogleReputationAddonEnabled)(merchantId).catch(() => (0, google_reputation_addon_1.isGoogleReputationAddonEnabled)(merchant.googleReputationAddonEnabled));
+            const aiWebSeoOn = await (0, ai_web_seo_addon_1.readAiWebSeoAddonEnabled)(merchantId).catch(() => (0, ai_web_seo_addon_1.isAiWebSeoAddonEnabled)(merchant.aiWebSeoAddonEnabled));
             return {
                 ...merchant,
                 inventoryAddonEnabled: inventoryOn,
@@ -235,6 +260,17 @@ class MerchantService {
                 justEatAddonEnabled: justEatOn,
                 uberEatsAddonEnabled: uberEatsOn,
                 deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
+                bexioAddonEnabled: bexioOn,
+                odooAddonEnabled: odooOn,
+                accountingAddonEnabled: bexioOn || odooOn,
+                growthAnalyticsAddonEnabled: growthAnalyticsOn,
+                guestCrmAddonEnabled: guestCrmOn,
+                marketingAutomationAddonEnabled: marketingAutomationOn,
+                smartSegmentsAddonEnabled: smartSegmentsOn,
+                reservationCampaignsAddonEnabled: reservationCampaignsOn,
+                aiCoachAddonEnabled: aiCoachOn,
+                googleReputationAddonEnabled: googleReputationOn,
+                aiWebSeoAddonEnabled: aiWebSeoOn,
                 editionName: merchant.edition?.name ?? null,
                 planBillingPaid: merchant.planBillingPaid !== false,
                 lastAppVersion: lastSeen.lastAppVersion,
@@ -359,6 +395,8 @@ class MerchantService {
             }
             const { StaffService } = await Promise.resolve().then(() => __importStar(require("./staff.service")));
             await StaffService.ensureDefaultManagerStaff(created.id, _contactName || businessName);
+            const { HqMenuService } = await Promise.resolve().then(() => __importStar(require("./hq-menu.service")));
+            await HqMenuService.ensureDefaultMenu(created.id);
             const refreshed = await db.query.merchants.findFirst({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, created.id),
             });
@@ -385,6 +423,38 @@ class MerchantService {
                 await (0, delivery_platform_addon_1.writeJustEatAddonEnabled)(created.id, true);
                 await (0, delivery_platform_addon_1.writeUberEatsAddonEnabled)(created.id, true);
             }
+            if (options?.bexioAddonEnabled === true) {
+                const { writeBexioAddonEnabled } = await Promise.resolve().then(() => __importStar(require("@/lib/accounting-integration-addon")));
+                await writeBexioAddonEnabled(created.id, true);
+            }
+            if (options?.odooAddonEnabled === true) {
+                const { writeOdooAddonEnabled } = await Promise.resolve().then(() => __importStar(require("@/lib/accounting-integration-addon")));
+                await writeOdooAddonEnabled(created.id, true);
+            }
+            if (options?.growthAnalyticsAddonEnabled === true) {
+                await (0, growth_analytics_addon_1.writeGrowthAnalyticsAddonEnabled)(created.id, true);
+            }
+            if (options?.guestCrmAddonEnabled === true) {
+                await (0, guest_crm_addon_1.writeGuestCrmAddonEnabled)(created.id, true);
+            }
+            if (options?.marketingAutomationAddonEnabled === true) {
+                await (0, marketing_automation_addon_1.writeMarketingAutomationAddonEnabled)(created.id, true);
+            }
+            if (options?.smartSegmentsAddonEnabled === true) {
+                await (0, smart_segments_addon_1.writeSmartSegmentsAddonEnabled)(created.id, true);
+            }
+            if (options?.reservationCampaignsAddonEnabled === true) {
+                await (0, reservation_campaigns_addon_1.writeReservationCampaignsAddonEnabled)(created.id, true);
+            }
+            if (options?.aiCoachAddonEnabled === true) {
+                await (0, ai_coach_addon_1.writeAiCoachAddonEnabled)(created.id, true);
+            }
+            if (options?.googleReputationAddonEnabled === true) {
+                await (0, google_reputation_addon_1.writeGoogleReputationAddonEnabled)(created.id, true);
+            }
+            if (options?.aiWebSeoAddonEnabled === true) {
+                await (0, ai_web_seo_addon_1.writeAiWebSeoAddonEnabled)(created.id, true);
+            }
             const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(created.id).catch(() => false);
             const signage = await (0, signage_addon_1.readSignageAddon)(created.id).catch(() => ({
                 enabled: false,
@@ -392,6 +462,14 @@ class MerchantService {
             }));
             const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(created.id).catch(() => false);
             const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(created.id).catch(() => false);
+            const growthAnalyticsOn = await (0, growth_analytics_addon_1.readGrowthAnalyticsAddonEnabled)(created.id).catch(() => false);
+            const guestCrmOn = await (0, guest_crm_addon_1.readGuestCrmAddonEnabled)(created.id).catch(() => false);
+            const marketingAutomationOn = await (0, marketing_automation_addon_1.readMarketingAutomationAddonEnabled)(created.id).catch(() => false);
+            const smartSegmentsOn = await (0, smart_segments_addon_1.readSmartSegmentsAddonEnabled)(created.id).catch(() => false);
+            const reservationCampaignsOn = await (0, reservation_campaigns_addon_1.readReservationCampaignsAddonEnabled)(created.id).catch(() => false);
+            const aiCoachOn = await (0, ai_coach_addon_1.readAiCoachAddonEnabled)(created.id).catch(() => false);
+            const googleReputationOn = await (0, google_reputation_addon_1.readGoogleReputationAddonEnabled)(created.id).catch(() => false);
+            const aiWebSeoOn = await (0, ai_web_seo_addon_1.readAiWebSeoAddonEnabled)(created.id).catch(() => false);
             // Don't leak password hash to API clients
             const { passwordHash: _ph, inviteTokenHash: _ith, ...safe } = row;
             return {
@@ -405,6 +483,14 @@ class MerchantService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
+                growthAnalyticsAddonEnabled: growthAnalyticsOn,
+                guestCrmAddonEnabled: guestCrmOn,
+                marketingAutomationAddonEnabled: marketingAutomationOn,
+                smartSegmentsAddonEnabled: smartSegmentsOn,
+                reservationCampaignsAddonEnabled: reservationCampaignsOn,
+                aiCoachAddonEnabled: aiCoachOn,
+                googleReputationAddonEnabled: googleReputationOn,
+                aiWebSeoAddonEnabled: aiWebSeoOn,
                 justEatAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
                 uberEatsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
                 deliveryPlatformsAddonEnabled: options?.deliveryPlatformsAddonEnabled === true,
@@ -522,6 +608,14 @@ class MerchantService {
             await (0, delivery_platform_addon_1.writeUberEatsAddonEnabled)(merchantId, limits.deliveryPlatformsAddonEnabled);
             wroteAddon = true;
         }
+        if (limits.bexioAddonEnabled !== undefined) {
+            await (0, accounting_integration_addon_1.writeBexioAddonEnabled)(merchantId, limits.bexioAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.odooAddonEnabled !== undefined) {
+            await (0, accounting_integration_addon_1.writeOdooAddonEnabled)(merchantId, limits.odooAddonEnabled);
+            wroteAddon = true;
+        }
         if (limits.kioskAddonEnabled !== undefined) {
             await (0, kiosk_addon_1.writeKioskAddonEnabled)(merchantId, limits.kioskAddonEnabled);
             wroteAddon = true;
@@ -530,8 +624,40 @@ class MerchantService {
             await (0, storekeeper_addon_1.writeStorekeeperAddonEnabled)(merchantId, limits.storekeeperAddonEnabled);
             wroteAddon = true;
         }
+        if (limits.growthAnalyticsAddonEnabled !== undefined) {
+            await (0, growth_analytics_addon_1.writeGrowthAnalyticsAddonEnabled)(merchantId, limits.growthAnalyticsAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.guestCrmAddonEnabled !== undefined) {
+            await (0, guest_crm_addon_1.writeGuestCrmAddonEnabled)(merchantId, limits.guestCrmAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.marketingAutomationAddonEnabled !== undefined) {
+            await (0, marketing_automation_addon_1.writeMarketingAutomationAddonEnabled)(merchantId, limits.marketingAutomationAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.smartSegmentsAddonEnabled !== undefined) {
+            await (0, smart_segments_addon_1.writeSmartSegmentsAddonEnabled)(merchantId, limits.smartSegmentsAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.reservationCampaignsAddonEnabled !== undefined) {
+            await (0, reservation_campaigns_addon_1.writeReservationCampaignsAddonEnabled)(merchantId, limits.reservationCampaignsAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.aiCoachAddonEnabled !== undefined) {
+            await (0, ai_coach_addon_1.writeAiCoachAddonEnabled)(merchantId, limits.aiCoachAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.googleReputationAddonEnabled !== undefined) {
+            await (0, google_reputation_addon_1.writeGoogleReputationAddonEnabled)(merchantId, limits.googleReputationAddonEnabled);
+            wroteAddon = true;
+        }
+        if (limits.aiWebSeoAddonEnabled !== undefined) {
+            await (0, ai_web_seo_addon_1.writeAiWebSeoAddonEnabled)(merchantId, limits.aiWebSeoAddonEnabled);
+            wroteAddon = true;
+        }
         if (!wroteAddon && Object.keys(patch).length === 0) {
-            throw new Error("At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, or deliveryPlatformsAddonEnabled is required");
+            throw new Error("At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required");
         }
         return this.getMerchantById(merchantId);
     }

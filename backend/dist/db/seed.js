@@ -182,9 +182,15 @@ async function seedDemoShop() {
         console.log(`  Sync API key: ${merchant.syncApiKey}`);
     }
     else {
+        const healDemoPassword = process.env.SEED_DEMO_RESET_PASSWORD !== "false" &&
+            String(merchant.email || "").toLowerCase() === email.toLowerCase();
+        const passwordHash = healDemoPassword
+            ? await auth_service_1.AuthService.hashPassword(password)
+            : undefined;
         await db
             .update(index_1.schema.merchants)
             .set({
+            ...(passwordHash ? { passwordHash, email } : {}),
             shopEnabled: true,
             slug: merchant.slug || slug,
             subdomain: merchant.subdomain || slug,
@@ -197,7 +203,7 @@ async function seedDemoShop() {
             updatedAt: new Date(),
         })
             .where((0, drizzle_orm_1.eq)(index_1.schema.merchants.id, merchant.id));
-        console.log(`Demo merchant ensured open: ${merchant.email} (slug=${merchant.slug || slug})`);
+        console.log(`Demo merchant ensured open: ${merchant.email} (slug=${merchant.slug || slug})${passwordHash ? " — password reset to SEED_DEMO_MERCHANT_PASSWORD" : ""}`);
     }
     const existingCats = await db.query.categories.findMany({
         where: (0, drizzle_orm_1.eq)(index_1.schema.categories.merchantId, merchant.id),
@@ -267,9 +273,27 @@ async function seedDemoShop() {
         ]);
         console.log("Seeded demo categories + products");
     }
+    await healDemoDefaultLocationCategory(merchant.id, slug);
     await seedDemoInventoryBundle(merchant.id);
     await seedDemoDeliveryStaff(merchant.id);
     await seedDemoPosLicense(merchant.id);
+}
+/** Default demo location (Demo Food Truck / main) should be retail, not restaurant bootstrap default. */
+async function healDemoDefaultLocationCategory(merchantId, slug) {
+    const demoSlug = process.env.SEED_DEMO_SLUG || "demo";
+    if (slug !== demoSlug)
+        return;
+    const raw = (process.env.SEED_DEMO_DEFAULT_LOCATION_CATEGORY || "retail").trim().toLowerCase();
+    const businessCategory = raw === "restaurant" ? "restaurant" : "retail";
+    const db = (0, index_1.getDb)();
+    const updated = await db
+        .update(index_1.schema.locations)
+        .set({ businessCategory, updatedAt: new Date() })
+        .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(index_1.schema.locations.merchantId, merchantId), (0, drizzle_orm_1.eq)(index_1.schema.locations.isDefault, true)))
+        .returning({ id: index_1.schema.locations.id, name: index_1.schema.locations.name });
+    if (updated.length) {
+        console.log(`Demo default location business category set to ${businessCategory}: ${updated.map((r) => r.name).join(", ")}`);
+    }
 }
 /** Known Reborn-style seat used on staging tablets (hyphens optional at activate). */
 async function seedDemoPosLicense(merchantId) {

@@ -319,11 +319,19 @@ export const merchants = pgTable(
       .default(false)
       .notNull(),
     aiCoachAddonEnabled: boolean("ai_coach_addon_enabled").default(false).notNull(),
+    googleReputationAddonEnabled: boolean("google_reputation_addon_enabled")
+      .default(false)
+      .notNull(),
+    aiWebSeoAddonEnabled: boolean("ai_web_seo_addon_enabled").default(false).notNull(),
     marketingAutomationSettings: json("marketing_automation_settings").$type<
       MarketingAutomationSettings | null
     >(),
     smartSegmentsSettings: json("smart_segments_settings").$type<SmartSegmentsSettings | null>(),
     aiCoachCache: json("ai_coach_cache").$type<AiCoachCache | null>(),
+    googleReputationSettings: json("google_reputation_settings").$type<
+      GoogleReputationSettings | null
+    >(),
+    aiWebSeoSettings: json("ai_web_seo_settings").$type<AiWebSeoSettings | null>(),
     /**
      * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
@@ -2321,6 +2329,42 @@ export type AiCoachCache = {
   generatedAt?: string | null;
   periodLabel?: string | null;
   insights: AiCoachInsight[];
+};
+
+export type GoogleReputationReview = {
+  id: string;
+  authorName: string;
+  rating: number;
+  text: string;
+  createdAt: string;
+  replyDraft?: string | null;
+  replyPostedAt?: string | null;
+  status: "pending" | "replied" | "skipped";
+};
+
+export type GoogleReputationSettings = {
+  googlePlaceId?: string | null;
+  autoReplyEnabled?: boolean;
+  replyTone?: "professional" | "friendly" | "warm";
+  managerEmail?: string | null;
+  notifyOnNewReview?: boolean;
+  reviews?: GoogleReputationReview[];
+};
+
+export type AiWebSeoSuggestion = {
+  id: string;
+  title: string;
+  detail: string;
+  priority: "high" | "medium" | "low";
+};
+
+export type AiWebSeoSettings = {
+  autopilotEnabled?: boolean;
+  targetKeywords?: string[];
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  lastScanAt?: string | null;
+  suggestions?: AiWebSeoSuggestion[];
 };
 
 export type ReportEmailSettings = {

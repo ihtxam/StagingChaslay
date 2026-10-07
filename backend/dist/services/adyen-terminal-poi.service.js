@@ -5,10 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdyenTerminalPoiService = void 0;
 exports.friendlyTerminalPaymentMessage = friendlyTerminalPaymentMessage;
+exports.buildTerminalSaleToAcquirerData = buildTerminalSaleToAcquirerData;
+exports.parseTerminalTipFromPaymentResponse = parseTerminalTipFromPaymentResponse;
 const axios_1 = __importDefault(require("axios"));
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const adyen_receipt_1 = require("@/lib/adyen-receipt");
+const pos_checkout_settings_1 = require("@/lib/pos-checkout-settings");
 const adyen_service_1 = require("@/services/adyen.service");
 const REFUSAL_MESSAGES = {
     NOT_ENOUGH_BALANCE: "Insufficient funds",
@@ -117,7 +120,69 @@ function legacySyncUrl(live) {
 function generateServiceId() {
     return String(Date.now() % 10000000000).padStart(10, "0");
 }
-function buildPaymentRequestBody(amount, currencyCode, saleId, poiId) {
+function roundMoney2(value) {
+    return Math.round(value * 100) / 100;
+}
+/** SaleToAcquirerData tender options for Terminal API payment requests. */
+function buildTerminalSaleToAcquirerData(options) {
+    const tenderOption = options?.askGratuity ? "ReceiptHandler,AskGratuity" : "ReceiptHandler";
+    return `tenderOption=${tenderOption}`;
+}
+function parseAdditionalResponseParams(additionalResponse) {
+    const params = new URLSearchParams();
+    if (!additionalResponse)
+        return params;
+    try {
+        const decoded = decodeURIComponent(String(additionalResponse).replace(/\+/g, " "));
+        for (const part of decoded.split("&")) {
+            const [k, ...rest] = part.split("=");
+            if (k)
+                params.set(k.trim(), rest.join("=").trim());
+        }
+    }
+    catch {
+        /* ignore malformed */
+    }
+    return params;
+}
+/** Parse tip / authorized amounts from an approved Terminal API PaymentResponse. */
+function parseTerminalTipFromPaymentResponse(paymentResponse, additionalResponse) {
+    let tipAmount = null;
+    let authorizedAmount = null;
+    const paymentResult = paymentResponse.PaymentResult;
+    const amountsResp = paymentResult?.AmountsResp;
+    if (amountsResp) {
+        if (amountsResp.TipAmount != null) {
+            const tip = Number(amountsResp.TipAmount);
+            if (Number.isFinite(tip) && tip > 0)
+                tipAmount = roundMoney2(tip);
+        }
+        if (amountsResp.AuthorizedAmount != null) {
+            const auth = Number(amountsResp.AuthorizedAmount);
+            if (Number.isFinite(auth) && auth > 0)
+                authorizedAmount = roundMoney2(auth);
+        }
+    }
+    const params = parseAdditionalResponseParams(additionalResponse);
+    if (tipAmount == null) {
+        const gratuityMinor = params.get("posAmountGratuityValue");
+        if (gratuityMinor) {
+            const minor = Number(gratuityMinor);
+            if (Number.isFinite(minor) && minor > 0)
+                tipAmount = roundMoney2(minor / 100);
+        }
+    }
+    if (authorizedAmount == null) {
+        const authMinor = params.get("authorisedAmountValue");
+        if (authMinor) {
+            const minor = Number(authMinor);
+            if (Number.isFinite(minor) && minor > 0)
+                authorizedAmount = roundMoney2(minor / 100);
+        }
+    }
+    return { tipAmount, authorizedAmount };
+}
+function buildPaymentRequestBody(amount, currencyCode, saleId, poiId, askGratuity = false) {
     const serviceId = generateServiceId();
     const transactionId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const timestamp = new Date().toISOString();
@@ -139,7 +204,7 @@ function buildPaymentRequestBody(amount, currencyCode, saleId, poiId) {
                         TransactionID: transactionId,
                         TimeStamp: timestamp,
                     },
-                    SaleToAcquirerData: "tenderOption=ReceiptHandler",
+                    SaleToAcquirerData: buildTerminalSaleToAcquirerData({ askGratuity }),
                 },
                 PaymentTransaction: {
                     AmountsReq: {
@@ -307,12 +372,15 @@ function parsePaymentResponse(body) {
         if (result.toLowerCase() === "success") {
             const { transactionId, timestamp } = extractPoiTransactionId(paymentResponse);
             const { customer, cashier } = (0, adyen_receipt_1.parsePaymentReceipts)(paymentResponse);
+            const { tipAmount, authorizedAmount } = parseTerminalTipFromPaymentResponse(paymentResponse, additionalResponse);
             return {
                 status: "approved",
                 reference: transactionId,
                 poiTransactionTimestamp: timestamp,
                 customerReceipt: customer,
                 cashierReceipt: cashier,
+                tipAmount,
+                authorizedAmount,
             };
         }
         if (result.toLowerCase() === "failure" &&
@@ -461,12 +529,29 @@ async function executeSync(ctx, body, parseFn) {
     }
     return cloudResult;
 }
+function resolveAskGratuityOnTerminal(merchant, opts) {
+    const posTip = roundMoney2(Math.max(0, Number(opts.posTipAmount) || 0));
+    if (posTip > 0)
+        return false;
+    if (opts.askGratuity === false)
+        return false;
+    if (opts.askGratuity === true)
+        return true;
+    const checkout = (0, pos_checkout_settings_1.normalizePosCheckoutSettings)(merchant?.posCheckoutSettings);
+    return checkout.tipsEnabled !== false;
+}
 class AdyenTerminalPoiService {
     static async processTerminalPayment(merchantId, amount, opts = {}) {
         const ctxOrErr = await resolveTerminalContext(merchantId, opts);
         if ("status" in ctxOrErr)
             return ctxOrErr;
-        const body = buildPaymentRequestBody(amount, ctxOrErr.currency, ctxOrErr.saleId, ctxOrErr.terminalId);
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { posCheckoutSettings: true },
+        });
+        const askGratuity = resolveAskGratuityOnTerminal(merchant, opts);
+        const body = buildPaymentRequestBody(amount, ctxOrErr.currency, ctxOrErr.saleId, ctxOrErr.terminalId, askGratuity);
         return executeSync(ctxOrErr, body, parsePaymentResponse);
     }
     /**

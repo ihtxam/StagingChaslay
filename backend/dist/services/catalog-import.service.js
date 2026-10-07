@@ -247,7 +247,10 @@ class CatalogImportService {
                 }
                 let productId;
                 if (existing) {
-                    await db.update(db_1.schema.products).set(values).where((0, drizzle_orm_1.eq)(db_1.schema.products.id, existing.id));
+                    await db
+                        .update(db_1.schema.products)
+                        .set(values)
+                        .where((0, drizzle_orm_1.eq)(db_1.schema.products.id, existing.id));
                     productId = existing.id;
                     productsUpdated++;
                 }
@@ -264,7 +267,10 @@ class CatalogImportService {
                         }
                         throw error;
                     }
-                    const [created] = await db.insert(db_1.schema.products).values(values).returning({ id: db_1.schema.products.id });
+                    const [created] = await db
+                        .insert(db_1.schema.products)
+                        .values(values)
+                        .returning({ id: db_1.schema.products.id });
                     productId = created.id;
                     productsCreated++;
                 }
@@ -372,7 +378,7 @@ class CatalogImportService {
         }
         return groupTitleToId;
     }
-    static buildTemplateBuffer() {
+    static async buildTemplateBuffer(merchantId) {
         const categories = [
             { name: "Food", description: "Fresh food", color: "#F97316", sortOrder: 0 },
             { name: "Beverages", description: "Drinks", color: "#3B82F6", sortOrder: 1 },

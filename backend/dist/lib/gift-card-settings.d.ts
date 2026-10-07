@@ -12,6 +12,16 @@ export type GiftCardSettings = {
     digitalVoucherEnabled?: boolean;
     /** Physical gift card shipped by post */
     physicalPostEnabled?: boolean;
+    /** Flat CHF added when deliveryType is physical */
+    physicalPostFee?: number;
+    /** Optional flat service / handling fee on online gift purchases */
+    serviceFeeFlat?: number;
+    /** Optional % of (face + shipping) added as service fee */
+    serviceFeePercent?: number;
+    /** When true, add card processing fee % to customer total */
+    passCardFeeToCustomer?: boolean;
+    /** Card fee % of subtotal (face + shipping + service) when pass-through enabled */
+    cardFeePercent?: number;
     /** Enable membership card sell / tier benefits */
     membershipEnabled?: boolean;
     /** Configurable membership tiers (discount %, stamp cards, etc.) */

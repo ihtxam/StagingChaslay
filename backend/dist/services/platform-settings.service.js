@@ -7,6 +7,7 @@ exports.formatAdyenCheckoutApiError = formatAdyenCheckoutApiError;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const adyen_checkout_env_1 = require("@/lib/adyen-checkout-env");
+const platform_legal_urls_1 = require("@/lib/platform-legal-urls");
 exports.PLATFORM_ADYEN_KEYS = {
     apiKey: "adyen_api_key",
     merchantAccount: "adyen_merchant_account",
@@ -442,6 +443,26 @@ class PlatformSettingsService {
             hmacKey,
             apiBase,
         };
+    }
+    static async getPlatformLegalUrls() {
+        const rows = await this.getMany(Object.values(platform_legal_urls_1.PLATFORM_LEGAL_SETTING_KEYS));
+        return (0, platform_legal_urls_1.resolvePlatformLegalUrls)({
+            privacyUrl: rows[platform_legal_urls_1.PLATFORM_LEGAL_SETTING_KEYS.privacyUrl],
+            termsUrl: rows[platform_legal_urls_1.PLATFORM_LEGAL_SETTING_KEYS.termsUrl],
+            cookiesUrl: rows[platform_legal_urls_1.PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl],
+        });
+    }
+    static async updatePlatformLegalUrls(input) {
+        if (input.privacyUrl !== undefined) {
+            await this.set(platform_legal_urls_1.PLATFORM_LEGAL_SETTING_KEYS.privacyUrl, input.privacyUrl.trim() || null);
+        }
+        if (input.termsUrl !== undefined) {
+            await this.set(platform_legal_urls_1.PLATFORM_LEGAL_SETTING_KEYS.termsUrl, input.termsUrl.trim() || null);
+        }
+        if (input.cookiesUrl !== undefined) {
+            await this.set(platform_legal_urls_1.PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl, input.cookiesUrl.trim() || null);
+        }
+        return this.getPlatformLegalUrls();
     }
 }
 exports.PlatformSettingsService = PlatformSettingsService;

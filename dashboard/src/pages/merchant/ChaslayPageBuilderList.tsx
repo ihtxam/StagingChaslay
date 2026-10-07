@@ -16,6 +16,8 @@ import '@/chaslay-pagebuilder/chaslay-pagebuilder.css';
 import { useAuthStore } from '@/store/auth';
 import { SHOP_ORIGIN } from '@/lib/brand';
 import { primaryMerchantShopPublicUrl } from '@/lib/shop-public-urls';
+import AiWebSeoPanel from '@/components/growth/AiWebSeoPanel';
+import api from '@/lib/api';
 
 export default function ChaslayPageBuilderList() {
   const navigate = useNavigate();
@@ -34,9 +36,13 @@ export default function ChaslayPageBuilderList() {
   const [activatingHomepage, setActivatingHomepage] = useState<HomepageBuilderListItem | null>(null);
   const [deactivatingHomepage, setDeactivatingHomepage] = useState<HomepageBuilderListItem | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [aiWebSeoLicensed, setAiWebSeoLicensed] = useState(false);
 
   useEffect(() => {
     void fetchHomepages();
+    void api.get('/merchant/settings').then((res) => {
+      setAiWebSeoLicensed(res.data?.settings?.aiWebSeoAddonEnabled === true);
+    }).catch(() => {});
   }, []);
 
   async function fetchHomepages() {
@@ -130,6 +136,8 @@ export default function ChaslayPageBuilderList() {
         </button>
         </div>
       </div>
+
+      {aiWebSeoLicensed ? <AiWebSeoPanel /> : null}
 
       {isLoading ? (
         <div className="flex justify-center py-16">

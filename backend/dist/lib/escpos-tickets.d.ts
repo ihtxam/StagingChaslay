@@ -26,6 +26,7 @@ export declare function kitchenTicketEscPos(opts: {
         extras?: string[];
     }>;
     paperWidthMm?: 58 | 80;
+    kitchenPrepOnly?: boolean;
 }): Buffer;
 export declare function orderNotificationTicketEscPos(opts: {
     orderNumber: string;

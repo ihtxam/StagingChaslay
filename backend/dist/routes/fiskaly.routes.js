@@ -28,5 +28,27 @@ router.post("/test-connection", async (req, res) => {
         });
     }
 });
+/**
+ * POST /api/merchant/fiskaly/provision-de
+ * Creates cloud TSS + client from saved API credentials (Germany only).
+ */
+router.post("/provision-de", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const clientSerial = req.body?.clientSerial != null ? String(req.body.clientSerial).trim().slice(0, 70) : undefined;
+        const description = req.body?.description != null ? String(req.body.description).trim().slice(0, 255) : undefined;
+        const fiskalySettings = await fiskaly_service_1.FiskalyService.provisionDe(merchantId, {
+            clientSerial: clientSerial || undefined,
+            description: description || undefined,
+        });
+        res.json({ ok: true, fiskalySettings });
+    }
+    catch (error) {
+        console.error("[fiskaly] provision-de failed:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Fiskaly DE provisioning failed",
+        });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=fiskaly.routes.js.map

@@ -37,6 +37,7 @@ exports.LocationsService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const business_module_1 = require("@/lib/business-module");
 function slugify(name) {
     const base = name
         .trim()
@@ -69,13 +70,14 @@ class LocationsService {
             });
             if (!merchant)
                 throw new Error("Merchant not found");
+            const lockedModule = (0, business_module_1.normalizeBusinessModule)(merchant.businessCategory);
             const [row] = await db
                 .insert(db_1.schema.locations)
                 .values({
                 merchantId,
                 name: merchant.name?.trim() || "Main location",
                 slug: "main",
-                businessCategory: merchant.businessCategory || "restaurant",
+                businessCategory: lockedModule || "restaurant",
                 address: merchant.address,
                 city: merchant.city,
                 country: merchant.country,

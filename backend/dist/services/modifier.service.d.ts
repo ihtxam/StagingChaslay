@@ -1,3 +1,4 @@
+import { type ModifierPriceScope } from "@/lib/catering-config";
 export type PricingType = "free" | "fixed" | "toppings_by_size";
 export type SelectionType = "optional" | "required";
 export type SaleStatus = "in_stock" | "out_of_stock";
@@ -20,6 +21,7 @@ export type ModifierGroupInput = {
     maxSelectable?: number;
     defaultCollapsed?: boolean;
     allowMultipleSameItem?: boolean;
+    priceScope?: ModifierPriceScope | string;
     sortOrder?: number;
     options?: ModifierOptionInput[];
     productIds?: string[];
@@ -34,6 +36,7 @@ export declare class ModifierService {
         maxSelectable: any;
         defaultCollapsed: boolean;
         allowMultipleSameItem: boolean;
+        priceScope: ModifierPriceScope;
         sortOrder: any;
         isActive: boolean;
         options: any;
@@ -51,6 +54,7 @@ export declare class ModifierService {
         maxSelectable: any;
         defaultCollapsed: boolean;
         allowMultipleSameItem: boolean;
+        priceScope: ModifierPriceScope;
         sortOrder: any;
         isActive: boolean;
         options: any;
@@ -68,6 +72,7 @@ export declare class ModifierService {
         maxSelectable: any;
         defaultCollapsed: boolean;
         allowMultipleSameItem: boolean;
+        priceScope: ModifierPriceScope;
         sortOrder: any;
         isActive: boolean;
         options: any;
@@ -85,6 +90,7 @@ export declare class ModifierService {
         maxSelectable: any;
         defaultCollapsed: boolean;
         allowMultipleSameItem: boolean;
+        priceScope: ModifierPriceScope;
         sortOrder: any;
         isActive: boolean;
         options: any;

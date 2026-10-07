@@ -1,5 +1,6 @@
 import { getDb, schema } from "@/db";
 import { eq, and, desc, or, ilike, sql } from "drizzle-orm";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 
 function cleanOptional(value?: string | null) {
   if (value == null) return null;
@@ -214,9 +215,8 @@ export class CustomerService {
     limit: number = 20,
     search?: string
   ) {
-    const db = getDb();
-
-    try {
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
       const offset = (page - 1) * limit;
       let whereConditions: any[] = [eq(schema.customers.merchantId, merchantId)];
 
@@ -237,18 +237,13 @@ export class CustomerService {
         );
       }
 
-      const customers = await db.query.customers.findMany({
+      return db.query.customers.findMany({
         where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
         limit,
         offset,
         orderBy: desc(schema.customers.createdAt),
       });
-
-      return customers;
-    } catch (error) {
-      console.error("Error getting customers:", error);
-      throw error;
-    }
+    });
   }
 
   /**

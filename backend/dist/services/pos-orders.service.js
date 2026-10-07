@@ -45,6 +45,7 @@ const gift_card_service_1 = require("@/services/gift-card.service");
 const adyen_terminal_poi_service_1 = require("@/services/adyen-terminal-poi.service");
 const adyen_service_1 = require("@/services/adyen.service");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
+const online_payment_refund_1 = require("@/lib/online-payment-refund");
 const pos_open_ticket_1 = require("@/lib/pos-open-ticket");
 const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
@@ -445,7 +446,9 @@ class PosOrdersService {
         const payStatus = String(order.paymentStatus || "").toLowerCase();
         const awaitingPayment = payStatus === "awaiting_payment" ||
             String(order.paymentMethod || "").toLowerCase().replace(/-/g, "_") === "pay_later";
+        const paidOnline = (0, online_payment_refund_1.isPaidOnlineEcommerce)(order);
         if (!awaitingPayment &&
+            !paidOnline &&
             (BLOCKED_CANCEL_STATUSES.has(String(order.status)) ||
                 COMPLETED_STATUSES.has(payStatus))) {
             throw new Error("Completed orders cannot be cancelled. Change the payment method or issue a refund.");
@@ -453,6 +456,10 @@ class PosOrdersService {
         const reasonText = (0, pos_print_settings_1.resolvePosCancelReason)(reason);
         if (!reasonText)
             throw new Error("Cancel reason is required");
+        const refund = await adyen_service_1.AdyenService.refundPaidOnlineOnCancel(merchantId, order);
+        if (refund.attempted && !refund.refunded) {
+            throw new Error(refund.error || "Online payment refund failed. The order was not cancelled.");
+        }
         const [updated] = await db
             .update(db_1.schema.orders)
             .set({
@@ -460,6 +467,7 @@ class PosOrdersService {
             paymentStatus: "cancelled",
             cancelReason: reasonText,
             cancelledAt: new Date(),
+            ...(0, online_payment_refund_1.onlineCancelPaymentPatch)(refund),
         })
             .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId))
             .returning();
@@ -589,7 +597,20 @@ class PosOrdersService {
         const refundDelta = (0, payment_breakdown_1.refundDeltaGiftFirst)(already, refund, tenders);
         const terminalRefundAmount = refundDelta.terminal;
         let terminalRefundRef = null;
-        if (terminalRefundAmount > 0.001) {
+        if ((0, online_payment_refund_1.isPaidOnlineEcommerce)(order) && refund > 0.001) {
+            const psp = await adyen_service_1.AdyenService.findEcommercePspReference(merchantId, order);
+            if (!psp) {
+                throw new Error("Cannot refund this online payment: Adyen checkout reference is missing on this order.");
+            }
+            await adyen_service_1.AdyenService.refundEcommercePayment(merchantId, psp, refund, "CHF");
+            try {
+                await adyen_service_1.AdyenService.recordPaymentTransaction(merchantId, orderId, -refund, "refund", psp, "completed");
+            }
+            catch (logErr) {
+                console.warn("Online refund approved but transaction log failed:", logErr);
+            }
+        }
+        else if (terminalRefundAmount > 0.001) {
             let poiTxId = String(order.adyenReference || "").trim();
             let poiTs = order.adyenPoiTransactionTs instanceof Date
                 ? order.adyenPoiTransactionTs.toISOString()

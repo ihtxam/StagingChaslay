@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { normalizeCateringConfig } from "@/lib/catering-config";
 import { ProductService } from "@/services/product.service";
 

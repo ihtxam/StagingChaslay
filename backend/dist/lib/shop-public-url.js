@@ -154,7 +154,7 @@ function shopGiftCardPaymentReturnUrl(merchant, purchaseId, opts = {}) {
         origin: opts.origin,
         shopPath: opts.shopPath,
         extraCandidates: opts.extraCandidates,
-        suffix: `/gift-cards/confirm/${encodeURIComponent(purchaseId)}?paid=1`,
+        suffix: `/gift-cards/confirm/${encodeURIComponent(purchaseId)}`,
     });
 }
 function shopTablePaymentReturnUrl(merchant, tableId, opts = {}) {

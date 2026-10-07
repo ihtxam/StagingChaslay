@@ -1,0 +1,1 @@
+{"version":3,"file":"shop-currency.d.ts","sourceRoot":"","sources":["../../src/lib/shop-currency.ts"],"names":[],"mappings":"AAAA,8EAA8E;AAC9E,wBAAgB,iBAAiB,CAAC,KAAK,CAAC,EAAE;IACxC,OAAO,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;IACxB,QAAQ,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;CAC1B,GAAG,MAAM,CAsCT;AAED,wBAAgB,eAAe,CAC7B,MAAM,EAAE,MAAM,EACd,QAAQ,EAAE,MAAM,EAChB,MAAM,CAAC,EAAE,MAAM,GACd,MAAM,CAeR"}

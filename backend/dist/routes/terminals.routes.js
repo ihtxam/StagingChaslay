@@ -6,6 +6,7 @@ const auth_middleware_1 = require("@/middleware/auth.middleware");
 const db_1 = require("@/db");
 const merchant_settings_service_1 = require("@/services/merchant-settings.service");
 const adyen_merchant_webhook_service_1 = require("@/services/adyen-merchant-webhook.service");
+const merchant_settings_preserve_1 = require("@/lib/merchant-settings-preserve");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
 router.use(auth_middleware_1.requireMerchant);
@@ -42,6 +43,7 @@ router.get("/", async (req, res) => {
             terminals: terminals.map(sanitizeTerminal),
             adyen: {
                 merchantAccount: settings.adyenMerchantAccount,
+                storeReference: settings.adyenStoreReference || "",
                 apiKeyMasked: settings.adyenApiKeyMasked,
                 apiKeySet: settings.adyenApiKeySet,
                 clientId: settings.adyenClientId,
@@ -62,18 +64,24 @@ router.get("/", async (req, res) => {
  */
 router.put("/adyen-credentials", async (req, res) => {
     try {
-        const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix } = req.body;
+        const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix, adyenStoreReference } = req.body;
         const settings = await merchant_settings_service_1.MerchantSettingsService.updateMerchantSettings(req.merchantId, {
-            adyenMerchantAccount,
-            adyenApiKey,
-            adyenClientId,
-            adyenHmacKey,
-            adyenLiveUrlPrefix,
+            ...((0, merchant_settings_preserve_1.shouldWriteCredential)(adyenMerchantAccount) ? { adyenMerchantAccount } : {}),
+            ...((0, merchant_settings_preserve_1.shouldWriteCredential)(adyenApiKey) ? { adyenApiKey } : {}),
+            ...((0, merchant_settings_preserve_1.shouldWriteCredential)(adyenClientId) ? { adyenClientId } : {}),
+            ...((0, merchant_settings_preserve_1.shouldWriteCredential)(adyenHmacKey) ? { adyenHmacKey } : {}),
+            ...(typeof adyenLiveUrlPrefix === "string" && adyenLiveUrlPrefix.trim()
+                ? { adyenLiveUrlPrefix }
+                : {}),
+            ...(typeof adyenStoreReference === "string" && adyenStoreReference.trim()
+                ? { adyenStoreReference }
+                : {}),
         });
         res.json({
             success: true,
             adyen: {
                 merchantAccount: settings.adyenMerchantAccount,
+                storeReference: settings.adyenStoreReference || "",
                 apiKeyMasked: settings.adyenApiKeyMasked,
                 apiKeySet: settings.adyenApiKeySet,
                 clientId: settings.adyenClientId,

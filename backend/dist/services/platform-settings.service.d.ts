@@ -1,3 +1,4 @@
+import { type PlatformLegalUrls } from "@/lib/platform-legal-urls";
 export declare const PLATFORM_ADYEN_KEYS: {
     readonly apiKey: "adyen_api_key";
     readonly merchantAccount: "adyen_merchant_account";
@@ -174,5 +175,11 @@ export declare class PlatformSettingsService {
         hmacKey: string;
         apiBase: string;
     }>;
+    static getPlatformLegalUrls(): Promise<PlatformLegalUrls>;
+    static updatePlatformLegalUrls(input: {
+        privacyUrl?: string;
+        termsUrl?: string;
+        cookiesUrl?: string;
+    }): Promise<PlatformLegalUrls>;
 }
 //# sourceMappingURL=platform-settings.service.d.ts.map

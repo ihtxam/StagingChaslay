@@ -72,6 +72,7 @@ export declare class InvoiceService {
                 id: string;
                 name: string;
                 imageUrl: string | null;
+                brand: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
@@ -115,6 +116,7 @@ export declare class InvoiceService {
                     productId?: string;
                     quantity?: number;
                 }[] | null;
+                cateringConfig: Record<string, unknown> | null;
                 specifications: {
                     id: string;
                     name: string;
@@ -128,6 +130,12 @@ export declare class InvoiceService {
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
                 similarProductIds: string[] | null;
+                dietaryTags: string[] | null;
+                extraBarcodes: string[] | null;
+                timeSlotPrices: Record<string, {
+                    price?: number;
+                    multiplier?: number;
+                }> | null;
             } | null;
         }[];
     }[]>;
@@ -228,6 +236,7 @@ export declare class InvoiceService {
             marketingOptIn: boolean;
             lastOrderAt: Date | null;
             lastReorderReminderAt: Date | null;
+            crmTags: string[];
         } | null;
         items: {
             id: string;
@@ -257,12 +266,14 @@ export declare class InvoiceService {
                     price: number;
                 }>;
             }[] | null;
+            cateringGuestCount: number | null;
             seatNumber: number | null;
             refundedQuantity: string | null;
             product: {
                 id: string;
                 name: string;
                 imageUrl: string | null;
+                brand: string | null;
                 isActive: boolean;
                 createdAt: Date;
                 updatedAt: Date;
@@ -306,6 +317,7 @@ export declare class InvoiceService {
                     productId?: string;
                     quantity?: number;
                 }[] | null;
+                cateringConfig: Record<string, unknown> | null;
                 specifications: {
                     id: string;
                     name: string;
@@ -319,6 +331,12 @@ export declare class InvoiceService {
                 loyaltyRewardPoints: number | null;
                 recipeYield: string;
                 similarProductIds: string[] | null;
+                dietaryTags: string[] | null;
+                extraBarcodes: string[] | null;
+                timeSlotPrices: Record<string, {
+                    price?: number;
+                    multiplier?: number;
+                }> | null;
             } | null;
         }[];
     } | undefined>;
@@ -402,7 +420,7 @@ export declare class InvoiceService {
             amount: number;
         }[] | null;
     }>;
-    /** Email invoice PDF to customer (uses platform Brevo when delivery mode is platform). */
+    /** Email invoice PDF to customer (uses platform mailco when delivery mode is platform). */
     static sendEmail(merchantId: string, orderRef: string, opts?: {
         to?: string | null;
         guestLocale?: string | null;

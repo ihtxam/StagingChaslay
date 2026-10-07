@@ -37,10 +37,27 @@ const express_1 = require("express");
 const auth_service_1 = require("@/services/auth.service");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const password_reset_service_1 = require("@/services/password-reset.service");
+const staff_service_1 = require("@/services/staff.service");
 function clientIp(req) {
     const forwarded = req.headers["x-forwarded-for"];
     const first = Array.isArray(forwarded) ? forwarded[0] : String(forwarded || "").split(",")[0];
     return (first || req.ip || req.socket.remoteAddress || "unknown").trim();
+}
+function isLoginAuthFailure(error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (message === "Invalid email or password" ||
+        message === "Email and password are required" ||
+        message.startsWith("Merchant account is") ||
+        message.startsWith("Superadmin account is") ||
+        message === staff_service_1.StaffService.PIN_ONLY_LOGIN_MESSAGE ||
+        message === staff_service_1.StaffService.NO_PASSWORD_LOGIN_MESSAGE ||
+        message === staff_service_1.StaffService.NO_ENTRY_PERMISSION_MESSAGE) {
+        return true;
+    }
+    return false;
+}
+function loginHttpStatus(error) {
+    return isLoginAuthFailure(error) ? 401 : 500;
 }
 const router = (0, express_1.Router)();
 /**
@@ -70,7 +87,8 @@ router.post("/login", async (req, res) => {
     }
     catch (error) {
         console.error("Error logging in:", error);
-        res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+        const status = loginHttpStatus(error);
+        res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
     }
 });
 /**
@@ -121,7 +139,8 @@ router.post("/merchant/login", async (req, res) => {
     }
     catch (error) {
         console.error("Error logging in merchant:", error);
-        res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+        const status = loginHttpStatus(error);
+        res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
     }
 });
 /**
@@ -165,7 +184,8 @@ router.post("/superadmin/login", async (req, res) => {
     }
     catch (error) {
         console.error("Error logging in superadmin:", error);
-        res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+        const status = loginHttpStatus(error);
+        res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
     }
 });
 /**
@@ -183,7 +203,8 @@ router.post("/reseller/login", async (req, res) => {
     }
     catch (error) {
         console.error("Error logging in reseller:", error);
-        res.status(401).json({ error: error instanceof Error ? error.message : "Failed to login" });
+        const status = loginHttpStatus(error);
+        res.status(status).json({ error: error instanceof Error ? error.message : "Failed to login" });
     }
 });
 /**
@@ -305,6 +326,8 @@ router.get("/me", auth_middleware_1.verifyToken, async (req, res) => {
                     signageEnabled: merchant.signageEnabled === true,
                     signageScreenLimit: merchant.signageScreenLimit ?? 2,
                     storekeeperAddonEnabled: merchant.storekeeperAddonEnabled === true,
+                    growthAnalyticsAddonEnabled: merchant.growthAnalyticsAddonEnabled === true,
+                    guestCrmAddonEnabled: merchant.guestCrmAddonEnabled === true,
                     maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
                 },
                 role: "merchant",
@@ -333,6 +356,8 @@ router.get("/me", auth_middleware_1.verifyToken, async (req, res) => {
             }));
             const { readStorekeeperAddonEnabled } = await Promise.resolve().then(() => __importStar(require("@/lib/storekeeper-addon")));
             const storekeeperOn = await readStorekeeperAddonEnabled(req.user.merchantId).catch(() => false);
+            const growthAnalyticsOn = await Promise.resolve().then(() => __importStar(require("@/lib/growth-analytics-addon"))).then((m) => m.readGrowthAnalyticsAddonEnabled(req.user.merchantId).catch(() => false));
+            const guestCrmOn = await Promise.resolve().then(() => __importStar(require("@/lib/guest-crm-addon"))).then((m) => m.readGuestCrmAddonEnabled(req.user.merchantId).catch(() => false));
             res.json({
                 user: {
                     id: profile.id,
@@ -350,6 +375,8 @@ router.get("/me", auth_middleware_1.verifyToken, async (req, res) => {
                     signageEnabled: signage.enabled,
                     signageScreenLimit: signage.screenLimit,
                     storekeeperAddonEnabled: storekeeperOn,
+                    growthAnalyticsAddonEnabled: growthAnalyticsOn,
+                    guestCrmAddonEnabled: guestCrmOn,
                     maxLocations: await (async () => {
                         try {
                             const merch = await auth_service_1.AuthService.getMerchantById(req.user.merchantId);

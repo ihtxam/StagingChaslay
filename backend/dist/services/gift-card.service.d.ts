@@ -3,6 +3,8 @@ import { type MembershipPlan } from "@/lib/membership-plans";
 /** Normalize RFID UIDs so tap / manual / issue all match (strip separators, uppercase). */
 export declare function normalizeRfidUid(raw: string): string;
 export declare class GiftCardService {
+    /** Gift cards module on when Loyalty settings or POS tender is enabled. */
+    static isOperational(merchantId: string): Promise<boolean>;
     static getSettings(merchantId: string): Promise<GiftCardSettings>;
     static updateSettings(merchantId: string, patch: Partial<GiftCardSettings>): Promise<GiftCardSettings>;
     static resolveMembershipPlan(settings: GiftCardSettings, planId: string | null | undefined): MembershipPlan | null;
@@ -66,6 +68,7 @@ export declare class GiftCardService {
             marketingOptIn: boolean;
             lastOrderAt: Date | null;
             lastReorderReminderAt: Date | null;
+            crmTags: string[];
         } | null;
     }>;
     static lookup(merchantId: string, code: string, mediaType?: "physical" | "e_card"): Promise<{
@@ -359,6 +362,9 @@ export declare class GiftCardService {
         code: string;
         balance: number;
         holderName?: string;
+        senderName?: string;
+        message?: string;
+        cardTheme?: import("@/lib/gift-card-themes").GiftCardThemeId;
         orderId?: string;
     }): Promise<{
         sent: boolean;

@@ -37,8 +37,10 @@ exports.GiftCardService = void 0;
 exports.normalizeRfidUid = normalizeRfidUid;
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
+const gift_card_member_spending_1 = require("@/lib/gift-card-member-spending");
 const gift_card_code_1 = require("@/lib/gift-card-code");
 const brand_1 = require("@/lib/brand");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const gift_card_settings_1 = require("@/lib/gift-card-settings");
 const membership_plans_1 = require("@/lib/membership-plans");
 const customer_service_1 = require("@/services/customer.service");
@@ -83,13 +85,7 @@ function assertLookupAllowed(card) {
     if (card.status !== "active")
         throw new Error("Card is not active");
 }
-const PURCHASE_TX_TYPES = [
-    "redeem",
-    "points_earn",
-    "points_redeem",
-    "stamp_earn",
-    "stamp_reward",
-];
+const PURCHASE_TX_TYPES = (0, gift_card_member_spending_1.memberSpendingOrderTransactionTypes)();
 async function assertOpenShiftForSell(merchantId) {
     const db = (0, db_1.getDb)();
     const merchant = await db.query.merchants.findFirst({
@@ -104,6 +100,18 @@ async function assertOpenShiftForSell(merchantId) {
     }
 }
 class GiftCardService {
+    /** Gift cards module on when Loyalty settings or POS tender is enabled. */
+    static async isOperational(merchantId) {
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { giftCardSettings: true, webposGiftCardEnabled: true },
+        });
+        if (!merchant)
+            return false;
+        const settings = (0, gift_card_settings_1.normalizeGiftCardSettings)(merchant.giftCardSettings);
+        return settings.enabled || merchant.webposGiftCardEnabled === true;
+    }
     static async getSettings(merchantId) {
         const db = (0, db_1.getDb)();
         const merchant = await db.query.merchants.findFirst({
@@ -138,44 +146,47 @@ class GiftCardService {
         };
     }
     static async listCards(merchantId, opts = {}) {
-        const db = (0, db_1.getDb)();
-        const page = Math.max(1, opts.page || 1);
-        const limit = Math.min(100, Math.max(1, opts.limit || 50));
-        const offset = (page - 1) * limit;
-        const conditions = [(0, drizzle_orm_1.eq)(db_1.schema.giftCards.merchantId, merchantId)];
-        if (opts.status) {
-            conditions.push((0, drizzle_orm_1.eq)(db_1.schema.giftCards.status, opts.status));
-        }
-        const cards = await db.query.giftCards.findMany({
-            where: (0, drizzle_orm_1.and)(...conditions),
-            with: { customer: true },
-            orderBy: (0, drizzle_orm_1.desc)(db_1.schema.giftCards.issuedAt),
-            limit,
-            offset,
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const page = Math.max(1, opts.page || 1);
+            const limit = Math.min(100, Math.max(1, opts.limit || 50));
+            const offset = (page - 1) * limit;
+            const conditions = [(0, drizzle_orm_1.eq)(db_1.schema.giftCards.merchantId, merchantId)];
+            if (opts.status) {
+                conditions.push((0, drizzle_orm_1.eq)(db_1.schema.giftCards.status, opts.status));
+            }
+            const cards = await db.query.giftCards.findMany({
+                where: (0, drizzle_orm_1.and)(...conditions),
+                with: { customer: true },
+                orderBy: (0, drizzle_orm_1.desc)(db_1.schema.giftCards.issuedAt),
+                limit,
+                offset,
+            });
+            const q = (opts.q || "").trim().toLowerCase();
+            const filtered = q
+                ? cards.filter((c) => {
+                    const hay = [
+                        c.cardNumber,
+                        c.ecardCode,
+                        c.holderName,
+                        c.holderEmail,
+                        c.ecardEmail,
+                        c.holderPhone,
+                        c.customer?.firstName,
+                        c.customer?.lastName,
+                        c.customer?.email,
+                        c.customer?.phone,
+                    ]
+                        .filter(Boolean)
+                        .join(" ")
+                        .toLowerCase();
+                    return hay.includes(q);
+                })
+                : cards;
+            const settings = await this.getSettings(merchantId);
+            const enriched = filtered.map((c) => this.enrichCard(c, settings));
+            return { cards: enriched, page, limit };
         });
-        const q = (opts.q || "").trim().toLowerCase();
-        const filtered = q
-            ? cards.filter((c) => {
-                const hay = [
-                    c.cardNumber,
-                    c.ecardCode,
-                    c.holderName,
-                    c.holderEmail,
-                    c.holderPhone,
-                    c.customer?.firstName,
-                    c.customer?.lastName,
-                    c.customer?.email,
-                    c.customer?.phone,
-                ]
-                    .filter(Boolean)
-                    .join(" ")
-                    .toLowerCase();
-                return hay.includes(q);
-            })
-            : cards;
-        const settings = await this.getSettings(merchantId);
-        const enriched = filtered.map((c) => this.enrichCard(c, settings));
-        return { cards: enriched, page, limit };
     }
     static async getById(merchantId, cardId) {
         const db = (0, db_1.getDb)();
@@ -300,7 +311,9 @@ class GiftCardService {
             pointsBalance: 0,
             customerId: input.customerId || null,
             holderName: input.holderName?.trim() || null,
-            holderEmail: input.holderEmail?.trim() || null,
+            holderEmail: input.holderEmail?.trim() ||
+                (mediaType === "e_card" ? input.ecardEmail?.trim() : undefined) ||
+                null,
             holderPhone: input.holderPhone?.trim() || null,
             ecardEmail: input.ecardEmail?.trim() || null,
             ecardCode,
@@ -332,7 +345,7 @@ class GiftCardService {
     static async credit(merchantId, opts) {
         const db = (0, db_1.getDb)();
         const settings = await this.getSettings(merchantId);
-        if (!settings.enabled)
+        if (!(await this.isOperational(merchantId)))
             throw new Error("Gift cards are disabled");
         if (opts.type === "sell") {
             if (!opts.skipShiftCheck) {
@@ -380,6 +393,25 @@ class GiftCardService {
         }
         const activeCard = card;
         assertActive(activeCard);
+        const ecardEmailPatch = opts.ecardEmail?.trim();
+        const holderNamePatch = opts.holderName?.trim();
+        if (ecardEmailPatch || holderNamePatch) {
+            await db
+                .update(db_1.schema.giftCards)
+                .set({
+                ...(ecardEmailPatch
+                    ? {
+                        ecardEmail: ecardEmailPatch,
+                        holderEmail: activeCard.holderEmail?.trim() || ecardEmailPatch,
+                    }
+                    : {}),
+                ...(holderNamePatch && !activeCard.holderName?.trim()
+                    ? { holderName: holderNamePatch }
+                    : {}),
+                updatedAt: new Date(),
+            })
+                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.giftCards.id, activeCard.id), (0, drizzle_orm_1.eq)(db_1.schema.giftCards.merchantId, merchantId)));
+        }
         const newBalance = money(activeCard.balance) + amount;
         const balanceCap = Math.max(settings.maxAmount, opts.type === "sell" ? amount : 0);
         if (newBalance > balanceCap + 0.001) {
@@ -413,7 +445,7 @@ class GiftCardService {
     static async redeem(merchantId, opts) {
         const db = (0, db_1.getDb)();
         const settings = await this.getSettings(merchantId);
-        if (!settings.enabled)
+        if (!(await this.isOperational(merchantId)))
             throw new Error("Gift cards are disabled");
         const requested = money(opts.amount);
         if (!Number.isFinite(requested) || requested <= 0) {
@@ -605,7 +637,7 @@ class GiftCardService {
     static async refundToCard(merchantId, opts) {
         const db = (0, db_1.getDb)();
         const settings = await this.getSettings(merchantId);
-        if (!settings.enabled)
+        if (!(await this.isOperational(merchantId)))
             throw new Error("Gift cards are disabled");
         const amount = money(opts.amount);
         if (!Number.isFinite(amount) || amount <= 0) {
@@ -744,11 +776,21 @@ class GiftCardService {
             ? `https://${(0, brand_1.resolveShopPublicHost)()}/${shopSlug}/gift/${encodeURIComponent(code)}`
             : redeemUrl;
         const holder = opts.holderName?.trim();
-        const subject = `${shopName} · Gift card CHF ${balance.toFixed(2)}`;
+        const { giftCardEmailIntro } = await Promise.resolve().then(() => __importStar(require("@/lib/gift-card-themes")));
+        const theme = opts.cardTheme || "classic";
+        const intro = giftCardEmailIntro({
+            theme,
+            senderName: opts.senderName,
+            recipientName: holder,
+            shopName,
+        });
+        const personalMsg = opts.message?.trim();
+        const subject = `${intro.subjectLine} · CHF ${balance.toFixed(2)}`;
         const html = `
       <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#1c1917;">
         <h2 style="margin:0 0 8px;">${shopName}</h2>
-        <p style="margin:0 0 16px;color:#57534e;">You received a digital gift card${holder ? ` for ${holder.replace(/</g, "&lt;")}` : ""}.</p>
+        <p style="margin:0 0 16px;color:#57534e;">${intro.htmlLead}</p>
+        ${personalMsg ? `<p style="margin:0 0 16px;padding:12px 16px;background:#fafaf9;border-radius:8px;font-style:italic;">“${personalMsg.replace(/</g, "&lt;").replace(/"/g, "&quot;")}”</p>` : ""}
         <p style="font-size:28px;font-weight:700;margin:8px 0;color:#0f766e;">CHF ${balance.toFixed(2)}</p>
         <p style="margin:16px 0 8px;font-weight:600;">Your gift card code</p>
         <p style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:1px;background:#f5f5f4;padding:12px 16px;border-radius:8px;">${code.replace(/</g, "&lt;")}</p>
@@ -757,8 +799,9 @@ class GiftCardService {
         <p style="color:#666;font-size:12px;word-break:break-all;">${shopGiftUrl}</p>
       </div>
     `;
-        const text = `${shopName}\nDigital gift card: CHF ${balance.toFixed(2)}\n` +
-            (holder ? `For: ${holder}\n` : "") +
+        const text = `${shopName}\n${intro.textLead}\n` +
+            (personalMsg ? `Message: ${personalMsg}\n` : "") +
+            `Gift card value: CHF ${balance.toFixed(2)}\n` +
             `Code: ${code}\n` +
             `Redeem at checkout by scanning or entering the code.\n` +
             `${shopGiftUrl}\n`;
@@ -784,12 +827,16 @@ class GiftCardService {
                 throw new Error("Phone number must be digits only (max 15)");
             holderPhone = digits;
         }
+        const ecardEmail = card.cardMediaType === "e_card" && holderEmail
+            ? holderEmail
+            : card.ecardEmail;
         const updated = await db
             .update(db_1.schema.giftCards)
             .set({
             holderName: holderName ?? null,
             holderEmail: holderEmail ?? null,
             holderPhone: holderPhone ?? null,
+            ecardEmail,
             updatedAt: new Date(),
         })
             .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.giftCards.id, cardId), (0, drizzle_orm_1.eq)(db_1.schema.giftCards.merchantId, merchantId)))
@@ -944,8 +991,19 @@ class GiftCardService {
             where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.inArray)(db_1.schema.orders.id, allOrderIds)),
         });
         const statsOrders = allForStats.filter((o) => o.status !== "cancelled" && o.paymentStatus !== "failed");
-        const totalSpent = statsOrders.reduce((sum, o) => sum + money(o.total), 0);
-        const orderCount = statsOrders.length;
+        let totalSpent = statsOrders.reduce((sum, o) => sum + money(o.total), 0);
+        let orderCount = statsOrders.length;
+        const orphanSellRows = await db
+            .select({
+            amount: db_1.schema.giftCardTransactions.amount,
+        })
+            .from(db_1.schema.giftCardTransactions)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.giftCardTransactions.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.giftCardTransactions.cardId, cardId), (0, drizzle_orm_1.eq)(db_1.schema.giftCardTransactions.transactionType, "sell"), (0, drizzle_orm_1.isNull)(db_1.schema.giftCardTransactions.orderId)));
+        if (orphanSellRows.length > 0) {
+            const orphanTotal = orphanSellRows.reduce((sum, row) => sum + money(row.amount), 0);
+            totalSpent += orphanTotal;
+            orderCount += orphanSellRows.length;
+        }
         return {
             statistics: {
                 totalSpent,

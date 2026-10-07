@@ -42,7 +42,9 @@ const drizzle_orm_1 = require("drizzle-orm");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const business_module_middleware_1 = require("@/middleware/business-module.middleware");
 const catalog_visibility_1 = require("@/lib/catalog-visibility");
+const product_dietary_1 = require("@/lib/product-dietary");
 const product_service_1 = require("@/services/product.service");
+const catering_templates_service_1 = require("@/services/catering-templates.service");
 const category_service_1 = require("@/services/category.service");
 const category_colors_1 = require("@/lib/category-colors");
 const order_service_1 = require("@/services/order.service");
@@ -57,6 +59,7 @@ const geocode_1 = require("@/lib/geocode");
 const media_upload_service_1 = require("@/services/media-upload.service");
 const path_1 = __importDefault(require("path"));
 const db_1 = require("@/db");
+const public_shop_error_1 = require("@/lib/public-shop-error");
 const subscription_billing_service_1 = require("@/services/subscription-billing.service");
 const subscription_plans_service_1 = require("@/services/subscription-plans.service");
 const pos_sessions_routes_1 = __importDefault(require("@/routes/pos-sessions.routes"));
@@ -68,6 +71,10 @@ const router = (0, express_1.Router)();
 const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const FAVICON_EXTENSIONS = new Set([".png", ".ico", ".svg"]);
+function wantsPosLocationCatalog(req) {
+    const raw = String(req.query.posLocationCatalog ?? req.query.locationCatalog ?? "").trim();
+    return raw === "1" || raw.toLowerCase() === "true";
+}
 const imageUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: 12 * 1024 * 1024 },
@@ -155,12 +162,15 @@ function restrictStaffMerchantWrites(req, res, next) {
     if (path.startsWith("/billing")) {
         return (0, auth_middleware_1.requirePermission)("MANAGE_BILLING")(req, res, next);
     }
+    // Storekeeper intake uploads product photos via POST /media (no catalog edit rights).
+    if (method === "POST" && path === "/media") {
+        return (0, auth_middleware_1.requirePermission)("MANAGE_PRODUCTS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS", "STOREKEEPER_INTAKE", "MANAGE_INVENTORY")(req, res, next);
+    }
     const catalogWrite = /^(POST|PUT|PATCH|DELETE)$/.test(method) &&
         (/^\/products(\/|$)/.test(path) ||
             /^\/categories(\/|$)/.test(path) ||
             /^\/modifiers(\/|$)/.test(path) ||
             path === "/demo-menu-photos" ||
-            path === "/media" ||
             path === "/shop-favicon");
     if (catalogWrite) {
         return (0, auth_middleware_1.requirePermission)("MANAGE_PRODUCTS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS")(req, res, next);
@@ -180,9 +190,12 @@ router.use(restrictStaffMerchantWrites);
  * GET /api/merchant/products/import/template
  * Download Excel template for one-click import
  */
-router.get("/products/import/template", async (_req, res) => {
+router.get("/products/import/template", async (req, res) => {
     try {
-        const buffer = catalog_import_service_1.CatalogImportService.buildTemplateBuffer();
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const buffer = await catalog_import_service_1.CatalogImportService.buildTemplateBuffer(merchantId);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", 'attachment; filename="reborn-catalog-template.xlsx"');
         res.send(buffer);
@@ -392,7 +405,12 @@ router.get("/products", async (req, res) => {
                 }
             })(),
         ]);
-        const pageList = products || [];
+        let pageList = products || [];
+        if (wantsPosLocationCatalog(req) && req.locationId) {
+            const { CatalogLocationService } = await Promise.resolve().then(() => __importStar(require("@/services/catalog-location.service")));
+            const catalog = await CatalogLocationService.buildLocationChannelCatalog(merchantId, req.locationId, "pos");
+            pageList = catalog.products;
+        }
         // Resolve combo option products that may not be on the current page
         const optionIds = new Set();
         for (const p of pageList) {
@@ -463,7 +481,12 @@ router.get("/products", async (req, res) => {
         res.json({
             success: true,
             products: withCatalog,
-            pagination: { page, limit, total },
+            pagination: {
+                page: wantsPosLocationCatalog(req) ? 1 : page,
+                limit: wantsPosLocationCatalog(req) ? pageList.length : limit,
+                total: wantsPosLocationCatalog(req) ? pageList.length : total,
+            },
+            locationId: wantsPosLocationCatalog(req) ? req.locationId : undefined,
             productLimit: productLimit
                 ? {
                     maxProducts: productLimit.maxProducts,
@@ -476,7 +499,7 @@ router.get("/products", async (req, res) => {
     }
     catch (error) {
         console.error("Error getting products:", error);
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get products" });
+        res.status(500).json({ error: (0, public_shop_error_1.publicShopDbError)(error, "Failed to get products") });
     }
 });
 /**
@@ -531,7 +554,7 @@ router.get("/products/:productId", async (req, res) => {
 router.post("/products", async (req, res) => {
     try {
         const merchantId = req.merchantId;
-        const { name, price, categoryId, sku, barcode, cost, stock, isTaxable, description, imageUrl, productType, isOpenPrice, soldByWeight, weightUnit, bulkPricing, extras, comboItems, allowExtras, clientId, specifications, buttonColor, loyaltyRewardPoints, modifierGroupIds, visibility, similarProductIds, } = req.body;
+        const { name, price, categoryId, sku, barcode, cost, stock, isTaxable, description, imageUrl, productType, isOpenPrice, soldByWeight, weightUnit, bulkPricing, extras, comboItems, allowExtras, clientId, specifications, buttonColor, loyaltyRewardPoints, modifierGroupIds, visibility, similarProductIds, brand, extraBarcodes, cateringConfig, dietaryTags, } = req.body;
         if (!merchantId) {
             return res.status(400).json({ error: "Merchant ID is required" });
         }
@@ -586,10 +609,13 @@ router.post("/products", async (req, res) => {
             normalizedLoyaltyReward = n;
         }
         const { sanitizeComboSlotsInput } = await Promise.resolve().then(() => __importStar(require("@/lib/combo")));
+        const { normalizeCateringConfig } = await Promise.resolve().then(() => __importStar(require("@/lib/catering-config")));
         const normalizedComboItems = productType === "combo" || (Array.isArray(comboItems) && comboItems.length)
             ? sanitizeComboSlotsInput(comboItems)
             : comboItems || [];
-        const product = await product_service_1.ProductService.createProduct(merchantId, name, price, categoryId, sku, barcode, cost, Math.floor(stockNum), isTaxable !== false, description, imageUrl, {
+        const { BarcodeService } = await Promise.resolve().then(() => __importStar(require("@/services/barcode.service")));
+        const normalizedBarcode = BarcodeService.normalizeForSave(barcode);
+        const product = await product_service_1.ProductService.createProduct(merchantId, name, price, categoryId, sku, normalizedBarcode ?? undefined, cost, Math.floor(stockNum), isTaxable !== false, description, imageUrl, {
             productType: productType === "combo" || normalizedComboItems.length ? "combo" : productType,
             isOpenPrice,
             soldByWeight,
@@ -597,17 +623,24 @@ router.post("/products", async (req, res) => {
             bulkPricing,
             extras,
             comboItems: normalizedComboItems,
+            cateringConfig: normalizeCateringConfig(cateringConfig),
             allowExtras,
             clientId,
             specifications,
             buttonColor,
             loyaltyRewardPoints: normalizedLoyaltyReward === undefined ? null : normalizedLoyaltyReward,
+            brand: brand != null ? String(brand).trim().slice(0, 255) : null,
+            extraBarcodes: Array.isArray(extraBarcodes)
+                ? extraBarcodes.map((s) => String(s || "").trim()).filter(Boolean).slice(0, 20)
+                : typeof extraBarcodes === "string"
+                    ? extraBarcodes.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean).slice(0, 20)
+                    : [],
         });
         let modifierGroups = [];
         if (Array.isArray(modifierGroupIds) && modifierGroupIds.length) {
             modifierGroups = await modifier_service_1.ModifierService.setGroupsForProduct(merchantId, product.id, modifierGroupIds);
         }
-        if (visibility !== undefined || similarProductIds !== undefined) {
+        if (visibility !== undefined || similarProductIds !== undefined || dietaryTags !== undefined) {
             const patch = {};
             if (visibility !== undefined) {
                 patch.visibility = (0, catalog_visibility_1.normalizeCatalogVisibility)(visibility);
@@ -620,9 +653,17 @@ router.post("/products", async (req, res) => {
                         .slice(0, 12)
                     : [];
             }
+            if (dietaryTags !== undefined) {
+                patch.dietaryTags = (0, product_dietary_1.normalizeDietaryTags)(dietaryTags);
+            }
             await product_service_1.ProductService.updateProduct(merchantId, product.id, patch);
         }
         const saved = await product_service_1.ProductService.getProductById(merchantId, product.id);
+        if (saved.categoryId && saved.visibility) {
+            const { CategoryService } = await Promise.resolve().then(() => __importStar(require("@/services/category.service")));
+            const vis = (0, catalog_visibility_1.normalizeCatalogVisibility)(saved.visibility);
+            await CategoryService.ensureChannelsEnabled(merchantId, saved.categoryId, vis.channels);
+        }
         res.status(201).json({
             success: true,
             message: "Product created successfully",
@@ -632,6 +673,24 @@ router.post("/products", async (req, res) => {
     catch (error) {
         console.error("Error creating product:", error);
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create product" });
+    }
+});
+/**
+ * POST /api/merchant/catering-templates/:templateId
+ */
+router.post("/catering-templates/:templateId", async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const templateId = String(req.params.templateId || "").trim();
+        const allowed = ["taco_bar", "boxed_lunch", "buffet_per_person"];
+        if (!allowed.includes(templateId)) {
+            return res.status(400).json({ error: "Unknown catering template" });
+        }
+        const result = await catering_templates_service_1.CateringTemplatesService.apply(merchantId, templateId);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to apply template" });
     }
 });
 /**
@@ -661,6 +720,10 @@ router.put("/products/:productId", async (req, res) => {
         }
         if (updates.sku != null && String(updates.sku).length > 100) {
             return res.status(400).json({ error: "SKU must be at most 100 characters" });
+        }
+        if (updates.barcode !== undefined) {
+            const { BarcodeService } = await Promise.resolve().then(() => __importStar(require("@/services/barcode.service")));
+            updates.barcode = BarcodeService.normalizeForSave(updates.barcode);
         }
         if (updates.stock !== undefined) {
             const stockNum = Number(updates.stock);
@@ -695,6 +758,10 @@ router.put("/products/:productId", async (req, res) => {
                 updates.productType = "combo";
             }
         }
+        if (updates.cateringConfig !== undefined) {
+            const { normalizeCateringConfig } = await Promise.resolve().then(() => __importStar(require("@/lib/catering-config")));
+            updates.cateringConfig = normalizeCateringConfig(updates.cateringConfig);
+        }
         if (updates.visibility !== undefined) {
             updates.visibility = (0, catalog_visibility_1.normalizeCatalogVisibility)(updates.visibility);
         }
@@ -706,7 +773,28 @@ router.put("/products/:productId", async (req, res) => {
                     .slice(0, 12)
                 : [];
         }
+        if (updates.dietaryTags !== undefined) {
+            updates.dietaryTags = (0, product_dietary_1.normalizeDietaryTags)(updates.dietaryTags);
+        }
+        if (updates.brand !== undefined) {
+            const b = String(updates.brand || "").trim().slice(0, 255);
+            updates.brand = b || null;
+        }
+        if (updates.extraBarcodes !== undefined) {
+            const list = Array.isArray(updates.extraBarcodes)
+                ? updates.extraBarcodes
+                : String(updates.extraBarcodes || "").split(/[,;\n]+/);
+            updates.extraBarcodes = list
+                .map((s) => String(s || "").trim())
+                .filter(Boolean)
+                .slice(0, 20);
+        }
         const product = await product_service_1.ProductService.updateProduct(merchantId, productId, updates);
+        if (product.categoryId && product.visibility) {
+            const { CategoryService } = await Promise.resolve().then(() => __importStar(require("@/services/category.service")));
+            const vis = (0, catalog_visibility_1.normalizeCatalogVisibility)(product.visibility);
+            await CategoryService.ensureChannelsEnabled(merchantId, product.categoryId, vis.channels);
+        }
         let modifierGroups = undefined;
         if (Array.isArray(modifierGroupIds)) {
             modifierGroups = await modifier_service_1.ModifierService.setGroupsForProduct(merchantId, productId, modifierGroupIds);
@@ -924,6 +1012,15 @@ router.get("/categories", async (req, res) => {
         if (!merchantId) {
             return res.status(400).json({ error: "Merchant ID is required" });
         }
+        if (wantsPosLocationCatalog(req) && req.locationId) {
+            const { CatalogLocationService } = await Promise.resolve().then(() => __importStar(require("@/services/catalog-location.service")));
+            const catalog = await CatalogLocationService.buildLocationChannelCatalog(merchantId, req.locationId, "pos");
+            return res.json({
+                success: true,
+                categories: catalog.categories,
+                locationId: catalog.locationId,
+            });
+        }
         const categories = await category_service_1.CategoryService.getCategories(merchantId);
         res.json({
             success: true,
@@ -995,7 +1092,14 @@ router.post("/categories", async (req, res) => {
                 visibility: (0, catalog_visibility_1.normalizeCatalogVisibility)(visibility),
             });
         }
-        const saved = visibility !== undefined
+        const shopScheduleRaw = req.body.shopSchedule;
+        if (shopScheduleRaw !== undefined) {
+            const { normalizeCategoryShopSchedule } = await Promise.resolve().then(() => __importStar(require("@/lib/category-shop-schedule")));
+            await category_service_1.CategoryService.updateCategory(merchantId, category.id, {
+                shopSchedule: normalizeCategoryShopSchedule(shopScheduleRaw),
+            });
+        }
+        const saved = visibility !== undefined || shopScheduleRaw !== undefined
             ? (await category_service_1.CategoryService.getCategories(merchantId)).find((c) => c.id === category.id) ||
                 category
             : category;
@@ -1066,6 +1170,10 @@ router.put("/categories/:categoryId", async (req, res) => {
             }
             updates.extraDeliveryPrice = n.toFixed(2);
         }
+        if (updates.shopSchedule !== undefined) {
+            const { normalizeCategoryShopSchedule } = await Promise.resolve().then(() => __importStar(require("@/lib/category-shop-schedule")));
+            updates.shopSchedule = normalizeCategoryShopSchedule(updates.shopSchedule);
+        }
         const category = await category_service_1.CategoryService.updateCategory(merchantId, categoryId, updates);
         res.json({
             success: true,
@@ -1131,7 +1239,7 @@ router.get("/orders", async (req, res) => {
     }
     catch (error) {
         console.error("Error getting orders:", error);
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get orders" });
+        res.status(500).json({ error: (0, public_shop_error_1.publicShopDbError)(error, "Failed to get orders") });
     }
 });
 /**
@@ -1336,7 +1444,7 @@ router.get("/customers", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOM
     }
     catch (error) {
         console.error("Error getting customers:", error);
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get customers" });
+        res.status(500).json({ error: (0, public_shop_error_1.publicShopDbError)(error, "Failed to get customers") });
     }
 });
 /**
@@ -1404,6 +1512,60 @@ router.get("/customers/:customerId", (0, auth_middleware_1.requirePermission)("M
     catch (error) {
         console.error("Error getting customer:", error);
         res.status(404).json({ error: error instanceof Error ? error.message : "Customer not found" });
+    }
+});
+/**
+ * PATCH /api/merchant/customers/:customerId
+ * Update customer
+ */
+router.patch("/customers/:customerId", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { customerId } = req.params;
+        const { email, phone, firstName, lastName, defaultAddress, defaultZip, defaultCity } = req.body;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        const customer = await customer_service_1.CustomerService.updateCustomer(merchantId, customerId, {
+            email,
+            phone,
+            firstName,
+            lastName,
+            defaultAddress,
+            defaultZip,
+            defaultCity,
+        });
+        res.json({
+            success: true,
+            message: "Customer updated successfully",
+            customer,
+        });
+    }
+    catch (error) {
+        console.error("Error updating customer:", error);
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update customer" });
+    }
+});
+/**
+ * DELETE /api/merchant/customers/:customerId
+ * Delete customer
+ */
+router.delete("/customers/:customerId", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const { customerId } = req.params;
+        if (!merchantId) {
+            return res.status(400).json({ error: "Merchant ID is required" });
+        }
+        await customer_service_1.CustomerService.deleteCustomer(merchantId, customerId);
+        res.json({
+            success: true,
+            message: "Customer deleted successfully",
+        });
+    }
+    catch (error) {
+        console.error("Error deleting customer:", error);
+        res.status(404).json({ error: error instanceof Error ? error.message : "Failed to delete customer" });
     }
 });
 /**
@@ -1567,7 +1729,7 @@ router.get("/webpos-config", async (req, res) => {
                     card: merchant.webposCardEnabled !== false,
                     terminal: merchant.webposTerminalEnabled !== false && terminalReady,
                     tap_to_pay: tapToPayReady,
-                    giftCard: merchant.webposGiftCardEnabled === true && giftCardSettings.enabled,
+                    giftCard: merchant.webposGiftCardEnabled === true,
                     invoice: merchant.webposInvoiceEnabled !== false,
                 },
                 giftCardSettings,
@@ -1859,6 +2021,128 @@ router.put("/settings", async (req, res) => {
  * Requires VIEW_REPORTS or END_OF_DAY.
  * Company-wide totals need VIEW_ALL_SALES; otherwise scoped to PIN staff (own sales).
  */
+/**
+ * GET /api/merchant/reports/sales-mix
+ * Sales mix & advanced analytics (Growth Analytics add-on).
+ */
+router.get("/reports/sales-mix", (0, auth_middleware_1.requirePermission)("VIEW_REPORTS", "END_OF_DAY"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { merchantHasGrowthAnalyticsLicense } = await Promise.resolve().then(() => __importStar(require("@/lib/growth-analytics-addon")));
+        if (!(await merchantHasGrowthAnalyticsLicense(merchantId))) {
+            return res.status(403).json({
+                error: "Sales mix & analytics requires the Growth Analytics add-on",
+                code: "GROWTH_ANALYTICS_ADDON",
+            });
+        }
+        const { resolveReportActor, salesScopeForActor } = await Promise.resolve().then(() => __importStar(require("@/lib/report-sales-scope")));
+        const actor = resolveReportActor(req);
+        const scope = salesScopeForActor(actor);
+        if (!scope.viewAll && !scope.staffId) {
+            return res.status(403).json({ error: "Own-sales reports require a staff PIN session" });
+        }
+        const preset = String(req.query.preset || "today");
+        const { SalesMixService } = await Promise.resolve().then(() => __importStar(require("@/services/sales-mix.service")));
+        const report = await SalesMixService.getSalesMixReport(merchantId, {
+            preset,
+            from: req.query.from ? String(req.query.from) : undefined,
+            to: req.query.to ? String(req.query.to) : undefined,
+            staffId: scope.viewAll ? (req.query.staffId ? String(req.query.staffId) : null) : scope.staffId,
+            locationId: req.query.scope === "location"
+                ? req.locationId || undefined
+                : req.query.locationId
+                    ? String(req.query.locationId)
+                    : undefined,
+        });
+        res.json({ success: true, report });
+    }
+    catch (error) {
+        console.error("Sales mix report failed:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load sales mix report",
+        });
+    }
+});
+/**
+ * GET /api/merchant/guest-crm/profiles
+ * Guest CRM profiles (paid add-on).
+ */
+router.get("/guest-crm/profiles", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { merchantHasGuestCrmLicense } = await Promise.resolve().then(() => __importStar(require("@/lib/guest-crm-addon")));
+        if (!(await merchantHasGuestCrmLicense(merchantId))) {
+            return res.status(403).json({
+                error: "Guest CRM requires the Guest CRM add-on",
+                code: "GUEST_CRM_ADDON",
+            });
+        }
+        const { GuestCrmService } = await Promise.resolve().then(() => __importStar(require("@/services/guest-crm.service")));
+        const result = await GuestCrmService.listProfiles(merchantId, {
+            page: req.query.page ? Number(req.query.page) : 1,
+            limit: req.query.limit ? Number(req.query.limit) : 25,
+            search: req.query.search ? String(req.query.search) : undefined,
+        });
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error("Guest CRM list failed:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load guest profiles",
+        });
+    }
+});
+router.get("/guest-crm/profiles/:customerId", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { merchantHasGuestCrmLicense } = await Promise.resolve().then(() => __importStar(require("@/lib/guest-crm-addon")));
+        if (!(await merchantHasGuestCrmLicense(merchantId))) {
+            return res.status(403).json({
+                error: "Guest CRM requires the Guest CRM add-on",
+                code: "GUEST_CRM_ADDON",
+            });
+        }
+        const { GuestCrmService } = await Promise.resolve().then(() => __importStar(require("@/services/guest-crm.service")));
+        const data = await GuestCrmService.getProfile(merchantId, req.params.customerId);
+        res.json({ success: true, ...data });
+    }
+    catch (error) {
+        console.error("Guest CRM profile failed:", error);
+        res.status(404).json({
+            error: error instanceof Error ? error.message : "Guest not found",
+        });
+    }
+});
+router.patch("/guest-crm/profiles/:customerId/tags", (0, auth_middleware_1.requirePermission)("MANAGE_CUSTOMERS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { merchantHasGuestCrmLicense } = await Promise.resolve().then(() => __importStar(require("@/lib/guest-crm-addon")));
+        if (!(await merchantHasGuestCrmLicense(merchantId))) {
+            return res.status(403).json({
+                error: "Guest CRM requires the Guest CRM add-on",
+                code: "GUEST_CRM_ADDON",
+            });
+        }
+        const tags = Array.isArray(req.body?.tags) ? req.body.tags : [];
+        const { GuestCrmService } = await Promise.resolve().then(() => __importStar(require("@/services/guest-crm.service")));
+        const result = await GuestCrmService.updateTags(merchantId, req.params.customerId, tags);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error("Guest CRM tags update failed:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to update tags",
+        });
+    }
+});
 router.get("/reports/eod", (0, auth_middleware_1.requirePermission)("VIEW_REPORTS", "END_OF_DAY"), async (req, res) => {
     try {
         const merchantId = req.merchantId;
@@ -2092,6 +2376,181 @@ router.get("/reports/export", (0, auth_middleware_1.requirePermission)("VIEW_REP
         res.status(500).json({
             error: error instanceof Error ? error.message : "Failed to export report",
         });
+    }
+});
+/**
+ * GET /api/merchant/reports/accounting-export?target=bexio|odoo|standard&preset=...
+ */
+router.get("/reports/accounting-export", (0, auth_middleware_1.requirePermission)("VIEW_REPORTS", "END_OF_DAY"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { resolveReportActor, salesScopeForActor } = await Promise.resolve().then(() => __importStar(require("@/lib/report-sales-scope")));
+        const actor = resolveReportActor(req);
+        const scope = salesScopeForActor(actor);
+        if (!scope.viewAll && !scope.staffId) {
+            return res.status(403).json({
+                error: "Own-sales reports require a staff PIN session",
+            });
+        }
+        const target = String(req.query.target || "standard").toLowerCase();
+        if (target === "bexio") {
+            const { readBexioAddonEnabled } = await Promise.resolve().then(() => __importStar(require("@/lib/accounting-integration-addon")));
+            if (!(await readBexioAddonEnabled(merchantId))) {
+                return res.status(403).json({ error: "Bexio add-on is not enabled" });
+            }
+        }
+        if (target === "odoo") {
+            const { readOdooAddonEnabled } = await Promise.resolve().then(() => __importStar(require("@/lib/accounting-integration-addon")));
+            if (!(await readOdooAddonEnabled(merchantId))) {
+                return res.status(403).json({ error: "Odoo add-on is not enabled" });
+            }
+        }
+        const preset = String(req.query.preset || "today");
+        const { AccountingExportService } = await Promise.resolve().then(() => __importStar(require("@/services/accounting-export.service")));
+        const file = await AccountingExportService.buildExport(merchantId, {
+            preset,
+            from: req.query.from ? String(req.query.from) : undefined,
+            to: req.query.to ? String(req.query.to) : undefined,
+            staffId: scope.staffId,
+            staffName: scope.staffName,
+            target: target === "bexio" || target === "odoo" ? target : "standard",
+        });
+        res.setHeader("Content-Type", file.mime);
+        res.setHeader("Content-Disposition", `attachment; filename="${file.filename.replace(/"/g, "")}"`);
+        res.send(file.buffer);
+    }
+    catch (error) {
+        console.error("Accounting export failed:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to export accounting data",
+        });
+    }
+});
+router.post("/accounting/bexio/test", (0, auth_middleware_1.requirePermission)("MANAGE_SETTINGS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { AccountingSyncService } = await Promise.resolve().then(() => __importStar(require("@/services/accounting-sync.service")));
+        const result = await AccountingSyncService.testBexioConnection(merchantId);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Bexio connection failed",
+        });
+    }
+});
+router.post("/accounting/odoo/test", (0, auth_middleware_1.requirePermission)("MANAGE_SETTINGS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { AccountingSyncService } = await Promise.resolve().then(() => __importStar(require("@/services/accounting-sync.service")));
+        const result = await AccountingSyncService.testOdooConnection(merchantId);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Odoo connection failed",
+        });
+    }
+});
+router.post("/accounting/bexio/push", (0, auth_middleware_1.requirePermission)("VIEW_REPORTS", "END_OF_DAY"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { resolveReportActor, salesScopeForActor } = await Promise.resolve().then(() => __importStar(require("@/lib/report-sales-scope")));
+        const scope = salesScopeForActor(resolveReportActor(req));
+        const body = (req.body && typeof req.body === "object" ? req.body : {});
+        const preset = String(body.preset || req.query.preset || "today");
+        const { AccountingSyncService, parseAccountingReportPreset } = await Promise.resolve().then(() => __importStar(require("@/services/accounting-sync.service")));
+        const result = await AccountingSyncService.pushPeriodToBexio(merchantId, {
+            preset: parseAccountingReportPreset(preset),
+            from: body.from ? String(body.from) : undefined,
+            to: body.to ? String(body.to) : undefined,
+            staffId: scope.staffId,
+            staffName: scope.staffName,
+        });
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        const merchantId = req.merchantId;
+        const msg = error instanceof Error ? error.message : "Bexio push failed";
+        if (merchantId) {
+            const { AccountingSyncService } = await Promise.resolve().then(() => __importStar(require("@/services/accounting-sync.service")));
+            await AccountingSyncService.recordPushError(merchantId, "bexio", msg).catch(() => { });
+        }
+        res.status(400).json({ error: msg });
+    }
+});
+router.get("/accounting/bexio/oauth/start", (0, auth_middleware_1.requirePermission)("MANAGE_SETTINGS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { readBexioAddonEnabled } = await Promise.resolve().then(() => __importStar(require("@/lib/accounting-integration-addon")));
+        if (!(await readBexioAddonEnabled(merchantId))) {
+            return res.status(403).json({ error: "Bexio add-on is not enabled" });
+        }
+        const { buildBexioAuthorizeUrl, bexioOAuthConfigured } = await Promise.resolve().then(() => __importStar(require("@/lib/bexio-oauth")));
+        if (!bexioOAuthConfigured()) {
+            return res.status(503).json({ error: "Bexio OAuth is not configured on this server" });
+        }
+        const url = buildBexioAuthorizeUrl(merchantId);
+        res.json({ success: true, url });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to start Bexio OAuth",
+        });
+    }
+});
+router.post("/accounting/bexio/oauth/disconnect", (0, auth_middleware_1.requirePermission)("MANAGE_SETTINGS"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { clearBexioOAuthTokens } = await Promise.resolve().then(() => __importStar(require("@/lib/bexio-oauth")));
+        await clearBexioOAuthTokens(merchantId);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to disconnect Bexio",
+        });
+    }
+});
+router.post("/accounting/odoo/push", (0, auth_middleware_1.requirePermission)("VIEW_REPORTS", "END_OF_DAY"), async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        if (!merchantId)
+            return res.status(400).json({ error: "Merchant ID is required" });
+        const { resolveReportActor, salesScopeForActor } = await Promise.resolve().then(() => __importStar(require("@/lib/report-sales-scope")));
+        const scope = salesScopeForActor(resolveReportActor(req));
+        const body = (req.body && typeof req.body === "object" ? req.body : {});
+        const preset = String(body.preset || req.query.preset || "today");
+        const { AccountingSyncService, parseAccountingReportPreset } = await Promise.resolve().then(() => __importStar(require("@/services/accounting-sync.service")));
+        const result = await AccountingSyncService.pushPeriodToOdoo(merchantId, {
+            preset: parseAccountingReportPreset(preset),
+            from: body.from ? String(body.from) : undefined,
+            to: body.to ? String(body.to) : undefined,
+            staffId: scope.staffId,
+            staffName: scope.staffName,
+        });
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        const merchantId = req.merchantId;
+        const msg = error instanceof Error ? error.message : "Odoo push failed";
+        if (merchantId) {
+            const { AccountingSyncService } = await Promise.resolve().then(() => __importStar(require("@/services/accounting-sync.service")));
+            await AccountingSyncService.recordPushError(merchantId, "odoo", msg).catch(() => { });
+        }
+        res.status(400).json({ error: msg });
     }
 });
 /** GET/PUT report email settings + POST send */

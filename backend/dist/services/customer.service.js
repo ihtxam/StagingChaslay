@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomerService = void 0;
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 function cleanOptional(value) {
     if (value == null)
         return null;
@@ -103,6 +104,27 @@ class CustomerService {
             return null;
         }
     }
+    static async assertCustomerContactAvailable(merchantId, contact, exceptCustomerId) {
+        const db = (0, db_1.getDb)();
+        const email = contact.email ?? null;
+        const phone = contact.phone ?? null;
+        if (email) {
+            const dup = await db.query.customers.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.customers.email, email)),
+            });
+            if (dup && dup.id !== exceptCustomerId) {
+                throw new Error("Email already used by another customer");
+            }
+        }
+        if (phone) {
+            const dup = await db.query.customers.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchantId), (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.customers.phone, phone), (0, drizzle_orm_1.sql) `regexp_replace(coalesce(${db_1.schema.customers.phone}, ''), '[^0-9]', '', 'g') = ${phone}`)),
+            });
+            if (dup && dup.id !== exceptCustomerId) {
+                throw new Error("Phone number already used by another customer");
+            }
+        }
+    }
     /**
      * Create customer
      */
@@ -123,6 +145,7 @@ class CustomerService {
             if (!first && !last && !mail && !tel) {
                 throw new Error("Name, email, or phone is required");
             }
+            await this.assertCustomerContactAvailable(merchantId, { email: mail, phone: tel });
             const customer = await db
                 .insert(db_1.schema.customers)
                 .values({
@@ -149,8 +172,8 @@ class CustomerService {
      * Get all customers for merchant
      */
     static async getCustomers(merchantId, page = 1, limit = 20, search) {
-        const db = (0, db_1.getDb)();
-        try {
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
             const offset = (page - 1) * limit;
             let whereConditions = [(0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchantId)];
             if (search) {
@@ -160,18 +183,13 @@ class CustomerService {
                     ? (0, drizzle_orm_1.sql) `regexp_replace(coalesce(${db_1.schema.customers.phone}, ''), '[^0-9]', '', 'g') like ${`%${digits}%`}`
                     : (0, drizzle_orm_1.sql) `false`));
             }
-            const customers = await db.query.customers.findMany({
+            return db.query.customers.findMany({
                 where: whereConditions.length > 0 ? (0, drizzle_orm_1.and)(...whereConditions) : undefined,
                 limit,
                 offset,
                 orderBy: (0, drizzle_orm_1.desc)(db_1.schema.customers.createdAt),
             });
-            return customers;
-        }
-        catch (error) {
-            console.error("Error getting customers:", error);
-            throw error;
-        }
+        });
     }
     /**
      * Get customer by ID
@@ -214,12 +232,28 @@ class CustomerService {
     static async updateCustomer(merchantId, customerId, updates) {
         const db = (0, db_1.getDb)();
         try {
-            const customer = await db
-                .update(db_1.schema.customers)
-                .set({
+            const existing = await db.query.customers.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.id, customerId), (0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchantId)),
+            });
+            if (!existing)
+                throw new Error("Customer not found");
+            const patch = {
                 ...updates,
                 updatedAt: new Date(),
-            })
+            };
+            if (updates.email !== undefined) {
+                patch.email = cleanOptional(updates.email)?.toLowerCase() || null;
+            }
+            if (updates.phone !== undefined) {
+                const telRaw = cleanOptional(updates.phone);
+                patch.phone = telRaw ? phoneDigits(telRaw) || telRaw.replace(/\D/g, "").slice(0, 15) || null : null;
+            }
+            const nextEmail = patch.email !== undefined ? patch.email : existing.email;
+            const nextPhone = patch.phone !== undefined ? patch.phone : existing.phone;
+            await this.assertCustomerContactAvailable(merchantId, { email: nextEmail, phone: nextPhone }, customerId);
+            const customer = await db
+                .update(db_1.schema.customers)
+                .set(patch)
                 .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.id, customerId), (0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchantId)))
                 .returning();
             if (customer.length === 0) {

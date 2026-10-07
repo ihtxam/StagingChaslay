@@ -53,6 +53,8 @@ import { isMarketingAutomationAddonEnabled } from "@/lib/marketing-automation-ad
 import { isSmartSegmentsAddonEnabled } from "@/lib/smart-segments-addon";
 import { isReservationCampaignsAddonEnabled } from "@/lib/reservation-campaigns-addon";
 import { isAiCoachAddonEnabled } from "@/lib/ai-coach-addon";
+import { isGoogleReputationAddonEnabled } from "@/lib/google-reputation-addon";
+import { isAiWebSeoAddonEnabled } from "@/lib/ai-web-seo-addon";
 import { normalizeShopSiteSettings, type ShopSiteSettings } from "@/lib/shop-site-settings";
 import {
   normalizeCustomerDisplaySettings,
@@ -169,6 +171,12 @@ export class MerchantSettingsService {
     const aiCoachOn = isAiCoachAddonEnabled(
       (merchant as { aiCoachAddonEnabled?: boolean }).aiCoachAddonEnabled
     );
+    const googleReputationOn = isGoogleReputationAddonEnabled(
+      (merchant as { googleReputationAddonEnabled?: boolean }).googleReputationAddonEnabled
+    );
+    const aiWebSeoOn = isAiWebSeoAddonEnabled(
+      (merchant as { aiWebSeoAddonEnabled?: boolean }).aiWebSeoAddonEnabled
+    );
 
     const shopHost = resolveShopPublicHost();
     const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
@@ -284,6 +292,8 @@ export class MerchantSettingsService {
       smartSegmentsAddonEnabled: smartSegmentsOn,
       reservationCampaignsAddonEnabled: reservationCampaignsOn,
       aiCoachAddonEnabled: aiCoachOn,
+      googleReputationAddonEnabled: googleReputationOn,
+      aiWebSeoAddonEnabled: aiWebSeoOn,
       inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
       inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
       inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),

@@ -202,6 +202,14 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS smart_segments_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
   ai_coach_cache:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_coach_cache jsonb NOT NULL DEFAULT '{}'::jsonb",
+  google_reputation_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS google_reputation_addon_enabled boolean NOT NULL DEFAULT false",
+  google_reputation_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS google_reputation_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
+  ai_web_seo_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_web_seo_addon_enabled boolean NOT NULL DEFAULT false",
+  ai_web_seo_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_web_seo_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
   customers_crm_tags:
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
   inventory_waste_factor:
@@ -1522,8 +1530,29 @@ export async function ensureAiCoachAddonColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
+export async function ensureGoogleReputationAddonColumn(): Promise<void> {
+  await runPatch("google_reputation_addon_enabled");
+  await runPatch("google_reputation_settings");
+  await ensureMerchantTables();
+}
+
+export async function ensureAiWebSeoAddonColumn(): Promise<void> {
+  await runPatch("ai_web_seo_addon_enabled");
+  await runPatch("ai_web_seo_settings");
+  await ensureMerchantTables();
+}
+
 export async function ensureCustomerCrmTagsColumn(): Promise<void> {
   await runPatch("customers_crm_tags");
+}
+
+/** Ensure optional customers columns (Guest CRM tags, etc.). */
+export async function ensureCustomersColumnsSchema(): Promise<void> {
+  await ensureCustomerCrmTagsColumn();
+}
+
+export async function ensureVouchersColumnsSchema(): Promise<void> {
+  await runPatch("vouchers_order_types");
 }
 
 export async function ensureOdsAddonColumn(): Promise<void> {
@@ -1755,23 +1784,49 @@ export async function backfillDefaultLocations(): Promise<void> {
   }
 }
 
-function isOrdersColumnSchemaError(raw: string): boolean {
+function mentionsOrdersTable(raw: string): boolean {
   return (
-    isMissingSchemaError(raw) &&
-    (/relation ["']?orders["']?/i.test(raw) ||
-      /from ["']?orders["']?/i.test(raw) ||
-      /column "[^"]+" of relation "orders"/i.test(raw) ||
-      /relation ["']?order_items["']?/i.test(raw) ||
-      /column "[^"]+" of relation "order_items"/i.test(raw))
+    /relation ["']?orders["']?/i.test(raw) ||
+    /from ["']?orders["']?/i.test(raw) ||
+    /"orders"\."orders"/i.test(raw) ||
+    /column "[^"]+" of relation "orders"/i.test(raw) ||
+    /relation ["']?order_items["']?/i.test(raw) ||
+    /column "[^"]+" of relation "order_items"/i.test(raw)
   );
 }
 
+function isOrdersColumnSchemaError(raw: string): boolean {
+  if (!mentionsOrdersTable(raw)) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
+}
+
 function isOrderItemsColumnSchemaError(raw: string): boolean {
+  if (
+    !/relation ["']?order_items["']?/i.test(raw) &&
+    !/column "[^"]+" of relation "order_items"/i.test(raw)
+  ) {
+    return false;
+  }
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
+}
+
+function mentionsCustomersTable(raw: string): boolean {
   return (
-    isMissingSchemaError(raw) &&
-    (/relation ["']?order_items["']?/i.test(raw) ||
-      /column "[^"]+" of relation "order_items"/i.test(raw))
+    /relation ["']?customers["']?/i.test(raw) ||
+    /from ["']?customers["']?/i.test(raw) ||
+    /"customers"\."customers"/i.test(raw) ||
+    /column "[^"]+" of relation "customers"/i.test(raw)
   );
+}
+
+function isCustomersColumnSchemaError(raw: string): boolean {
+  if (!mentionsCustomersTable(raw)) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
+}
+
+function isVouchersColumnSchemaError(raw: string): boolean {
+  if (!/vouchers/i.test(raw)) return false;
+  return isMissingSchemaError(raw) || /Failed query/i.test(raw);
 }
 
 const SHOP_CATEGORY_HEAL_COLUMNS = [
@@ -1946,6 +2001,8 @@ export async function ensureAllMerchantSchema(): Promise<{
   }
   await ensureOrdersColumnsSchema();
   await ensureOrderItemsColumnsSchema();
+  await ensureCustomersColumnsSchema();
+  await ensureVouchersColumnsSchema();
   await ensureMerchantTables();
   await ensureSubscriptionPlansSchema();
   await ensureLocationsSchema();
@@ -2126,6 +2183,8 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
       const locationsMissing = isLocationsSchemaError(raw);
       const merchantsColumnMissing = isMerchantsColumnSchemaError(raw);
       const ordersColumnMissing = isOrdersColumnSchemaError(raw);
+      const customersColumnMissing = isCustomersColumnSchemaError(raw);
+      const vouchersColumnMissing = isVouchersColumnSchemaError(raw);
       const subscriptionMissing = isSubscriptionSchemaError(raw);
       const posSessionsMissing = isPosSessionsSchemaError(raw);
       const chaslayPagebuilderMissing = isChaslayPagebuilderSchemaError(raw);
@@ -2150,6 +2209,10 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
         await ensureOrdersColumnsSchema();
         await ensureOrderItemsColumnsSchema();
         await runAlterTablePatches();
+      } else if (customersColumnMissing) {
+        await ensureCustomersColumnsSchema();
+      } else if (vouchersColumnMissing) {
+        await ensureVouchersColumnsSchema();
       } else if (catalogMissing) {
         await ensureShopCatalogColumnsSchema();
       } else if (chaslayPagebuilderMissing || inventoryTableMissing) {
@@ -2163,6 +2226,8 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
         !locationsMissing &&
         !merchantsColumnMissing &&
         !ordersColumnMissing &&
+        !customersColumnMissing &&
+        !vouchersColumnMissing &&
         !catalogMissing &&
         !subscriptionMissing &&
         !posSessionsMissing
@@ -2180,6 +2245,30 @@ export async function withMerchantSchemaRetry<T>(fn: () => Promise<T>): Promise<
  */
 export async function patchMerchantSchemaFromError(error: unknown): Promise<boolean> {
   const raw = dbErrorChain(error);
+  if (/Failed query/i.test(raw)) {
+    if (isCustomersColumnSchemaError(raw)) {
+      await ensureCustomersColumnsSchema();
+      return true;
+    }
+    if (isOrdersColumnSchemaError(raw) || isOrderItemsColumnSchemaError(raw)) {
+      await ensureOrdersColumnsSchema();
+      await ensureOrderItemsColumnsSchema();
+      await runAlterTablePatches();
+      return true;
+    }
+    if (isVouchersColumnSchemaError(raw)) {
+      await ensureVouchersColumnsSchema();
+      return true;
+    }
+    if (/gift_cards/i.test(raw) && mentionsCustomersTable(raw)) {
+      await ensureCustomersColumnsSchema();
+      return true;
+    }
+    if (isShopCatalogSchemaError(error)) {
+      await ensureShopCatalogColumnsSchema();
+      return true;
+    }
+  }
   if (!isMissingSchemaError(raw)) return false;
   if (isLocationsSchemaError(raw)) {
     await ensureLocationsSchema();
@@ -2206,6 +2295,14 @@ export async function patchMerchantSchemaFromError(error: unknown): Promise<bool
     await ensureOrdersColumnsSchema();
     await ensureOrderItemsColumnsSchema();
     await runAlterTablePatches();
+    return true;
+  }
+  if (isCustomersColumnSchemaError(raw)) {
+    await ensureCustomersColumnsSchema();
+    return true;
+  }
+  if (isVouchersColumnSchemaError(raw)) {
+    await ensureVouchersColumnsSchema();
     return true;
   }
   if (isShopCatalogSchemaError(error)) {

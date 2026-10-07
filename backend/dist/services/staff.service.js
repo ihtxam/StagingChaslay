@@ -54,6 +54,41 @@ class StaffService {
             message === this.NO_PASSWORD_LOGIN_MESSAGE ||
             message === this.NO_ENTRY_PERMISSION_MESSAGE);
     }
+    static normalizeStaffPhone(raw) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (!digits)
+            return null;
+        return digits.slice(0, 32);
+    }
+    static async assertStaffEmailAvailable(merchantId, email, exceptStaffId) {
+        if (!email)
+            return;
+        const db = (0, db_1.getDb)();
+        const owner = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { email: true },
+        });
+        if (owner?.email?.trim().toLowerCase() === email) {
+            throw new Error("Email already used by the merchant owner account");
+        }
+        const dup = await db.query.merchantStaff.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.email, email)),
+        });
+        if (dup && dup.id !== exceptStaffId) {
+            throw new Error("Email already used by another staff member");
+        }
+    }
+    static async assertStaffPhoneAvailable(merchantId, phone, exceptStaffId) {
+        if (!phone)
+            return;
+        const db = (0, db_1.getDb)();
+        const dup = await db.query.merchantStaff.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.phone, phone)),
+        });
+        if (dup && dup.id !== exceptStaffId) {
+            throw new Error("Phone number already used by another staff member");
+        }
+    }
     static async ensureDefaultRoles(merchantId) {
         const db = (0, db_1.getDb)();
         if (defaultRolesReady.has(merchantId)) {
@@ -239,16 +274,11 @@ class StaffService {
             });
             return;
         }
-        const perms = (0, permissions_1.parsePermissions)(existing.permissions);
-        const expected = (0, permissions_1.encodePermissions)(template.permissions);
-        if (!existing.isSystem ||
-            existing.sortOrder !== template.sortOrder ||
-            existing.permissions !== expected) {
+        if (!existing.isSystem || existing.sortOrder !== template.sortOrder) {
             await db
                 .update(db_1.schema.merchantRoles)
                 .set({
                 name: template.name,
-                permissions: expected,
                 isSystem: true,
                 sortOrder: template.sortOrder,
                 updatedAt: new Date(),
@@ -403,7 +433,7 @@ class StaffService {
                 .where((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.id, member.id));
         }
     }
-    /** Restore Cashier system role permissions (USE_WEBPOS, etc.) if stripped in older installs. */
+    /** Restore Cashier system role permissions only when core POS keys were stripped. */
     static async ensureCashierRolePermissions(merchantId) {
         const template = permissions_1.DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "cashier");
         if (!template)
@@ -414,36 +444,25 @@ class StaffService {
         });
         if (!role)
             return;
-        const expected = (0, permissions_1.encodePermissions)(template.permissions);
-        if (role.permissions === expected)
+        const current = (0, permissions_1.parsePermissions)(role.permissions);
+        const required = ["USE_WEBPOS", "USE_POS", "PROCESS_PAYMENTS"];
+        const missing = required.filter((p) => !current.includes(p));
+        if (!missing.length)
+            return;
+        const merged = (0, permissions_1.encodePermissions)([...new Set([...current, ...template.permissions])]);
+        if (role.permissions === merged)
             return;
         await db
             .update(db_1.schema.merchantRoles)
-            .set({ permissions: expected, updatedAt: new Date() })
+            .set({ permissions: merged, updatedAt: new Date() })
             .where((0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, role.id));
     }
     /**
-     * Strip full panel access from the system Storekeeper role.
-     * Mobile intake only — inventory managers should use a different role.
+     * Ensure Storekeeper role exists and login home is storekeeper app.
+     * Do not overwrite merchant-edited role permissions (Users & roles must persist).
      */
     static async enforceStorekeeperPanelRestrictions(merchantId) {
         await this.ensureStorekeeperSystemRole(merchantId);
-        const db = (0, db_1.getDb)();
-        const roles = await db.query.merchantRoles.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.isSystem, true)),
-        });
-        const template = permissions_1.DEFAULT_ROLE_TEMPLATES.find((t) => t.name.trim().toLowerCase() === "storekeeper");
-        const expected = template ? (0, permissions_1.encodePermissions)(template.permissions) : (0, permissions_1.encodePermissions)(["STOREKEEPER_INTAKE"]);
-        for (const role of roles) {
-            if (role.name.trim().toLowerCase() !== "storekeeper")
-                continue;
-            if (role.permissions !== expected) {
-                await db
-                    .update(db_1.schema.merchantRoles)
-                    .set({ permissions: expected, updatedAt: new Date() })
-                    .where((0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, role.id));
-            }
-        }
         await this.syncStorekeeperLoginHome(merchantId);
     }
     static async listRoles(merchantId) {
@@ -478,7 +497,6 @@ class StaffService {
             .where((0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, roleId))
             .returning();
         await this.enforceWaiterFloorRestrictions(merchantId);
-        await this.enforceStorekeeperPanelRestrictions(merchantId);
         return ((await db.query.merchantRoles.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, roleId),
         })) || row);
@@ -547,7 +565,9 @@ class StaffService {
                 email: s.email,
                 roleId: s.roleId,
                 roleName: role?.name || "Unknown",
-                permissions: (0, permissions_1.applyRolePermissionPolicy)(role?.name || "Unknown", (0, permissions_1.parsePermissions)(role?.permissions)),
+                permissions: (0, permissions_1.resolveStaffPermissions)(role?.name || "Unknown", role?.permissions, s.extraPermissions),
+                extraPermissions: (0, permissions_1.parsePermissions)(s.extraPermissions),
+                phone: s.phone || null,
                 canAccessPanel: s.canAccessPanel,
                 isActive: s.isActive,
                 pinSet: !!s.pinHash,
@@ -572,11 +592,11 @@ class StaffService {
             throw new Error("Invalid role");
         const email = input.email?.trim().toLowerCase() || null;
         if (email) {
-            const dup = await db.query.merchantStaff.findFirst({
-                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.email, email)),
-            });
-            if (dup)
-                throw new Error("Email already used by another staff member");
+            await this.assertStaffEmailAvailable(merchantId, email);
+        }
+        const phone = this.normalizeStaffPhone(input.phone);
+        if (phone) {
+            await this.assertStaffPhoneAvailable(merchantId, phone);
         }
         const pin = input.pin?.trim();
         if (pin && (pin.length < 4 || pin.length > 8)) {
@@ -607,11 +627,15 @@ class StaffService {
             roleId: input.roleId,
             name,
             email,
+            phone,
             pinHash: pin ? await auth_service_1.AuthService.hashPassword(pin) : null,
             pinDisplay: pin || null,
             passwordHash: password ? await auth_service_1.AuthService.hashPassword(password) : null,
             canAccessPanel,
             loginHome,
+            extraPermissions: input.extraPermissions !== undefined
+                ? (0, permissions_1.encodePermissions)((0, permissions_1.normalizePermissions)(input.extraPermissions))
+                : null,
             isActive: true,
         })
             .returning();
@@ -641,14 +665,19 @@ class StaffService {
         }
         if (input.email !== undefined) {
             const email = input.email?.trim().toLowerCase() || null;
-            if (email) {
-                const dup = await db.query.merchantStaff.findFirst({
-                    where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.merchantStaff.email, email)),
-                });
-                if (dup && dup.id !== staffId)
-                    throw new Error("Email already used");
-            }
+            await this.assertStaffEmailAvailable(merchantId, email, staffId);
             patch.email = email;
+        }
+        if (input.phone !== undefined) {
+            const phone = this.normalizeStaffPhone(input.phone);
+            await this.assertStaffPhoneAvailable(merchantId, phone, staffId);
+            patch.phone = phone;
+        }
+        if (input.extraPermissions !== undefined) {
+            patch.extraPermissions =
+                input.extraPermissions === null
+                    ? null
+                    : (0, permissions_1.encodePermissions)((0, permissions_1.normalizePermissions)(input.extraPermissions));
         }
         if (input.pin !== undefined) {
             if (input.pin === null || input.pin === "") {
@@ -802,7 +831,7 @@ class StaffService {
         const role = await db.query.merchantRoles.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, staff.roleId),
         });
-        const permissions = (0, permissions_1.applyRolePermissionPolicy)(role?.name || "Staff", (0, permissions_1.parsePermissions)(role?.permissions));
+        const permissions = (0, permissions_1.resolveStaffPermissions)(role?.name || "Staff", role?.permissions, staff.extraPermissions);
         const accessToken = auth_service_1.AuthService.generateToken({
             id: staff.id,
             email: staff.email || `${staff.id}@pin.local`,
@@ -837,7 +866,7 @@ class StaffService {
         const role = await db.query.merchantRoles.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, staff.roleId),
         });
-        const permissions = (0, permissions_1.applyRolePermissionPolicy)(role?.name || "Staff", (0, permissions_1.parsePermissions)(role?.permissions));
+        const permissions = (0, permissions_1.resolveStaffPermissions)(role?.name || "Staff", role?.permissions, staff.extraPermissions);
         return {
             id: staff.id,
             name: staff.name,
@@ -845,6 +874,7 @@ class StaffService {
             roleId: staff.roleId,
             roleName: role?.name || "Staff",
             permissions,
+            extraPermissions: (0, permissions_1.parsePermissions)(staff.extraPermissions),
             canAccessPanel: staff.canAccessPanel,
             loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(staff.loginHome),
             preferredTerminalId: staff.preferredTerminalId || null,
@@ -894,7 +924,7 @@ class StaffService {
         const role = await db.query.merchantRoles.findFirst({
             where: (0, drizzle_orm_1.eq)(db_1.schema.merchantRoles.id, staff.roleId),
         });
-        const permissions = (0, permissions_1.applyRolePermissionPolicy)(role?.name || "Staff", (0, permissions_1.parsePermissions)(role?.permissions));
+        const permissions = (0, permissions_1.resolveStaffPermissions)(role?.name || "Staff", role?.permissions, staff.extraPermissions);
         if (!(0, permissions_1.hasAnyPermission)(permissions, permissions_1.STAFF_MERCHANT_ENTRY_PERMISSIONS)) {
             throw new Error(this.NO_ENTRY_PERMISSION_MESSAGE);
         }
@@ -931,7 +961,9 @@ class StaffService {
             email: staff.email,
             roleId: staff.roleId,
             roleName: role.name,
-            permissions: (0, permissions_1.applyRolePermissionPolicy)(role.name, (0, permissions_1.parsePermissions)(role.permissions)),
+            permissions: (0, permissions_1.resolveStaffPermissions)(role.name, role.permissions, staff.extraPermissions),
+            extraPermissions: (0, permissions_1.parsePermissions)(staff.extraPermissions),
+            phone: staff.phone || null,
             canAccessPanel: staff.canAccessPanel,
             isActive: staff.isActive,
             pinSet: !!staff.pinHash,

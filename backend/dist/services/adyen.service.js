@@ -8,9 +8,16 @@ const axios_1 = __importDefault(require("axios"));
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
 const adyen_checkout_env_1 = require("@/lib/adyen-checkout-env");
+const shop_adyen_session_1 = require("@/lib/shop-adyen-session");
+const online_payment_refund_1 = require("@/lib/online-payment-refund");
 const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
 const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT;
+function isAdyenAlreadyReversed(err) {
+    const data = axios_1.default.isAxiosError(err) ? err.response?.data : null;
+    const raw = `${JSON.stringify(data || "")} ${err instanceof Error ? err.message : ""}`.toLowerCase();
+    return /already.*(refund|cancel|revers)|transaction already processed|payment already refunded/.test(raw);
+}
 const ADYEN_CLIENT_ID = process.env.ADYEN_CLIENT_ID;
 class AdyenService {
     static environmentFromClientKey(clientKey) {
@@ -56,16 +63,59 @@ class AdyenService {
         };
     }
     /**
+     * Logged-in shop account → Adyen shopperReference for CardOnFile.
+     * JWT-authenticated customers are tokenized even if passwordHash is missing.
+     * Guest CRM rows (no password, not authenticated) are not tokenized.
+     */
+    static async resolveShopAccountShopper(merchantId, customerId, opts) {
+        const id = String(customerId || "").trim();
+        if (!id)
+            return null;
+        const db = (0, db_1.getDb)();
+        const customer = await db.query.customers.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.customers.id, id), (0, drizzle_orm_1.eq)(db_1.schema.customers.merchantId, merchantId)),
+            columns: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                passwordHash: true,
+            },
+        });
+        if (!customer)
+            return null;
+        if (!opts?.authenticated && !customer.passwordHash)
+            return null;
+        return {
+            shopperReference: (0, shop_adyen_session_1.shopAdyenShopperReference)(merchantId, customer.id),
+            shopperEmail: customer.email || null,
+            shopperName: {
+                firstName: customer.firstName || null,
+                lastName: customer.lastName || null,
+            },
+        };
+    }
+    /**
      * Initialize Checkout /sessions for Drop-in (online shop + gift cards).
      * API base and Drop-in environment follow the merchant client key (test_ / live_),
      * not platform ADYEN_ENVIRONMENT. Do not send clientKey in the session body.
+     * POS terminal payments use processTerminalPayment / Terminal API — not this path.
      */
-    static async initializePaymentSession(merchantId, orderId, amount, currency = "CHF", returnUrl, origin) {
+    static async initializePaymentSession(merchantId, orderId, amount, currency = "CHF", returnUrl, origin, options) {
         try {
+            const db = (0, db_1.getDb)();
+            const merchant = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+                columns: { adyenStoreReference: true },
+            });
             const creds = await this.resolveCredentials(merchantId);
             const environment = this.environmentFromClientKey(creds.clientId);
             const apiBase = this.checkoutApiBase(creds.clientId);
-            const sessionPayload = {
+            const shopper = options?.shopper ||
+                (await this.resolveShopAccountShopper(merchantId, options?.customerId, {
+                    authenticated: options?.authenticated === true,
+                }));
+            const basePayload = (0, shop_adyen_session_1.applyWebCheckoutSessionOptions)({
                 amount: {
                     value: Math.round(amount * 100),
                     currency,
@@ -75,25 +125,44 @@ class AdyenService {
                 returnUrl: returnUrl || `${process.env.APP_URL || process.env.PUBLIC_APP_URL}/payment/return`,
                 channel: "Web",
                 countryCode: "CH",
-            };
-            // Drop-in origin is configured on the Adyen client key — /sessions rejects `origin`.
-            const response = await axios_1.default.post(`${apiBase}/sessions`, sessionPayload, {
-                headers: {
-                    "x-api-key": creds.apiKey,
-                    "Content-Type": "application/json",
-                },
-            });
-            const id = response.data?.id;
-            const sessionData = response.data?.sessionData;
+            }, merchant);
+            const attempts = (0, shop_adyen_session_1.buildShopCheckoutSessionAttempts)(basePayload, shopper);
+            let lastError;
+            let usedStored = false;
+            let responseData = null;
+            for (const attempt of attempts) {
+                try {
+                    const response = await axios_1.default.post(`${apiBase}/sessions`, attempt.payload, {
+                        headers: {
+                            "x-api-key": creds.apiKey,
+                            "Content-Type": "application/json",
+                        },
+                    });
+                    responseData = response.data;
+                    usedStored = attempt.stored;
+                    lastError = null;
+                    break;
+                }
+                catch (err) {
+                    lastError = err;
+                    console.warn("[adyen] /sessions attempt failed:", axios_1.default.isAxiosError(err) ? err.response?.data || err.message : err);
+                }
+            }
+            if (lastError || !responseData) {
+                throw lastError || new Error("Adyen session response was incomplete");
+            }
+            const id = responseData?.id;
+            const sessionData = responseData?.sessionData;
             if (!id || !sessionData) {
                 throw new Error("Adyen session response was incomplete");
             }
             return {
-                ...response.data,
+                ...responseData,
                 id,
                 sessionData,
                 clientKey: creds.clientId,
                 environment,
+                storePaymentMethod: usedStored,
             };
         }
         catch (error) {
@@ -277,6 +346,109 @@ class AdyenService {
             throw error;
         }
     }
+    static async findEcommercePspReference(merchantId, order) {
+        if ((0, online_payment_refund_1.isUsableAdyenPspReference)(order.adyenReference)) {
+            return String(order.adyenReference).trim();
+        }
+        const orderId = String(order.id || "").trim();
+        if (!orderId)
+            return null;
+        const db = (0, db_1.getDb)();
+        const txs = await db.query.paymentTransactions.findMany({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.paymentTransactions.orderId, orderId), (0, drizzle_orm_1.eq)(db_1.schema.paymentTransactions.merchantId, merchantId)),
+            orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.paymentTransactions.createdAt)],
+        });
+        for (const tx of txs) {
+            if (tx.adyenPoiTransactionTs)
+                continue;
+            if ((0, online_payment_refund_1.isUsableAdyenPspReference)(tx.adyenReference)) {
+                return String(tx.adyenReference).trim();
+            }
+        }
+        return null;
+    }
+    static async refundEcommercePayment(merchantId, pspReference, amount, currency = "CHF") {
+        const creds = await this.resolveCredentials(merchantId);
+        const apiBase = this.checkoutApiBase(creds.clientId);
+        const psp = String(pspReference || "").trim();
+        if (!(0, online_payment_refund_1.isUsableAdyenPspReference)(psp)) {
+            throw new Error("Missing Adyen payment reference for refund");
+        }
+        const headers = {
+            "x-api-key": creds.apiKey,
+            "Content-Type": "application/json",
+        };
+        const refundBody = {
+            merchantAccount: creds.merchantAccount,
+            amount: {
+                value: Math.round(amount * 100),
+                currency: currency || "CHF",
+            },
+            reference: `refund-${psp}`.slice(0, 80),
+        };
+        try {
+            const response = await axios_1.default.post(`${apiBase}/payments/${psp}/refunds`, refundBody, { headers });
+            return response.data;
+        }
+        catch (err) {
+            if (isAdyenAlreadyReversed(err))
+                return { alreadyReversed: true };
+            try {
+                const cancelRes = await axios_1.default.post(`${apiBase}/payments/${psp}/cancels`, {
+                    merchantAccount: creds.merchantAccount,
+                    reference: `cancel-${psp}`.slice(0, 80),
+                }, { headers });
+                return cancelRes.data;
+            }
+            catch (cancelErr) {
+                if (isAdyenAlreadyReversed(cancelErr))
+                    return { alreadyReversed: true };
+                throw err;
+            }
+        }
+    }
+    static async refundPaidOnlineOnCancel(merchantId, order) {
+        if (!(0, online_payment_refund_1.isPaidOnlineEcommerce)(order)) {
+            return { attempted: false, refunded: false, amount: 0 };
+        }
+        const amount = (0, online_payment_refund_1.remainingRefundableAmount)(order);
+        if (amount <= 0) {
+            return { attempted: false, refunded: true, amount: 0 };
+        }
+        const psp = await this.findEcommercePspReference(merchantId, order);
+        if (!psp) {
+            return {
+                attempted: true,
+                refunded: false,
+                amount,
+                error: "Cannot refund this online payment: Adyen reference is missing. The order was not cancelled.",
+            };
+        }
+        try {
+            await this.refundEcommercePayment(merchantId, psp, amount, "CHF");
+            try {
+                await this.recordPaymentTransaction(merchantId, String(order.id || ""), -amount, "refund", psp, "completed");
+            }
+            catch (logErr) {
+                console.warn("Online refund recorded at Adyen but transaction log failed:", logErr);
+            }
+            return { attempted: true, refunded: true, amount };
+        }
+        catch (err) {
+            const message = axios_1.default.isAxiosError(err)
+                ? String(err.response?.data?.message || err.message || "")
+                : err instanceof Error
+                    ? err.message
+                    : "Online payment refund failed";
+            console.error("Online payment refund on cancel failed:", err);
+            return {
+                attempted: true,
+                refunded: false,
+                amount,
+                error: `Online payment refund failed (${message}). The order was not cancelled.`,
+            };
+        }
+    }
     /**
      * Get merchant payment methods
      */
@@ -329,7 +501,7 @@ class AdyenService {
                 where: whereConditions.length > 0 ? (0, drizzle_orm_1.and)(...whereConditions) : undefined,
                 limit,
                 offset,
-                orderBy: [(0, drizzle_orm_2.desc)(db_1.schema.paymentTransactions.completedAt)],
+                orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.paymentTransactions.completedAt)],
             });
             return transactions;
         }
@@ -346,8 +518,8 @@ class AdyenService {
         try {
             let whereConditions = [(0, drizzle_orm_1.eq)(db_1.schema.paymentTransactions.merchantId, merchantId)];
             if (startDate && endDate) {
-                whereConditions.push((0, drizzle_orm_2.gte)(db_1.schema.paymentTransactions.completedAt, startDate));
-                whereConditions.push((0, drizzle_orm_2.lte)(db_1.schema.paymentTransactions.completedAt, endDate));
+                whereConditions.push((0, drizzle_orm_1.gte)(db_1.schema.paymentTransactions.completedAt, startDate));
+                whereConditions.push((0, drizzle_orm_1.lte)(db_1.schema.paymentTransactions.completedAt, endDate));
             }
             const transactions = await db.query.paymentTransactions.findMany({
                 where: whereConditions.length > 0 ? (0, drizzle_orm_1.and)(...whereConditions) : undefined,
@@ -375,6 +547,4 @@ class AdyenService {
     }
 }
 exports.AdyenService = AdyenService;
-// Import missing functions
-const drizzle_orm_2 = require("drizzle-orm");
 //# sourceMappingURL=adyen.service.js.map

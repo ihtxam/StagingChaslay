@@ -68,9 +68,11 @@ const signage_routes_1 = __importStar(require("@/routes/signage.routes"));
 const chaslay_1 = __importDefault(require("@/routes/chaslay"));
 const webhooks_routes_1 = __importDefault(require("@/routes/webhooks.routes"));
 const delivery_platform_routes_1 = __importDefault(require("@/routes/delivery-platform.routes"));
+const bexio_oauth_routes_1 = __importDefault(require("@/routes/bexio-oauth.routes"));
 const offers_routes_1 = __importDefault(require("@/routes/offers.routes"));
 const vouchers_routes_1 = __importDefault(require("@/routes/vouchers.routes"));
 const marketing_routes_1 = __importDefault(require("@/routes/marketing.routes"));
+const growth_routes_1 = __importDefault(require("@/routes/growth.routes"));
 const panel_routes_1 = __importDefault(require("@/routes/panel.routes"));
 const merchant_support_routes_1 = __importDefault(require("@/routes/merchant-support.routes"));
 const reseller_support_routes_1 = __importDefault(require("@/routes/reseller-support.routes"));
@@ -92,6 +94,7 @@ const brand_1 = require("@/lib/brand");
 const downloads_routes_1 = __importDefault(require("@/routes/downloads.routes"));
 const custom_domain_routes_1 = __importDefault(require("@/routes/custom-domain.routes"));
 const shop_host_middleware_1 = require("@/middleware/shop-host.middleware");
+const shop_spa_middleware_1 = require("@/middleware/shop-spa.middleware");
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -211,6 +214,7 @@ async function handleSchemaRepair(_req, res) {
             editionsMissing: result.editionsMissing,
             subscriptionPlansMissing: result.subscriptionPlansMissing,
             posSessionsMissing: result.posSessionsMissing,
+            chaslayHomepageRepair: result.chaslayHomepageRepair,
             timestamp: new Date().toISOString(),
         });
     }
@@ -252,6 +256,7 @@ app.get("/api/public/status", async (_req, res) => {
 });
 app.use(shop_host_middleware_1.shopHostMiddleware);
 app.use("/api/auth", auth_routes_1.default);
+app.use("/api/oauth/bexio", bexio_oauth_routes_1.default);
 app.use("/api/licensing", licensing_routes_1.default);
 app.use("/api/superadmin", superadmin_routes_1.default);
 app.use("/api/panel", panel_routes_1.default);
@@ -279,6 +284,7 @@ app.use("/api/merchant/reservations", reservations_routes_1.default);
 app.use("/api/merchant/offers", offers_routes_1.default);
 app.use("/api/merchant/vouchers", vouchers_routes_1.default);
 app.use("/api/merchant/marketing", marketing_routes_1.default);
+app.use("/api/merchant/growth", growth_routes_1.default);
 app.use("/api/merchant/inventory", inventory_routes_1.default);
 app.use("/api/merchant/storekeeper", storekeeper_routes_1.default);
 app.use("/api/merchant/delivery", delivery_tracking_routes_1.default);
@@ -301,6 +307,7 @@ app.use("/v1", chaslay_1.default);
 // ============================================================================
 // ERROR HANDLING
 // ============================================================================
+app.use(shop_spa_middleware_1.shopSpaShellMiddleware);
 app.use((_req, res) => {
     res.status(404).json({ error: "Route not found" });
 });

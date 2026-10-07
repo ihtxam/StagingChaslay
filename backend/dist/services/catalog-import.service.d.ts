@@ -35,7 +35,7 @@ export declare class CatalogImportService {
         errors: ImportRowError[];
     }>;
     private static importModifierGroupsSheet;
-    static buildTemplateBuffer(): Buffer;
+    static buildTemplateBuffer(merchantId: string): Promise<Buffer>;
     /** Export current categories + modifier groups + products to Excel (same columns as import template). */
     static exportWorkbook(merchantId: string): Promise<Buffer>;
 }

@@ -84,6 +84,7 @@ export declare class LoyaltyService {
             marketingOptIn: boolean;
             lastOrderAt: Date | null;
             lastReorderReminderAt: Date | null;
+            crmTags: string[];
         } | null;
     }[]>;
     /**

@@ -31,6 +31,8 @@ export declare function vacationPublicPayload(raw: VacationSettings | null | und
     popupTitle: string | LocalizedText | null | undefined;
     popupImageUrl: string | null | undefined;
     periods: VacationPeriod[] | undefined;
+    returnDate: string | null;
+    returnTime: string | null;
 };
 export declare const VACATION_BLOCK_MESSAGE = "We are currently on vacation. Online orders and reservations are temporarily unavailable.";
 export declare const NOT_ACCEPTING_ORDERS_MESSAGE = "We are not accepting orders at the moment, please call us";
