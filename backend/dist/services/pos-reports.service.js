@@ -5,6 +5,7 @@ exports.isCountableSale = isCountableSale;
 exports.resolveReportRange = resolveReportRange;
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const payment_breakdown_1 = require("@/lib/payment-breakdown");
 function zurichDayBounds(ymd) {
     const start = new Date(`${ymd}T00:00:00+02:00`);
@@ -164,9 +165,8 @@ class PosReportsService {
         else {
             range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
         }
-        const merchant = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
-        });
+        const merchantRaw = await (0, ensure_merchant_schema_1.loadMerchantRowById)(merchantId);
+        const merchant = merchantRaw;
         const money = (n) => Number(n) || 0;
         const rateTakeaway = money(merchant?.taxTakeawayRate) || money(merchant?.vatRate) || 2.6;
         const rateDineIn = money(merchant?.taxDineInRate) || money(merchant?.vatRate) || 8.1;

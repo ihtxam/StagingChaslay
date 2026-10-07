@@ -3,9 +3,15 @@ export type CatalogChannel = "pos" | "shop" | "qr_table" | "delivery" | "kiosk";
 export type CatalogVisibility = {
     channels: CatalogChannel[];
 };
+/** All channels stored in DB (legacy rows may still list delivery). */
 export declare const ALL_CATALOG_CHANNELS: CatalogChannel[];
+/** Channels shown in merchant UI — delivery is controlled via shop pickup/delivery settings. */
+export declare const CATALOG_VISIBILITY_UI_CHANNELS: CatalogChannel[];
 export declare const DEFAULT_CATALOG_VISIBILITY: CatalogVisibility;
 export declare function normalizeCatalogVisibility(raw: unknown): CatalogVisibility;
+/** Normalize schedule-menu / HQ menu channel list (delivery → shop). */
+export declare function normalizeMenuCatalogChannels(channels: unknown): string[];
+export declare function menuIncludesCatalogChannel(menuChannels: unknown, channel: CatalogChannel): boolean;
 export declare function isVisibleOnChannel(visibility: unknown, channel: CatalogChannel): boolean;
 export declare function productVisibleOnChannel(product: {
     visibility?: unknown;

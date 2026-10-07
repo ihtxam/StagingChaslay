@@ -22,8 +22,16 @@ export type PosPrinterProfile = {
     linkedProductIds?: string[];
 };
 export type PosPrintSettings = {
+    /** Store name printed large/bold at top of receipt header. */
+    receiptHeaderTitle?: string;
+    /** Address and other details printed below store name at normal size. */
     receiptHeader?: string;
     receiptFooter?: string;
+    /** Receipt header alignment: left, center (default), or right. */
+    receiptHeaderAlign?: "left" | "center" | "right";
+    receiptHeaderBold?: boolean;
+    /** Receipt header text scale: 1=normal, 2=double height, 3=double width+height */
+    receiptHeaderTextScale?: 1 | 2 | 3;
     kitchenTicketHeader?: string;
     kitchenTicketFooter?: string;
     /** Kitchen item text scale: 1=normal (plain), 2=double height, 3=double width+height */

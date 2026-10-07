@@ -578,8 +578,7 @@ class ChaslayCompatService {
                 card: merchant.webposCardEnabled !== false,
                 terminal: merchant.webposTerminalEnabled !== false && terminalReady,
                 tap_to_pay: tapToPayReady,
-                giftCard: merchant.webposGiftCardEnabled === true &&
-                    !!merchant.giftCardSettings?.enabled,
+                giftCard: merchant.webposGiftCardEnabled === true,
                 invoice: merchant.webposInvoiceEnabled !== false,
             },
             loyalty: (await Promise.resolve().then(() => __importStar(require("@/services/shop-loyalty.service")))).ShopLoyaltyService.programFromMerchant(merchant),

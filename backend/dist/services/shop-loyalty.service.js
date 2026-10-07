@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ShopLoyaltyService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 class ShopLoyaltyService {
     static programFromMerchant(merchant) {
         const earn = Number(merchant.loyaltyEarnPointsPerChf ?? 1);
@@ -100,7 +101,52 @@ class ShopLoyaltyService {
     }
     static computeEarnPoints(paidFoodSubtotalChf, earnPointsPerChf) {
         const base = Math.max(0, Number(paidFoodSubtotalChf) || 0);
-        return Math.floor(base * earnPointsPerChf);
+        const rate = Number(earnPointsPerChf) || 0;
+        if (rate <= 0)
+            return 0;
+        // Epsilon avoids float underflow (e.g. 3.80 * 1 → 3.799999) flooring to one less.
+        return Math.floor(base * rate + 1e-9);
+    }
+    /**
+     * Award shop fidelity for a paid order (cash at create, card/TWINT after Adyen confirm/webhook).
+     * Idempotent: skips when already earned, program off, guest, or paid food floors to 0 pts.
+     */
+    static async earnForPaidOrder(merchant, order) {
+        if (!order.customerId)
+            return order;
+        if ((order.pointsEarned || 0) > 0)
+            return order;
+        const program = this.programFromMerchant(merchant);
+        if (!program.enabled)
+            return order;
+        const subtotal = parseFloat(order.subtotal?.toString() || "0");
+        const pointsDiscount = parseFloat(order.pointsDiscount?.toString() || "0");
+        const delivery = parseFloat(order.deliveryFee?.toString() || "0");
+        const tip = parseFloat(order.tipAmount?.toString() || "0");
+        const cardFee = parseFloat(order.cardFee?.toString() || "0");
+        const total = parseFloat(order.total?.toString() || "0");
+        let paidFood = Math.max(0, subtotal - pointsDiscount);
+        if (paidFood <= 0 && total > 0) {
+            paidFood = Math.max(0, total - delivery - tip - cardFee - pointsDiscount);
+        }
+        const points = this.computeEarnPoints(paidFood, program.earnPointsPerChf);
+        if (points <= 0)
+            return order;
+        await this.earnPoints({
+            merchantId: merchant.id,
+            customerId: order.customerId,
+            orderId: order.id,
+            points,
+            expiryDays: program.expiryDays,
+            source: "earn",
+        });
+        const db = (0, db_1.getDb)();
+        const [updated] = await db
+            .update(db_1.schema.orders)
+            .set({ pointsEarned: points })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id))
+            .returning();
+        return updated || { ...order, pointsEarned: points };
     }
     static computeCashDiscount(points, redeemPointsPerChf) {
         const pts = Math.max(0, Math.floor(points));
@@ -185,10 +231,12 @@ class ShopLoyaltyService {
         return { balance: next, points: need };
     }
     static async listRewardProducts(merchantId, balance) {
-        const db = (0, db_1.getDb)();
-        const products = await db.query.products.findMany({
-            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true), (0, drizzle_orm_1.isNotNull)(db_1.schema.products.loyaltyRewardPoints), (0, drizzle_orm_1.gt)(db_1.schema.products.loyaltyRewardPoints, 0)),
-            orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.products.loyaltyRewardPoints), (0, drizzle_orm_1.asc)(db_1.schema.products.name)],
+        const products = await (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            return db.query.products.findMany({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true), (0, drizzle_orm_1.isNotNull)(db_1.schema.products.loyaltyRewardPoints), (0, drizzle_orm_1.gt)(db_1.schema.products.loyaltyRewardPoints, 0)),
+                orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.products.loyaltyRewardPoints), (0, drizzle_orm_1.asc)(db_1.schema.products.name)],
+            });
         });
         return products.map((p) => {
             const cost = Number(p.loyaltyRewardPoints) || 0;
@@ -206,7 +254,7 @@ class ShopLoyaltyService {
         const program = await this.getProgram(merchantId);
         // Always sync/show balance on account — earn/redeem still gated by program.enabled
         const balance = await this.getBalance(merchantId, customerId);
-        const rewards = program.enabled ? await this.listRewardProducts(merchantId, balance) : [];
+        const rewards = program.enabled ? await this.rewardProductsOrEmpty(merchantId, balance) : [];
         const unlocked = rewards.filter((r) => r.unlocked);
         const next = rewards.find((r) => !r.unlocked) || null;
         const nextCost = next?.loyaltyRewardPoints ?? null;
@@ -243,8 +291,18 @@ class ShopLoyaltyService {
     /** Public program + rewards (no customer) for menu bar when logged out. */
     static async getPublicLoyalty(merchantId) {
         const program = await this.getProgram(merchantId);
-        const rewards = program.enabled ? await this.listRewardProducts(merchantId, 0) : [];
+        const rewards = program.enabled ? await this.rewardProductsOrEmpty(merchantId, 0) : [];
         return { program, rewards };
+    }
+    /** Loyalty rewards are optional. A catalog schema error must not fail the shop menu. */
+    static async rewardProductsOrEmpty(merchantId, balance) {
+        try {
+            return await this.listRewardProducts(merchantId, balance);
+        }
+        catch (error) {
+            console.error("[shop] loyalty reward products failed:", error);
+            return [];
+        }
     }
 }
 exports.ShopLoyaltyService = ShopLoyaltyService;

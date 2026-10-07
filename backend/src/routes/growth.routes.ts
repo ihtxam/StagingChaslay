@@ -4,6 +4,8 @@ import { merchantHasMarketingAutomationLicense } from "@/lib/marketing-automatio
 import { merchantHasSmartSegmentsLicense } from "@/lib/smart-segments-addon";
 import { merchantHasReservationCampaignsLicense } from "@/lib/reservation-campaigns-addon";
 import { merchantHasAiCoachLicense } from "@/lib/ai-coach-addon";
+import { merchantHasGoogleReputationLicense } from "@/lib/google-reputation-addon";
+import { merchantHasAiWebSeoLicense } from "@/lib/ai-web-seo-addon";
 
 const router = Router();
 
@@ -126,6 +128,94 @@ router.post("/ai-coach/refresh", async (req: Request, res: Response) => {
     const { AiCoachService } = await import("@/services/ai-coach.service");
     const brief = await AiCoachService.regenerate(req.merchantId!);
     res.json({ success: true, brief });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.get("/google-reputation/settings", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasGoogleReputationLicense(req.merchantId!), "GOOGLE_REPUTATION_ADDON", "Google reputation", res))) return;
+    const { GoogleReputationService } = await import("@/services/google-reputation.service");
+    const settings = await GoogleReputationService.getSettings(req.merchantId!);
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.put("/google-reputation/settings", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasGoogleReputationLicense(req.merchantId!), "GOOGLE_REPUTATION_ADDON", "Google reputation", res))) return;
+    const { GoogleReputationService } = await import("@/services/google-reputation.service");
+    const settings = await GoogleReputationService.updateSettings(req.merchantId!, req.body?.settings || req.body);
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.post("/google-reputation/reviews", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasGoogleReputationLicense(req.merchantId!), "GOOGLE_REPUTATION_ADDON", "Google reputation", res))) return;
+    const { GoogleReputationService } = await import("@/services/google-reputation.service");
+    const result = await GoogleReputationService.addReview(req.merchantId!, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.post("/google-reputation/reviews/:reviewId/draft-reply", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasGoogleReputationLicense(req.merchantId!), "GOOGLE_REPUTATION_ADDON", "Google reputation", res))) return;
+    const { GoogleReputationService } = await import("@/services/google-reputation.service");
+    const settings = await GoogleReputationService.draftReplyForReview(req.merchantId!, req.params.reviewId);
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.post("/google-reputation/reviews/:reviewId/mark-replied", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasGoogleReputationLicense(req.merchantId!), "GOOGLE_REPUTATION_ADDON", "Google reputation", res))) return;
+    const { GoogleReputationService } = await import("@/services/google-reputation.service");
+    const settings = await GoogleReputationService.markReplied(req.merchantId!, req.params.reviewId);
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.get("/ai-web-seo/settings", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasAiWebSeoLicense(req.merchantId!), "AI_WEB_SEO_ADDON", "AI website & SEO", res))) return;
+    const { AiWebSeoService } = await import("@/services/ai-web-seo.service");
+    const settings = await AiWebSeoService.getSettings(req.merchantId!);
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.put("/ai-web-seo/settings", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasAiWebSeoLicense(req.merchantId!), "AI_WEB_SEO_ADDON", "AI website & SEO", res))) return;
+    const { AiWebSeoService } = await import("@/services/ai-web-seo.service");
+    const settings = await AiWebSeoService.updateSettings(req.merchantId!, req.body?.settings || req.body);
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+router.post("/ai-web-seo/scan", async (req: Request, res: Response) => {
+  try {
+    if (!(await denyUnless(() => merchantHasAiWebSeoLicense(req.merchantId!), "AI_WEB_SEO_ADDON", "AI website & SEO", res))) return;
+    const { AiWebSeoService } = await import("@/services/ai-web-seo.service");
+    const settings = await AiWebSeoService.runScan(req.merchantId!);
+    res.json({ success: true, settings });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : "Failed" });
   }

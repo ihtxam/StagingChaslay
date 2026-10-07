@@ -83,6 +83,7 @@ export declare class OffersService {
         visibility: {
             channels: string[];
         };
+        shopSchedule: Record<string, unknown>;
         deliveryPricingEnabled: boolean;
         extraDeliveryPrice: string | null;
         clientId: string | null;
@@ -242,6 +243,33 @@ export declare class OffersService {
     };
     /** Seed a few sensible demo offers for merchants. */
     static seedDemoOffers(merchantId: string, categoryIds?: string[]): Promise<{
+        id: string;
+        name: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        merchantId: string;
+        sortOrder: number;
+        description: string | null;
+        channels: string[];
+        categoryIds: string[];
+        productIds: string[];
+        daysOfWeek: string[];
+        timeStart: string | null;
+        timeEnd: string | null;
+        offerType: string;
+        rules: schema.OfferRules;
+        staffIds: string[];
+        scheduleMode: string;
+        validFrom: Date | null;
+        validTo: Date | null;
+        featured: boolean;
+        badgeLabel: string | null;
+        priority: number;
+        stackable: boolean;
+    }[]>;
+    /** Restaurant playbooks including cart free gifts (skips if any offer exists). */
+    static seedRestaurantTemplates(merchantId: string, categoryIds?: string[]): Promise<{
         id: string;
         name: string;
         isActive: boolean;

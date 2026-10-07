@@ -28,6 +28,13 @@ export type FiskalyDeSignResult = {
     tssSerial: string | null;
     raw: Record<string, unknown>;
 };
+export type FiskalyDeProvisionResult = {
+    tssId: string;
+    clientId: string;
+    clientSerial: string;
+    adminPin: string;
+    tssSerial: string | null;
+};
 /** Map tax rate % to Fiskaly SIGN DE vat_rate enum. */
 export declare function mapVatRateToFiskalyDe(ratePercent: number): FiskalyDeVatRate;
 /** Map POS payment method to Fiskaly payment_type. */
@@ -35,6 +42,11 @@ export declare function mapPaymentMethodToFiskalyDe(method: string): FiskalyDePa
 export declare class FiskalyDeService {
     static authenticate(apiKey: string, apiSecret: string, environment?: FiskalyEnvironment): Promise<string>;
     static testConnection(de: FiskalyDeSettings, environment: FiskalyEnvironment): Promise<void>;
+    /** Create + initialize a cloud TSS and register one POS client (SIGN DE quick start). */
+    static provisionCloudTssAndClient(de: Pick<FiskalyDeSettings, "apiKey" | "apiSecret">, environment: FiskalyEnvironment, opts?: {
+        clientSerial?: string;
+        description?: string;
+    }): Promise<FiskalyDeProvisionResult>;
     static signTransaction(opts: {
         de: FiskalyDeSettings;
         environment: FiskalyEnvironment;

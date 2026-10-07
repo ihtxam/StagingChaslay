@@ -3,6 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ModifierService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
+const catering_config_1 = require("@/lib/catering-config");
+function normalizePriceScope(raw) {
+    return (0, catering_config_1.normalizeModifierPriceScope)(raw);
+}
 function normalizePricing(type) {
     if (type === "free" || type === "toppings_by_size")
         return type;
@@ -86,6 +90,7 @@ class ModifierService {
             maxSelectable,
             defaultCollapsed: !!input.defaultCollapsed,
             allowMultipleSameItem: !!input.allowMultipleSameItem,
+            priceScope: normalizePriceScope(input.priceScope),
             sortOrder: Number(input.sortOrder) || 0,
         })
             .returning();
@@ -121,6 +126,9 @@ class ModifierService {
             allowMultipleSameItem: input.allowMultipleSameItem !== undefined
                 ? !!input.allowMultipleSameItem
                 : existing.allowMultipleSameItem,
+            priceScope: input.priceScope !== undefined
+                ? normalizePriceScope(String(input.priceScope))
+                : normalizePriceScope(existing.priceScope),
             sortOrder: input.sortOrder !== undefined ? Number(input.sortOrder) || 0 : existing.sortOrder,
             updatedAt: new Date(),
         })
@@ -329,6 +337,7 @@ class ModifierService {
             maxSelectable: g.maxSelectable,
             defaultCollapsed: !!g.defaultCollapsed,
             allowMultipleSameItem: !!g.allowMultipleSameItem,
+            priceScope: normalizePriceScope(g.priceScope),
             sortOrder: g.sortOrder ?? 0,
             isActive: g.isActive !== false,
             options,

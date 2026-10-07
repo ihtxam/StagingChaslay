@@ -314,6 +314,36 @@ router.put("/platform-settings/mailco", async (req, res) => {
     }
 });
 /**
+ * GET /api/superadmin/platform-settings/legal
+ */
+router.get("/platform-settings/legal", async (_req, res) => {
+    try {
+        const legal = await platform_settings_service_1.PlatformSettingsService.getPlatformLegalUrls();
+        res.json({ success: true, legal });
+    }
+    catch (error) {
+        console.error("Error getting platform legal settings:", error);
+        res.status(500).json({
+            error: error instanceof Error ? error.message : "Failed to load platform legal settings",
+        });
+    }
+});
+/**
+ * PUT /api/superadmin/platform-settings/legal
+ */
+router.put("/platform-settings/legal", async (req, res) => {
+    try {
+        const legal = await platform_settings_service_1.PlatformSettingsService.updatePlatformLegalUrls(req.body || {});
+        res.json({ success: true, legal });
+    }
+    catch (error) {
+        console.error("Error updating platform legal settings:", error);
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to save platform legal settings",
+        });
+    }
+});
+/**
  * GET /api/superadmin/email/usage — platform email send statistics
  */
 router.get("/email/usage", async (_req, res) => {
@@ -465,7 +495,7 @@ router.post("/merchants/:merchantId/impersonate", async (req, res) => {
  */
 router.post("/merchants", async (req, res) => {
     try {
-        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, kioskAddonEnabled, } = req.body;
+        const { email, password, businessName, contactName, phone, address, city, country, slug, shopEnabled, subscriptionPlan, status, deviceSeats, licenseType, customDays, editionId, resellerId, businessCategory, maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, kioskAddonEnabled, bexioAddonEnabled, odooAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, } = req.body;
         if (!email || !password || !businessName) {
             return res.status(400).json({ error: "Email, password, and business name are required" });
         }
@@ -491,6 +521,14 @@ router.post("/merchants", async (req, res) => {
             deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
             storekeeperAddonEnabled: (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(storekeeperAddonEnabled),
             kioskAddonEnabled: (0, kiosk_addon_1.isKioskAddonEnabled)(kioskAddonEnabled),
+            bexioAddonEnabled: bexioAddonEnabled === true,
+            odooAddonEnabled: odooAddonEnabled === true,
+            growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
+            guestCrmAddonEnabled: guestCrmAddonEnabled === true,
+            marketingAutomationAddonEnabled: marketingAutomationAddonEnabled === true,
+            smartSegmentsAddonEnabled: smartSegmentsAddonEnabled === true,
+            reservationCampaignsAddonEnabled: reservationCampaignsAddonEnabled === true,
+            aiCoachAddonEnabled: aiCoachAddonEnabled === true,
         });
         res.status(201).json({
             success: true,
@@ -553,9 +591,17 @@ router.put("/merchants/:merchantId", async (req, res) => {
             updates.odsAddonEnabled != null ||
             updates.odsEnabled != null ||
             updates.deliveryPlatformsAddonEnabled != null ||
+            updates.bexioAddonEnabled != null ||
+            updates.odooAddonEnabled != null ||
             updates.storekeeperAddonEnabled != null ||
             updates.kioskAddonEnabled != null ||
-            updates.kioskEnabled != null) {
+            updates.kioskEnabled != null ||
+            updates.growthAnalyticsAddonEnabled != null ||
+            updates.guestCrmAddonEnabled != null ||
+            updates.marketingAutomationAddonEnabled != null ||
+            updates.smartSegmentsAddonEnabled != null ||
+            updates.reservationCampaignsAddonEnabled != null ||
+            updates.aiCoachAddonEnabled != null) {
             await merchant_service_1.MerchantService.updatePosPostLimits(merchantId, {
                 maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
                 maxWaiterPosts: updates.maxWaiterPosts != null ? Number(updates.maxWaiterPosts) : undefined,
@@ -586,6 +632,8 @@ router.put("/merchants/:merchantId", async (req, res) => {
                 deliveryPlatformsAddonEnabled: updates.deliveryPlatformsAddonEnabled != null
                     ? updates.deliveryPlatformsAddonEnabled === true
                     : undefined,
+                bexioAddonEnabled: updates.bexioAddonEnabled != null ? updates.bexioAddonEnabled === true : undefined,
+                odooAddonEnabled: updates.odooAddonEnabled != null ? updates.odooAddonEnabled === true : undefined,
                 storekeeperAddonEnabled: updates.storekeeperAddonEnabled != null
                     ? (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(updates.storekeeperAddonEnabled)
                     : undefined,
@@ -594,6 +642,22 @@ router.put("/merchants/:merchantId", async (req, res) => {
                     : updates.kioskEnabled != null
                         ? (0, kiosk_addon_1.isKioskAddonEnabled)(updates.kioskEnabled)
                         : undefined,
+                growthAnalyticsAddonEnabled: updates.growthAnalyticsAddonEnabled != null
+                    ? updates.growthAnalyticsAddonEnabled === true
+                    : undefined,
+                guestCrmAddonEnabled: updates.guestCrmAddonEnabled != null
+                    ? updates.guestCrmAddonEnabled === true
+                    : undefined,
+                marketingAutomationAddonEnabled: updates.marketingAutomationAddonEnabled != null
+                    ? updates.marketingAutomationAddonEnabled === true
+                    : undefined,
+                smartSegmentsAddonEnabled: updates.smartSegmentsAddonEnabled != null
+                    ? updates.smartSegmentsAddonEnabled === true
+                    : undefined,
+                reservationCampaignsAddonEnabled: updates.reservationCampaignsAddonEnabled != null
+                    ? updates.reservationCampaignsAddonEnabled === true
+                    : undefined,
+                aiCoachAddonEnabled: updates.aiCoachAddonEnabled != null ? updates.aiCoachAddonEnabled === true : undefined,
             });
             delete updates.maxPosPosts;
             delete updates.maxWaiterPosts;
@@ -608,9 +672,17 @@ router.put("/merchants/:merchantId", async (req, res) => {
             delete updates.odsAddonEnabled;
             delete updates.odsEnabled;
             delete updates.deliveryPlatformsAddonEnabled;
+            delete updates.bexioAddonEnabled;
+            delete updates.odooAddonEnabled;
             delete updates.storekeeperAddonEnabled;
             delete updates.kioskAddonEnabled;
             delete updates.kioskEnabled;
+            delete updates.growthAnalyticsAddonEnabled;
+            delete updates.guestCrmAddonEnabled;
+            delete updates.marketingAutomationAddonEnabled;
+            delete updates.smartSegmentsAddonEnabled;
+            delete updates.reservationCampaignsAddonEnabled;
+            delete updates.aiCoachAddonEnabled;
         }
         const merchant = Object.keys(updates).length > 0
             ? await merchant_service_1.MerchantService.updateMerchant(merchantId, updates)

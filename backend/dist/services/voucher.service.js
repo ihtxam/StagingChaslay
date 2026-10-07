@@ -4,6 +4,7 @@ exports.VoucherService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
 const db_1 = require("@/db");
 const money_1 = require("@/lib/money");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const VOUCHER_ORDER_TYPES = new Set(["takeaway", "delivery", "dine_in"]);
 class VoucherService {
     static normalizeCode(code) {
@@ -24,15 +25,17 @@ class VoucherService {
         return types.includes(ch);
     }
     static async list(merchantId) {
-        const db = (0, db_1.getDb)();
-        const rows = await db.query.vouchers.findMany({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.vouchers.merchantId, merchantId),
-            orderBy: (0, drizzle_orm_1.desc)(db_1.schema.vouchers.createdAt),
-            with: {
-                customer: { columns: { id: true, email: true, firstName: true, lastName: true } },
-            },
+        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(async () => {
+            const db = (0, db_1.getDb)();
+            const rows = await db.query.vouchers.findMany({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.vouchers.merchantId, merchantId),
+                orderBy: (0, drizzle_orm_1.desc)(db_1.schema.vouchers.createdAt),
+                with: {
+                    customer: { columns: { id: true, email: true, firstName: true, lastName: true } },
+                },
+            });
+            return rows.map((v) => this.serialize(v));
         });
-        return rows.map((v) => this.serialize(v));
     }
     static async getById(merchantId, voucherId) {
         const db = (0, db_1.getDb)();

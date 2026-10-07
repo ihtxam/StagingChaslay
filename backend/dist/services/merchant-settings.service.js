@@ -47,19 +47,31 @@ const pos_checkout_settings_1 = require("@/lib/pos-checkout-settings");
 const business_module_1 = require("@/lib/business-module");
 const table_qr_settings_1 = require("@/lib/table-qr-settings");
 const delivery_platform_settings_1 = require("@/lib/delivery-platform-settings");
+const accounting_integration_settings_1 = require("@/lib/accounting-integration-settings");
+const accounting_integration_addon_1 = require("@/lib/accounting-integration-addon");
 const inventory_addon_1 = require("@/lib/inventory-addon");
 const fiskaly_settings_1 = require("@/lib/fiskaly-settings");
 const storekeeper_addon_1 = require("@/lib/storekeeper-addon");
 const signage_addon_1 = require("@/lib/signage-addon");
 const kds_addon_1 = require("@/lib/kds-addon");
 const ods_addon_1 = require("@/lib/ods-addon");
+const gift_card_settings_1 = require("@/lib/gift-card-settings");
 const kiosk_addon_1 = require("@/lib/kiosk-addon");
+const growth_analytics_addon_1 = require("@/lib/growth-analytics-addon");
+const guest_crm_addon_1 = require("@/lib/guest-crm-addon");
+const marketing_automation_addon_1 = require("@/lib/marketing-automation-addon");
+const smart_segments_addon_1 = require("@/lib/smart-segments-addon");
+const reservation_campaigns_addon_1 = require("@/lib/reservation-campaigns-addon");
+const ai_coach_addon_1 = require("@/lib/ai-coach-addon");
+const google_reputation_addon_1 = require("@/lib/google-reputation-addon");
+const ai_web_seo_addon_1 = require("@/lib/ai-web-seo-addon");
 const shop_site_settings_1 = require("@/lib/shop-site-settings");
 const customer_display_settings_1 = require("@/lib/customer-display-settings");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const brand_1 = require("@/lib/brand");
 const merchant_product_flags_1 = require("@/lib/merchant-product-flags");
 const adyen_checkout_env_1 = require("@/lib/adyen-checkout-env");
+const merchant_settings_preserve_1 = require("@/lib/merchant-settings-preserve");
 function maskSecret(value) {
     if (!value)
         return null;
@@ -112,18 +124,16 @@ function normalizeTaxRatePercent(value, field) {
 }
 class MerchantSettingsService {
     static async getMerchantSettings(merchantId) {
-        return (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(() => this.buildMerchantSettings(merchantId));
+        return this.buildMerchantSettings(merchantId);
     }
     static async buildMerchantSettings(merchantId) {
         // Schema patches run at API startup. Do not re-run CREATE/ALTER here —
         // concurrent Settings loads were locking Postgres and leaving the panel spinning.
-        const db = (0, db_1.getDb)();
-        const merchant = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
-        });
-        if (!merchant) {
+        const merchantRaw = await (0, ensure_merchant_schema_1.loadMerchantRowById)(merchantId);
+        if (!merchantRaw) {
             throw new Error("Merchant not found");
         }
+        const merchant = merchantRaw;
         const inventoryOn = (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventoryAddonEnabled);
         const signage = {
             enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
@@ -133,8 +143,18 @@ class MerchantSettingsService {
         const odsOn = (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled);
         const justEatOn = merchant.justEatAddonEnabled === true;
         const uberEatsOn = merchant.uberEatsAddonEnabled === true;
+        const bexioOn = (0, accounting_integration_addon_1.isBexioAddonEnabled)(merchant.bexioAddonEnabled);
+        const odooOn = (0, accounting_integration_addon_1.isOdooAddonEnabled)(merchant.odooAddonEnabled);
         const storekeeperOn = (0, storekeeper_addon_1.isStorekeeperAddonEnabled)(merchant.storekeeperAddonEnabled);
         const kioskOn = (0, kiosk_addon_1.isKioskAddonEnabled)(merchant.kioskAddonEnabled);
+        const growthAnalyticsOn = (0, growth_analytics_addon_1.isGrowthAnalyticsAddonEnabled)(merchant.growthAnalyticsAddonEnabled);
+        const guestCrmOn = (0, guest_crm_addon_1.isGuestCrmAddonEnabled)(merchant.guestCrmAddonEnabled);
+        const marketingAutomationOn = (0, marketing_automation_addon_1.isMarketingAutomationAddonEnabled)(merchant.marketingAutomationAddonEnabled);
+        const smartSegmentsOn = (0, smart_segments_addon_1.isSmartSegmentsAddonEnabled)(merchant.smartSegmentsAddonEnabled);
+        const reservationCampaignsOn = (0, reservation_campaigns_addon_1.isReservationCampaignsAddonEnabled)(merchant.reservationCampaignsAddonEnabled);
+        const aiCoachOn = (0, ai_coach_addon_1.isAiCoachAddonEnabled)(merchant.aiCoachAddonEnabled);
+        const googleReputationOn = (0, google_reputation_addon_1.isGoogleReputationAddonEnabled)(merchant.googleReputationAddonEnabled);
+        const aiWebSeoOn = (0, ai_web_seo_addon_1.isAiWebSeoAddonEnabled)(merchant.aiWebSeoAddonEnabled);
         const shopHost = (0, brand_1.resolveShopPublicHost)();
         const apex = shopHost.replace(/^shop\./, "").replace(/^app\./, "");
         const shopRootUrl = (0, shop_public_urls_1.filterMerchantShopUrl)(merchant.slug ? `https://${shopHost}/${merchant.slug}` : null);
@@ -227,9 +247,20 @@ class MerchantSettingsService {
             justEatAddonEnabled: justEatOn,
             uberEatsAddonEnabled: uberEatsOn,
             deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
+            bexioAddonEnabled: bexioOn,
+            odooAddonEnabled: odooOn,
+            accountingAddonEnabled: bexioOn || odooOn,
             storekeeperAddonEnabled: storekeeperOn,
             kioskAddonEnabled: kioskOn,
             kioskEnabled: kioskOn,
+            growthAnalyticsAddonEnabled: growthAnalyticsOn,
+            guestCrmAddonEnabled: guestCrmOn,
+            marketingAutomationAddonEnabled: marketingAutomationOn,
+            smartSegmentsAddonEnabled: smartSegmentsOn,
+            reservationCampaignsAddonEnabled: reservationCampaignsOn,
+            aiCoachAddonEnabled: aiCoachOn,
+            googleReputationAddonEnabled: googleReputationOn,
+            aiWebSeoAddonEnabled: aiWebSeoOn,
             inventoryWasteFactor: Number(merchant.inventoryWasteFactor ?? 0.2) || 0.2,
             inventoryAutoReorderEmailEnabled: merchant.inventoryAutoReorderEmailEnabled === true,
             inventoryExpiryAlertDays: Math.max(1, Math.min(365, Number(merchant.inventoryExpiryAlertDays ?? 30) || 30)),
@@ -265,6 +296,7 @@ class MerchantSettingsService {
             adyenApiKeyMasked: maskSecret(merchant.adyenApiKey),
             adyenApiKeySet: !!merchant.adyenApiKey,
             adyenClientId: merchant.adyenClientId,
+            adyenStoreReference: merchant.adyenStoreReference || "",
             adyenHmacKeyMasked: maskSecret(merchant.adyenHmacKey),
             adyenHmacKeySet: !!merchant.adyenHmacKey,
             tapToPayEnabled: merchant.tapToPayEnabled === true,
@@ -291,8 +323,17 @@ class MerchantSettingsService {
             posPrintSettings: (0, pos_print_settings_1.normalizePosPrintSettings)(merchant.posPrintSettings),
             tableQrSettings: (0, table_qr_settings_1.normalizeTableQrSettings)(merchant.tableQrSettings),
             posCheckoutSettings: (0, pos_checkout_settings_1.normalizePosCheckoutSettings)(merchant.posCheckoutSettings),
-            customerDisplaySettings: (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(merchant.customerDisplaySettings),
+            customerDisplaySettings: await (async () => {
+                try {
+                    const { CdsService } = await Promise.resolve().then(() => __importStar(require("@/services/cds.service")));
+                    return await CdsService.getSettings(merchantId);
+                }
+                catch {
+                    return (0, customer_display_settings_1.normalizeCustomerDisplaySettings)(merchant.customerDisplaySettings);
+                }
+            })(),
             deliveryPlatformSettings: (0, delivery_platform_settings_1.getDeliveryPlatformPublic)(merchant.deliveryPlatformSettings),
+            accountingIntegrationSettings: (0, accounting_integration_settings_1.getAccountingIntegrationPublic)(merchant.accountingIntegrationSettings),
             status: merchant.status,
             subscriptionPlan: merchant.subscriptionPlan,
             editionId: merchant.editionId || null,
@@ -346,16 +387,25 @@ class MerchantSettingsService {
             patch.businessLicense = updates.businessLicense;
         if (updates.vatNumber !== undefined)
             patch.vatNumber = updates.vatNumber;
-        if (updates.vatRate !== undefined)
-            patch.vatRate = normalizeTaxRatePercent(updates.vatRate, "vatRate");
+        if (updates.vatRate !== undefined) {
+            const vatRate = (0, merchant_settings_preserve_1.incomingTaxRateOrPreserve)(updates.vatRate, "vatRate");
+            if (vatRate !== undefined)
+                patch.vatRate = vatRate;
+        }
         if (updates.taxTakeawayRate !== undefined) {
-            patch.taxTakeawayRate = normalizeTaxRatePercent(updates.taxTakeawayRate, "taxTakeawayRate");
+            const rate = (0, merchant_settings_preserve_1.incomingTaxRateOrPreserve)(updates.taxTakeawayRate, "taxTakeawayRate");
+            if (rate !== undefined)
+                patch.taxTakeawayRate = rate;
         }
         if (updates.taxDineInRate !== undefined) {
-            patch.taxDineInRate = normalizeTaxRatePercent(updates.taxDineInRate, "taxDineInRate");
+            const rate = (0, merchant_settings_preserve_1.incomingTaxRateOrPreserve)(updates.taxDineInRate, "taxDineInRate");
+            if (rate !== undefined)
+                patch.taxDineInRate = rate;
         }
         if (updates.taxDeliveryRate !== undefined) {
-            patch.taxDeliveryRate = normalizeTaxRatePercent(updates.taxDeliveryRate, "taxDeliveryRate");
+            const rate = (0, merchant_settings_preserve_1.incomingTaxRateOrPreserve)(updates.taxDeliveryRate, "taxDeliveryRate");
+            if (rate !== undefined)
+                patch.taxDeliveryRate = rate;
         }
         if (updates.taxIncludedInPrice !== undefined)
             patch.taxIncludedInPrice = !!updates.taxIncludedInPrice;
@@ -472,14 +522,22 @@ class MerchantSettingsService {
                 throw new Error("deliveryPerOrderFee must be >= 0");
             patch.deliveryPerOrderFee = n.toFixed(2);
         }
-        if (updates.adyenMerchantAccount !== undefined)
-            patch.adyenMerchantAccount = updates.adyenMerchantAccount;
-        if (updates.adyenClientId !== undefined) {
-            const clientKey = String(updates.adyenClientId || "").trim();
-            if (clientKey && !(0, adyen_checkout_env_1.isValidAdyenClientKey)(clientKey)) {
+        if ((0, merchant_settings_preserve_1.shouldWriteCredential)(updates.adyenMerchantAccount)) {
+            patch.adyenMerchantAccount = String(updates.adyenMerchantAccount).trim();
+        }
+        if (updates.adyenStoreReference !== undefined) {
+            const storeRef = String(updates.adyenStoreReference || "")
+                .trim()
+                .slice(0, 255);
+            if (storeRef)
+                patch.adyenStoreReference = storeRef;
+        }
+        if ((0, merchant_settings_preserve_1.shouldWriteCredential)(updates.adyenClientId)) {
+            const clientKey = String(updates.adyenClientId).trim();
+            if (!(0, adyen_checkout_env_1.isValidAdyenClientKey)(clientKey)) {
                 throw new Error("Client key must start with test_ or live_. Use the Client Key from Adyen Customer Area → Developers → Client settings — not the API key (AQE…).");
             }
-            patch.adyenClientId = clientKey || null;
+            patch.adyenClientId = clientKey;
         }
         if (updates.tapToPayEnabled !== undefined)
             patch.tapToPayEnabled = !!updates.tapToPayEnabled;
@@ -493,7 +551,8 @@ class MerchantSettingsService {
                 .replace(/\/.*$/, "")
                 .replace(/:+$/, "")
                 .slice(0, 255);
-            patch.adyenLiveUrlPrefix = prefix || null;
+            if (prefix)
+                patch.adyenLiveUrlPrefix = prefix;
         }
         if (updates.adyenLiveRegion !== undefined) {
             const region = String(updates.adyenLiveRegion || "EU").toUpperCase();
@@ -516,8 +575,19 @@ class MerchantSettingsService {
             patch.webposCardEnabled = !!updates.webposCardEnabled;
         if (updates.webposTerminalEnabled !== undefined)
             patch.webposTerminalEnabled = !!updates.webposTerminalEnabled;
-        if (updates.webposGiftCardEnabled !== undefined)
+        if (updates.webposGiftCardEnabled !== undefined) {
             patch.webposGiftCardEnabled = !!updates.webposGiftCardEnabled;
+            if (updates.webposGiftCardEnabled) {
+                const currentMerchant = await db.query.merchants.findFirst({
+                    where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+                    columns: { giftCardSettings: true },
+                });
+                const gc = (0, gift_card_settings_1.normalizeGiftCardSettings)(currentMerchant?.giftCardSettings);
+                if (!gc.enabled) {
+                    patch.giftCardSettings = { ...gc, enabled: true };
+                }
+            }
+        }
         if (updates.webposInvoiceEnabled !== undefined)
             patch.webposInvoiceEnabled = !!updates.webposInvoiceEnabled;
         if (updates.bankIban !== undefined) {
@@ -563,12 +633,11 @@ class MerchantSettingsService {
             }
             patch.shopLanguage = lang;
         }
-        // Only overwrite API key when a non-empty new value is provided (not the masked placeholder)
-        if (updates.adyenApiKey && !updates.adyenApiKey.includes("••••")) {
-            patch.adyenApiKey = updates.adyenApiKey;
+        if ((0, merchant_settings_preserve_1.shouldWriteCredential)(updates.adyenApiKey)) {
+            patch.adyenApiKey = String(updates.adyenApiKey).trim();
         }
-        if (updates.adyenHmacKey && !updates.adyenHmacKey.includes("••••")) {
-            patch.adyenHmacKey = updates.adyenHmacKey.trim();
+        if ((0, merchant_settings_preserve_1.shouldWriteCredential)(updates.adyenHmacKey)) {
+            patch.adyenHmacKey = String(updates.adyenHmacKey).trim();
         }
         if (updates.slug !== undefined) {
             patch.slug = normalizeSubdomain(updates.slug) || null;
@@ -711,6 +780,30 @@ class MerchantSettingsService {
             }
             patch.deliveryPlatformSettings = (0, delivery_platform_settings_1.applyProductionCredentialDefaults)(merged);
         }
+        if (updates.accountingIntegrationSettings !== undefined) {
+            const current = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+                columns: {
+                    accountingIntegrationSettings: true,
+                    bexioAddonEnabled: true,
+                    odooAddonEnabled: true,
+                },
+            });
+            const merged = (0, accounting_integration_settings_1.mergeAccountingIntegrationSettings)(current?.accountingIntegrationSettings, updates.accountingIntegrationSettings);
+            const before = (0, accounting_integration_settings_1.normalizeAccountingIntegrationSettings)(current?.accountingIntegrationSettings);
+            const after = (0, accounting_integration_settings_1.normalizeAccountingIntegrationSettings)(merged);
+            if (after.bexio?.enabled && !before.bexio?.enabled) {
+                if (!(0, accounting_integration_addon_1.isBexioAddonEnabled)(current?.bexioAddonEnabled)) {
+                    throw new Error("Bexio integration requires the Bexio add-on");
+                }
+            }
+            if (after.odoo?.enabled && !before.odoo?.enabled) {
+                if (!(0, accounting_integration_addon_1.isOdooAddonEnabled)(current?.odooAddonEnabled)) {
+                    throw new Error("Odoo integration requires the Odoo add-on");
+                }
+            }
+            patch.accountingIntegrationSettings = merged;
+        }
         // Auto-create slug when enabling shop without one
         if (updates.shopEnabled && !updates.slug) {
             const current = await db.query.merchants.findFirst({
@@ -845,15 +938,10 @@ class MerchantSettingsService {
         if (domain && host.endsWith(`.${domain}`)) {
             key = host.slice(0, -(domain.length + 1));
         }
-        // Custom apex / branded domain first (verified or legacy direct-save)
-        const byCustom = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.customDomain, host),
-        });
-        if (byCustom) {
-            const dns = String(byCustom.customDomainDnsStatus || "none").toLowerCase();
-            if (dns === "none" || dns === "verified")
-                return byCustom;
-        }
+        const { findMerchantByCustomDomainHost } = await Promise.resolve().then(() => __importStar(require("@/lib/custom-domain-lookup")));
+        const byCustom = await findMerchantByCustomDomainHost(host);
+        if (byCustom)
+            return byCustom;
         return db.query.merchants.findFirst({
             where: (0, drizzle_orm_1.or)((0, drizzle_orm_1.eq)(db_1.schema.merchants.subdomain, key), (0, drizzle_orm_1.eq)(db_1.schema.merchants.slug, key)),
         });

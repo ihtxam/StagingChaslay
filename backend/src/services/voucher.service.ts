@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { roundMoney2 } from "@/lib/money";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import type { VoucherDiscountType, VoucherUsageType } from "@/db/schema";
 
 export type VoucherOrderType = "takeaway" | "delivery" | "dine_in";
@@ -43,15 +44,17 @@ export class VoucherService {
   }
 
   static async list(merchantId: string) {
-    const db = getDb();
-    const rows = await db.query.vouchers.findMany({
-      where: eq(schema.vouchers.merchantId, merchantId),
-      orderBy: desc(schema.vouchers.createdAt),
-      with: {
-        customer: { columns: { id: true, email: true, firstName: true, lastName: true } },
-      },
+    return withMerchantSchemaRetry(async () => {
+      const db = getDb();
+      const rows = await db.query.vouchers.findMany({
+        where: eq(schema.vouchers.merchantId, merchantId),
+        orderBy: desc(schema.vouchers.createdAt),
+        with: {
+          customer: { columns: { id: true, email: true, firstName: true, lastName: true } },
+        },
+      });
+      return rows.map((v) => this.serialize(v));
     });
-    return rows.map((v) => this.serialize(v));
   }
 
   static async getById(merchantId: string, voucherId: string) {

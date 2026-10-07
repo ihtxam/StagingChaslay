@@ -1,3 +1,4 @@
+import { schema } from "@/db";
 /**
  * Shop fidelity formula (defaults):
  * - Earn: floor(paidFoodSubtotalCHF × earnPointsPerChf) — default 1 pt / CHF
@@ -40,6 +41,17 @@ export declare class ShopLoyaltyService {
     static syncBalanceCache(merchantId: string, customerId: string): Promise<number>;
     static getBalance(merchantId: string, customerId: string): Promise<number>;
     static computeEarnPoints(paidFoodSubtotalChf: number, earnPointsPerChf: number): number;
+    /**
+     * Award shop fidelity for a paid order (cash at create, card/TWINT after Adyen confirm/webhook).
+     * Idempotent: skips when already earned, program off, guest, or paid food floors to 0 pts.
+     */
+    static earnForPaidOrder(merchant: {
+        id: string;
+        loyaltyEnabled?: boolean | null;
+        loyaltyEarnPointsPerChf?: string | number | null;
+        loyaltyRedeemPointsPerChf?: number | null;
+        loyaltyPointsExpiryDays?: number | null;
+    }, order: typeof schema.orders.$inferSelect): Promise<typeof schema.orders.$inferSelect>;
     static computeCashDiscount(points: number, redeemPointsPerChf: number): {
         discountChf: number;
         pointsUsed: number;
@@ -102,5 +114,7 @@ export declare class ShopLoyaltyService {
         program: LoyaltyProgramSettings;
         rewards: LoyaltyRewardProduct[];
     }>;
+    /** Loyalty rewards are optional. A catalog schema error must not fail the shop menu. */
+    private static rewardProductsOrEmpty;
 }
 //# sourceMappingURL=shop-loyalty.service.d.ts.map

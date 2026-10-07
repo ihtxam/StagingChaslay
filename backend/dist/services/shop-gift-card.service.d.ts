@@ -15,6 +15,12 @@ export declare class ShopGiftCardService {
         minAmount: number;
         maxAmount: number;
         customAmountEnabled: boolean;
+        physicalPostFee: number;
+        serviceFeeFlat: number;
+        serviceFeePercent: number;
+        passCardFeeToCustomer: boolean;
+        cardFeePercent: number;
+        themes: string[];
     };
     /** Public balance lookup — returns balance + masked holder email */
     static lookupPublicBalance(merchantId: string, code: string): Promise<{
@@ -53,6 +59,8 @@ export declare class ShopGiftCardService {
         paymentMethod?: "card";
         origin?: string;
         shopPath?: string;
+        customerId?: string | null;
+        cardTheme?: string;
     }): Promise<{
         purchase: {
             id: string;
@@ -74,12 +82,18 @@ export declare class ShopGiftCardService {
             shippingZip: string | null;
             shippingCity: string | null;
             shippingCountry: string | null;
+            cardTheme: string | null;
+            shippingFee: string | null;
+            serviceFee: string | null;
+            paymentFee: string | null;
+            totalCharged: string | null;
             fulfillmentStatus: string | null;
             shippedAt: Date | null;
             fulfilledAt: Date | null;
         };
         paymentSession: Record<string, unknown>;
         amount: number;
+        breakdown: import("@/lib/gift-card-checkout").GiftCardCheckoutBreakdown;
     }>;
     static getPurchase(merchantId: string, purchaseId: string): Promise<{
         id: string;
@@ -101,6 +115,11 @@ export declare class ShopGiftCardService {
         shippingZip: string | null;
         shippingCity: string | null;
         shippingCountry: string | null;
+        cardTheme: string | null;
+        shippingFee: string | null;
+        serviceFee: string | null;
+        paymentFee: string | null;
+        totalCharged: string | null;
         fulfillmentStatus: string | null;
         shippedAt: Date | null;
         fulfilledAt: Date | null;
@@ -111,6 +130,11 @@ export declare class ShopGiftCardService {
     } | null): {
         id: string;
         amount: string;
+        totalCharged: string;
+        shippingFee: string | null;
+        serviceFee: string | null;
+        paymentFee: string | null;
+        cardTheme: string;
         deliveryType: string;
         recipientEmail: string;
         recipientName: string | null;
@@ -148,6 +172,11 @@ export declare class ShopGiftCardService {
             shippingZip: string | null;
             shippingCity: string | null;
             shippingCountry: string | null;
+            cardTheme: string | null;
+            shippingFee: string | null;
+            serviceFee: string | null;
+            paymentFee: string | null;
+            totalCharged: string | null;
             fulfillmentStatus: string | null;
             shippedAt: Date | null;
             adyenReference: string | null;
@@ -202,6 +231,11 @@ export declare class ShopGiftCardService {
         shippingZip: string | null;
         shippingCity: string | null;
         shippingCountry: string | null;
+        cardTheme: string | null;
+        shippingFee: string | null;
+        serviceFee: string | null;
+        paymentFee: string | null;
+        totalCharged: string | null;
         fulfillmentStatus: string | null;
         shippedAt: Date | null;
         fulfilledAt: Date | null;
@@ -227,6 +261,11 @@ export declare class ShopGiftCardService {
         shippingZip: string | null;
         shippingCity: string | null;
         shippingCountry: string | null;
+        cardTheme: string | null;
+        shippingFee: string | null;
+        serviceFee: string | null;
+        paymentFee: string | null;
+        totalCharged: string | null;
         fulfillmentStatus: string | null;
         shippedAt: Date | null;
         fulfilledAt: Date | null;

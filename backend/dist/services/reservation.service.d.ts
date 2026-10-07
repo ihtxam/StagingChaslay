@@ -17,6 +17,7 @@ export declare function resolveSettings(raw: ReservationSettings | null | undefi
 export declare function resolveDineInHours(storeHours: StoreHours | null | undefined, settings: ReturnType<typeof resolveSettings>): ChannelHours;
 /** Build a Date for a Zurich wall-clock YYYY-MM-DD + HH:mm */
 export declare function zurichLocalToDate(dateStr: string, hm: string): Date;
+export declare function assertReservationNotInPast(reservedAt: Date): void;
 export declare class ReservationService {
     static getSettingsForMerchant(merchant: {
         reservationsEnabled?: boolean | null;
@@ -148,6 +149,7 @@ export declare class ReservationService {
         tableId?: string | null;
         status?: ReservationStatus;
         skipSlotCheck?: boolean;
+        campaignCode?: string | null;
     }): Promise<{
         id: string;
         createdAt: Date;

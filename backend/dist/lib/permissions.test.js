@@ -33,10 +33,16 @@ const permissions_1 = require("./permissions");
 {
     const storekeeper = (0, permissions_1.applyRolePermissionPolicy)("Storekeeper", [
         "STOREKEEPER_INTAKE",
+        "STOREKEEPER_EDIT_INTAKE",
         "ACCESS_PANEL",
         "MANAGE_SETTINGS",
     ]);
-    strict_1.default.deepEqual(storekeeper, ["STOREKEEPER_INTAKE"]);
+    strict_1.default.deepEqual(storekeeper, ["STOREKEEPER_INTAKE", "STOREKEEPER_EDIT_INTAKE"]);
+}
+{
+    const rolePerms = (0, permissions_1.encodePermissions)(["STOREKEEPER_INTAKE"]);
+    const merged = (0, permissions_1.resolveStaffPermissions)("Storekeeper", rolePerms, "STOREKEEPER_EDIT_INTAKE");
+    strict_1.default.deepEqual(merged, ["STOREKEEPER_INTAKE", "STOREKEEPER_EDIT_INTAKE"]);
 }
 console.log("permissions: all assertions passed");
 //# sourceMappingURL=permissions.test.js.map

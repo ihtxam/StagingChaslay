@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdyenMerchantWebhookService = void 0;
 const drizzle_orm_1 = require("drizzle-orm");
@@ -27,6 +60,15 @@ function inferPaymentMethod(item, merchantReference) {
         return "tap_to_pay";
     if (interaction.toUpperCase() === "POS" || poi)
         return "terminal";
+    const raw = additional.paymentMethod ||
+        additional["paymentMethod"] ||
+        additional.paymentMethodVariant ||
+        item.paymentMethod;
+    const text = String(typeof raw === "object" && raw
+        ? raw.type || raw.brand || ""
+        : raw || "").toLowerCase();
+    if (text.includes("twint"))
+        return "twint";
     return "card";
 }
 class AdyenMerchantWebhookService {
@@ -125,6 +167,14 @@ class AdyenMerchantWebhookService {
                 break;
         }
     }
+    static purchaseIdFromReference(merchantId, merchantReference) {
+        const ref = merchantReference.trim();
+        if (!ref)
+            return null;
+        if (ref.startsWith(`${merchantId}-`))
+            return ref.slice(merchantId.length + 1);
+        return null;
+    }
     static async findOrderByReference(merchantId, merchantReference) {
         const db = (0, db_1.getDb)();
         const ref = merchantReference.trim();
@@ -135,7 +185,7 @@ class AdyenMerchantWebhookService {
         });
         if (byClientId)
             return byClientId;
-        const prefixed = ref.startsWith(`${merchantId}-`) ? ref.slice(merchantId.length + 1) : null;
+        const prefixed = this.purchaseIdFromReference(merchantId, ref);
         if (prefixed) {
             const byId = await db.query.orders.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.orders.id, prefixed)),
@@ -144,6 +194,15 @@ class AdyenMerchantWebhookService {
                 return byId;
         }
         return null;
+    }
+    static async findGiftCardPurchaseByReference(merchantId, merchantReference) {
+        const purchaseId = this.purchaseIdFromReference(merchantId, merchantReference);
+        if (!purchaseId)
+            return null;
+        const db = (0, db_1.getDb)();
+        return db.query.giftCardPurchases.findFirst({
+            where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.giftCardPurchases.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.giftCardPurchases.id, purchaseId)),
+        });
     }
     static async recordAuthorisedPayment(merchantId, merchantReference, pspReference, amount, currency, paymentMethod) {
         const db = (0, db_1.getDb)();
@@ -155,15 +214,50 @@ class AdyenMerchantWebhookService {
                 return;
         }
         const order = await this.findOrderByReference(merchantId, merchantReference);
-        if (order) {
-            const effectiveAmount = amount > 0 ? amount : Number(order.total) || 0;
-            try {
-                await adyen_service_1.AdyenService.recordPaymentTransaction(merchantId, order.id, effectiveAmount, paymentMethod, pspReference || `auth-${Date.now()}`, "captured", { currency });
+        if (!order) {
+            const purchase = await this.findGiftCardPurchaseByReference(merchantId, merchantReference);
+            if (purchase) {
+                if (purchase.paymentStatus === "completed")
+                    return;
+                const { ShopGiftCardService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-gift-card.service")));
+                await ShopGiftCardService.confirmPurchasePayment(merchantId, purchase.id, pspReference || purchase.adyenReference || undefined);
+                return;
             }
-            catch (err) {
-                console.warn("[adyen-webhook] recordPaymentTransaction failed:", err);
+            if (merchantReference) {
+                try {
+                    await adyen_service_1.AdyenService.recordPaymentTransactionByClientRef(merchantId, merchantReference, amount, paymentMethod, pspReference || `auth-${Date.now()}`, "captured", { currency });
+                }
+                catch (err) {
+                    console.warn("[adyen-webhook] recordPaymentTransactionByClientRef failed:", err);
+                }
             }
-            if (pspReference) {
+            return;
+        }
+        const effectiveAmount = amount > 0 ? amount : Number(order.total) || 0;
+        try {
+            await adyen_service_1.AdyenService.recordPaymentTransaction(merchantId, order.id, effectiveAmount, paymentMethod, pspReference || `auth-${Date.now()}`, "captured", { currency });
+        }
+        catch (err) {
+            console.warn("[adyen-webhook] recordPaymentTransaction failed:", err);
+        }
+        if (pspReference) {
+            const merchant = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            });
+            const isAwaitingShopCard = order.orderType === "web_shop" &&
+                order.paymentStatus === "awaiting_payment" &&
+                String(order.paymentMethod || "").toLowerCase() === "card" &&
+                (order.status === "awaiting_payment" ||
+                    order.status === "pending" ||
+                    order.status === "pending_approval");
+            if (isAwaitingShopCard && merchant) {
+                const { finalizePaidOnlineShopCardOrder } = await Promise.resolve().then(() => __importStar(require("@/services/shop-online-order-arrival.service")));
+                await finalizePaidOnlineShopCardOrder(merchant, order, {
+                    pspReference,
+                    adyenPaymentMethod: paymentMethod,
+                });
+            }
+            else {
                 await db
                     .update(db_1.schema.orders)
                     .set({
@@ -171,15 +265,19 @@ class AdyenMerchantWebhookService {
                     paymentStatus: order.paymentStatus === "awaiting_payment" ? "completed" : order.paymentStatus,
                 })
                     .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id));
-            }
-            return;
-        }
-        if (merchantReference) {
-            try {
-                await adyen_service_1.AdyenService.recordPaymentTransactionByClientRef(merchantId, merchantReference, amount, paymentMethod, pspReference || `auth-${Date.now()}`, "captured", { currency });
-            }
-            catch (err) {
-                console.warn("[adyen-webhook] recordPaymentTransactionByClientRef failed:", err);
+                if (merchant) {
+                    try {
+                        const { ShopLoyaltyService } = await Promise.resolve().then(() => __importStar(require("@/services/shop-loyalty.service")));
+                        const latest = await db.query.orders.findFirst({
+                            where: (0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id),
+                        });
+                        if (latest)
+                            await ShopLoyaltyService.earnForPaidOrder(merchant, latest);
+                    }
+                    catch (earnErr) {
+                        console.error("[adyen-webhook] loyalty earn failed:", earnErr);
+                    }
+                }
             }
         }
     }
@@ -202,16 +300,26 @@ class AdyenMerchantWebhookService {
         }
     }
     static async markOrderPaymentFailed(merchantId, merchantReference) {
-        const order = await this.findOrderByReference(merchantId, merchantReference);
-        if (!order)
-            return;
-        if (order.paymentStatus === "completed" || order.paymentStatus === "paid")
-            return;
         const db = (0, db_1.getDb)();
+        const order = await this.findOrderByReference(merchantId, merchantReference);
+        if (order) {
+            if (order.paymentStatus === "completed" || order.paymentStatus === "paid")
+                return;
+            await db
+                .update(db_1.schema.orders)
+                .set({ paymentStatus: "failed" })
+                .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id));
+            return;
+        }
+        const purchase = await this.findGiftCardPurchaseByReference(merchantId, merchantReference);
+        if (!purchase)
+            return;
+        if (purchase.paymentStatus === "completed")
+            return;
         await db
-            .update(db_1.schema.orders)
-            .set({ paymentStatus: "failed" })
-            .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, order.id));
+            .update(db_1.schema.giftCardPurchases)
+            .set({ paymentStatus: "failed", updatedAt: new Date() })
+            .where((0, drizzle_orm_1.eq)(db_1.schema.giftCardPurchases.id, purchase.id));
     }
 }
 exports.AdyenMerchantWebhookService = AdyenMerchantWebhookService;

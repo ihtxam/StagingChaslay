@@ -13,7 +13,13 @@ exports.PANEL_NAV_GROUP_PATHS = {
         "/merchant/sales/reservations",
         "/merchant/reports",
     ],
-    catalog: ["/merchant/products", "/merchant/categories", "/merchant/modifiers"],
+    catalog: [
+        "/merchant/products",
+        "/merchant/categories",
+        "/merchant/modifiers",
+        "/merchant/products/scheduled-menus",
+        "/merchant/products/pizza-builder",
+    ],
     hq: ["/merchant/hq", "/merchant/hq/menus", "/merchant/hq/bulk-pricing"],
     inventory: [
         "/merchant/inventory",

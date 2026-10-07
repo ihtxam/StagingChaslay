@@ -38,6 +38,7 @@ exports.normalizeReservationSettings = normalizeReservationSettings;
 exports.resolveSettings = resolveSettings;
 exports.resolveDineInHours = resolveDineInHours;
 exports.zurichLocalToDate = zurichLocalToDate;
+exports.assertReservationNotInPast = assertReservationNotInPast;
 const drizzle_orm_1 = require("drizzle-orm");
 const crypto_1 = require("crypto");
 const db_1 = require("@/db");
@@ -250,6 +251,14 @@ function matchSlotDiscount(settings, reservedAt) {
 function makeCode() {
     return `RES-${Date.now().toString(36).toUpperCase().slice(-6)}-${(0, crypto_1.randomUUID)().slice(0, 4).toUpperCase()}`;
 }
+function assertReservationNotInPast(reservedAt) {
+    if (Number.isNaN(reservedAt.getTime())) {
+        throw new Error("Invalid reservation time");
+    }
+    if (reservedAt.getTime() < Date.now() - 60000) {
+        throw new Error("Cannot book a time in the past");
+    }
+}
 async function getMerchant(merchantId) {
     const db = (0, db_1.getDb)();
     const merchant = await db.query.merchants.findFirst({
@@ -437,11 +446,7 @@ class ReservationService {
             throw new Error(`Party size must be between ${settings.minPartySize} and ${settings.maxPartySize}`);
         }
         const reservedAt = input.reservedAt instanceof Date ? input.reservedAt : new Date(input.reservedAt);
-        if (Number.isNaN(reservedAt.getTime()))
-            throw new Error("Invalid reservation time");
-        if (reservedAt.getTime() < Date.now() - 60000) {
-            throw new Error("Cannot book a time in the past");
-        }
+        assertReservationNotInPast(reservedAt);
         if (input.source === "web" || !input.skipSlotCheck) {
             const dateYmd = formatZurichDate(reservedAt);
             const hm = formatZurichHm(reservedAt);
@@ -527,6 +532,27 @@ class ReservationService {
         }
         if (status === "confirmed") {
             await ReservationService.enqueuePosAlert(merchantId, row.id);
+        }
+        if (input.campaignCode) {
+            try {
+                const { ReservationCampaignsService } = await Promise.resolve().then(() => __importStar(require("@/services/reservation-campaigns.service")));
+                await ReservationCampaignsService.trackBooking(merchantId, input.campaignCode);
+            }
+            catch {
+                /* non-fatal */
+            }
+        }
+        if (status === "confirmed" && email) {
+            try {
+                const { MarketingAutomationService } = await Promise.resolve().then(() => __importStar(require("@/services/marketing-automation.service")));
+                await MarketingAutomationService.trigger(merchantId, "reservation_confirmed", {
+                    email,
+                    name,
+                });
+            }
+            catch {
+                /* non-fatal */
+            }
         }
         return row;
     }
@@ -786,8 +812,8 @@ class ReservationService {
                 throw new Error("Invalid reservation time");
             patch.reservedAt = reservedAt;
         }
-        if (patch.reservedAt && new Date(reservedAt).getTime() < Date.now() - 60000) {
-            throw new Error("Cannot book a time in the past");
+        if (patch.reservedAt) {
+            assertReservationNotInPast(new Date(reservedAt));
         }
         let partySize = Number(current.partySize) || 2;
         if (input.partySize !== undefined) {

@@ -1,8 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shopHostMiddleware = shopHostMiddleware;
-const drizzle_orm_1 = require("drizzle-orm");
-const db_1 = require("@/db");
+const custom_domain_lookup_1 = require("@/lib/custom-domain-lookup");
 const PLATFORM_HOST_SUFFIXES = [
     "rebornsense.com",
     "chaslay.com",
@@ -31,13 +30,8 @@ async function shopHostMiddleware(req, _res, next) {
             req.shopMerchantFromHost = null;
             return next();
         }
-        const db = (0, db_1.getDb)();
-        const merchant = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.customDomain, host),
-        });
+        const merchant = await (0, custom_domain_lookup_1.findMerchantByCustomDomainHost)(host);
         if (merchant &&
-            merchant.customDomainDnsStatus !== "pending" &&
-            merchant.customDomainDnsStatus !== "failed" &&
             merchant.shopEnabled &&
             merchant.status !== "suspended" &&
             merchant.status !== "expired") {

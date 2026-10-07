@@ -101,6 +101,7 @@ export interface SyncSalePayload {
     paymentBreakdown?: Array<{
         method: string;
         amount: number;
+        giftCardNumber?: string | null;
     }> | null;
     pointsEarned?: number | null;
     pointsRedeemed?: number | null;
@@ -127,6 +128,7 @@ export declare class SyncService {
             visibility: {
                 channels: string[];
             };
+            shopSchedule: Record<string, unknown>;
             deliveryPricingEnabled: boolean;
             extraDeliveryPrice: string | null;
             clientId: string | null;
@@ -135,6 +137,7 @@ export declare class SyncService {
             id: string;
             name: string;
             imageUrl: string | null;
+            brand: string | null;
             isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
@@ -178,6 +181,7 @@ export declare class SyncService {
                 productId?: string;
                 quantity?: number;
             }[] | null;
+            cateringConfig: Record<string, unknown> | null;
             specifications: {
                 id: string;
                 name: string;
@@ -191,6 +195,12 @@ export declare class SyncService {
             loyaltyRewardPoints: number | null;
             recipeYield: string;
             similarProductIds: string[] | null;
+            dietaryTags: string[] | null;
+            extraBarcodes: string[] | null;
+            timeSlotPrices: Record<string, {
+                price?: number;
+                multiplier?: number;
+            }> | null;
         }[];
         terminals: {
             id: string;
@@ -308,6 +318,7 @@ export declare class SyncService {
                 marketingOptIn: boolean;
                 lastOrderAt: Date | null;
                 lastReorderReminderAt: Date | null;
+                crmTags: string[];
             } | null;
             items: {
                 id: string;
@@ -337,6 +348,7 @@ export declare class SyncService {
                         price: number;
                     }>;
                 }[] | null;
+                cateringGuestCount: number | null;
                 seatNumber: number | null;
                 refundedQuantity: string | null;
             }[];
@@ -469,6 +481,12 @@ export declare class SyncService {
             created: boolean;
             skipped?: boolean;
             invoiceNumber?: string | null;
+            fiskaly?: {
+                qrCodeData?: string | null;
+                signature?: string | null;
+                txNumber?: string | number | null;
+                txId?: string | null;
+            };
         }[];
     }>;
 }

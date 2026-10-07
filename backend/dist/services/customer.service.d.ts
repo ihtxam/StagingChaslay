@@ -32,7 +32,12 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
     } | null>;
+    static assertCustomerContactAvailable(merchantId: string, contact: {
+        email?: string | null;
+        phone?: string | null;
+    }, exceptCustomerId?: string): Promise<void>;
     /**
      * Create customer
      */
@@ -58,6 +63,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
     }>;
     /**
      * Get all customers for merchant
@@ -80,6 +86,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
     }[]>;
     /**
      * Get customer by ID
@@ -102,6 +109,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
     }>;
     /**
      * Get customer by email
@@ -124,6 +132,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
     } | undefined>;
     /**
      * Update customer
@@ -144,6 +153,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
         createdAt: Date;
         updatedAt: Date;
     }>;
@@ -172,6 +182,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
         createdAt: Date;
         updatedAt: Date;
     }>;
@@ -194,6 +205,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
         createdAt: Date;
         updatedAt: Date;
     }>;
@@ -219,6 +231,7 @@ export declare class CustomerService {
             marketingOptIn: boolean;
             lastOrderAt: Date | null;
             lastReorderReminderAt: Date | null;
+            crmTags: string[];
         };
         orders: {
             id: string;
@@ -327,12 +340,14 @@ export declare class CustomerService {
                         price: number;
                     }>;
                 }[] | null;
+                cateringGuestCount: number | null;
                 seatNumber: number | null;
                 refundedQuantity: string | null;
                 product: {
                     id: string;
                     name: string;
                     imageUrl: string | null;
+                    brand: string | null;
                     isActive: boolean;
                     createdAt: Date;
                     updatedAt: Date;
@@ -376,6 +391,7 @@ export declare class CustomerService {
                         productId?: string;
                         quantity?: number;
                     }[] | null;
+                    cateringConfig: Record<string, unknown> | null;
                     specifications: {
                         id: string;
                         name: string;
@@ -389,6 +405,12 @@ export declare class CustomerService {
                     loyaltyRewardPoints: number | null;
                     recipeYield: string;
                     similarProductIds: string[] | null;
+                    dietaryTags: string[] | null;
+                    extraBarcodes: string[] | null;
+                    timeSlotPrices: Record<string, {
+                        price?: number;
+                        multiplier?: number;
+                    }> | null;
                 } | null;
             }[];
         }[];
@@ -419,6 +441,7 @@ export declare class CustomerService {
         marketingOptIn: boolean;
         lastOrderAt: Date | null;
         lastReorderReminderAt: Date | null;
+        crmTags: string[];
     }[]>;
     /**
      * Get customer statistics

@@ -2,7 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductService = void 0;
 const db_1 = require("@/db");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const text_encoding_1 = require("@/lib/text-encoding");
+const barcode_service_1 = require("@/services/barcode.service");
 const drizzle_orm_1 = require("drizzle-orm");
 class ProductService {
     /**
@@ -25,7 +27,7 @@ class ProductService {
                 price: price.toString(),
                 categoryId,
                 sku,
-                barcode: barcode && String(barcode).trim() ? String(barcode).trim() : null,
+                barcode: barcode_service_1.BarcodeService.normalizeForSave(barcode),
                 cost: cost?.toString(),
                 stock: stock || 0,
                 isTaxable,
@@ -38,6 +40,7 @@ class ProductService {
                 bulkPricing: extras?.bulkPricing || [],
                 extras: extras?.extras || [],
                 comboItems: extras?.comboItems || [],
+                cateringConfig: extras?.cateringConfig || {},
                 specifications: extras?.specifications || [],
                 buttonColor: extras?.buttonColor || null,
                 allowExtras: !!extras?.allowExtras,
@@ -50,6 +53,8 @@ class ProductService {
                         : null,
                 sortOrder: Number(nextSort) || 0,
                 clientId: extras?.clientId,
+                brand: extras?.brand?.trim() || null,
+                extraBarcodes: extras?.extraBarcodes || [],
             })
                 .returning();
             return product[0];
@@ -89,7 +94,7 @@ class ProductService {
         try {
             const offset = (page - 1) * limit;
             const where = this.productListWhere(merchantId, search, categoryId);
-            const products = await db.query.products.findMany({
+            const products = await (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(() => db.query.products.findMany({
                 where,
                 with: {
                     category: true,
@@ -97,7 +102,7 @@ class ProductService {
                 limit,
                 offset,
                 orderBy: [(0, drizzle_orm_1.asc)(db_1.schema.products.sortOrder), (0, drizzle_orm_1.desc)(db_1.schema.products.createdAt)],
-            });
+            }));
             return products.map((p) => ({
                 ...p,
                 name: (0, text_encoding_1.repairCatalogText)(p.name),
@@ -165,8 +170,14 @@ class ProductService {
     static async getProductByBarcode(merchantId, barcode) {
         const db = (0, db_1.getDb)();
         try {
+            const variants = (0, barcode_service_1.barcodeMatchVariants)(barcode);
+            if (!variants.length)
+                return null;
             const product = await db.query.products.findFirst({
-                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.products.barcode, barcode)),
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.or)(...variants.flatMap((variant) => [
+                    (0, drizzle_orm_1.eq)(db_1.schema.products.barcode, variant),
+                    (0, drizzle_orm_1.sql) `exists (select 1 from jsonb_array_elements_text(coalesce(${db_1.schema.products.extraBarcodes}, '[]'::jsonb)) e where e = ${variant})`,
+                ]))),
             });
             return product;
         }
@@ -188,7 +199,8 @@ class ProductService {
                 patched.description = (0, text_encoding_1.repairCatalogText)(patched.description);
             }
             if (patched.barcode !== undefined) {
-                const b = String(patched.barcode || "").trim();
+                // Empty string / whitespace clears the barcode (NULL). Unique index allows many NULLs.
+                const b = patched.barcode == null ? "" : String(patched.barcode).trim();
                 patched.barcode = b || null;
             }
             const product = await db
@@ -269,10 +281,10 @@ class ProductService {
     static async getLowStockProducts(merchantId) {
         const db = (0, db_1.getDb)();
         try {
-            const products = await db.query.products.findMany({
+            const products = await (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(() => db.query.products.findMany({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.lt)(db_1.schema.products.stock, db_1.schema.products.lowStockThreshold)),
                 orderBy: (0, drizzle_orm_1.asc)(db_1.schema.products.stock),
-            });
+            }));
             return products;
         }
         catch (error) {
@@ -286,9 +298,9 @@ class ProductService {
     static async getProductStatistics(merchantId) {
         const db = (0, db_1.getDb)();
         try {
-            const products = await db.query.products.findMany({
+            const products = await (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(() => db.query.products.findMany({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId),
-            });
+            }));
             const totalProducts = products.length;
             const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
             const lowStockCount = products.filter((p) => p.stock < (p.lowStockThreshold || 5)).length;

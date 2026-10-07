@@ -72,6 +72,7 @@ class EmailUsageService {
             const db = (0, db_1.getDb)();
             await db.insert(db_1.schema.emailSendLog).values({
                 merchantId: input.merchantId || null,
+                orderId: input.orderId || null,
                 provider: input.provider,
                 source: input.source,
                 emailType: input.emailType || "general",
@@ -131,8 +132,23 @@ class EmailUsageService {
             .orderBy((0, drizzle_orm_1.desc)((0, drizzle_orm_1.count)()))
             .limit(50);
         const { PlatformSettingsService } = await Promise.resolve().then(() => __importStar(require("@/services/platform-settings.service")));
+        const { EmailService } = await Promise.resolve().then(() => __importStar(require("@/services/email.service")));
         const brevoPublic = await PlatformSettingsService.getBrevoSettingsPublic();
         const mailcoPublic = await PlatformSettingsService.getMailcoSettingsPublic();
+        const platformStatus = await EmailService.status();
+        const [lastShopOrderRow] = await db
+            .select({
+            provider: db_1.schema.emailSendLog.provider,
+            source: db_1.schema.emailSendLog.source,
+            createdAt: db_1.schema.emailSendLog.createdAt,
+            recipient: db_1.schema.emailSendLog.recipient,
+            orderId: db_1.schema.emailSendLog.orderId,
+            merchantId: db_1.schema.emailSendLog.merchantId,
+        })
+            .from(db_1.schema.emailSendLog)
+            .where((0, drizzle_orm_1.and)(sentFilter, (0, drizzle_orm_1.eq)(db_1.schema.emailSendLog.emailType, "shop_order")))
+            .orderBy((0, drizzle_orm_1.desc)(db_1.schema.emailSendLog.createdAt))
+            .limit(1);
         let account = null;
         if (brevoPublic.apiKeySet) {
             try {
@@ -168,8 +184,57 @@ class EmailUsageService {
             brevo: brevoPublic,
             mailco: mailcoPublic,
             platformEmailPrimary: mailcoPublic.emailPrimary,
+            activeProvider: platformStatus.provider,
+            activeFromEmail: platformStatus.fromEmail,
+            activeFromName: platformStatus.fromName,
+            lastShopOrderEmail: lastShopOrderRow
+                ? {
+                    provider: lastShopOrderRow.provider,
+                    source: lastShopOrderRow.source,
+                    sentAt: lastShopOrderRow.createdAt,
+                    recipient: lastShopOrderRow.recipient,
+                    orderId: lastShopOrderRow.orderId,
+                    merchantId: lastShopOrderRow.merchantId,
+                }
+                : null,
+            allEmailViaMailco: !!mailcoPublic?.configured &&
+                (mailcoPublic?.emailPrimary || "mailco") === "mailco" &&
+                platformStatus.provider === "mailco",
+            mailcoBrevoFallbackEnabled: platformStatus.mailcoBrevoFallbackEnabled,
             account,
         };
+    }
+    static async getOrderEmailLogs(orderId) {
+        await this.ensureTable();
+        const db = (0, db_1.getDb)();
+        const rows = await db
+            .select({
+            id: db_1.schema.emailSendLog.id,
+            provider: db_1.schema.emailSendLog.provider,
+            source: db_1.schema.emailSendLog.source,
+            emailType: db_1.schema.emailSendLog.emailType,
+            recipient: db_1.schema.emailSendLog.recipient,
+            subject: db_1.schema.emailSendLog.subject,
+            status: db_1.schema.emailSendLog.status,
+            error: db_1.schema.emailSendLog.error,
+            createdAt: db_1.schema.emailSendLog.createdAt,
+            merchantId: db_1.schema.emailSendLog.merchantId,
+        })
+            .from(db_1.schema.emailSendLog)
+            .where((0, drizzle_orm_1.eq)(db_1.schema.emailSendLog.orderId, orderId))
+            .orderBy((0, drizzle_orm_1.desc)(db_1.schema.emailSendLog.createdAt));
+        return rows.map((row) => ({
+            id: row.id,
+            provider: row.provider,
+            source: row.source,
+            emailType: row.emailType,
+            recipient: row.recipient,
+            subject: row.subject,
+            status: row.status,
+            error: row.error,
+            sentAt: row.createdAt,
+            merchantId: row.merchantId,
+        }));
     }
     static async getMerchantPlatformUsage(merchantId) {
         await this.ensureTable();

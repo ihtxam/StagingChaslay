@@ -176,6 +176,8 @@ export declare class DeliveryPlatformService {
         printNotification?: boolean;
         /** Online shop arrival — bypass master receipt/kitchen auto-print toggles */
         independentOfMasterAutoPrint?: boolean;
+        /** Accept-time kitchen: items + customer name only (no address/phone). */
+        kitchenPrepOnly?: boolean;
     }): Promise<void>;
     static webhookUrl(platform: string, merchantId: string): string;
 }

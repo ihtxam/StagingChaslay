@@ -43,6 +43,8 @@ const order_item_name_1 = require("@/lib/order-item-name");
 const pos_print_settings_1 = require("@/lib/pos-print-settings");
 const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const online_order_scope_1 = require("@/lib/online-order-scope");
+const adyen_service_1 = require("@/services/adyen.service");
+const online_payment_refund_1 = require("@/lib/online-payment-refund");
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
 async function releaseHeldAfterPosPayment(merchantId, order) {
@@ -153,7 +155,7 @@ async function enqueueOnlineOrderReceiptPrint(merchantId, orderId, order) {
         printReceipt: !isDelivery,
     });
 }
-async function sendOrderRejectedEmail(merchantId, order, merchantName) {
+async function sendOrderRejectedEmail(merchantId, orderId, order, merchantName) {
     const email = String(order.customerEmail || "").trim();
     if (!email)
         return;
@@ -162,6 +164,7 @@ async function sendOrderRejectedEmail(merchantId, order, merchantName) {
         const reason = String(order.cancelReason || "").trim();
         await EmailService.send({
             merchantId,
+            orderId,
             to: email,
             subject: `Order ${order.orderNumber || ""} — update from ${merchantName}`,
             html: `<p>Hello${order.customerName ? ` ${order.customerName}` : ""},</p>
@@ -207,11 +210,21 @@ function withResolvedItemNames(order) {
 }
 async function withGiftCardRemainingBalance(order) {
     const db = (0, db_1.getDb)();
-    const redeemTx = await db.query.giftCardTransactions.findFirst({
+    const redeemRows = await db.query.giftCardTransactions.findMany({
         where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.giftCardTransactions.orderId, order.id), (0, drizzle_orm_1.eq)(db_1.schema.giftCardTransactions.transactionType, "redeem")),
         orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.giftCardTransactions.createdAt)],
-        columns: { balanceAfter: true },
+        with: {
+            card: {
+                columns: { cardNumber: true },
+            },
+        },
     });
+    const redeemTx = redeemRows[0];
+    const giftCardRedeemNumbers = [
+        ...new Set(redeemRows
+            .map((row) => String(row.card?.cardNumber || "").trim())
+            .filter(Boolean)),
+    ];
     const fromTx = redeemTx?.balanceAfter != null ? Number(redeemTx.balanceAfter) : null;
     const fromNotes = String(order.notes || "").match(/Gift card remaining:\s*([\d.]+)/i)?.[1];
     const parsedNotes = fromNotes != null && Number.isFinite(Number(fromNotes))
@@ -225,6 +238,7 @@ async function withGiftCardRemainingBalance(order) {
     return {
         ...order,
         giftCardRemainingBalance,
+        giftCardRedeemNumbers: giftCardRedeemNumbers.length ? giftCardRedeemNumbers : null,
     };
 }
 class OrderService {
@@ -525,16 +539,19 @@ class OrderService {
                         : order.orderSource === "kiosk"
                             ? "kiosk"
                             : "online_shop";
-                    await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
-                        printKitchen: true,
-                        printDeliveryReceipt: false,
-                        printReceipt: false,
-                        printNotification: false,
-                    });
-                    await db
-                        .update(db_1.schema.orders)
-                        .set({ printCount: (0, drizzle_orm_1.sql) `COALESCE(${db_1.schema.orders.printCount}, 0) + 1` })
-                        .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId));
+                    if (opts?.skipAutoPrintKitchen !== true) {
+                        await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
+                            printKitchen: true,
+                            printDeliveryReceipt: false,
+                            printReceipt: false,
+                            printNotification: false,
+                            kitchenPrepOnly: true,
+                        });
+                        await db
+                            .update(db_1.schema.orders)
+                            .set({ printCount: (0, drizzle_orm_1.sql) `COALESCE(${db_1.schema.orders.printCount}, 0) + 1` })
+                            .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId));
+                    }
                 }
                 catch (printErr) {
                     console.warn("Accept auto-print enqueue failed:", printErr);
@@ -700,21 +717,26 @@ class OrderService {
             case "reject":
             case "cancel":
             case "archive": {
-                if (status === "completed")
+                if (status === "completed" && !(0, online_payment_refund_1.isPaidOnlineEcommerce)(order)) {
                     throw new Error("Cannot cancel a completed order");
+                }
+                const refund = await adyen_service_1.AdyenService.refundPaidOnlineOnCancel(merchantId, order);
+                if (refund.attempted && !refund.refunded) {
+                    throw new Error(refund.error || "Online payment refund failed. The order was not cancelled.");
+                }
                 const reasonText = (0, pos_print_settings_1.resolvePosCancelReason)(String(opts?.rejectReason || ""));
                 const updated = await set({
                     status: "cancelled",
-                    paymentStatus: "cancelled",
                     cancelReason: reasonText || null,
                     cancelledAt: new Date(),
+                    ...(0, online_payment_refund_1.onlineCancelPaymentPatch)(refund),
                 });
                 if (action === "reject") {
                     if (order.orderType === "web_shop" && order.customerEmail) {
                         void sendGuestShopOrderEmail(merchantId, orderId, "cancelled", order);
                     }
                     else {
-                        void sendOrderRejectedEmail(merchantId, { ...order, cancelReason: reasonText }, merchant?.name || "Store");
+                        void sendOrderRejectedEmail(merchantId, orderId, { ...order, cancelReason: reasonText }, merchant?.name || "Store");
                     }
                 }
                 else if (order.orderType === "web_shop" && order.customerEmail) {
@@ -844,6 +866,10 @@ class OrderService {
             if (!order) {
                 throw new Error("Order not found");
             }
+            const refund = await adyen_service_1.AdyenService.refundPaidOnlineOnCancel(merchantId, order);
+            if (refund.attempted && !refund.refunded) {
+                throw new Error(refund.error || "Online payment refund failed. The order was not cancelled.");
+            }
             // Restore stock
             for (const item of order.items) {
                 const product = await db.query.products.findFirst({
@@ -859,7 +885,11 @@ class OrderService {
             // Update order status
             const updatedOrder = await db
                 .update(db_1.schema.orders)
-                .set({ status: "cancelled", paymentStatus: "cancelled" })
+                .set({
+                status: "cancelled",
+                cancelledAt: new Date(),
+                ...(0, online_payment_refund_1.onlineCancelPaymentPatch)(refund),
+            })
                 .where((0, drizzle_orm_1.eq)(db_1.schema.orders.id, orderId))
                 .returning();
             return updatedOrder[0];

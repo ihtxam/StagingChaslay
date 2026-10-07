@@ -417,6 +417,10 @@ class ResellerService {
             odsAddonEnabled: input.odsAddonEnabled,
             deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
             storekeeperAddonEnabled: input.storekeeperAddonEnabled,
+            bexioAddonEnabled: input.bexioAddonEnabled,
+            odooAddonEnabled: input.odooAddonEnabled,
+            growthAnalyticsAddonEnabled: input.growthAnalyticsAddonEnabled,
+            guestCrmAddonEnabled: input.guestCrmAddonEnabled,
         });
         return created;
     }
@@ -435,6 +439,10 @@ class ResellerService {
             deliveryPlatformsAddonEnabled: limits.deliveryPlatformsAddonEnabled,
             storekeeperAddonEnabled: limits.storekeeperAddonEnabled,
             kioskAddonEnabled: limits.kioskAddonEnabled,
+            bexioAddonEnabled: limits.bexioAddonEnabled,
+            odooAddonEnabled: limits.odooAddonEnabled,
+            growthAnalyticsAddonEnabled: limits.growthAnalyticsAddonEnabled,
+            guestCrmAddonEnabled: limits.guestCrmAddonEnabled,
         });
         return MerchantService.getMerchantById(merchantId);
     }

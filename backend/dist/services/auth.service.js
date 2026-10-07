@@ -49,6 +49,59 @@ const ods_addon_1 = require("@/lib/ods-addon");
 const business_module_1 = require("@/lib/business-module");
 const merchant_support_code_1 = require("@/lib/merchant-support-code");
 const staff_login_home_1 = require("@/lib/staff-login-home");
+const AUTH_MERCHANT_SELECT = `id, email, password_hash, status, name,
+  inventory_addon_enabled, signage_addon_enabled,
+  kds_addon_enabled, ods_addon_enabled`;
+/** Auth paths use raw SQL so login works when drizzle schema columns lag production. */
+async function findAuthMerchantByEmail(email) {
+    const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT ${AUTH_MERCHANT_SELECT}
+     FROM merchants
+     WHERE lower(email) = $1
+     LIMIT 1`, [email]);
+    return rows[0] ?? null;
+}
+async function findAuthMerchantById(merchantId) {
+    const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT id, email, status, name,
+            inventory_addon_enabled, signage_addon_enabled,
+            kds_addon_enabled, ods_addon_enabled
+     FROM merchants
+     WHERE id = $1
+     LIMIT 1`, [merchantId]);
+    return rows[0] ?? null;
+}
+async function readMerchantAuthEpoch(merchantId) {
+    try {
+        const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT auth_epoch FROM merchants WHERE id = $1 LIMIT 1`, [merchantId]);
+        return Number(rows[0]?.auth_epoch ?? 0);
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/column "auth_epoch" does not exist/i.test(message)) {
+            return 0;
+        }
+        throw error;
+    }
+}
+async function readMerchantStatus(merchantId) {
+    const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT status FROM merchants WHERE id = $1 LIMIT 1`, [merchantId]);
+    return rows[0]?.status ?? null;
+}
+async function readMerchantMaxLocations(merchantId) {
+    try {
+        const { MerchantEntitlementsService } = await Promise.resolve().then(() => __importStar(require("@/services/merchant-entitlements.service")));
+        const limits = await MerchantEntitlementsService.getLimits(merchantId);
+        return Math.max(0, Number(limits.maxLocations ?? 1));
+    }
+    catch {
+        try {
+            const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT max_locations FROM merchants WHERE id = $1 LIMIT 1`, [merchantId]);
+            return Math.max(0, Number(rows[0]?.max_locations ?? 1));
+        }
+        catch {
+            return 1;
+        }
+    }
+}
 class AuthService {
     /**
      * Hash a password
@@ -82,12 +135,7 @@ class AuthService {
         }
     }
     static async getMerchantAuthEpoch(merchantId) {
-        const db = (0, db_1.getDb)();
-        const merchant = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
-            columns: { authEpoch: true },
-        });
-        return Number(merchant?.authEpoch ?? 0);
+        return readMerchantAuthEpoch(merchantId);
     }
     static async bumpMerchantAuthEpoch(merchantId) {
         const db = (0, db_1.getDb)();
@@ -191,39 +239,37 @@ class AuthService {
         }
     }
     static async loginMerchantOwner(email, password) {
-        const db = (0, db_1.getDb)();
         const normalizedEmail = String(email || "").trim().toLowerCase();
-        const merchants = await (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(() => db
-            .select()
-            .from(db_1.schema.merchants)
-            .where((0, drizzle_orm_1.sql) `lower(${db_1.schema.merchants.email}) = ${normalizedEmail}`)
-            .limit(1));
-        const merchant = merchants[0];
+        const merchant = await findAuthMerchantByEmail(normalizedEmail);
         if (!merchant) {
             throw new Error("Invalid email or password");
         }
-        const isValid = await this.comparePassword(password, merchant.passwordHash);
+        const isValid = await this.comparePassword(password, merchant.password_hash);
         if (!isValid) {
             throw new Error("Invalid email or password");
         }
         if (merchant.status !== "active" && merchant.status !== "trial") {
             throw new Error(`Merchant account is ${merchant.status}`);
         }
+        const authEpoch = await readMerchantAuthEpoch(merchant.id);
         const token = this.generateToken({
             id: merchant.id,
             email: merchant.email,
             role: "merchant",
             merchantId: merchant.id,
             name: merchant.name,
-            authEpoch: Number(merchant.authEpoch ?? 0),
+            authEpoch,
         });
-        const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(merchant.id).catch(() => (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventoryAddonEnabled));
+        const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(merchant.id).catch(() => (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventory_addon_enabled));
         const signage = await (0, signage_addon_1.readSignageAddon)(merchant.id).catch(() => ({
-            enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
+            enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signage_addon_enabled),
             screenLimit: 2,
         }));
-        const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
-        const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
+        const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchant.id).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kds_addon_enabled));
+        const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchant.id).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.ods_addon_enabled));
+        const maxLocations = await readMerchantMaxLocations(merchant.id);
+        const growthAnalyticsOn = await Promise.resolve().then(() => __importStar(require("@/lib/growth-analytics-addon"))).then((m) => m.readGrowthAnalyticsAddonEnabled(merchant.id).catch(() => false));
+        const guestCrmOn = await Promise.resolve().then(() => __importStar(require("@/lib/guest-crm-addon"))).then((m) => m.readGuestCrmAddonEnabled(merchant.id).catch(() => false));
         return {
             token,
             merchant: {
@@ -233,6 +279,8 @@ class AuthService {
                 status: merchant.status,
                 roleName: "Owner",
                 inventoryAddonEnabled: inventoryOn,
+                growthAnalyticsAddonEnabled: growthAnalyticsOn,
+                guestCrmAddonEnabled: guestCrmOn,
                 inventoryEnabled: inventoryOn,
                 signageAddonEnabled: signage.enabled,
                 signageEnabled: signage.enabled,
@@ -241,7 +289,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+                maxLocations,
             },
             isOwner: true,
         };
@@ -249,14 +297,11 @@ class AuthService {
     static async loginMerchantStaff(email, password) {
         const { StaffService } = await Promise.resolve().then(() => __importStar(require("@/services/staff.service")));
         const { staff, role, permissions } = await StaffService.loginStaff(email, password);
-        const db = (0, db_1.getDb)();
-        const merchant = await db.query.merchants.findFirst({
-            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, staff.merchantId),
-            columns: { status: true, maxLocations: true, authEpoch: true },
-        });
-        if (!merchant || (merchant.status !== "active" && merchant.status !== "trial")) {
-            throw new Error(`Merchant account is ${merchant?.status || "unavailable"}`);
+        const merchantStatus = await readMerchantStatus(staff.merchantId);
+        if (!merchantStatus || (merchantStatus !== "active" && merchantStatus !== "trial")) {
+            throw new Error(`Merchant account is ${merchantStatus || "unavailable"}`);
         }
+        const authEpoch = await readMerchantAuthEpoch(staff.merchantId);
         const token = this.generateToken({
             id: staff.id,
             email: staff.email || email,
@@ -266,7 +311,7 @@ class AuthService {
             name: staff.name,
             roleName: role?.name,
             permissions,
-            authEpoch: Number(merchant.authEpoch ?? 0),
+            authEpoch,
         });
         const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(staff.merchantId).catch(() => false);
         const signage = await (0, signage_addon_1.readSignageAddon)(staff.merchantId).catch(() => ({
@@ -275,6 +320,9 @@ class AuthService {
         }));
         const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(staff.merchantId).catch(() => false);
         const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(staff.merchantId).catch(() => false);
+        const maxLocations = await readMerchantMaxLocations(staff.merchantId);
+        const growthAnalyticsOn = await Promise.resolve().then(() => __importStar(require("@/lib/growth-analytics-addon"))).then((m) => m.readGrowthAnalyticsAddonEnabled(staff.merchantId).catch(() => false));
+        const guestCrmOn = await Promise.resolve().then(() => __importStar(require("@/lib/guest-crm-addon"))).then((m) => m.readGuestCrmAddonEnabled(staff.merchantId).catch(() => false));
         return {
             token,
             merchant: {
@@ -286,6 +334,8 @@ class AuthService {
                 roleName: role?.name,
                 permissions,
                 inventoryAddonEnabled: inventoryOn,
+                growthAnalyticsAddonEnabled: growthAnalyticsOn,
+                guestCrmAddonEnabled: guestCrmOn,
                 inventoryEnabled: inventoryOn,
                 signageAddonEnabled: signage.enabled,
                 signageEnabled: signage.enabled,
@@ -294,7 +344,7 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+                maxLocations,
                 loginHome: (0, staff_login_home_1.normalizeStaffLoginHome)(staff.loginHome),
             },
             isOwner: false,
@@ -509,21 +559,21 @@ class AuthService {
      * Verify merchant email (for password reset, etc.)
      */
     static async getMerchantById(merchantId) {
-        const db = (0, db_1.getDb)();
         try {
-            const merchant = await (0, ensure_merchant_schema_1.withMerchantSchemaRetry)(() => db.query.merchants.findFirst({
-                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
-            }));
+            const merchant = await findAuthMerchantById(merchantId);
             if (!merchant) {
                 throw new Error("Merchant not found");
             }
-            const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(merchantId).catch(() => (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventoryAddonEnabled));
+            const inventoryOn = await (0, inventory_addon_1.readInventoryAddonEnabled)(merchantId).catch(() => (0, inventory_addon_1.isInventoryAddonEnabled)(merchant.inventory_addon_enabled));
             const signage = await (0, signage_addon_1.readSignageAddon)(merchantId).catch(() => ({
-                enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signageAddonEnabled),
+                enabled: (0, signage_addon_1.isSignageAddonEnabled)(merchant.signage_addon_enabled),
                 screenLimit: 2,
             }));
-            const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kdsAddonEnabled));
-            const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.odsAddonEnabled));
+            const kdsOn = await (0, kds_addon_1.readKdsAddonEnabled)(merchantId).catch(() => (0, kds_addon_1.isKdsAddonEnabled)(merchant.kds_addon_enabled));
+            const odsOn = await (0, ods_addon_1.readOdsAddonEnabled)(merchantId).catch(() => (0, ods_addon_1.isOdsAddonEnabled)(merchant.ods_addon_enabled));
+            const maxLocations = await readMerchantMaxLocations(merchantId);
+            const growthAnalyticsOn = await Promise.resolve().then(() => __importStar(require("@/lib/growth-analytics-addon"))).then((m) => m.readGrowthAnalyticsAddonEnabled(merchantId).catch(() => false));
+            const guestCrmOn = await Promise.resolve().then(() => __importStar(require("@/lib/guest-crm-addon"))).then((m) => m.readGuestCrmAddonEnabled(merchantId).catch(() => false));
             return {
                 id: merchant.id,
                 email: merchant.email,
@@ -538,7 +588,9 @@ class AuthService {
                 kdsEnabled: kdsOn,
                 odsAddonEnabled: odsOn,
                 odsEnabled: odsOn,
-                maxLocations: Math.max(0, Number(merchant.maxLocations ?? 1)),
+                growthAnalyticsAddonEnabled: growthAnalyticsOn,
+                guestCrmAddonEnabled: guestCrmOn,
+                maxLocations,
             };
         }
         catch (error) {
@@ -581,15 +633,10 @@ class AuthService {
         const db = (0, db_1.getDb)();
         const passwordHash = await this.hashPassword(newPassword);
         if (role === "merchant") {
-            const merchant = await db.query.merchants.findFirst({
-                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.email, normalized),
-            });
+            const merchant = await findAuthMerchantByEmail(normalized);
             if (!merchant)
                 throw new Error("Merchant not found");
-            await db
-                .update(db_1.schema.merchants)
-                .set({ passwordHash, updatedAt: new Date() })
-                .where((0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchant.id));
+            await (0, ensure_merchant_schema_1.queryRaw)(`UPDATE merchants SET password_hash = $1, updated_at = NOW() WHERE id = $2`, [passwordHash, merchant.id]);
             return { success: true, role: "merchant", email: merchant.email };
         }
         if (role === "staff") {

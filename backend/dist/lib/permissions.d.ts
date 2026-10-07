@@ -1,5 +1,5 @@
 /** POS + panel permissions (aligned with Android PosPermission + panel extras). */
-export declare const PERMISSIONS: readonly ["USE_POS", "USE_WEBPOS", "PROCESS_PAYMENTS", "APPLY_DISCOUNTS", "OPEN_CASH_DRAWER", "SEND_KITCHEN", "MANAGE_TABLES", "TAKEAWAY_ORDERS", "DELIVERY_ORDERS", "VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "CANCEL_ORDERS", "REFUND_ORDERS", "VIEW_REPORTS", "VIEW_ALL_SALES", "GANDOLA_PURGE", "MANAGE_PRODUCTS", "MANAGE_CUSTOMERS", "MANAGE_OFFERS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS", "ACCESS_PANEL", "MANAGE_STAFF", "MANAGE_ROLES", "MANAGE_BILLING", "END_OF_DAY", "MANAGE_INVENTORY", "STOREKEEPER_INTAKE", "MANAGE_KIOSK"];
+export declare const PERMISSIONS: readonly ["USE_POS", "USE_WEBPOS", "PROCESS_PAYMENTS", "APPLY_DISCOUNTS", "OPEN_CASH_DRAWER", "SEND_KITCHEN", "MANAGE_TABLES", "TAKEAWAY_ORDERS", "DELIVERY_ORDERS", "VIEW_DELIVERY_TRACKING", "VIEW_ORDER_HISTORY", "CANCEL_ORDERS", "REFUND_ORDERS", "VIEW_REPORTS", "VIEW_ALL_SALES", "GANDOLA_PURGE", "MANAGE_PRODUCTS", "MANAGE_CUSTOMERS", "MANAGE_OFFERS", "MANAGE_ONLINE_SHOP", "MANAGE_SETTINGS", "ACCESS_PANEL", "MANAGE_STAFF", "MANAGE_ROLES", "MANAGE_BILLING", "END_OF_DAY", "MANAGE_INVENTORY", "STOREKEEPER_INTAKE", "STOREKEEPER_EDIT_INTAKE", "MANAGE_KIOSK"];
 export type Permission = (typeof PERMISSIONS)[number];
 export declare function parsePermissions(raw?: string | null): Permission[];
 /**
@@ -50,4 +50,6 @@ export declare function waiterRestrictedHomePath(granted: readonly string[] | un
  * permissions so Users & roles checkboxes round-trip to the database.
  */
 export declare function applyRolePermissionPolicy(roleName: string, permissions: Permission[]): Permission[];
+/** Merge role permissions with per-user extras, then apply runtime policy. */
+export declare function resolveStaffPermissions(roleName: string, rolePermissionsRaw: string | null | undefined, extraPermissionsRaw?: string | null): Permission[];
 //# sourceMappingURL=permissions.d.ts.map

@@ -26,8 +26,12 @@ function parseLabelHeightMm(value) {
     return exports.LABEL_HEIGHTS_MM.includes(n) ? n : 20;
 }
 exports.DEFAULT_POS_PRINT_SETTINGS = {
+    receiptHeaderTitle: "",
     receiptHeader: "",
     receiptFooter: "Merci / Danke / Thank you",
+    receiptHeaderAlign: "center",
+    receiptHeaderBold: false,
+    receiptHeaderTextScale: 1,
     kitchenTicketHeader: "",
     kitchenTicketFooter: "",
     kitchenItemTextScale: 1,
@@ -164,6 +168,14 @@ function normalizePosPrintSettings(raw) {
         ? modifierScale
         : 1);
     let kitchenBoldText = src.kitchenBoldText === true;
+    const receiptHeaderAlignRaw = String(src.receiptHeaderAlign ?? "center").toLowerCase();
+    const receiptHeaderAlign = receiptHeaderAlignRaw === "left" || receiptHeaderAlignRaw === "right"
+        ? receiptHeaderAlignRaw
+        : "center";
+    const receiptHeaderScale = Number(src.receiptHeaderTextScale);
+    const receiptHeaderTextScale = (receiptHeaderScale === 2 || receiptHeaderScale === 3
+        ? receiptHeaderScale
+        : 1);
     // Legacy default was double-height (2) + bold — migrate to plain full-width tickets.
     if (kitchenItemTextScale === 2 && kitchenHeaderTextScale === 2 && src.kitchenBoldText !== false) {
         kitchenItemTextScale = 1;
@@ -171,8 +183,12 @@ function normalizePosPrintSettings(raw) {
         kitchenBoldText = false;
     }
     return {
+        receiptHeaderTitle: String(src.receiptHeaderTitle ?? "").slice(0, 500),
         receiptHeader: String(src.receiptHeader ?? "").slice(0, 2000),
         receiptFooter: String(src.receiptFooter ?? exports.DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
+        receiptHeaderAlign,
+        receiptHeaderBold: src.receiptHeaderBold === true,
+        receiptHeaderTextScale,
         kitchenTicketHeader: String(src.kitchenTicketHeader ?? "").slice(0, 2000),
         kitchenTicketFooter: String(src.kitchenTicketFooter ?? "").slice(0, 2000),
         kitchenItemTextScale,

@@ -509,6 +509,7 @@ class DeliveryPlatformService {
                 printDeliveryReceipt,
                 orderSource,
                 independentOfMasterAutoPrint: bypass,
+                kitchenPrepOnly: opts?.kitchenPrepOnly === true,
             });
             if (printReceipt && !printNotification && !printDeliveryReceipt) {
                 await chaslay_floor_service_1.ChaslayFloorService.createPrintJob(merchantId, {
@@ -542,6 +543,7 @@ class DeliveryPlatformService {
                 printNotification,
                 orderSource,
                 force: bypass,
+                kitchenPrepOnly: opts?.kitchenPrepOnly === true,
             },
             orderId,
             sourceDeviceId: "delivery-platform",

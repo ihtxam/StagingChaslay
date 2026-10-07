@@ -52,10 +52,26 @@ class KioskLicenseError extends Error {
     }
 }
 exports.KioskLicenseError = KioskLicenseError;
+function merchantChannelFlags(row) {
+    return {
+        pickupEnabled: row.pickup_enabled ?? row.pickupEnabled,
+        deliveryEnabled: row.delivery_enabled ?? row.deliveryEnabled,
+        dineInEnabled: row.dine_in_enabled ?? row.dineInEnabled,
+    };
+}
+function effectiveKioskChannelSettings(settings, row) {
+    const merchantFlags = merchantChannelFlags(row);
+    return {
+        ...settings,
+        takeawayEnabled: settings.takeawayEnabled !== false && merchantFlags.pickupEnabled !== false,
+        deliveryEnabled: settings.deliveryEnabled === true && merchantFlags.deliveryEnabled !== false,
+        dineInEnabled: settings.dineInEnabled !== false && merchantFlags.dineInEnabled !== false,
+    };
+}
 async function loadMerchantByToken(token) {
     await (0, ensure_merchant_schema_1.ensureKioskAddonColumn)();
     await (0, ensure_merchant_schema_1.ensureKioskSettingsColumn)();
-    const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT id, name, slug, shop_enabled, kiosk_settings
+    const rows = await (0, ensure_merchant_schema_1.queryRaw)(`SELECT id, name, slug, shop_enabled, pickup_enabled, delivery_enabled, dine_in_enabled, kiosk_settings
      FROM merchants
      WHERE kiosk_settings IS NOT NULL
        AND kiosk_settings->>'accessToken' = $1
@@ -74,6 +90,7 @@ async function loadMerchantByToken(token) {
 class KioskService {
     static async getPublicConfig(token) {
         const { merchant, settings } = await loadMerchantByToken(token);
+        const channelSettings = effectiveKioskChannelSettings(settings, merchant);
         const shopEnabled = merchant.shop_enabled ?? merchant.shopEnabled;
         if (!shopEnabled)
             throw new Error("Shop is not enabled for this merchant");
@@ -101,11 +118,11 @@ class KioskService {
                 membershipScanEnabled: settings.membershipScanEnabled !== false,
                 idleTimeoutSeconds: settings.idleTimeoutSeconds ?? 120,
                 locationSlug: settings.locationSlug,
-                cashPaymentEnabled: settings.cashPaymentEnabled !== false,
-                cardPaymentEnabled: settings.cardPaymentEnabled !== false,
-                takeawayEnabled: settings.takeawayEnabled !== false,
-                deliveryEnabled: settings.deliveryEnabled === true,
-                dineInEnabled: settings.dineInEnabled !== false,
+                cashPaymentEnabled: channelSettings.cashPaymentEnabled !== false,
+                cardPaymentEnabled: channelSettings.cardPaymentEnabled !== false,
+                takeawayEnabled: channelSettings.takeawayEnabled !== false,
+                deliveryEnabled: channelSettings.deliveryEnabled === true,
+                dineInEnabled: channelSettings.dineInEnabled !== false,
                 attractHeadline: settings.attractHeadline,
                 attractSubheadline: settings.attractSubheadline,
                 brandPrimaryColor: settings.brandPrimaryColor,
@@ -158,12 +175,21 @@ class KioskService {
         const { HqMenuService } = await Promise.resolve().then(() => __importStar(require("@/services/hq-menu.service")));
         const withOverrides = await CatalogLocationService.applyLocationOverrides(merchant.id, locationId, products);
         const filtered = (0, catalog_visibility_1.filterCatalogForKioskChannel)(withOverrides, categories);
-        const menuProductIds = await HqMenuService.resolveActiveProductIds(merchant.id, locationId, catalogChannel);
-        const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(filtered.products, menuProductIds);
+        let menuTimezone = "Europe/Zurich";
+        if (locationId) {
+            const locRow = await db.query.locations.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.locations.merchantId, merchant.id), (0, drizzle_orm_1.eq)(db_1.schema.locations.id, locationId)),
+                columns: { timezone: true },
+            });
+            menuTimezone = locRow?.timezone || menuTimezone;
+        }
+        const activeMenu = await HqMenuService.resolveActiveMenu(merchant.id, locationId, catalogChannel, new Date(), menuTimezone);
+        const visibleProducts = CatalogLocationService.filterByHqMenuProductIds(filtered.products, activeMenu.productIds);
         const categoryIdsWithProducts = new Set(visibleProducts.map((p) => p.categoryId).filter(Boolean));
         const visibleCategories = filtered.categories.filter((c) => categoryIdsWithProducts.has(c.id) || c.isOffersCategory);
+        const pricedProducts = HqMenuService.applyMenuPrices(visibleProducts, activeMenu.productPrices);
         const comboChildIds = new Set();
-        for (const p of visibleProducts) {
+        for (const p of pricedProducts) {
             if (String(p.productType || "") !== "combo")
                 continue;
             for (const slot of (0, combo_1.normalizeComboSlots)(p.comboItems)) {
@@ -173,7 +199,7 @@ class KioskService {
         }
         const { ModifierService } = await Promise.resolve().then(() => __importStar(require("@/services/modifier.service")));
         const groupsByProduct = await ModifierService.getGroupsForProducts(merchant.id, [
-            ...new Set([...visibleProducts.map((p) => p.id), ...comboChildIds]),
+            ...new Set([...pricedProducts.map((p) => p.id), ...comboChildIds]),
         ]);
         const serializeGroup = (g) => ({
             id: g.id,
@@ -192,7 +218,7 @@ class KioskService {
                 image: o.imageUrl || null,
             })),
         });
-        const catalogById = new Map(withOverrides.map((p) => [p.id, p]));
+        const catalogById = new Map(pricedProducts.map((p) => [p.id, p]));
         const serializeProduct = (p) => {
             const extras = Array.isArray(p.extras)
                 ? (p.extras)
@@ -271,7 +297,7 @@ class KioskService {
             name: cat.name,
             image: cat.imageUrl || undefined,
             color: cat.color || undefined,
-            items: visibleProducts.filter((p) => p.categoryId === cat.id).map(serializeProduct),
+            items: pricedProducts.filter((p) => p.categoryId === cat.id).map(serializeProduct),
         }));
         let bestsellerIds = [];
         try {

@@ -80,6 +80,15 @@ function ensureLicensesSchemaAtStartup() {
         console.warn("[schema] licenses startup patch failed:", err);
     });
 }
+function isLicenseSchemaError(raw) {
+    const mentionsLicenseTables = /relation ["']?(licenses|devices)["']?/i.test(raw) ||
+        /column "[^"]+" of relation "(licenses|devices)"/i.test(raw) ||
+        /\blicenses\b/i.test(raw) ||
+        /\bdevices\b/i.test(raw);
+    if (!mentionsLicenseTables)
+        return false;
+    return (0, db_schema_errors_1.isMissingSchemaError)(raw) || /Failed query/i.test(raw);
+}
 /** Retry a licenses query after applying missing-column/table patches. */
 async function withLicenseSchemaRetry(fn) {
     try {
@@ -87,7 +96,7 @@ async function withLicenseSchemaRetry(fn) {
     }
     catch (error) {
         const raw = error instanceof Error ? error.message : String(error ?? "");
-        if (!(0, db_schema_errors_1.isMissingSchemaError)(raw) && !/relation ["']?(licenses|devices)["']? does not exist/i.test(raw)) {
+        if (!isLicenseSchemaError(raw)) {
             throw error;
         }
         await ensureLicensesSchema();

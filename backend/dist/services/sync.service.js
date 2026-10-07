@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SyncService = void 0;
 const text_encoding_1 = require("@/lib/text-encoding");
+const ensure_merchant_schema_1 = require("@/lib/ensure-merchant-schema");
 const db_1 = require("@/db");
 const drizzle_orm_1 = require("drizzle-orm");
 const floor_plan_service_1 = require("@/services/floor-plan.service");
@@ -42,6 +43,7 @@ const money_1 = require("@/lib/money");
 const pos_print_settings_1 = require("@/lib/pos-print-settings");
 const order_item_name_1 = require("@/lib/order-item-name");
 const payment_breakdown_1 = require("@/lib/payment-breakdown");
+const merchant_channels_1 = require("@/lib/merchant-channels");
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
 function encodeOrderMetaNotes(opts) {
@@ -178,12 +180,12 @@ class SyncService {
         const db = (0, db_1.getDb)();
         const sinceDate = since || new Date(0);
         const [categories, products, terminals, readers, merchant, onlineOrders] = await Promise.all([
-            db.query.categories.findMany({
+            (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(() => db.query.categories.findMany({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.categories.merchantId, merchantId), (0, drizzle_orm_1.gt)(db_1.schema.categories.updatedAt, sinceDate)),
-            }),
-            db.query.products.findMany({
+            })),
+            (0, ensure_merchant_schema_1.withShopCatalogSchemaRetry)(() => db.query.products.findMany({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.gt)(db_1.schema.products.updatedAt, sinceDate)),
-            }),
+            })),
             db.query.paymentTerminals.findMany({
                 where: (0, drizzle_orm_1.eq)(db_1.schema.paymentTerminals.merchantId, merchantId),
             }),
@@ -345,12 +347,19 @@ class SyncService {
             ? await LocationsService.resolveLocationIdOrNull(merchantId, opts.contextLocationId)
             : null;
         const results = [];
+        const merchantRow = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { pickupEnabled: true, deliveryEnabled: true, dineInEnabled: true },
+        });
         for (const sale of sales) {
             const existing = await db.query.orders.findFirst({
                 where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.orders.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.orders.clientId, sale.clientId)),
             });
             if (existing) {
-                results.push({ clientId: sale.clientId, orderId: existing.id, created: false });
+                const { FiskalyService } = await Promise.resolve().then(() => __importStar(require("@/services/fiskaly.service")));
+                const fiskaly = FiskalyService.toPushResponse(existing.fiskalySignature ||
+                    null);
+                results.push({ clientId: sale.clientId, orderId: existing.id, created: false, fiskaly });
                 continue;
             }
             // Reject empty / zero-total pushes (e.g. re-confirm after pay-later cleared the cart).
@@ -366,7 +375,11 @@ class SyncService {
                 sale.paymentMethod === "pay_later" ||
                 sale.paymentMethod === "pay-later" ||
                 String(sale.paymentMethod || "").toLowerCase() === "invoice";
-            if (!isCancelledEarly && !payLaterEarly) {
+            // Split-bill parts share one kitchen ticket — sibling checks must not block the final part.
+            if (!isCancelledEarly &&
+                !payLaterEarly &&
+                splitBillFullyPaid(sale) &&
+                !String(sale.masterOrderId || "").trim()) {
                 const dup = await findRecentPaidDuplicateOrder(db, merchantId, {
                     ticketDisplay: sale.ticketDisplay,
                     tabNumber: sale.tabNumber,
@@ -415,6 +428,9 @@ class SyncService {
                     isInvoice);
             const scheduledFor = parseScheduledFor(sale);
             const channel = normalizeFulfillmentChannel(sale);
+            if (merchantRow && !(0, merchant_channels_1.isMerchantFulfillmentChannelEnabled)(merchantRow, channel)) {
+                throw new Error(`Order type "${channel}" is not enabled for this merchant`);
+            }
             const status = sale.status ||
                 (payLater ? (scheduledFor ? "accepted" : "preparing") : "completed");
             const fulfillmentOpen = [
@@ -700,7 +716,37 @@ class SyncService {
                 }))
                     .catch(() => { });
             }
-            results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber });
+            let fiskaly;
+            if (paid &&
+                String(status).toLowerCase() === "completed" &&
+                !isInvoice) {
+                try {
+                    const { FiskalyService } = await Promise.resolve().then(() => __importStar(require("@/services/fiskaly.service")));
+                    fiskaly = await FiskalyService.maybeSignSyncedPosSale(merchantId, order.id, {
+                        total,
+                        subtotal,
+                        taxAmount,
+                        paymentMethod: orderValuesBase.paymentMethod,
+                        paymentBreakdown: sale.paymentBreakdown,
+                        orderNumber,
+                        items: (sale.items || []).map((item) => ({
+                            productName: item.productName,
+                            quantity: Number(item.quantity) || 1,
+                            unitPrice: Number(item.unitPrice) || 0,
+                            totalPrice: Number(item.totalPrice) || 0,
+                            taxAmount: Number(item.taxAmount) || 0,
+                            taxRate: item.taxRate != null && Number.isFinite(Number(item.taxRate))
+                                ? Number(item.taxRate)
+                                : undefined,
+                        })),
+                    });
+                }
+                catch (fiskalyErr) {
+                    console.error("[sync] Fiskaly signing failed:", fiskalyErr);
+                    throw fiskalyErr instanceof Error ? fiskalyErr : new Error("Fiskaly signing failed");
+                }
+            }
+            results.push({ clientId: sale.clientId, orderId: order.id, created: true, invoiceNumber, fiskaly });
         }
         return { results };
     }

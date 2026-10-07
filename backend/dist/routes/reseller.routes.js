@@ -199,7 +199,7 @@ router.get("/merchants", async (req, res) => {
  */
 router.post("/merchants", async (req, res) => {
     try {
-        const { email, password, businessName, phone, address, city, country, editionId, businessCategory, shopEnabled, deviceSeats, licenseType, customDays, sendInvite, maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, } = req.body || {};
+        const { email, password, businessName, phone, address, city, country, editionId, businessCategory, shopEnabled, deviceSeats, licenseType, customDays, sendInvite, maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, bexioAddonEnabled, odooAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, } = req.body || {};
         const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
         if (!email || !trimmedBusinessName || !editionId) {
             return res.status(400).json({ error: "Email, business name, and edition are required" });
@@ -229,6 +229,10 @@ router.post("/merchants", async (req, res) => {
             odsAddonEnabled: odsAddonEnabled === true,
             deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
             storekeeperAddonEnabled: storekeeperAddonEnabled === true,
+            bexioAddonEnabled: bexioAddonEnabled === true,
+            odooAddonEnabled: odooAddonEnabled === true,
+            growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
+            guestCrmAddonEnabled: guestCrmAddonEnabled === true,
         });
         res.status(201).json({ success: true, merchant });
     }
@@ -242,7 +246,7 @@ router.post("/merchants", async (req, res) => {
  */
 router.put("/merchants/:merchantId/pos-limits", async (req, res) => {
     try {
-        const { maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, inventoryEnabled, signageAddonEnabled, signageEnabled, signageScreenLimit, kdsAddonEnabled, kdsEnabled, odsAddonEnabled, odsEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, kioskAddonEnabled, kioskEnabled, } = req.body || {};
+        const { maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, inventoryEnabled, signageAddonEnabled, signageEnabled, signageScreenLimit, kdsAddonEnabled, kdsEnabled, odsAddonEnabled, odsEnabled, deliveryPlatformsAddonEnabled, storekeeperAddonEnabled, kioskAddonEnabled, kioskEnabled, bexioAddonEnabled, odooAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, } = req.body || {};
         const merchant = await reseller_service_1.ResellerService.updateMerchantPosLimits(resellerId(req), req.params.merchantId, {
             maxPosPosts: maxPosPosts != null ? Number(maxPosPosts) : undefined,
             maxWaiterPosts: maxWaiterPosts != null ? Number(maxWaiterPosts) : undefined,
@@ -277,6 +281,10 @@ router.put("/merchants/:merchantId/pos-limits", async (req, res) => {
                 : kioskEnabled != null
                     ? (0, kiosk_addon_1.isKioskAddonEnabled)(kioskEnabled)
                     : undefined,
+            bexioAddonEnabled: bexioAddonEnabled != null ? bexioAddonEnabled === true : undefined,
+            odooAddonEnabled: odooAddonEnabled != null ? odooAddonEnabled === true : undefined,
+            growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled != null ? growthAnalyticsAddonEnabled === true : undefined,
+            guestCrmAddonEnabled: guestCrmAddonEnabled != null ? guestCrmAddonEnabled === true : undefined,
         });
         res.json({ success: true, merchant });
     }

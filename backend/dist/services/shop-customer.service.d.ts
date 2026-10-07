@@ -157,6 +157,47 @@ export declare class ShopCustomerService {
     static deleteAddress(customerId: string, merchantId: string, addressId: string): Promise<{
         success: boolean;
     }>;
+    /** Fill blank profile fields from a logged-in checkout without overwriting set values. */
+    static syncFromCheckout(customerId: string, merchantId: string, input: {
+        name?: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+        phone?: string | null;
+        email?: string | null;
+    }): Promise<{
+        id: string;
+        email: string | null;
+        passwordHash: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        phone: string | null;
+        merchantId: string;
+        firstName: string | null;
+        lastName: string | null;
+        defaultAddress: string | null;
+        defaultZip: string | null;
+        defaultCity: string | null;
+        loyaltyPoints: number | null;
+        totalSpent: string | null;
+        marketingOptIn: boolean;
+        lastOrderAt: Date | null;
+        lastReorderReminderAt: Date | null;
+        crmTags: string[];
+    } | null>;
+    /**
+     * Persist a delivery address on the shop account if it is new.
+     * Guest checkout must not call this.
+     */
+    static rememberCheckoutAddress(customerId: string, merchantId: string, input: SavedAddressInput): Promise<{
+        id: string;
+        label: string;
+        address: string;
+        zipCode: string | null;
+        city: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        isDefault: boolean;
+    } | null>;
     private static publicCustomer;
     private static tokenFor;
 }

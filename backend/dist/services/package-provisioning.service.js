@@ -123,6 +123,12 @@ class PackageProvisioningService {
             case "uber_eats":
                 patch.uberEatsAddonEnabled = true;
                 break;
+            case "bexio":
+                patch.bexioAddonEnabled = true;
+                break;
+            case "odoo":
+                patch.odooAddonEnabled = true;
+                break;
             case "extra_pos_post": {
                 const current = Number(merchant.maxPosPosts || 0);
                 patch.maxPosPosts = current === 0 ? qty : current + qty;

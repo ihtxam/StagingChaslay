@@ -1395,7 +1395,7 @@ router.get("/orders", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error getting orders:", error);
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get orders" });
+    res.status(500).json({ error: publicShopDbError(error, "Failed to get orders") });
   }
 });
 
@@ -1649,7 +1649,7 @@ router.get("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Requ
     });
   } catch (error) {
     console.error("Error getting customers:", error);
-    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get customers" });
+    res.status(500).json({ error: publicShopDbError(error, "Failed to get customers") });
   }
 });
 

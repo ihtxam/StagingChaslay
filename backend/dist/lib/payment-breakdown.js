@@ -38,6 +38,7 @@ const PAYMENT_METHOD_ALIASES = {
     bargeld: "cash",
     liquide: "cash",
     card: "card",
+    twint: "twint",
     carte: "card",
     karte: "card",
     credit_card: "card",
@@ -96,6 +97,8 @@ function paymentMethodLabelEn(method) {
             return "Cash";
         case "card":
             return "Card";
+        case "twint":
+            return "TWINT";
         case "terminal":
             return "Terminal";
         case "mixed":

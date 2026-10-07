@@ -75,5 +75,14 @@ export declare function autocompleteAddress(opts: {
     limit?: number;
     lang?: string;
 }): Promise<LocationSuggestion[]>;
+/** List distinct house numbers for a street (Photon / Nominatim). */
+export declare function suggestHouseNumbers(opts: {
+    street: string;
+    city?: string;
+    postcode?: string;
+    countryCode?: string;
+    lang?: string;
+    limit?: number;
+}): Promise<string[]>;
 export {};
 //# sourceMappingURL=location-service.d.ts.map

@@ -13,11 +13,8 @@ const SIZE_DOUBLE = Buffer.from([0x1d, 0x21, 0x11]);
 const SIZE_NORMAL = Buffer.from([0x1d, 0x21, 0x00]);
 const BOLD_ON = Buffer.from([0x1b, 0x45, 0x01]);
 const BOLD_OFF = Buffer.from([0x1b, 0x45, 0x00]);
-const CUT = Buffer.from([
-    0x1b, 0x64, 0x03,
-    0x1d, 0x56, 0x41, 0x0c,
-    0x1d, 0x56, 0x00,
-]);
+/** Short feed + single full cut — matches dashboard escposKitchenCut(). */
+const CUT = Buffer.from([0x1b, 0x64, 0x02, 0x1d, 0x56, 0x00]);
 const CP850_MAP = {
     À: 0xb7,
     Á: 0xb5,
@@ -167,11 +164,20 @@ function reservationTicketEscPos(opts) {
 }
 function kitchenTicketEscPos(opts) {
     const width = opts.paperWidthMm === 58 ? 32 : 42;
-    const lines = [
-        String(opts.orderNumber || "-"),
-        String(opts.orderSource || "ONLINE").toUpperCase(),
-        "---",
-    ];
+    const prepOnly = opts.kitchenPrepOnly === true;
+    const channelLabel = String(opts.channel || "takeaway").replace(/_/g, " ").toUpperCase();
+    const whenLabel = opts.scheduledFor ? formatWhen(opts.scheduledFor) : "ASAP";
+    const lines = [String(opts.orderNumber || "-")];
+    if (prepOnly) {
+        lines.push(`${channelLabel} · ${whenLabel}`);
+        if (opts.customerName?.trim()) {
+            lines.push(...wrap(opts.customerName.trim(), width));
+        }
+    }
+    else {
+        lines.push(String(opts.orderSource || "ONLINE").toUpperCase());
+    }
+    lines.push("---");
     for (const item of opts.items) {
         const qty = Number(item.quantity) || 1;
         lines.push(...wrap(`${qty}x ${item.name || "Item"}`, width));
@@ -180,16 +186,18 @@ function kitchenTicketEscPos(opts) {
         }
     }
     lines.push("---");
-    if (opts.customerName)
-        lines.push(padLine("Guest", opts.customerName, width));
-    if (opts.customerPhone)
-        lines.push(padLine("Tel", opts.customerPhone, width));
-    if (opts.channel)
-        lines.push(padLine("Channel", opts.channel, width));
-    if (opts.scheduledFor)
-        lines.push(padLine("When", formatWhen(opts.scheduledFor), width));
-    if (opts.shippingAddress) {
-        lines.push(...wrap(opts.shippingAddress, width));
+    if (!prepOnly) {
+        if (opts.customerName)
+            lines.push(padLine("Guest", opts.customerName, width));
+        if (opts.customerPhone)
+            lines.push(padLine("Tel", opts.customerPhone, width));
+        if (opts.channel)
+            lines.push(padLine("Channel", opts.channel, width));
+        if (opts.scheduledFor)
+            lines.push(padLine("When", formatWhen(opts.scheduledFor), width));
+        if (opts.shippingAddress) {
+            lines.push(...wrap(opts.shippingAddress, width));
+        }
     }
     if (opts.notes?.trim()) {
         lines.push("---");

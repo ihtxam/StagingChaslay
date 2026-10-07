@@ -136,6 +136,7 @@ class PrintJobExpandService {
                         notes: order.notes,
                         items,
                         paperWidthMm: printer.paperWidthMm,
+                        kitchenPrepOnly: opts.kitchenPrepOnly === true,
                     }),
                 });
             }
@@ -272,6 +273,7 @@ class PrintJobExpandService {
                         notes: order.notes,
                         items,
                         paperWidthMm: printer.paperWidthMm,
+                        kitchenPrepOnly: payload.kitchenPrepOnly === true,
                     });
                     return {
                         kind: "escpos",

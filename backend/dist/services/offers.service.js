@@ -98,6 +98,10 @@ function defaultBadge(type, rules) {
             return `${buy}+${get} · CHF ${price.toFixed(0)}`;
         return `${buy}+${get}`;
     }
+    if (type === "cart_free_gift") {
+        const tiers = (rules.cartGiftTiers || []).length;
+        return tiers > 0 ? `Free gift · ${tiers} tier${tiers === 1 ? "" : "s"}` : "Free gift";
+    }
     return "Offer";
 }
 class OffersService {
@@ -295,18 +299,33 @@ class OffersService {
         }
         return [...byProduct.values()].filter((u) => u.length > 0);
     }
-    static computeBogoDiscount(rules, pools) {
+    static computeBogoDiscount(rules, eligible) {
         const buy = Math.max(1, Math.floor(Number(rules.buyQty) || 1));
         const get = Math.max(1, Math.floor(Number(rules.getQty) || 1));
         const getPct = Math.min(100, Math.max(0, Number(rules.getDiscountPercent) ?? 100));
         const group = buy + get;
-        let discount = 0;
-        for (const raw of pools) {
-            const units = [...raw].sort((a, b) => a - b);
-            const freeSlots = Math.floor(units.length / group) * get;
-            for (let i = 0; i < freeSlots; i++) {
-                discount += (units[i] * getPct) / 100;
+        const byProduct = new Map();
+        const allUnits = [];
+        for (const l of eligible) {
+            const list = byProduct.get(l.productId) || [];
+            for (let i = 0; i < l.quantity; i++) {
+                list.push(l.unitPrice);
+                allUnits.push(l.unitPrice);
             }
+            byProduct.set(l.productId, list);
+        }
+        if (allUnits.length < group)
+            return 0;
+        const hasTrigger = [...byProduct.values()].some((units) => units.length >= buy);
+        if (!hasTrigger)
+            return 0;
+        const freeSlots = Math.floor(allUnits.length / group) * get;
+        if (freeSlots <= 0)
+            return 0;
+        const sortedDesc = [...allUnits].sort((a, b) => b - a);
+        let discount = 0;
+        for (let i = 0; i < freeSlots; i++) {
+            discount += (sortedDesc[i] * getPct) / 100;
         }
         return discount;
     }
@@ -359,9 +378,7 @@ class OffersService {
             return (0, money_1.roundMoney2)((base * pct) / 100);
         }
         if (type === "bogo") {
-            const sameProductOnly = !!rules.sameProductOnly;
-            const pools = this.unitPoolsByProduct(eligible, sameProductOnly);
-            return (0, money_1.roundMoney2)(this.computeBogoDiscount(rules, pools));
+            return (0, money_1.roundMoney2)(this.computeBogoDiscount(rules, eligible));
         }
         if (type === "pay_n_get_m") {
             const sameProductOnly = !!rules.sameProductOnly;
@@ -403,6 +420,9 @@ class OffersService {
         }
         if (type === "package_deal") {
             return this.computePackageDealDiscount(rules, lines);
+        }
+        if (type === "cart_free_gift") {
+            return 0;
         }
         return 0;
     }
@@ -599,6 +619,68 @@ class OffersService {
                 daysOfWeek: ["sat", "sun"],
                 badgeLabel: "15% off",
                 priority: 5,
+            },
+        ];
+        const created = [];
+        for (const d of demos) {
+            created.push(await this.create(merchantId, d));
+        }
+        return created;
+    }
+    /** Restaurant playbooks including cart free gifts (skips if any offer exists). */
+    static async seedRestaurantTemplates(merchantId, categoryIds = []) {
+        const existing = await this.list(merchantId);
+        if (existing.length)
+            return existing;
+        const demos = [
+            {
+                name: "Free gift — spend CHF 40 / 80",
+                description: "Unlock tiered free gifts as cart subtotal grows. Configure gift products per tier.",
+                offerType: "cart_free_gift",
+                rules: {
+                    cartGiftTiers: [
+                        { minCartTotal: 40, label: "Free drink", productIds: [] },
+                        { minCartTotal: 80, label: "Free side", productIds: [] },
+                    ],
+                },
+                badgeLabel: "Free gift",
+                priority: 8,
+            },
+            {
+                name: "Weekday lunch 15% off",
+                description: "15% off orders over CHF 25, Mon–Fri 11:00–14:00.",
+                offerType: "percent_order",
+                rules: { percentOff: 15, minOrderAmount: 25 },
+                scheduleMode: "days",
+                daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
+                timeStart: "11:00",
+                timeEnd: "14:00",
+                badgeLabel: "15% lunch",
+                priority: 9,
+            },
+            {
+                name: "Catering bonus dessert",
+                description: "Free dessert tray when catering cart exceeds CHF 200.",
+                offerType: "cart_free_gift",
+                rules: {
+                    cartGiftTiers: [{ minCartTotal: 200, label: "Dessert tray", productIds: [] }],
+                },
+                channels: ["catering"],
+                badgeLabel: "Catering bonus",
+                priority: 7,
+            },
+            {
+                name: "Happy hour 20% — Food",
+                description: "20% off food category, weekdays 13:00–17:00.",
+                offerType: "percent_category",
+                rules: { percentOff: 20 },
+                categoryIds: categoryIds.slice(0, 1),
+                scheduleMode: "days",
+                daysOfWeek: ["mon", "tue", "wed", "thu", "fri"],
+                timeStart: "13:00",
+                timeEnd: "17:00",
+                badgeLabel: "20% off",
+                priority: 10,
             },
         ];
         const created = [];

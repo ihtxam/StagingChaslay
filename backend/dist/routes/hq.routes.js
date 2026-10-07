@@ -4,6 +4,7 @@ const express_1 = require("express");
 const auth_middleware_1 = require("@/middleware/auth.middleware");
 const hq_catalog_service_1 = require("@/services/hq-catalog.service");
 const hq_menu_service_1 = require("@/services/hq-menu.service");
+const scheduled_menu_1 = require("@/lib/scheduled-menu");
 const pos_reports_service_1 = require("@/services/pos-reports.service");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyToken);
@@ -120,16 +121,41 @@ router.get("/hq/analytics", async (req, res) => {
         });
     }
 });
-/** GET /api/merchant/hq/menus */
-router.get("/hq/menus", async (req, res) => {
+/** POST /api/merchant/hq/menus/uniform-pricing — preview menu-wide price adjustment */
+router.post("/hq/menus/uniform-pricing", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const basePrices = {};
+        if (body.basePrices && typeof body.basePrices === "object") {
+            for (const [id, val] of Object.entries(body.basePrices)) {
+                basePrices[id] = Number(val) || 0;
+            }
+        }
+        const mode = body.mode === "percent" ? "percent" : "fixed";
+        const value = Number(body.value) || 0;
+        const direction = body.direction === "decrease" ? "decrease" : "increase";
+        const prices = (0, scheduled_menu_1.applyUniformPricingToMap)(basePrices, { mode, value, direction });
+        res.json({ success: true, prices });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to compute uniform pricing",
+        });
+    }
+});
+async function listMenusHandler(req, res) {
     try {
         const menus = await hq_menu_service_1.HqMenuService.list(req.merchantId);
         res.json({ success: true, menus });
     }
     catch (error) {
-        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list HQ menus" });
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list menus" });
     }
-});
+}
+/** GET /api/merchant/menus — scheduled menus (merchant-wide) */
+router.get("/menus", listMenusHandler);
+/** GET /api/merchant/hq/menus */
+router.get("/hq/menus", listMenusHandler);
 /** POST /api/merchant/hq/menus */
 router.post("/hq/menus", async (req, res) => {
     try {
@@ -139,6 +165,17 @@ router.post("/hq/menus", async (req, res) => {
     }
     catch (error) {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create HQ menu" });
+    }
+});
+/** POST /api/merchant/menus */
+router.post("/menus", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const menu = await hq_menu_service_1.HqMenuService.create(req.merchantId, body);
+        res.json({ success: true, menu });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create menu" });
     }
 });
 /** PUT /api/merchant/hq/menus/:menuId */
@@ -151,6 +188,16 @@ router.put("/hq/menus/:menuId", async (req, res) => {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update HQ menu" });
     }
 });
+/** PUT /api/merchant/menus/:menuId */
+router.put("/menus/:menuId", async (req, res) => {
+    try {
+        const menu = await hq_menu_service_1.HqMenuService.update(req.merchantId, req.params.menuId, req.body || {});
+        res.json({ success: true, menu });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update menu" });
+    }
+});
 /** DELETE /api/merchant/hq/menus/:menuId */
 router.delete("/hq/menus/:menuId", async (req, res) => {
     try {
@@ -159,6 +206,38 @@ router.delete("/hq/menus/:menuId", async (req, res) => {
     }
     catch (error) {
         res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete HQ menu" });
+    }
+});
+/** DELETE /api/merchant/menus/:menuId */
+router.delete("/menus/:menuId", async (req, res) => {
+    try {
+        await hq_menu_service_1.HqMenuService.remove(req.merchantId, req.params.menuId);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete menu" });
+    }
+});
+/** POST /api/merchant/menus/uniform-pricing */
+router.post("/menus/uniform-pricing", async (req, res) => {
+    try {
+        const body = req.body || {};
+        const basePrices = {};
+        if (body.basePrices && typeof body.basePrices === "object") {
+            for (const [id, val] of Object.entries(body.basePrices)) {
+                basePrices[id] = Number(val) || 0;
+            }
+        }
+        const mode = body.mode === "percent" ? "percent" : "fixed";
+        const value = Number(body.value) || 0;
+        const direction = body.direction === "decrease" ? "decrease" : "increase";
+        const prices = (0, scheduled_menu_1.applyUniformPricingToMap)(basePrices, { mode, value, direction });
+        res.json({ success: true, prices });
+    }
+    catch (error) {
+        res.status(400).json({
+            error: error instanceof Error ? error.message : "Failed to compute uniform pricing",
+        });
     }
 });
 /** GET /api/merchant/hq/bulk-pricing/jobs */

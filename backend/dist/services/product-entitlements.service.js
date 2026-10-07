@@ -10,7 +10,7 @@ class ProductEntitlementsService {
         const [row] = await db
             .select({ total: (0, drizzle_orm_1.count)() })
             .from(db_1.schema.products)
-            .where((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId));
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.products.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.products.isActive, true)));
         return Number(row?.total) || 0;
     }
     static async getLimitInfo(merchantId) {

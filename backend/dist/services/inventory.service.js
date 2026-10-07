@@ -654,6 +654,34 @@ class InventoryService {
         if (!barcode)
             throw new Error("Barcode is required");
         const qty = num(input.qty);
+        const photoOnly = input.photoOnly === true;
+        if (photoOnly) {
+            const item = await this.getItemByBarcode(merchantId, barcode);
+            if (!item)
+                throw new Error("Product not found — scan an existing barcode to update the photo");
+            const imageUrl = String(input.imageUrl || "").trim();
+            if (!imageUrl)
+                throw new Error("Product photo is required");
+            let menuProduct = null;
+            const db = (0, db_1.getDb)();
+            const merchant = await db.query.merchants.findFirst({
+                where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+                columns: { businessCategory: true },
+            });
+            const businessModule = (0, business_module_1.normalizeBusinessModule)(merchant?.businessCategory);
+            const publishToPos = input.publishToPos !== false && (businessModule === "retail" || businessModule === null);
+            if (publishToPos) {
+                menuProduct = await this.publishStorekeeperToPos(merchantId, {
+                    barcode,
+                    name: String(input.name || item.name).trim(),
+                    salePrice: input.salePrice,
+                    qty: 0,
+                    imageUrl,
+                    updateImageUrl: true,
+                });
+            }
+            return { item, created: false, menuProduct };
+        }
         if (!(qty > 0))
             throw new Error("Quantity must be greater than 0");
         let item = await this.getItemByBarcode(merchantId, barcode);
@@ -697,6 +725,16 @@ class InventoryService {
             note: input.note || "Storekeeper intake",
             expiryDate: input.expiryDate,
         });
+        let lotId = null;
+        if (parseExpiryDate(input.expiryDate)) {
+            const db = (0, db_1.getDb)();
+            const lot = await db.query.inventoryStockLots.findFirst({
+                where: (0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryStockLots.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.inventoryStockLots.itemId, item.id)),
+                orderBy: [(0, drizzle_orm_1.desc)(db_1.schema.inventoryStockLots.createdAt)],
+                columns: { id: true },
+            });
+            lotId = lot?.id ?? null;
+        }
         let menuProduct = null;
         const db = (0, db_1.getDb)();
         const merchant = await db.query.merchants.findFirst({
@@ -712,9 +750,10 @@ class InventoryService {
                 salePrice: input.salePrice,
                 qty,
                 imageUrl: input.imageUrl,
+                updateImageUrl: input.updateImageUrl === true,
             });
         }
-        return { item: updated, created, menuProduct };
+        return { item: updated, created, menuProduct, lotId };
     }
     /** Create or update a sellable menu product after storekeeper intake (retail). */
     static async publishStorekeeperToPos(merchantId, input) {
@@ -728,11 +767,13 @@ class InventoryService {
             const patch = {
                 name: input.name,
                 stock: nextStock,
+                isActive: true,
             };
             if (input.salePrice != null && Number.isFinite(input.salePrice)) {
                 patch.price = price.toString();
             }
-            if (input.imageUrl && !existing.imageUrl) {
+            if (input.imageUrl &&
+                (input.updateImageUrl || !existing.imageUrl)) {
                 patch.imageUrl = input.imageUrl;
             }
             const updated = await ProductService.updateProduct(merchantId, existing.id, patch);
@@ -744,6 +785,10 @@ class InventoryService {
             columns: { id: true },
         });
         const created = await ProductService.createProduct(merchantId, input.name, price, defaultCategory?.id, undefined, input.barcode, undefined, stockAdd, true, undefined, input.imageUrl || undefined);
+        if (defaultCategory?.id) {
+            const { CategoryService } = await Promise.resolve().then(() => __importStar(require("@/services/category.service")));
+            await CategoryService.ensureChannelsEnabled(merchantId, defaultCategory.id, ["pos"]);
+        }
         return {
             id: created.id,
             name: created.name,
@@ -764,7 +809,9 @@ class InventoryService {
     }
     static async createStockLot(merchantId, itemId, movementId, qty, expiryDate, note) {
         const db = (0, db_1.getDb)();
-        await db.insert(db_1.schema.inventoryStockLots).values({
+        const [row] = await db
+            .insert(db_1.schema.inventoryStockLots)
+            .values({
             merchantId,
             itemId,
             movementId,
@@ -772,7 +819,79 @@ class InventoryService {
             remainingQty: qtyStr(qty),
             expiryDate,
             note: note ? String(note).slice(0, 500) : null,
+        })
+            .returning({ id: db_1.schema.inventoryStockLots.id });
+        return row.id;
+    }
+    static async storekeeperReviseIntake(merchantId, input) {
+        await (0, storekeeper_addon_1.assertStorekeeperLicensed)(merchantId);
+        const item = await this.getOwnedItem(merchantId, input.itemId);
+        const barcode = String(input.barcode || "").trim();
+        if (!barcode || String(item.barcode || "").trim() !== barcode) {
+            throw new Error("Barcode does not match this stock item");
+        }
+        const nextQty = num(input.qty);
+        const prevQty = num(input.previousQty);
+        if (!(nextQty > 0))
+            throw new Error("Quantity must be greater than 0");
+        const patch = {};
+        const name = String(input.name || "").trim();
+        if (name && name !== item.name)
+            patch.name = name;
+        if (input.unit)
+            patch.unit = input.unit;
+        if (input.categoryId !== undefined)
+            patch.categoryId = input.categoryId;
+        if (parseExpiryDate(input.expiryDate))
+            patch.perishable = true;
+        let current = item;
+        if (Object.keys(patch).length) {
+            current = await this.updateItem(merchantId, item.id, patch);
+        }
+        const delta = nextQty - prevQty;
+        if (delta > 0) {
+            current = await this.stockIn(merchantId, item.id, {
+                qty: delta,
+                unit: input.unit,
+                note: "Storekeeper correction",
+                expiryDate: input.expiryDate,
+            });
+        }
+        else if (delta < 0) {
+            current = await this.stockOut(merchantId, item.id, {
+                qty: Math.abs(delta),
+                note: "Storekeeper correction",
+                reason: "out",
+            });
+        }
+        const lotId = String(input.lotId || "").trim();
+        const expiry = parseExpiryDate(input.expiryDate);
+        if (lotId && expiry) {
+            const db = (0, db_1.getDb)();
+            await db
+                .update(db_1.schema.inventoryStockLots)
+                .set({ expiryDate: expiry })
+                .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(db_1.schema.inventoryStockLots.id, lotId), (0, drizzle_orm_1.eq)(db_1.schema.inventoryStockLots.merchantId, merchantId), (0, drizzle_orm_1.eq)(db_1.schema.inventoryStockLots.itemId, item.id)));
+        }
+        let menuProduct = null;
+        const db = (0, db_1.getDb)();
+        const merchant = await db.query.merchants.findFirst({
+            where: (0, drizzle_orm_1.eq)(db_1.schema.merchants.id, merchantId),
+            columns: { businessCategory: true },
         });
+        const businessModule = (0, business_module_1.normalizeBusinessModule)(merchant?.businessCategory);
+        const publishToPos = businessModule === "retail" || businessModule === null;
+        if (publishToPos) {
+            menuProduct = await this.publishStorekeeperToPos(merchantId, {
+                barcode,
+                name: String(input.name || current.name).trim(),
+                salePrice: input.salePrice,
+                qty: 0,
+                imageUrl: input.imageUrl,
+                updateImageUrl: input.updateImageUrl === true,
+            });
+        }
+        return { item: current, menuProduct };
     }
     static async usageReport(merchantId, days = 30) {
         await this.assertLicensed(merchantId);

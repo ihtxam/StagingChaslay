@@ -372,7 +372,7 @@ class InvoiceService {
         }
         return updated;
     }
-    /** Email invoice PDF to customer (uses platform Brevo when delivery mode is platform). */
+    /** Email invoice PDF to customer (uses platform mailco when delivery mode is platform). */
     static async sendEmail(merchantId, orderRef, opts) {
         const db = (0, db_1.getDb)();
         const order = await this.findOrder(merchantId, orderRef);

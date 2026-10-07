@@ -1,6 +1,14 @@
 export declare class ChaslayPagebuilderService {
-    /** Prefer the homepage row in chaslay_homepage_builder_pages; fall back to builder.editor_state. */
+    /**
+     * Auto-bootstrap from legacy CMS is disabled on production by default.
+     * Client website content must not be created or replaced without explicit merchant action.
+     * Set CHASLAY_AUTO_BOOTSTRAP=1 to allow on any env, or run outside NODE_ENV=production.
+     */
+    static isAutoBootstrapAllowed(): boolean;
+    /** Prefer homepage page row when it has real blocks; fall back to builder.editor_state. */
     private static resolvePublishedEditorState;
+    /** Repair missing/wiped Chaslay state before reads (legacy CMS bootstrap, split-brain heal). */
+    private static ensureHomepageRepaired;
     /** Keep builder.editor_state aligned with the homepage page row (editor saves to pages). */
     private static syncHomepagePageToBuilder;
     /** One-time bootstrap when a merchant had the classic CMS homepage but no Chaslay builder yet. */

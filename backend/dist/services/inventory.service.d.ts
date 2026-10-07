@@ -611,6 +611,10 @@ export declare class InventoryService {
         cost?: number;
         salePrice?: number;
         imageUrl?: string | null;
+        /** Replace POS product photo even when one already exists. */
+        updateImageUrl?: boolean;
+        /** Update photo only — no stock movement (existing barcode required). */
+        photoOnly?: boolean;
         /** Retail: create/update menu product for POS sale. Default true for retail merchants. */
         publishToPos?: boolean;
         note?: string;
@@ -649,11 +653,84 @@ export declare class InventoryService {
         };
         created: boolean;
         menuProduct: Record<string, unknown> | null;
+        lotId?: undefined;
+    } | {
+        item: {
+            onHand: number;
+            minStock: number;
+            reorderQty: number;
+            cost: number;
+            lowStock: boolean;
+            outOfStock: boolean;
+            categoryId: string | null;
+            category: {
+                id: string;
+                name: string;
+            } | null;
+            supplier: {
+                id: string;
+                name: string;
+                email: string | null;
+                archivedAt: Date | null;
+            } | null;
+            doNotReorder: boolean;
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            merchantId: string;
+            barcode: string | null;
+            isDemo: boolean;
+            unit: string;
+            supplierId: string | null;
+            perishable: boolean;
+            autoReorderEnabled: boolean;
+            lastAutoReorderAt: Date | null;
+        };
+        created: boolean;
+        menuProduct: Record<string, unknown> | null;
+        lotId: string | null;
     }>;
     /** Create or update a sellable menu product after storekeeper intake (retail). */
     private static publishStorekeeperToPos;
     private static assertBarcodeAvailable;
     private static createStockLot;
+    static storekeeperReviseIntake(merchantId: string, input: {
+        itemId: string;
+        barcode: string;
+        name?: string;
+        unit?: string;
+        categoryId?: string | null;
+        qty: number;
+        previousQty: number;
+        expiryDate?: string | null;
+        lotId?: string | null;
+        salePrice?: number;
+        imageUrl?: string | null;
+        updateImageUrl?: boolean;
+    }): Promise<{
+        item: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            merchantId: string;
+            categoryId: string | null;
+            barcode: string | null;
+            cost: string;
+            isDemo: boolean;
+            unit: string;
+            onHand: string;
+            minStock: string;
+            reorderQty: string;
+            supplierId: string | null;
+            perishable: boolean;
+            autoReorderEnabled: boolean;
+            doNotReorder: boolean;
+            lastAutoReorderAt: Date | null;
+        };
+        menuProduct: Record<string, unknown> | null;
+    }>;
     static usageReport(merchantId: string, days?: number): Promise<{
         theoreticalUsage: number;
         wasteQty: number;

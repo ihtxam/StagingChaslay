@@ -1,6 +1,12 @@
 import { schema } from "@/db";
 import { type CatalogChannel } from "@/lib/catalog-visibility";
 type ProductRow = typeof schema.products.$inferSelect;
+type CategoryRow = typeof schema.categories.$inferSelect;
+export type LocationChannelCatalog = {
+    categories: CategoryRow[];
+    products: ProductRow[];
+    locationId: string;
+};
 export declare class CatalogLocationService {
     /** Merge per-location price, visibility, and availability overrides onto products. */
     static applyLocationOverrides<T extends ProductRow>(merchantId: string, locationId: string | null | undefined, products: T[]): Promise<T[]>;
@@ -12,6 +18,10 @@ export declare class CatalogLocationService {
         visibility?: unknown;
         isActive?: boolean | null;
     }, channel: CatalogChannel): boolean;
+    /**
+     * POS / shop menu for one location: overrides, optional HQ location links, channel visibility, HQ time menus.
+     */
+    static buildLocationChannelCatalog(merchantId: string, locationId: string, channel: CatalogChannel): Promise<LocationChannelCatalog>;
 }
 export {};
 //# sourceMappingURL=catalog-location.service.d.ts.map

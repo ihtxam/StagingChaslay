@@ -8,6 +8,8 @@ export declare function isSafeSkuAsBarcode(sku: string): boolean;
 export declare function formatInternalBarcode(seq: number): string;
 /** Allocate the next merchant-unique 12-digit internal barcode (20 + 10 digits). Mutates `taken`. */
 export declare function allocateInternalBarcode(taken: Set<string>): string | null;
+/** Alternate forms for scanner vs stored barcode (UPC/EAN leading zero, etc.). */
+export declare function barcodeMatchVariants(raw?: string | null): string[];
 export declare class BarcodeService {
     static generateMissing(merchantId: string, opts?: {
         productIds?: string[];

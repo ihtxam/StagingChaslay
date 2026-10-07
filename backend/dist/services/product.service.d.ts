@@ -29,6 +29,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }>;
+        cateringConfig?: Record<string, unknown>;
         allowExtras?: boolean;
         clientId?: string;
         specifications?: Array<{
@@ -42,10 +43,13 @@ export declare class ProductService {
         buttonColor?: string;
         /** Null clears; integer ≥ 1 sets free-with-points cost */
         loyaltyRewardPoints?: number | null;
+        brand?: string | null;
+        extraBarcodes?: string[];
     }): Promise<{
         id: string;
         name: string;
         imageUrl: string | null;
+        brand: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -89,6 +93,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -102,6 +107,12 @@ export declare class ProductService {
         loyaltyRewardPoints: number | null;
         recipeYield: string;
         similarProductIds: string[] | null;
+        dietaryTags: string[] | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
     }>;
     private static productListWhere;
     static countProducts(merchantId: string, search?: string, categoryId?: string): Promise<number>;
@@ -113,6 +124,7 @@ export declare class ProductService {
         description: string | null;
         id: string;
         imageUrl: string | null;
+        brand: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -155,6 +167,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -168,6 +181,12 @@ export declare class ProductService {
         loyaltyRewardPoints: number | null;
         recipeYield: string;
         similarProductIds: string[] | null;
+        dietaryTags: string[] | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
         category: {
             id: string;
             name: string;
@@ -182,6 +201,7 @@ export declare class ProductService {
             visibility: {
                 channels: string[];
             };
+            shopSchedule: Record<string, unknown>;
             deliveryPricingEnabled: boolean;
             extraDeliveryPrice: string | null;
             clientId: string | null;
@@ -195,6 +215,7 @@ export declare class ProductService {
         description: string | null;
         id: string;
         imageUrl: string | null;
+        brand: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -237,6 +258,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -250,6 +272,12 @@ export declare class ProductService {
         loyaltyRewardPoints: number | null;
         recipeYield: string;
         similarProductIds: string[] | null;
+        dietaryTags: string[] | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
         category: {
             id: string;
             name: string;
@@ -264,6 +292,7 @@ export declare class ProductService {
             visibility: {
                 channels: string[];
             };
+            shopSchedule: Record<string, unknown>;
             deliveryPricingEnabled: boolean;
             extraDeliveryPrice: string | null;
             clientId: string | null;
@@ -276,6 +305,7 @@ export declare class ProductService {
         id: string;
         name: string;
         imageUrl: string | null;
+        brand: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -319,6 +349,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -332,6 +363,12 @@ export declare class ProductService {
         loyaltyRewardPoints: number | null;
         recipeYield: string;
         similarProductIds: string[] | null;
+        dietaryTags: string[] | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
         category: {
             id: string;
             name: string;
@@ -346,6 +383,7 @@ export declare class ProductService {
             visibility: {
                 channels: string[];
             };
+            shopSchedule: Record<string, unknown>;
             deliveryPricingEnabled: boolean;
             extraDeliveryPrice: string | null;
             clientId: string | null;
@@ -358,6 +396,7 @@ export declare class ProductService {
         id: string;
         name: string;
         imageUrl: string | null;
+        brand: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -401,6 +440,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -414,7 +454,13 @@ export declare class ProductService {
         loyaltyRewardPoints: number | null;
         recipeYield: string;
         similarProductIds: string[] | null;
-    } | undefined>;
+        dietaryTags: string[] | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
+    } | null | undefined>;
     /**
      * Update product
      */
@@ -457,6 +503,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -476,6 +523,13 @@ export declare class ProductService {
             channels: string[];
         };
         similarProductIds: string[] | null;
+        dietaryTags: string[] | null;
+        brand: string | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
         createdAt: Date;
         updatedAt: Date;
     }>;
@@ -531,6 +585,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -550,6 +605,13 @@ export declare class ProductService {
             channels: string[];
         };
         similarProductIds: string[] | null;
+        dietaryTags: string[] | null;
+        brand: string | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
         createdAt: Date;
         updatedAt: Date;
     }>;
@@ -560,6 +622,7 @@ export declare class ProductService {
         id: string;
         name: string;
         imageUrl: string | null;
+        brand: string | null;
         isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
@@ -603,6 +666,7 @@ export declare class ProductService {
             productId?: string;
             quantity?: number;
         }[] | null;
+        cateringConfig: Record<string, unknown> | null;
         specifications: {
             id: string;
             name: string;
@@ -616,6 +680,12 @@ export declare class ProductService {
         loyaltyRewardPoints: number | null;
         recipeYield: string;
         similarProductIds: string[] | null;
+        dietaryTags: string[] | null;
+        extraBarcodes: string[] | null;
+        timeSlotPrices: Record<string, {
+            price?: number;
+            multiplier?: number;
+        }> | null;
     }[]>;
     /**
      * Get product statistics

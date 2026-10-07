@@ -9,6 +9,7 @@ import {
   normalizeScannedPayload,
 } from "@/lib/gift-card-code";
 import { resolveShopPublicHost } from "@/lib/brand";
+import { withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
 import {
   normalizeGiftCardSettings,
   validateGiftAmount,
@@ -134,6 +135,7 @@ export class GiftCardService {
     merchantId: string,
     opts: { page?: number; limit?: number; status?: string; q?: string } = {}
   ) {
+    return withMerchantSchemaRetry(async () => {
     const db = getDb();
     const page = Math.max(1, opts.page || 1);
     const limit = Math.min(100, Math.max(1, opts.limit || 50));
@@ -179,6 +181,7 @@ export class GiftCardService {
       this.enrichCard(c as unknown as Record<string, unknown>, settings)
     );
     return { cards: enriched, page, limit };
+    });
   }
 
   static async getById(merchantId: string, cardId: string) {
