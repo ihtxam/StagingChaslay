@@ -96,8 +96,10 @@ export default function ShopInfoSheet({ open, onClose, merchant, zones: zonesPro
         onClick={onClose}
       />
       <div
-        className={`absolute inset-x-3 top-[8%] mx-auto flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl transition sm:inset-x-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-h-[92dvh] sm:max-w-xl md:max-w-2xl ${
-          open ? 'opacity-100' : 'translate-y-4 opacity-0'
+        className={`fixed left-1/2 z-[71] flex max-h-[88dvh] w-[min(calc(100vw-1.5rem),32rem)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-xl transition sm:top-1/2 sm:max-h-[92dvh] sm:w-[min(calc(100vw-2rem),36rem)] sm:-translate-y-1/2 md:max-w-2xl ${
+          open
+            ? 'top-[max(1.25rem,env(safe-area-inset-top,0px))] opacity-100'
+            : 'pointer-events-none top-[max(1.25rem,env(safe-area-inset-top,0px))] translate-y-3 opacity-0'
         }`}
         role="dialog"
         aria-modal="true"

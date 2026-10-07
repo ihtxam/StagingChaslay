@@ -10,6 +10,8 @@ import {
   newCartLineId,
   newOfferInstanceId,
   removeOfferInstance,
+  resolveCartLineQuantityUpdate,
+  cartLineQuantityCap,
   resolveShopKey,
   resolveShopLocationSlug,
   saveCart,
@@ -1036,22 +1038,26 @@ export default function OrderingPage() {
   const updateQuantity = (lineId: string, quantity: number) => {
     setDraft((prev) => {
       const target = prev.items.find((item) => item.lineId === lineId);
-      // Locked deal lines: only whole-offer remove (qty 0 on any line removes the deal)
-      if (target?.offerInstanceId) {
-        if (quantity <= 0) {
+      if (!target) return prev;
+      const nextQty = resolveCartLineQuantityUpdate(target, quantity);
+      if (nextQty === 'unchanged') return prev;
+      if (nextQty === 'remove') {
+        if (target.offerInstanceId) {
           return {
             ...prev,
             items: removeOfferInstance(prev.items, target.offerInstanceId),
           };
         }
-        return prev;
+        return {
+          ...prev,
+          items: prev.items.filter((item) => item.lineId !== lineId),
+        };
       }
       return {
         ...prev,
-        items:
-          quantity <= 0
-            ? prev.items.filter((item) => item.lineId !== lineId)
-            : prev.items.map((item) => (item.lineId === lineId ? { ...item, quantity } : item)),
+        items: prev.items.map((item) =>
+          item.lineId === lineId ? { ...item, quantity: nextQty } : item
+        ),
       };
     });
   };
@@ -1635,6 +1641,8 @@ export default function OrderingPage() {
               }
 
               const item = block.item;
+              const qtyCap = cartLineQuantityCap(item);
+              const qtyLocked = qtyCap === 1;
               return (
                 <li key={item.lineId} className="flex gap-3 text-sm">
                   {showProductImages && item.image ? (
@@ -1701,13 +1709,15 @@ export default function OrderingPage() {
                         -
                       </button>
                       <span className="w-5 text-center font-semibold">{item.quantity}</span>
-                      <button
-                        type="button"
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-900 text-sm font-bold text-white"
-                        onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
-                      >
-                        +
-                      </button>
+                      {qtyLocked ? null : (
+                        <button
+                          type="button"
+                          className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-900 text-sm font-bold text-white"
+                          onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                        >
+                          +
+                        </button>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -2271,7 +2281,7 @@ export default function OrderingPage() {
           role="presentation"
         >
           <div
-            className="absolute right-0 top-0 bottom-0 flex h-full w-full max-w-md flex-col bg-white shop-slide-in-right shadow-xl"
+            className="absolute right-0 top-0 bottom-0 flex h-full w-full max-w-[min(28rem,100dvw)] flex-col overflow-x-hidden bg-white shop-slide-in-right shadow-xl pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)]"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"

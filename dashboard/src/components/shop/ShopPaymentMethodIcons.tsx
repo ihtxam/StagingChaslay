@@ -11,6 +11,9 @@ const PAYMENT_FILES = [
 ] as const;
 
 function paymentIconUrl(file: string): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin.replace(/\/+$/, '')}/shop/payments/${file}`;
+  }
   const origin = resolvePanelAppOrigin().replace(/\/+$/, '');
   return `${origin}/shop/payments/${file}`;
 }
@@ -31,7 +34,6 @@ export default function ShopPaymentMethodIcons({ className = '' }: { className?:
           className="h-5 w-auto max-h-5 object-contain opacity-95"
           loading="lazy"
           decoding="async"
-          crossOrigin="anonymous"
         />
       ))}
     </div>

@@ -59,6 +59,34 @@ export interface ShopCartItem {
   offerName?: string;
 }
 
+/** Max units per line; `null` = no cap (offer bundles use offerInstanceId instead). */
+export function cartLineQuantityCap(
+  item: Pick<
+    ShopCartItem,
+    'loyaltyReward' | 'cartFreeGiftOfferId' | 'cartFreeGiftTierIndex' | 'offerInstanceId'
+  >
+): number | null {
+  if (item.offerInstanceId) return null;
+  if (item.loyaltyReward) return 1;
+  if (item.cartFreeGiftOfferId && item.cartFreeGiftTierIndex != null) return 1;
+  return null;
+}
+
+export type CartLineQuantityUpdate = number | 'remove' | 'unchanged';
+
+export function resolveCartLineQuantityUpdate(
+  item: ShopCartItem,
+  quantity: number
+): CartLineQuantityUpdate {
+  if (item.offerInstanceId) {
+    return quantity <= 0 ? 'remove' : 'unchanged';
+  }
+  if (quantity <= 0) return 'remove';
+  const cap = cartLineQuantityCap(item);
+  if (cap != null) return Math.min(quantity, cap);
+  return quantity;
+}
+
 export interface ShopVoucherState {
   voucherCode?: string;
   voucherDiscount?: number;
@@ -141,6 +169,13 @@ function normalizeCartItem(item: Partial<ShopCartItem> & { id: string; name: str
     item.cartFreeGiftTierIndex >= 0
       ? Math.floor(item.cartFreeGiftTierIndex)
       : undefined;
+  const qtyCap = cartLineQuantityCap({
+    loyaltyReward,
+    cartFreeGiftOfferId,
+    cartFreeGiftTierIndex,
+  });
+  let quantity = Math.max(1, Math.floor(Number(item.quantity)) || 1);
+  if (qtyCap != null) quantity = Math.min(quantity, qtyCap);
   return {
     lineId:
       item.lineId ||
@@ -150,7 +185,7 @@ function normalizeCartItem(item: Partial<ShopCartItem> & { id: string; name: str
     categoryId: item.categoryId ?? null,
     price: loyaltyReward ? 0 : item.price,
     basePrice: loyaltyReward ? 0 : basePrice,
-    quantity: item.quantity,
+    quantity,
     description: item.description,
     image: item.image,
     selectedExtras: loyaltyReward ? [] : selectedExtras,
