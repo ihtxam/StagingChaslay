@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 16" role="img" aria-label="PostFinance">
+  <rect x="0" y="2" width="12" height="12" rx="1" fill="#fff"/>
+  <path fill="#17252b" d="M3 5h6v1H3zm0 2.5h6v1H3zm0 2.5h4v1H3z"/>
+  <text x="16" y="12" fill="#fff" font-family="Inter, Arial, sans-serif" font-size="9" font-weight="600">PostFinance</text>
+</svg>

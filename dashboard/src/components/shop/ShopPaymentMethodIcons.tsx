@@ -5,9 +5,9 @@ const PAYMENT_FILES = [
   { file: 'visa.svg', alt: 'Visa', w: 42 },
   { file: 'mastercard.svg', alt: 'Mastercard', w: 32 },
   { file: 'amex.svg', alt: 'American Express', w: 42 },
+  { file: 'paypal.svg', alt: 'PayPal', w: 52 },
   { file: 'twint.svg', alt: 'TWINT', w: 52 },
-  { file: 'apple-pay.svg', alt: 'Apple Pay', w: 44 },
-  { file: 'google-pay.svg', alt: 'Google Pay', w: 44 },
+  { file: 'postfinance.svg', alt: 'PostFinance', w: 72 },
 ] as const;
 
 function paymentIconUrl(file: string): string {
