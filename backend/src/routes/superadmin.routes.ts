@@ -755,7 +755,11 @@ router.put("/merchants/:merchantId/product-surface", async (req: Request, res: R
   try {
     const { merchantId } = req.params;
     const surface = String(req.body?.surface || "");
-    const result = await MerchantProductSurfaceService.apply(merchantId, surface as any);
+    const posEditionId =
+      req.body?.posEditionId != null ? String(req.body.posEditionId) : undefined;
+    const result = await MerchantProductSurfaceService.apply(merchantId, surface as any, {
+      posEditionId,
+    });
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Error applying product surface:", error);
