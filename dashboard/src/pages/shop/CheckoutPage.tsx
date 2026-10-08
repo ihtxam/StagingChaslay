@@ -12,6 +12,8 @@ import {
   loadCustomerToken,
   newCartLineId,
   removeOfferInstance,
+  resolveCartLineQuantityUpdate,
+  cartLineQuantityCap,
   resolveShopKey,
   resolveShopLocationSlug,
   saveCart,
@@ -822,18 +824,20 @@ export default function CheckoutPage() {
   const setLineQty = (lineId: string, quantity: number) => {
     setDraft((d) => {
       const target = d.items.find((i) => (i.lineId || i.id) === lineId);
+      if (!target) return d;
+      const nextQty = resolveCartLineQuantityUpdate(target, quantity);
       let items = d.items;
-      if (target?.offerInstanceId) {
-        // Locked deal: only whole-offer removal
-        if (quantity > 0) return d;
-        items = removeOfferInstance(d.items, target.offerInstanceId);
+      if (nextQty === 'unchanged') return d;
+      if (nextQty === 'remove') {
+        if (target.offerInstanceId) {
+          items = removeOfferInstance(d.items, target.offerInstanceId);
+        } else {
+          items = d.items.filter((i) => (i.lineId || i.id) !== lineId);
+        }
       } else {
-        items =
-          quantity <= 0
-            ? d.items.filter((i) => (i.lineId || i.id) !== lineId)
-            : d.items.map((i) =>
-                (i.lineId || i.id) === lineId ? { ...i, quantity } : i
-              );
+        items = d.items.map((i) =>
+          (i.lineId || i.id) === lineId ? { ...i, quantity: nextQty } : i
+        );
       }
       const next = { ...d, items };
       if (shopKey) saveCart(shopKey, next);
@@ -1638,6 +1642,7 @@ export default function CheckoutPage() {
         }
         const i = block.item;
         const lineKey = i.lineId || i.id;
+        const qtyLocked = cartLineQuantityCap(i) === 1;
         return (
           <li key={lineKey} className="space-y-1.5">
             <div className="flex justify-between gap-3">
@@ -1667,13 +1672,15 @@ export default function CheckoutPage() {
                   −
                 </button>
                 <span className="w-5 text-center font-semibold">{i.quantity}</span>
-                <button
-                  type="button"
-                  className="h-6 w-6 text-sm font-semibold"
-                  onClick={() => setLineQty(lineKey, i.quantity + 1)}
-                >
-                  +
-                </button>
+                {qtyLocked ? null : (
+                  <button
+                    type="button"
+                    className="h-6 w-6 text-sm font-semibold"
+                    onClick={() => setLineQty(lineKey, i.quantity + 1)}
+                  >
+                    +
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Link to={menuPath} className="text-stone-500 hover:underline">

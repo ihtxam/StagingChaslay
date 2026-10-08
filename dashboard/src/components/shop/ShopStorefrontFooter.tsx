@@ -25,7 +25,7 @@ export default function ShopStorefrontFooter({
   if (shopKey) {
     return (
       <div className={shellClass}>
-        <ShopFooter shopKey={shopKey} />
+        <ShopFooter shopKey={shopKey} basePath={basePath} />
       </div>
     );
   }

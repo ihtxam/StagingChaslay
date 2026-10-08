@@ -5,12 +5,15 @@ const PAYMENT_FILES = [
   { file: 'visa.svg', alt: 'Visa', w: 42 },
   { file: 'mastercard.svg', alt: 'Mastercard', w: 32 },
   { file: 'amex.svg', alt: 'American Express', w: 42 },
+  { file: 'paypal.svg', alt: 'PayPal', w: 52 },
   { file: 'twint.svg', alt: 'TWINT', w: 52 },
-  { file: 'apple-pay.svg', alt: 'Apple Pay', w: 44 },
-  { file: 'google-pay.svg', alt: 'Google Pay', w: 44 },
+  { file: 'postfinance.svg', alt: 'PostFinance', w: 72 },
 ] as const;
 
 function paymentIconUrl(file: string): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin.replace(/\/+$/, '')}/shop/payments/${file}`;
+  }
   const origin = resolvePanelAppOrigin().replace(/\/+$/, '');
   return `${origin}/shop/payments/${file}`;
 }
@@ -31,7 +34,6 @@ export default function ShopPaymentMethodIcons({ className = '' }: { className?:
           className="h-5 w-auto max-h-5 object-contain opacity-95"
           loading="lazy"
           decoding="async"
-          crossOrigin="anonymous"
         />
       ))}
     </div>
