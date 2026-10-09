@@ -3,12 +3,8 @@ import { useI18n } from '@/lib/i18n';
 import ShopPaymentMethodIcons from '@/components/shop/ShopPaymentMethodIcons';
 import { usePlatformLegalUrls } from '@/hooks/usePlatformLegalUrls';
 
-type Props = {
-  siteHost?: string;
-};
-
 /** Platform footer (Reborn logo, legal, payments) — login-style charcoal + burgundy gradient. */
-export default function ShopPlatformFooterBand({ siteHost }: Props) {
+export default function ShopPlatformFooterBand() {
   const { t } = useI18n();
   const year = new Date().getFullYear();
   const logoUrl = getRebornLogoWhiteUrl();
@@ -84,12 +80,6 @@ export default function ShopPlatformFooterBand({ siteHost }: Props) {
           </div>
         </div>
       </div>
-
-      {siteHost ? (
-        <div className="relative z-[1] border-t border-white/10 bg-white py-2.5 text-center">
-          <p className="text-xs font-medium text-stone-800">{siteHost}</p>
-        </div>
-      ) : null}
     </div>
   );
 }
