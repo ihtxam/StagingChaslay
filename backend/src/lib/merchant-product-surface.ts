@@ -3,17 +3,23 @@ import { ALL_EDITION_FEATURES } from "@/lib/edition-features";
 
 /** Merchant commercial package — drives shop, website CMS, and POS surfaces. */
 export type MerchantProductSurface =
+  | "pos_only"
   | "shop_only"
   | "website_only"
   | "shop_website"
   | "full_pos";
 
 export const MERCHANT_PRODUCT_SURFACES: MerchantProductSurface[] = [
+  "pos_only",
   "shop_only",
   "website_only",
   "shop_website",
   "full_pos",
 ];
+
+export function productSurfaceNeedsPosEdition(surface: MerchantProductSurface): boolean {
+  return surface === "full_pos" || surface === "pos_only";
+}
 
 const POS_FEATURES = ALL_EDITION_FEATURES.filter((k) => k.startsWith("pos_"));
 
@@ -44,6 +50,15 @@ export type ProductSurfacePreset = {
 };
 
 export const PRODUCT_SURFACE_PRESETS: Record<MerchantProductSurface, ProductSurfacePreset> = {
+  pos_only: {
+    label: "POS only",
+    description: "WebPOS till only — no online shop or website.",
+    editionName: "POS only",
+    shopEnabled: false,
+    cmsHomepageEnabled: false,
+    maxPosPosts: 1,
+    features: [...POS_FEATURES, "reports", "staff_roles"],
+  },
   shop_only: {
     label: "Shop only",
     description: "Online ordering kiosk/QR — Order Center, no till (WebPOS hidden).",
@@ -106,6 +121,7 @@ export function inferProductSurface(input: {
     Math.max(0, Number(input.maxPosPosts) || 0) > 0 || !!input.hasPosEdition;
   const shop = !!input.shopEnabled;
   const cms = !!input.cmsHomepageEnabled;
+  if (hasPos && !shop && !cms) return "pos_only";
   if (hasPos) return "full_pos";
   if (shop && cms) return "shop_website";
   if (cms) return "website_only";

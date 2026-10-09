@@ -4,6 +4,7 @@ import {
   isMerchantProductSurface,
   isProductSurfacePackagingEditionName,
   PRODUCT_SURFACE_PRESETS,
+  productSurfaceNeedsPosEdition,
   type MerchantProductSurface,
 } from "@/lib/merchant-product-surface";
 import { EditionService } from "@/services/edition.service";
@@ -24,7 +25,7 @@ export class MerchantProductSurfaceService {
     let editionId: string;
     let editionName: string;
 
-    if (surface === "full_pos" && opts?.posEditionId) {
+    if (productSurfaceNeedsPosEdition(surface) && opts?.posEditionId) {
       const posEditionId = String(opts.posEditionId).trim();
       if (!posEditionId) throw new Error("POS version is required");
       const posEdition = await EditionService.getById(posEditionId);
@@ -36,6 +37,8 @@ export class MerchantProductSurfaceService {
       }
       editionId = posEdition.id;
       editionName = posEdition.name;
+    } else if (productSurfaceNeedsPosEdition(surface)) {
+      throw new Error("POS version is required for this package");
     } else {
       const edition = await EditionService.getPlatformEditionByName(preset.editionName);
       if (!edition) {
