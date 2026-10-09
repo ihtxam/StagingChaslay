@@ -11,6 +11,7 @@ import {
 type Slot = {
   time: string;
   available: boolean;
+  waitlistAvailable?: boolean;
   remainingCovers: number;
   discountPercent?: number;
   discountLabel?: string | null;
@@ -260,9 +261,11 @@ export default function InlineReservationsWidget({
           {t('shopReservationsThanks')}
         </h2>
         <p style={{ color: 'var(--color-text-2)' }}>
-          {done.status === 'confirmed'
-            ? t('shopReservationsConfirmedMsg')
-            : t('shopReservationsPendingMsg')}
+          {done.status === 'waitlist'
+            ? t('shopReservationsWaitlistDone')
+            : done.status === 'confirmed'
+              ? t('shopReservationsConfirmedMsg')
+              : t('shopReservationsPendingMsg')}
         </p>
         <p className="font-mono text-sm">{done.code}</p>
         <p className="text-sm">{formatDateTime(done.reservedAt)}</p>
@@ -446,24 +449,32 @@ export default function InlineReservationsWidget({
           <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={t('shopReservationsTime')}>
             {(timesExpanded ? slots : slots.slice(0, 6)).map((s) => {
               const selected = time === s.time;
+              const waitlist = !s.available && !!s.waitlistAvailable;
+              const canPick = s.available || waitlist;
               return (
                 <button
                   key={s.time}
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  disabled={!s.available}
+                  disabled={!canPick}
                   onClick={() => setTime(s.time)}
                   className={`min-h-11 px-1 text-sm font-semibold border tabular-nums transition-colors flex flex-col items-center justify-center leading-tight rounded-lg ${
                     selected
                       ? selectedBtn
-                      : s.available
-                        ? idleBtn
-                        : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed line-through'
+                      : waitlist
+                        ? 'border-violet-300 bg-violet-50 text-violet-900'
+                        : s.available
+                          ? idleBtn
+                          : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed line-through'
                   }`}
                 >
                   <span>{s.time}</span>
-                  {s.discountLabel ? (
+                  {waitlist ? (
+                    <span className={`text-[10px] font-bold ${selected ? 'text-violet-100' : 'text-violet-700'}`}>
+                      {t('shopReservationsWaitlistSlot')}
+                    </span>
+                  ) : s.discountLabel ? (
                     <span className={`text-[10px] font-bold ${selected ? 'text-amber-200' : 'text-amber-700'}`}>
                       {s.discountLabel}
                     </span>
@@ -488,6 +499,9 @@ export default function InlineReservationsWidget({
             .replace('{interval}', String(config?.settings?.slotIntervalMinutes || 30))
             .replace('{hours}', String(config?.settings?.minHoursBefore || 0))}
         </p>
+        {config?.settings?.waitlistEnabled !== false ? (
+          <p className="text-xs text-violet-800">{t('shopReservationsWaitlistHint')}</p>
+        ) : null}
       </fieldset>
 
       <div className="grid gap-3 sm:grid-cols-2">

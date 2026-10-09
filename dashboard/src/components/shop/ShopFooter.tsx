@@ -22,6 +22,9 @@ type ShopFooterInfo = {
   storeHours?: StoreHours | null;
   giftCards?: { enabled?: boolean };
   language?: string;
+  reservationsEnabled?: boolean;
+  googleReserveUrl?: string | null;
+  googleOrderUrl?: string | null;
 };
 
 function formatAddressLine(info: ShopFooterInfo): string | null {
@@ -63,6 +66,9 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
           storeHours: (data.storeHours as StoreHours) || null,
           giftCards: data.giftCards || undefined,
           language: data.language || undefined,
+          reservationsEnabled: !!data.reservationsEnabled,
+          googleReserveUrl: data.googleReserveUrl || null,
+          googleOrderUrl: data.googleOrderUrl || null,
         });
       } catch {
         if (!cancelled) setInfo(null);
@@ -93,6 +99,9 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
   const vat = String(info.vatNumber || '').trim();
   const email = String(info.email || '').trim();
   const giftCardsOn = info.giftCards?.enabled === true;
+  const googleOrder = String(info.googleOrderUrl || '').trim();
+  const googleReserve = String(info.googleReserveUrl || '').trim();
+  const reservePath = `${basePath}/reservations`.replace(/\/+/g, '/');
 
   return (
     <footer id="contact" className="shop-global-footer shop-platform-footer mt-auto w-full text-stone-200">
@@ -155,6 +164,31 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
               <Link to={menuPath} className="text-stone-200 hover:text-white hover:underline">
                 {t('shopFooterOrderOnline')}
               </Link>
+              {googleOrder ? (
+                <a
+                  href={googleOrder}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('shopFooterGoogleOrder')}
+                </a>
+              ) : null}
+              {info.reservationsEnabled ? (
+                <Link to={reservePath} className="text-stone-200 hover:text-white hover:underline">
+                  {t('shopReservations')}
+                </Link>
+              ) : null}
+              {googleReserve ? (
+                <a
+                  href={googleReserve}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('shopFooterGoogleReserve')}
+                </a>
+              ) : null}
               {giftCardsOn ? (
                 <Link to={giftPath} className="text-stone-200 hover:text-white hover:underline">
                   {t('shopFooterGiftCards')}

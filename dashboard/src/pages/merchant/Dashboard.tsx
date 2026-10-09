@@ -43,6 +43,7 @@ import DesktopTimingsPage from './DesktopTimingsPage';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
+import ProductGuidesPage from '../shared/ProductGuidesPage';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import Billing from './Billing';
 import OnlineShop from './OnlineShop';
@@ -983,6 +984,9 @@ function MerchantShell() {
         { label: t('cmsWebsite'), path: '/merchant/chaslay-page-builder', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
+    ...(allow('/merchant/support')
+      ? [{ label: t('productGuidesNav'), path: '/merchant/guides', icon: '📘' }]
+      : []),
   ]
     .filter(Boolean)
     .filter((entry) => {
@@ -1184,6 +1188,8 @@ function MerchantShell() {
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:
                   !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
+                guidesPath:
+                  !panelChromeRestricted && allow('/merchant/support') ? '/merchant/guides' : undefined,
               }}
               shopName={merchantShopName}
               shopPath={
@@ -1224,6 +1230,8 @@ function MerchantShell() {
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:
                   !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
+                guidesPath:
+                  !panelChromeRestricted && allow('/merchant/support') ? '/merchant/guides' : undefined,
               }}
               shopName={merchantShopName}
               shopPath={
@@ -1563,6 +1571,14 @@ function MerchantShell() {
               }
             />
             <Route path="users" element={<LegacyUsersRedirect />} />
+            <Route
+              path="guides"
+              element={
+                <PanelRouteGuard path="/merchant/support" allow={allow}>
+                  <ProductGuidesPage audience="merchant" />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="support"
               element={

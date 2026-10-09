@@ -75,6 +75,7 @@ import {
 } from "@/lib/shop-privacy-policy";
 import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { publicShopDbError } from "@/lib/public-shop-error";
+import { resolveSettings as resolveReservationSettings } from "@/services/reservation.service";
 
 const router = Router();
 
@@ -685,11 +686,23 @@ async function resolvePrivacyManagerName(merchantId: string): Promise<string | n
   return staff?.name ? String(staff.name).trim() : null;
 }
 
+function publicReservationGuestLinks(
+  merchant: NonNullable<Awaited<ReturnType<typeof resolveMerchant>>>
+) {
+  const s = resolveReservationSettings(merchant.reservationSettings);
+  return {
+    googleReserveUrl: s.googleReserveUrl,
+    googleOrderUrl: s.googleOrderUrl,
+    photoMenuEnabled: s.photoMenuEnabled !== false,
+  };
+}
+
 function shopPageMerchantPayload(
   req: Request,
   merchant: NonNullable<Awaited<ReturnType<typeof resolveMerchant>>>,
   seo: ReturnType<typeof shopSeoFromMerchant>
 ) {
+  const reservationLinks = publicReservationGuestLinks(merchant);
   return {
     id: merchant.id,
     name: merchant.name,
@@ -711,6 +724,7 @@ function shopPageMerchantPayload(
     acceptingReservations: merchant.acceptingReservations !== false,
     vacation: vacationPublicPayload(merchant.vacationSettings),
     language: merchant.shopLanguage || merchant.panelLanguage || "en",
+    ...reservationLinks,
   };
 }
 
@@ -903,6 +917,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
           ShopGiftCardService.settingsFromMerchant(merchant)
         ),
         reservationsEnabled: !!merchant.reservationsEnabled,
+        ...publicReservationGuestLinks(merchant),
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
         vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -1443,6 +1458,7 @@ router.get("/:slug/table/:tableId/session", async (req: Request, res: Response) 
       settings: {
         qrAutoApprove: qrSettings.qrAutoApprove,
         qrPayAtTableEnabled: qrSettings.qrPayAtTableEnabled,
+        photoMenuEnabled: resolveReservationSettings(merchant.reservationSettings).photoMenuEnabled !== false,
       },
     });
   } catch (error) {

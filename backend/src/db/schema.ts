@@ -2172,11 +2172,26 @@ export type ReservationSettings = {
   dailySummaryEnabled?: boolean;
   /** Last YYYY-MM-DD (Zurich) a daily summary was sent */
   lastDailySummaryDate?: string | null;
+  /** Offer a waitlist when the requested slot is full */
+  waitlistEnabled?: boolean;
+  /**
+   * When true, assigning/seating a reservation updates the POS floor-plan table
+   * (reserved → occupied) and opening a ticket keeps the booking seated until complete.
+   * When false, reservations stay a standalone book and tables are optional.
+   */
+  liveTableLink?: boolean;
+  /** Table QR photo menu — guests browse photos and order to POS/KDS */
+  photoMenuEnabled?: boolean;
+  /** Google Business “Reserve” URL for this location */
+  googleReserveUrl?: string | null;
+  /** Google Business “Order” URL for this location */
+  googleOrderUrl?: string | null;
 };
 
 export type ReservationStatus =
   | "pending"
   | "confirmed"
+  | "waitlist"
   | "seated"
   | "completed"
   | "cancelled"

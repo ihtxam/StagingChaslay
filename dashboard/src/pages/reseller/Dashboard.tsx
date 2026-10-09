@@ -7,6 +7,7 @@ import {
   Copy,
   KeyRound,
   LayoutDashboard,
+  BookOpen,
   LifeBuoy,
   Package,
   Plus,
@@ -42,6 +43,8 @@ import {
 import SupportInbox from '../shared/SupportInbox';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import ResellerPackages from './Packages';
+import ModulePriceBook from '@/components/agency/ModulePriceBook';
+import ProductGuidesPage from '../shared/ProductGuidesPage';
 
 function Overview() {
   const { t } = useI18n();
@@ -754,6 +757,10 @@ function MerchantsPage() {
               </label>
             )}
             <p className="sm:col-span-3 text-xs text-stone-500">{t('deviceLicenseSeatsHint')}</p>
+          </div>
+
+          <div className="sm:col-span-2 rounded-xl border border-stone-200 bg-white p-3">
+            <ModulePriceBook compact />
           </div>
 
           <div className="sm:col-span-2 border rounded-lg p-3 bg-stone-50 grid sm:grid-cols-2 gap-3">
@@ -2260,7 +2267,10 @@ function ResellerShell() {
       id: 'support',
       label: t('agencyNavSupport'),
       icon: <LifeBuoy />,
-      children: [{ label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> }],
+      children: [
+        { label: t('resellerGuidesNav'), path: '/reseller/guides', icon: <BookOpen /> },
+        { label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> },
+      ],
     },
   ];
 
@@ -2288,6 +2298,7 @@ function ResellerShell() {
             <Route path="licenses" element={<LicensesPage />} />
             <Route path="editions" element={<EditionsPage />} />
             <Route path="packages" element={<ResellerPackages />} />
+            <Route path="guides" element={<ProductGuidesPage audience="reseller" />} />
             <Route path="support" element={<SupportInbox mode="reseller" />} />
             <Route path="notifications" element={<PlatformNotificationsHistory />} />
           </Routes>

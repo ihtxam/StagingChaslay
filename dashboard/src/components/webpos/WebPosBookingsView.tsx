@@ -219,6 +219,26 @@ export default function WebPosBookingsView() {
   const statusBadge = reservationStatusBadgeClass;
 
   const pendingActions = (r: Reservation, compact = false) => {
+    if (r.status === 'waitlist') {
+      return (
+        <div className={`flex gap-2 ${compact ? 'flex-col sm:flex-row' : ''}`}>
+          <button
+            type="button"
+            className={`webpos-accent-btn rounded-lg font-semibold ${compact ? 'flex-1 px-3 py-2 text-sm' : 'w-full px-4 py-2.5 text-sm'}`}
+            onClick={() => void runAction(r.id, 'promote_waitlist')}
+          >
+            {t('reservationsPromoteWaitlist')}
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg border border-[var(--webpos-border)] font-semibold ${compact ? 'flex-1 px-3 py-2 text-sm' : 'w-full px-4 py-2 text-sm'}`}
+            onClick={() => void runAction(r.id, 'seat')}
+          >
+            {t('reservationsSeat')}
+          </button>
+        </div>
+      );
+    }
     if (r.status !== 'pending') return null;
     return (
       <div className={`flex gap-2 ${compact ? 'flex-col sm:flex-row' : ''}`}>

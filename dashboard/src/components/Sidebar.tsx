@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarAccountName, REBORN_LOGO_WHITE } from '@/lib/brand';
@@ -50,6 +50,7 @@ interface SidebarProps {
     settingsPath?: string;
     billingPath?: string;
     supportPath?: string;
+    guidesPath?: string;
   };
   /** Merchant shop name in the sidebar header (defaults to "Shop"). */
   shopName?: string | null;
@@ -623,6 +624,19 @@ export default function Sidebar({
                       <UserCircle2 className="w-4 h-4" />
                       {t('webPosSwitchUser')}
                     </button>
+                  ) : null}
+                  {profileMenu.guidesPath ? (
+                    <Link
+                      to={profileMenu.guidesPath}
+                      onClick={() => {
+                        setProfileOpen(false);
+                        closeMobile();
+                      }}
+                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      {t('productGuidesNav')}
+                    </Link>
                   ) : null}
                   {profileMenu.supportPath ? (
                     <Link

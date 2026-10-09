@@ -426,6 +426,20 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'users',
 ];
 
+/** SpotOn-style settings groups: Team / Tables / Service / Guest / Money */
+const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }> = [
+  { id: 'business', labelKey: 'settingsGroupBusiness', ids: ['business'] },
+  { id: 'team', labelKey: 'settingsGroupTeam', ids: ['users', 'language'] },
+  { id: 'tables', labelKey: 'settingsGroupTables', ids: ['tables', 'reservations'] },
+  {
+    id: 'service',
+    labelKey: 'settingsGroupService',
+    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'kiosk', 'signage', 'delivery'],
+  },
+  { id: 'guest', labelKey: 'settingsGroupGuest', ids: ['shop', 'email', 'delivery-map'] },
+  { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting'] },
+];
+
 const TAX_RATE_MAX = 100;
 
 function sanitizeTaxRateInput(raw: string): string {
@@ -2079,39 +2093,71 @@ export default function Settings() {
               className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 [-webkit-overflow-scrolling:touch] lg:flex lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:overflow-y-auto"
               aria-label={t('settings')}
             >
-              {visibleTabs.map((item) => {
-                const Icon = item.icon;
-                const active = tab === item.id;
-                const searchHit =
-                  searchView === 'results' ? matchedTabs.has(item.id) : false;
-                const navText = item.navLabel ?? item.label;
+              {SETTINGS_NAV_GROUPS.map((group) => {
+                const items = visibleTabs.filter((item) => group.ids.includes(item.id));
+                if (!items.length) return null;
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      selectTab(item.id);
-                      if (normalizedQuery) {
-                        const first = matchedSearch.find((m) => m.tab === item.id);
-                        if (first) setHighlightId(first.id);
-                      }
-                    }}
-                    aria-label={item.label}
-                    title={item.label}
-                    className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors whitespace-nowrap lg:w-full lg:py-2 lg:whitespace-normal ${
-                      active
-                        ? 'bg-[var(--bg-muted)] text-[var(--text)]'
-                        : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
-                    } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''}`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                    <span className="min-w-0 truncate lg:whitespace-normal">
-                      <span className="lg:hidden">{navText}</span>
-                      <span className="hidden lg:inline">{item.label}</span>
-                    </span>
-                  </button>
+                  <div key={group.id} className="contents lg:block lg:pb-1">
+                    <p className="hidden px-3 pb-0.5 pt-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] lg:block">
+                      {t(group.labelKey)}
+                    </p>
+                    {items.map((item) => {
+                      const Icon = item.icon;
+                      const active = tab === item.id;
+                      const searchHit =
+                        searchView === 'results' ? matchedTabs.has(item.id) : false;
+                      const navText = item.navLabel ?? item.label;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            selectTab(item.id);
+                            if (normalizedQuery) {
+                              const first = matchedSearch.find((m) => m.tab === item.id);
+                              if (first) setHighlightId(first.id);
+                            }
+                          }}
+                          aria-label={item.label}
+                          title={item.label}
+                          className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors whitespace-nowrap lg:w-full lg:py-2 lg:whitespace-normal ${
+                            active
+                              ? 'bg-[var(--bg-muted)] text-[var(--text)]'
+                              : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
+                          } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''}`}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                          <span className="min-w-0 truncate lg:whitespace-normal">
+                            <span className="lg:hidden">{navText}</span>
+                            <span className="hidden lg:inline">{item.label}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 );
               })}
+              {visibleTabs
+                .filter((item) => !SETTINGS_NAV_GROUPS.some((group) => group.ids.includes(item.id)))
+                .map((item) => {
+                  const Icon = item.icon;
+                  const active = tab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => selectTab(item.id)}
+                      className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors whitespace-nowrap lg:w-full lg:py-2 ${
+                        active
+                          ? 'bg-[var(--bg-muted)] text-[var(--text)]'
+                          : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
             </nav>
           </aside>
 
