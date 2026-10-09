@@ -5,7 +5,6 @@ import { Mail, MapPin, Phone } from 'lucide-react';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { shopMerchantWideBasePath } from '@/lib/shop-base-path';
 import { formatShopPhoneDisplay } from '@/lib/shop-phone-format';
-import { SHOP_HOST } from '@/lib/brand';
 import { useI18n } from '@/lib/i18n';
 import type { StoreHours } from '@/lib/shop-hours';
 import { summarizeStoreHours } from '@/lib/shop-hours-display';
@@ -44,13 +43,6 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
     shopBasePath(resolvedKey, locationSlug ? String(locationSlug) : null);
 
   const [info, setInfo] = useState<ShopFooterInfo | null>(null);
-  const [siteHost, setSiteHost] = useState(SHOP_HOST);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setSiteHost(window.location.hostname || SHOP_HOST);
-    }
-  }, []);
 
   useEffect(() => {
     if (!resolvedKey) return;
@@ -188,7 +180,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
         </div>
       </div>
 
-      <ShopPlatformFooterBand siteHost={siteHost} />
+      <ShopPlatformFooterBand />
     </footer>
   );
 }
