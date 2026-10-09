@@ -9,7 +9,9 @@ import {
   MERCHANT_PRODUCT_SURFACES,
   PRODUCT_SURFACE_PRESETS,
   filterEditionsForProductSurface,
+  inferProductSurface,
   isProductSurfacePackagingEditionName,
+  productSurfaceNeedsPosEdition,
   type MerchantProductSurface,
 } from '@/lib/merchant-product-surface';
 import {
@@ -210,7 +212,7 @@ export default function Merchants() {
     const preset = PRODUCT_SURFACE_PRESETS[surface];
     setForm((f) => {
       let editionId = f.editionId;
-      if (surface === 'full_pos') {
+      if (productSurfaceNeedsPosEdition(surface)) {
         const selected = editions.find((e) => e.id === f.editionId);
         if (!selected || isProductSurfacePackagingEditionName(selected.name)) {
           editionId = '';
@@ -303,10 +305,12 @@ export default function Merchants() {
         growthAnalyticsAddonEnabled: res.data.merchant?.growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: res.data.merchant?.guestCrmAddonEnabled === true,
       });
-      const maxPos = Math.max(0, Number(res.data.merchant?.maxPosPosts) || 0);
-      const cms = !!res.data.merchant?.cmsHomepageEnabled;
       setDetailSurface(
-        maxPos > 0 ? 'full_pos' : cms ? 'shop_website' : 'shop_only'
+        inferProductSurface({
+          shopEnabled: res.data.merchant?.shopEnabled,
+          cmsHomepageEnabled: res.data.merchant?.cmsHomepageEnabled,
+          maxPosPosts: res.data.merchant?.maxPosPosts,
+        }) || 'full_pos'
       );
     } catch {
       toast.error('Failed to load merchant details');
@@ -498,7 +502,7 @@ export default function Merchants() {
     try {
       await api.put(`/superadmin/merchants/${showDetail.id}/product-surface`, {
         surface: detailSurface,
-        ...(detailSurface === 'full_pos' && planForm.editionId
+        ...(productSurfaceNeedsPosEdition(detailSurface) && planForm.editionId
           ? { posEditionId: planForm.editionId }
           : {}),
       });
@@ -535,8 +539,8 @@ export default function Merchants() {
     }
     setSaving(true);
     try {
-      if (form.productSurface === 'full_pos' && !form.editionId) {
-        toast.error('Select a POS version for Shop + Website + POS');
+      if (productSurfaceNeedsPosEdition(form.productSurface) && !form.editionId) {
+        toast.error('Select a POS version for this package');
         setSaving(false);
         return;
       }
@@ -582,7 +586,7 @@ export default function Merchants() {
       if (merchantId && form.productSurface) {
         await api.put(`/superadmin/merchants/${merchantId}/product-surface`, {
           surface: form.productSurface,
-          ...(form.productSurface === 'full_pos' && form.editionId
+          ...(productSurfaceNeedsPosEdition(form.productSurface) && form.editionId
             ? { posEditionId: form.editionId }
             : {}),
         });
@@ -928,16 +932,27 @@ export default function Merchants() {
       </div>
 
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="text-xl font-bold">Create merchant</h2>
-              <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-gray-100 rounded">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/45 p-0 sm:items-center sm:p-4">
+          <div className="flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50 px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
+                  Superadmin
+                </p>
+                <h2 className="text-lg font-semibold tracking-tight text-stone-900">
+                  Create merchant
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-stone-200"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleCreate} className="space-y-6 overflow-y-auto p-5 sm:p-6">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <label className="block md:col-span-2">
                   <span className="text-sm font-medium">Business name *</span>
                   <input
@@ -1038,58 +1053,63 @@ export default function Merchants() {
                     <option value="retail">Retail</option>
                   </select>
                 </label>
-                <label className="block">
-                  <span className="text-sm font-medium">Product package</span>
-                  <select
-                    className="input mt-1"
-                    value={form.productSurface}
-                    onChange={(e) =>
-                      applyProductSurfaceToForm(e.target.value as MerchantProductSurface)
-                    }
-                  >
-                    {MERCHANT_PRODUCT_SURFACES.map((key) => (
-                      <option key={key} value={key}>
-                        {PRODUCT_SURFACE_PRESETS[key].label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {PRODUCT_SURFACE_PRESETS[form.productSurface].description}
+                <div className="md:col-span-2 space-y-2">
+                  <p className="text-sm font-semibold text-stone-900">Product package</p>
+                  <p className="text-xs text-stone-500">
+                    Channels this merchant gets. POS version is the feature tier (Restaurant Pro,
+                    Retail Basic) — same split Toast and Square use: POS first, shop/website as
+                    extras.
                   </p>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium">
-                    {form.productSurface === 'full_pos' ? 'POS version *' : 'Edition (package)'}
-                  </span>
-                  <select
-                    className="input mt-1 w-full min-w-0"
-                    value={form.editionId}
-                    onChange={(e) => setForm({ ...form, editionId: e.target.value })}
-                    required={form.productSurface === 'full_pos'}
-                    disabled={form.productSurface !== 'full_pos'}
-                  >
-                    <option value="">
-                      {form.productSurface === 'full_pos'
-                        ? 'Select POS version…'
-                        : 'Set by product package'}
-                    </option>
-                    {filterEditionsForProductSurface(
-                      editions,
-                      form.productSurface,
-                      form.businessCategory
-                    ).map((ed) => (
-                      <option key={ed.id} value={ed.id}>
-                        {ed.name}
-                      </option>
-                    ))}
-                  </select>
-                  {form.productSurface === 'full_pos' ? (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Restaurant Pro, Retail Basic, or your reseller POS version — separate from the
-                      shop/website package flags above.
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {MERCHANT_PRODUCT_SURFACES.map((key) => {
+                      const preset = PRODUCT_SURFACE_PRESETS[key];
+                      const on = form.productSurface === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => applyProductSurfaceToForm(key)}
+                          className={`rounded-xl border px-3 py-3 text-left transition ${
+                            on
+                              ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-200'
+                              : 'border-stone-200 bg-white hover:border-stone-300'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-stone-900">{preset.label}</p>
+                          <p className="mt-0.5 text-xs leading-snug text-stone-500">
+                            {preset.description}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {productSurfaceNeedsPosEdition(form.productSurface) ? (
+                  <label className="block md:col-span-2">
+                    <span className="text-sm font-medium">POS version *</span>
+                    <select
+                      className="input mt-1 w-full min-w-0"
+                      value={form.editionId}
+                      onChange={(e) => setForm({ ...form, editionId: e.target.value })}
+                      required
+                    >
+                      <option value="">Select POS version…</option>
+                      {filterEditionsForProductSurface(
+                        editions,
+                        form.productSurface,
+                        form.businessCategory
+                      ).map((ed) => (
+                        <option key={ed.id} value={ed.id}>
+                          {ed.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-stone-500">
+                      Restaurant Pro, Retail Basic, or a reseller POS version — not the package
+                      itself.
                     </p>
-                  ) : null}
-                </label>
+                  </label>
+                ) : null}
                 <label className="block">
                   <span className="text-sm font-medium">Reseller / dealer</span>
                   <select
@@ -1107,14 +1127,18 @@ export default function Merchants() {
                 </label>
               </div>
 
-              <div className="border rounded-lg p-4 space-y-3 bg-slate-50">
+              <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <input
                     type="checkbox"
                     checked={form.shopEnabled}
+                    disabled={form.productSurface === 'pos_only'}
                     onChange={(e) => setForm({ ...form, shopEnabled: e.target.checked })}
                   />
                   Enable online shop
+                  {form.productSurface === 'pos_only' ? (
+                    <span className="text-xs font-normal text-stone-500">(off for POS only)</span>
+                  ) : null}
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <label className="block">
@@ -1546,26 +1570,31 @@ export default function Merchants() {
                 <div>
                   <p className="font-semibold mb-2">Product package</p>
                   <p className="text-xs text-gray-500 mb-2">
-                    Shop only → Order Center. Full POS → WebPOS + online shop. Change anytime.
+                    POS only = till. Shop/Website can be added later. Change anytime.
                   </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-3">
+                    {MERCHANT_PRODUCT_SURFACES.map((key) => {
+                      const preset = PRODUCT_SURFACE_PRESETS[key];
+                      const on = detailSurface === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setDetailSurface(key)}
+                          className={`rounded-xl border px-3 py-2.5 text-left ${
+                            on
+                              ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-200'
+                              : 'border-stone-200 bg-white'
+                          }`}
+                        >
+                          <p className="text-sm font-semibold">{preset.label}</p>
+                          <p className="text-[11px] text-stone-500">{preset.description}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex flex-wrap gap-2 items-end">
-                    <label className="block text-xs flex-1 min-w-[12rem]">
-                      Package
-                      <select
-                        className="input mt-1"
-                        value={detailSurface}
-                        onChange={(e) =>
-                          setDetailSurface(e.target.value as MerchantProductSurface)
-                        }
-                      >
-                        {MERCHANT_PRODUCT_SURFACES.map((key) => (
-                          <option key={key} value={key}>
-                            {PRODUCT_SURFACE_PRESETS[key].label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {detailSurface === 'full_pos' ? (
+                    {productSurfaceNeedsPosEdition(detailSurface) ? (
                       <label className="block text-xs flex-1 min-w-[12rem]">
                         POS version
                         <select
@@ -1578,7 +1607,7 @@ export default function Merchants() {
                           <option value="">Select POS version…</option>
                           {filterEditionsForProductSurface(
                             editions,
-                            'full_pos',
+                            detailSurface,
                             showDetail?.businessCategory === 'retail' ? 'retail' : 'restaurant'
                           ).map((ed) => (
                             <option key={ed.id} value={ed.id}>
@@ -1593,7 +1622,7 @@ export default function Merchants() {
                       className="btn-primary text-sm"
                       disabled={
                         applyingSurface ||
-                        (detailSurface === 'full_pos' && !planForm.editionId)
+                        (productSurfaceNeedsPosEdition(detailSurface) && !planForm.editionId)
                       }
                       onClick={() => void handleApplyProductSurface()}
                     >

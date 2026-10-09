@@ -749,7 +749,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
 
 /**
  * PUT /api/superadmin/merchants/:merchantId/product-surface
- * Apply shop-only | website | shop+website | full POS package.
+ * Apply POS-only | shop-only | website | shop+website | full POS package.
  */
 router.put("/merchants/:merchantId/product-surface", async (req: Request, res: Response) => {
   try {
