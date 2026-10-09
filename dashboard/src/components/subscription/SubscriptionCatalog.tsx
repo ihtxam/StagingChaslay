@@ -94,9 +94,10 @@ type Props = {
   apiPrefix: 'superadmin' | 'reseller';
   title: string;
   description: string;
+  variant?: 'default' | 'agency';
 };
 
-export default function SubscriptionCatalog({ apiPrefix, title, description }: Props) {
+export default function SubscriptionCatalog({ apiPrefix, title, description, variant = 'default' }: Props) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [editions, setEditions] = useState<Edition[]>([]);
   const [addons, setAddons] = useState<SubscriptionAddon[]>([]);
@@ -327,8 +328,21 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
     return <div className="text-gray-500">Loading catalog…</div>;
   }
 
+  const agency = variant === 'agency';
+
   return (
     <div className="space-y-6">
+      {agency ? (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#9f1239] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#861032]"
+            onClick={openCreate}
+          >
+            <Plus size={16} /> New package
+          </button>
+        </div>
+      ) : (
       <div className="card">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
@@ -411,6 +425,52 @@ export default function SubscriptionCatalog({ apiPrefix, title, description }: P
           </table>
         </div>
       </div>
+      )}
+
+      {agency ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {plans.map((plan) => (
+            <div key={plan.id} className="agency-card p-5">
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-stone-900">{plan.name}</p>
+                  <p className="text-xs text-stone-400">{plan.slug}</p>
+                </div>
+                <span className={`agency-pill ${plan.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>
+                  {plan.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <p className="text-2xl font-semibold tracking-tight text-stone-900">
+                {Number(plan.priceMonthly).toFixed(2)}
+                <span className="ml-1 text-sm font-medium text-stone-400">{plan.currency}/mo</span>
+              </p>
+              <p className="mt-2 text-xs text-stone-400">
+                {plan.isPublic ? 'Visible to merchants' : 'Visible to admin only'}
+              </p>
+              <div className="mt-5 flex items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-stone-200 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+                  onClick={() => openEdit(plan)}
+                >
+                  <Pencil size={14} /> Edit
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-rose-100 p-2 text-rose-600 hover:bg-rose-50"
+                  onClick={() => void deactivatePlan(plan)}
+                  title="Deactivate"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+          {!plans.length ? (
+            <p className="text-sm text-stone-400 sm:col-span-2">No packages yet. Create one to get started.</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="card">
         <div className="flex items-start justify-between gap-4 mb-4">

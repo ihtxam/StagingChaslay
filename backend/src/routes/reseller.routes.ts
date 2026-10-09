@@ -12,6 +12,7 @@ import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
+import { SupportTicketService } from "@/services/support-ticket.service";
 
 const router = Router();
 
@@ -45,6 +46,57 @@ router.get("/overview", async (req: Request, res: Response) => {
     const merchants = await ResellerService.listMerchants(rid);
     const active = merchants.filter((m) => m.status === "active" || m.status === "trial").length;
     const pool = await ResellerService.getSeatPool(rid);
+    const [plans, addons, tickets] = await Promise.all([
+      SubscriptionPlansService.listForReseller(rid, true).catch(() => []),
+      SubscriptionAddonsService.listForReseller(rid, true).catch(() => []),
+      SupportTicketService.listResellerTickets(rid, "open").catch(() => []),
+    ]);
+    const planBySlug = new Map(
+      (plans || []).map((plan: { slug?: string; priceMonthly?: string | number }) => [
+        String(plan.slug || "").toLowerCase(),
+        Number(plan.priceMonthly) || 0,
+      ])
+    );
+    const monthlyRevenue = merchants.reduce((sum, merchant) => {
+      if ((merchant as { planBillingPaid?: boolean }).planBillingPaid === false) return sum;
+      const slug = String((merchant as { subscriptionPlan?: string }).subscriptionPlan || "").toLowerCase();
+      return sum + (planBySlug.get(slug) || 0);
+    }, 0);
+    const now = new Date();
+    const storeGrowth = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const count = merchants.filter((m) => {
+        const created = (m as { createdAt?: Date | string }).createdAt;
+        if (!created) return false;
+        const cd = new Date(created);
+        return cd.getFullYear() === d.getFullYear() && cd.getMonth() === d.getMonth();
+      }).length;
+      return { month: key, count };
+    });
+    const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const storesThisMonth = storeGrowth.find((row) => row.month === thisMonthKey)?.count || 0;
+    const recentActivity = [
+      ...merchants.slice(0, 8).map((m) => ({
+        id: `store-${m.id}`,
+        kind: m.status === "suspended" ? "license" : "store",
+        title: String(m.name || "Store"),
+        detail:
+          m.status === "suspended"
+            ? "License suspended"
+            : `${(m as { editionName?: string }).editionName || "Store"} joined`,
+        at: (m as { createdAt?: Date | string }).createdAt || null,
+      })),
+      ...(tickets || []).slice(0, 6).map((tk: { id: string; subject?: string; lastMessageAt?: Date | string; createdAt?: Date | string; merchant?: { name?: string } }) => ({
+        id: `ticket-${tk.id}`,
+        kind: "ticket",
+        title: tk.subject || "Support ticket",
+        detail: tk.merchant?.name || "Merchant",
+        at: tk.lastMessageAt || tk.createdAt || null,
+      })),
+    ]
+      .sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime())
+      .slice(0, 6);
     res.json({
       success: true,
       overview: {
@@ -55,6 +107,14 @@ router.get("/overview", async (req: Request, res: Response) => {
         seatsUsed: pool.seatsUsed,
         seatsRemaining: pool.seatsRemaining,
         billableMerchantCount: me?.billableMerchantCount ?? 0,
+        monthlyRevenue,
+        currency: "CHF",
+        openTicketCount: (tickets || []).length,
+        packageCount: (plans || []).filter((p: { isActive?: boolean }) => p.isActive !== false).length,
+        addonCount: (addons || []).filter((a: { isActive?: boolean }) => a.isActive !== false).length,
+        storesThisMonth,
+        storeGrowth,
+        recentActivity,
       },
     });
   } catch (error) {

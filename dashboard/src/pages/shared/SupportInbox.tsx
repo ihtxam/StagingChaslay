@@ -96,15 +96,20 @@ export default function SupportInbox({ mode }: Props) {
     }
   };
 
-  return (
-    <div className="max-w-6xl mx-auto space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">{t('supportInboxTitle')}</h1>
-        <p className="text-sm text-stone-600">{mode === 'superadmin' ? t('supportInboxSaHint') : t('supportInboxResellerHint')}</p>
-      </div>
+  const agency = mode === 'reseller';
 
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+  return (
+    <div className={`${agency ? '' : 'max-w-6xl mx-auto'} space-y-4`}>
+      {agency ? null : (
+        <div>
+          <h1 className="text-xl font-bold">{t('supportInboxTitle')}</h1>
+          <p className="text-sm text-stone-600">{t('supportInboxSaHint')}</p>
+        </div>
+      )}
+
+      <div className={`grid gap-4 ${agency ? 'lg:grid-cols-[300px_1fr]' : 'lg:grid-cols-[280px_1fr]'}`}>
         <div className="space-y-2">
+          {agency ? <p className="text-sm font-semibold text-stone-800">{t('supportInboxTitle')}</p> : null}
           <select className="input w-full text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="open">{t('supportFilterOpen')}</option>
             <option value="answered">{t('supportFilterAnswered')}</option>
@@ -117,23 +122,26 @@ export default function SupportInbox({ mode }: Props) {
                 <button
                   type="button"
                   onClick={() => void open(tk.id)}
-                  className={`w-full text-left rounded-lg px-3 py-2 text-sm border ${
-                    active?.id === tk.id ? 'border-teal-500 bg-teal-50' : 'border-stone-200 bg-white'
+                  className={`w-full text-left rounded-xl px-3 py-2.5 text-sm border ${
+                    active?.id === tk.id
+                      ? agency
+                        ? 'border-rose-200 bg-rose-50'
+                        : 'border-teal-500 bg-teal-50'
+                      : 'border-stone-200 bg-white'
                   }`}
                 >
-                  <p className="font-mono text-xs text-stone-500">{tk.ticketNumber}</p>
-                  <p className="font-medium truncate">{tk.subject}</p>
-                  <p className="text-xs text-stone-500">{tk.merchant?.name}</p>
-                  <span className={`text-[10px] uppercase font-semibold ${tk.category === 'technical' ? 'text-red-600' : 'text-stone-400'}`}>
-                    {tk.category}
-                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium truncate">{tk.merchant?.name || tk.subject}</p>
+                    <span className="agency-pill bg-emerald-50 text-emerald-700">{tk.status}</span>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-stone-500">{tk.subject}</p>
                 </button>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="rounded-xl border border-stone-200 bg-white min-h-[400px] flex flex-col">
+        <div className={`${agency ? 'agency-card' : 'rounded-xl border border-stone-200 bg-white'} min-h-[400px] flex flex-col`}>
           {active ? (
             <>
               <div className="border-b px-4 py-3 space-y-2">
@@ -176,8 +184,14 @@ export default function SupportInbox({ mode }: Props) {
               !(mode === 'superadmin' && active.category !== 'technical') ? (
                 <div className="border-t p-3 flex flex-wrap gap-2">
                   <input className="input flex-1 min-w-[200px] text-sm" value={reply} onChange={(e) => setReply(e.target.value)} placeholder={t('supportTypeReply')} />
-                  <button type="button" className="btn-primary text-sm" disabled={busy} onClick={() => void sendReply(false)}>
+                  <button
+                    type="button"
+                    className={`${agency ? 'inline-flex items-center gap-1.5 rounded-full bg-[#9f1239] px-3.5 py-2 text-sm font-semibold text-white' : 'btn-primary text-sm'}`}
+                    disabled={busy}
+                    onClick={() => void sendReply(false)}
+                  >
                     <Send className="w-4 h-4" />
+                    {agency ? t('agencySend') : null}
                   </button>
                   <button type="button" className="btn-secondary text-sm" disabled={busy} onClick={() => void sendReply(true)}>
                     {t('supportReplyAndClose')}
