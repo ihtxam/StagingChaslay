@@ -210,8 +210,6 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_web_seo_addon_enabled boolean NOT NULL DEFAULT false",
   ai_web_seo_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ai_web_seo_settings jsonb NOT NULL DEFAULT '{}'::jsonb",
-  customers_crm_tags:
-    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
   inventory_waste_factor:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS inventory_waste_factor numeric(5,4) NOT NULL DEFAULT 0.20",
   inventory_auto_reorder_email_enabled:
@@ -278,6 +276,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES: Record<string, string> = {
+  customers_crm_tags:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
   chaslay_homepage_builders_last_good_editor_state:
     "ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   chaslay_homepage_builder_pages_last_good_editor_state:
