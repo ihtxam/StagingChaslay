@@ -844,6 +844,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [selectedLineId, setSelectedLineId] = useState<string | null>(
     () => bootActive?.selectedLineId ?? null
   );
+  const [cartFlashLineId, setCartFlashLineId] = useState<string | null>(null);
+  const cartFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [keypadMode, setKeypadMode] = useState<KeypadMode>('qty');
   const [keypadBuffer, setKeypadBuffer] = useState(() => bootActive?.keypadBuffer || '');
   const [activeCourse, setActiveCourse] = useState(() => bootActive?.activeCourse || 1);
@@ -3660,13 +3662,31 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return out;
   };
 
+  const flashCartLine = useCallback((lineId: string) => {
+    if (!lineId) return;
+    if (cartFlashTimerRef.current) clearTimeout(cartFlashTimerRef.current);
+    setCartFlashLineId(lineId);
+    cartFlashTimerRef.current = setTimeout(() => {
+      setCartFlashLineId(null);
+      cartFlashTimerRef.current = null;
+    }, 560);
+  }, []);
+
+  const stackedLineIdAfterAdd = (prev: CartLine[], candidate: CartLine): string => {
+    const key = cartLineStackKey(candidate);
+    if (!key) return candidate.lineId;
+    const merged = collapseStackableCart([...prev, candidate]);
+    return merged.find((l) => cartLineStackKey(l) === key)?.lineId ?? candidate.lineId;
+  };
+
   const pushConfiguredProduct = (
     p: Product,
     unitPrice: number,
     selectedExtras: ShopSelectedExtra[] = [],
     comboSelections: ShopComboSelection[] = [],
     quantity = 1,
-    lineNote?: string
+    lineNote?: string,
+    flashOnAdd = false
   ) => {
     setSearch('');
     const price = roundMoney2(unitPrice);
@@ -3677,48 +3697,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setCart((prev) => {
       const isOpen = p.isOpenPrice || p.productType === 'open_price';
       if (isOpen) {
-        return [
-          ...prev,
-          {
-            lineId: `${p.id}-${Date.now()}-open`,
-            productId: p.id,
-            name: p.name,
-            quantity: qty,
-            unitPrice: price,
-            lineTotal: roundMoney2(price * qty),
-            taxable: p.isTaxable !== false,
-            categoryId: p.categoryId,
-            selectedExtras,
-            comboSelections,
-            isOpenPrice: true,
-            courseNumber,
-            lineNote: lineNote?.trim() || undefined,
-          },
-        ];
-      }
-      if (qty === 1 && !lineNote?.trim()) {
-        return collapseStackableCart([
-          ...prev,
-          {
-            lineId: `${p.id}-${Date.now()}-${sig || 'plain'}`,
-            productId: p.id,
-            name: p.name,
-            quantity: 1,
-            unitPrice: price,
-            lineTotal: price,
-            taxable: p.isTaxable !== false,
-            categoryId: p.categoryId,
-            selectedExtras,
-            comboSelections,
-            isOpenPrice: false,
-            courseNumber,
-          },
-        ]);
-      }
-      return [
-        ...prev,
-        {
-          lineId: `${p.id}-${Date.now()}-${sig || 'plain'}${noteSuffix}`,
+        const lineId = `${p.id}-${Date.now()}-open`;
+        const line: CartLine = {
+          lineId,
           productId: p.id,
           name: p.name,
           quantity: qty,
@@ -3728,11 +3709,52 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           categoryId: p.categoryId,
           selectedExtras,
           comboSelections,
-          isOpenPrice: false,
+          isOpenPrice: true,
           courseNumber,
           lineNote: lineNote?.trim() || undefined,
-        },
-      ];
+        };
+        if (flashOnAdd) queueMicrotask(() => flashCartLine(lineId));
+        return [...prev, line];
+      }
+      if (qty === 1 && !lineNote?.trim()) {
+        const line: CartLine = {
+          lineId: `${p.id}-${Date.now()}-${sig || 'plain'}`,
+          productId: p.id,
+          name: p.name,
+          quantity: 1,
+          unitPrice: price,
+          lineTotal: price,
+          taxable: p.isTaxable !== false,
+          categoryId: p.categoryId,
+          selectedExtras,
+          comboSelections,
+          isOpenPrice: false,
+          courseNumber,
+        };
+        if (flashOnAdd) {
+          const flashId = stackedLineIdAfterAdd(prev, line);
+          queueMicrotask(() => flashCartLine(flashId));
+        }
+        return collapseStackableCart([...prev, line]);
+      }
+      const lineId = `${p.id}-${Date.now()}-${sig || 'plain'}${noteSuffix}`;
+      const line: CartLine = {
+        lineId,
+        productId: p.id,
+        name: p.name,
+        quantity: qty,
+        unitPrice: price,
+        lineTotal: roundMoney2(price * qty),
+        taxable: p.isTaxable !== false,
+        categoryId: p.categoryId,
+        selectedExtras,
+        comboSelections,
+        isOpenPrice: false,
+        courseNumber,
+        lineNote: lineNote?.trim() || undefined,
+      };
+      if (flashOnAdd) queueMicrotask(() => flashCartLine(lineId));
+      return [...prev, line];
     });
   };
 
@@ -3863,15 +3885,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     ]);
   };
 
-  const onProductClick = (p: Product) => {
+  const onProductClick = (p: Product, opts?: { fromScan?: boolean }) => {
     void ensureShift(() => {
+      const flashOnAdd = opts?.fromScan === true;
       if (p.isOpenPrice || p.productType === 'open_price') {
         setPendingOpenPrice(p);
         return;
       }
       if (isWeighedProduct(p)) {
         if (!scaleFeatureEnabled) {
-          addConfiguredProduct(p, Number(p.price) || 0);
+          pushConfiguredProduct(p, Number(p.price) || 0, [], [], 1, undefined, flashOnAdd);
           return;
         }
         setPendingWeighed(p);
@@ -3906,7 +3929,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         return;
       }
-      pushConfiguredProduct(p, roundMoney2(Number(p.price) || 0), [], []);
+      pushConfiguredProduct(p, roundMoney2(Number(p.price) || 0), [], [], 1, undefined, flashOnAdd);
       if (useRetailLayout && checkoutSettings.retailClearSearchAfterAdd !== false) {
         setSearch('');
       }
@@ -10129,7 +10152,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const product = findProductByScanCode(code);
       if (product) {
         setSearch('');
-        onProductClick(product);
+        onProductClick(product, { fromScan: true });
         return;
       }
       const tableQr = parseTableQrPayload(code);
@@ -11194,6 +11217,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             >
               <WebPosCartPanel
                 cart={cart}
+                flashLineId={cartFlashLineId}
                 totals={totals}
                 taxRate={taxRate}
                 money={money}

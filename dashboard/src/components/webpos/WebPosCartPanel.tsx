@@ -29,6 +29,8 @@ type CartListTab = 'ordering' | 'ordered';
 
 type Props = {
   cart: CartLine[];
+  /** Brief highlight on the line just added via barcode scan. */
+  flashLineId?: string | null;
   totals: { subtotal: number; tax: number; rounding: number; total: number; discount?: number };
   taxRate: number;
   money: (n: number) => string;
@@ -173,6 +175,7 @@ function lineQtyLabel(l: CartLine): string {
 
 export default function WebPosCartPanel({
   cart,
+  flashLineId = null,
   totals,
   taxRate,
   money,
@@ -911,6 +914,7 @@ export default function WebPosCartPanel({
               }
               const l = row.line;
               const selected = selectedLineId === l.lineId;
+              const flashing = flashLineId === l.lineId;
               const modifierRows = cartModifierRows(l);
               const lineName = repairCatalogText(l.name || '');
               const sentAtLabel = formatSentAt(l.sentToKitchenAt);
@@ -1020,6 +1024,7 @@ export default function WebPosCartPanel({
                     <WebPosSwipeableCartLine
                       lineId={l.lineId}
                       selected={selected}
+                      flashing={flashing}
                       sentToKitchen={!!l.sentToKitchen}
                       disabled={busy}
                       onRemove={() => onRemoveLine(l)}
@@ -1041,7 +1046,7 @@ export default function WebPosCartPanel({
                         selected
                           ? 'bg-[var(--webpos-accent-softer)] ring-2 ring-[var(--webpos-accent-ring)]'
                           : 'hover:bg-stone-50'
-                      } ${l.sentToKitchen ? 'opacity-80' : ''}`}
+                      } ${l.sentToKitchen ? 'opacity-80' : ''} ${flashing ? 'webpos-cart-line-added-flash' : ''}`}
                     >
                       {lineBody}
                     </button>

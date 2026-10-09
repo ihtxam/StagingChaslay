@@ -293,6 +293,22 @@ button {
     color-scheme: light;
   }
 
+  @keyframes webpos-cart-line-added-flash {
+    0% {
+      background-color: rgba(15, 23, 42, 0.18);
+    }
+    40% {
+      background-color: rgba(13, 148, 136, 0.22);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  .webpos-cart-line-added-flash {
+    animation: webpos-cart-line-added-flash 0.55s ease-out;
+  }
+
   /*
    * Zoom scales rem/Tailwind UI, but would clip the fixed viewport.
    * Compensate layout box so Pay / cart dock stay inside 100dvh.

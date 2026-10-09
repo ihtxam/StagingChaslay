@@ -11,6 +11,8 @@ type Props = {
   onRemove: () => void;
   onSelect: (e: React.MouseEvent | React.PointerEvent) => void;
   selected: boolean;
+  /** Barcode scan just added or stacked qty on this line. */
+  flashing?: boolean;
   sentToKitchen?: boolean;
   children: React.ReactNode;
 };
@@ -21,6 +23,7 @@ export default function WebPosSwipeableCartLine({
   onRemove,
   onSelect,
   selected,
+  flashing = false,
   sentToKitchen = false,
   children,
 }: Props) {
@@ -129,7 +132,7 @@ export default function WebPosSwipeableCartLine({
             selected
               ? 'bg-[var(--webpos-accent-softer)] ring-2 ring-[var(--webpos-accent-ring)]'
               : 'hover:bg-stone-50'
-          } ${sentToKitchen ? 'opacity-80' : ''}`}
+          } ${sentToKitchen ? 'opacity-80' : ''} ${flashing ? 'webpos-cart-line-added-flash' : ''}`}
         >
           {children}
         </button>
