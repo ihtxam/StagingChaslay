@@ -55,6 +55,11 @@ type ResSettings = {
     timeEnd?: string | null;
     enabled?: boolean;
   }>;
+  waitlistEnabled?: boolean;
+  liveTableLink?: boolean;
+  photoMenuEnabled?: boolean;
+  googleReserveUrl?: string | null;
+  googleOrderUrl?: string | null;
 };
 
 function emptyWeek(): ChannelHours {
@@ -188,6 +193,42 @@ export default function SettingsReservationsTab() {
           onChange={setEnabled}
           title={t('reservationsEnable')}
         />
+        <SettingsToggleRow
+          checked={settings.waitlistEnabled !== false}
+          onChange={(waitlistEnabled) => setSettings({ ...settings, waitlistEnabled })}
+          title={t('reservationsWaitlistEnable')}
+          hint={t('reservationsWaitlistHint')}
+        />
+        <SettingsToggleRow
+          checked={settings.liveTableLink !== false}
+          onChange={(liveTableLink) => setSettings({ ...settings, liveTableLink })}
+          title={t('reservationsLiveTableLink')}
+          hint={t('reservationsLiveTableLinkHint')}
+        />
+        <SettingsToggleRow
+          checked={settings.photoMenuEnabled !== false}
+          onChange={(photoMenuEnabled) => setSettings({ ...settings, photoMenuEnabled })}
+          title={t('photoMenuEnable')}
+          hint={t('photoMenuHint')}
+        />
+        <SettingsField label={t('googleReserveUrl')}>
+          <input
+            className="input"
+            placeholder="https://reserve.google.com/…"
+            value={settings.googleReserveUrl || ''}
+            onChange={(e) => setSettings({ ...settings, googleReserveUrl: e.target.value })}
+          />
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('googleReserveHint')}</p>
+        </SettingsField>
+        <SettingsField label={t('googleOrderUrl')}>
+          <input
+            className="input"
+            placeholder="https://food.google.com/…"
+            value={settings.googleOrderUrl || ''}
+            onChange={(e) => setSettings({ ...settings, googleOrderUrl: e.target.value })}
+          />
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('googleOrderHint')}</p>
+        </SettingsField>
       </SettingsReportCard>
 
       <SettingsReportCard

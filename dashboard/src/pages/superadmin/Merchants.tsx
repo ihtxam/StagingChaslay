@@ -21,6 +21,7 @@ import {
   parseLimitNumberField,
   type LimitNumberField,
 } from '@/lib/limit-number-input';
+import ModulePriceBook from '@/components/agency/ModulePriceBook';
 
 interface SubscriptionPlanOption {
   id: string;
@@ -1125,6 +1126,10 @@ export default function Merchants() {
                     ))}
                   </select>
                 </label>
+              </div>
+
+              <div className="rounded-xl border border-stone-200 bg-white p-4">
+                <ModulePriceBook compact />
               </div>
 
               <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4">

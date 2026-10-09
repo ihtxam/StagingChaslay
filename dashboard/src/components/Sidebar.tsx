@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarAccountName, REBORN_LOGO_WHITE } from '@/lib/brand';
@@ -22,6 +22,8 @@ export interface SidebarNavEntry {
   path?: string;
   icon: ReactNode;
   children?: SidebarLeaf[];
+  /** Always-visible section label (agency panel). */
+  heading?: boolean;
 }
 
 interface SidebarProps {
@@ -48,11 +50,14 @@ interface SidebarProps {
     settingsPath?: string;
     billingPath?: string;
     supportPath?: string;
+    guidesPath?: string;
   };
   /** Merchant shop name in the sidebar header (defaults to "Shop"). */
   shopName?: string | null;
   /** Optional Reborn platform shop shortcut pinned above the footer. */
   shopPath?: string | null;
+  /** Light agency chrome for reseller / dealer panel. */
+  tone?: 'default' | 'agency';
 }
 
 const STORAGE_PREFIX = 'sidebar_groups_open:';
@@ -107,6 +112,7 @@ export default function Sidebar({
   profileMenu,
   shopName,
   shopPath,
+  tone = 'default',
 }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -244,43 +250,78 @@ export default function Sidebar({
     };
   }, [isOpen]);
 
+  const isAgency = tone === 'agency';
+
   const linkClass = (active: boolean, nested = false) =>
-    `flex items-center gap-2.5 rounded-md text-sm transition-colors ${
-      nested ? 'px-2.5 py-1.5 pl-9' : 'px-2.5 py-2'
-    } ${
-      active
-        ? 'bg-black/25 text-white shadow-sm'
-        : 'text-white/90 hover:bg-white/10 hover:text-white'
-    }`;
+    isAgency
+      ? `agency-nav-link ${active ? 'is-active' : ''}`
+      : `flex items-center gap-2.5 rounded-md text-sm transition-colors ${
+          nested ? 'px-2.5 py-1.5 pl-9' : 'px-2.5 py-2'
+        } ${
+          active
+            ? 'bg-black/25 text-white shadow-sm'
+            : 'text-white/90 hover:bg-white/10 hover:text-white'
+        }`;
+
+  const agencyInitials = accountName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'AG';
 
   return (
     <>
       <aside
-        className={`panel-sidebar ${
+        className={`panel-sidebar ${isAgency ? 'agency-sidebar' : ''} ${
           isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
         } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto ${
-          railMode ? 'w-[4.5rem] lg:w-[4.5rem]' : 'w-56'
+          railMode ? 'w-[4.5rem] lg:w-[4.5rem]' : isAgency ? 'w-60' : 'w-56'
         } h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
-        <div className="panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0">
+        <div className={`panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0 ${isAgency ? 'border-stone-100' : ''}`}>
           <div className="flex min-w-0 items-center">
-            <div className="h-9 shrink-0 overflow-hidden" aria-hidden>
-              <img
-                src={REBORN_LOGO_WHITE}
-                alt=""
-                className="h-9 w-auto max-w-none object-contain object-left"
-              />
-            </div>
+            {isAgency ? (
+              <div className="agency-brand">
+                <span className="agency-mark" aria-hidden>
+                  R
+                </span>
+                <div className="min-w-0">
+                  <p className="agency-brand-name">reborn</p>
+                  <p className="agency-brand-sub">{t('agencyPanel')}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="h-9 shrink-0 overflow-hidden" aria-hidden>
+                <img
+                  src={REBORN_LOGO_WHITE}
+                  alt=""
+                  className="h-9 w-auto max-w-none object-contain object-left"
+                />
+              </div>
+            )}
           </div>
           <button
             type="button"
             onClick={onToggle}
-            className="lg:hidden p-1.5 rounded-md text-white/90 hover:bg-white/10 hover:text-white"
+            className={`lg:hidden p-1.5 rounded-md ${
+              isAgency ? 'text-stone-500 hover:bg-stone-100' : 'text-white/90 hover:bg-white/10 hover:text-white'
+            }`}
             aria-label="Close menu"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
+        {isAgency ? (
+          <div className="agency-account-card">
+            <span className="agency-account-initials">{agencyInitials}</span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{accountName}</p>
+              <p className="truncate text-[11px] text-white/60">{t('agencyResellerAccount')}</p>
+            </div>
+            <span className="ml-auto h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
+          </div>
+        ) : null}
 
         {quickAction && (
           <div className="panel-sidebar-divider px-3 pt-3 pb-3 border-b shrink-0">
@@ -310,6 +351,39 @@ export default function Sidebar({
         <nav ref={navRef} className="flex-1 min-h-0 p-2 space-y-0.5 overflow-y-auto">
           {menuItems.map((entry) => {
             const children = entry.children?.filter(Boolean) ?? [];
+
+            if (isAgency && entry.heading && children.length && !railMode) {
+              return (
+                <div key={entry.id || entry.label} className="pb-1">
+                  <p className="agency-nav-heading">{entry.label}</p>
+                  <div className="space-y-0.5">
+                    {children.map((child, idx) => {
+                      if (child.heading || !child.path) {
+                        return (
+                          <p key={`h-${child.label}-${idx}`} className="agency-nav-heading">
+                            {child.label}
+                          </p>
+                        );
+                      }
+                      const active = isPathActive(location.pathname, child.path, location.search);
+                      return (
+                        <Link
+                          key={child.path}
+                          to={child.path}
+                          onClick={closeMobile}
+                          className={linkClass(active)}
+                        >
+                          <span className="inline-flex w-5 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4">
+                            {child.icon || entry.icon}
+                          </span>
+                          <span className="truncate">{child.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
 
             if (railMode && children.length > 0) {
               const groupId = entry.id || entry.label;
@@ -551,6 +625,19 @@ export default function Sidebar({
                       {t('webPosSwitchUser')}
                     </button>
                   ) : null}
+                  {profileMenu.guidesPath ? (
+                    <Link
+                      to={profileMenu.guidesPath}
+                      onClick={() => {
+                        setProfileOpen(false);
+                        closeMobile();
+                      }}
+                      className="flex items-center gap-2 px-3 py-2.5 text-sm text-white/90 hover:bg-white/10"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      {t('productGuidesNav')}
+                    </Link>
+                  ) : null}
                   {profileMenu.supportPath ? (
                     <Link
                       to={profileMenu.supportPath}
@@ -615,7 +702,7 @@ export default function Sidebar({
                 </div>
               ) : null}
             </div>
-          ) : (
+          ) : isAgency ? null : (
             <div className="flex items-center gap-2.5 px-2 py-1.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/30 text-white">
                 <User className="h-4 w-4" />
@@ -631,7 +718,11 @@ export default function Sidebar({
 
           {onLanguageChange && !profileMenu ? (
             <select
-              className="w-full rounded-md border border-white/25 bg-black/25 px-2.5 py-1.5 text-xs text-white/90"
+              className={
+                isAgency
+                  ? 'w-full rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-700'
+                  : 'w-full rounded-md border border-white/25 bg-black/25 px-2.5 py-1.5 text-xs text-white/90'
+              }
               value={language || 'en'}
               onChange={(e) => onLanguageChange(e.target.value as Locale)}
               aria-label={t('language')}
@@ -646,7 +737,11 @@ export default function Sidebar({
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white"
+              className={
+                isAgency
+                  ? 'agency-logout w-full inline-flex items-center gap-2 px-3 py-2 text-sm'
+                  : 'w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white'
+              }
             >
               <LogOut className="w-3.5 h-3.5" />
               {t('logout')}

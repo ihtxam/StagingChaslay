@@ -82,6 +82,7 @@ export default function TableOrderPage() {
   const [orders, setOrders] = useState<SessionOrder[]>([]);
   const [runningTotal, setRunningTotal] = useState(0);
   const [payAtTableEnabled, setPayAtTableEnabled] = useState(false);
+  const [photoMenuEnabled, setPhotoMenuEnabled] = useState(true);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [modifierProduct, setModifierProduct] = useState<ShopProductForModifiers | null>(null);
   const [notes, setNotes] = useState('');
@@ -108,6 +109,7 @@ export default function TableOrderPage() {
     setOrders(sessionData.orders || []);
     setRunningTotal(Number(sessionData.runningTotal || 0));
     setPayAtTableEnabled(!!sessionData.settings?.qrPayAtTableEnabled);
+    setPhotoMenuEnabled(sessionData.settings?.photoMenuEnabled !== false);
     setMenu(menuRes.data.data || []);
   }, [shopKey, tableId, signedAccess, locationSlug]);
 
@@ -292,7 +294,7 @@ export default function TableOrderPage() {
 
   return (
     <ShopThemeShell theme={cmsTheme} site={shopSite}>
-      <div className="mx-auto max-w-lg min-h-screen bg-white pb-28">
+      <div className={`mx-auto min-h-screen bg-white pb-28 ${photoMenuEnabled ? 'max-w-xl' : 'max-w-lg'}`}>
         <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur">
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
             {t('tableOrderTitle')}
@@ -345,26 +347,59 @@ export default function TableOrderPage() {
           {menu.map((cat) => (
             <div key={cat.id}>
               <h2 className="text-sm font-bold text-stone-800">{cat.name}</h2>
-              <div className="mt-2 space-y-2">
-                {cat.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => addProduct(item)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-stone-200 p-3 text-left hover:bg-stone-50"
-                  >
-                    <div>
-                      <p className="font-semibold text-stone-900">{item.name}</p>
-                      {item.description ? (
-                        <p className="text-xs text-stone-500 line-clamp-2">{item.description}</p>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-semibold tabular-nums">{item.price.toFixed(2)}</span>
-                      <Plus size={16} className="text-teal-600" />
-                    </div>
-                  </button>
-                ))}
+              <div className={photoMenuEnabled ? 'mt-2 grid grid-cols-2 gap-2.5' : 'mt-2 space-y-2'}>
+                {cat.items.map((item) =>
+                  photoMenuEnabled ? (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addProduct(item)}
+                      className="overflow-hidden rounded-2xl border border-stone-200 bg-white text-left shadow-sm hover:border-stone-300"
+                    >
+                      <div className="aspect-[4/3] bg-stone-100">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-2xl font-bold text-stone-300">
+                            {item.name.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-2.5">
+                        <p className="line-clamp-2 text-sm font-semibold text-stone-900">{item.name}</p>
+                        {item.description ? (
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-stone-500">{item.description}</p>
+                        ) : null}
+                        <div className="mt-2 flex items-center justify-between gap-1">
+                          <span className="text-sm font-semibold tabular-nums">{item.price.toFixed(2)}</span>
+                          <Plus size={16} className="text-teal-600" />
+                        </div>
+                      </div>
+                    </button>
+                  ) : (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addProduct(item)}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-stone-200 p-3 text-left hover:bg-stone-50"
+                    >
+                      <div>
+                        <p className="font-semibold text-stone-900">{item.name}</p>
+                        {item.description ? (
+                          <p className="text-xs text-stone-500 line-clamp-2">{item.description}</p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-semibold tabular-nums">{item.price.toFixed(2)}</span>
+                        <Plus size={16} className="text-teal-600" />
+                      </div>
+                    </button>
+                  )
+                )}
               </div>
             </div>
           ))}

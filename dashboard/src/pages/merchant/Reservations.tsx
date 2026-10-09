@@ -310,6 +310,7 @@ export default function Reservations() {
               >
                 <option value="all">{t('all')}</option>
                 <option value="pending">pending</option>
+                <option value="waitlist">{t('reservationsStatusWaitlist')}</option>
                 <option value="confirmed">confirmed</option>
                 <option value="seated">seated</option>
                 <option value="completed">completed</option>
@@ -442,6 +443,15 @@ export default function Reservations() {
                         {t('edit')}
                       </button>
                     ) : null}
+                    {r.status === 'waitlist' && (
+                      <button
+                        type="button"
+                        className="btn-primary text-xs !py-1"
+                        onClick={() => void runAction(r.id, 'promote_waitlist')}
+                      >
+                        {t('reservationsPromoteWaitlist')}
+                      </button>
+                    )}
                     {r.status === 'pending' && (
                       <>
                         <button
@@ -460,7 +470,7 @@ export default function Reservations() {
                         </button>
                       </>
                     )}
-                    {['confirmed', 'pending'].includes(r.status) && (
+                    {['confirmed', 'pending', 'waitlist'].includes(r.status) && (
                       <button
                         type="button"
                         className="btn-secondary text-xs !py-1"
@@ -498,7 +508,7 @@ export default function Reservations() {
                     )}
                   </div>
                 </div>
-                {['pending', 'confirmed', 'seated'].includes(r.status) && (
+                {['pending', 'confirmed', 'seated', 'waitlist'].includes(r.status) && (
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="muted">{t('reservationsAssignTable')}</span>
                     <select

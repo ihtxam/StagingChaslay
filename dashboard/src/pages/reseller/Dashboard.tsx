@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Ban,
   Building2,
+  ChevronDown,
   Copy,
   KeyRound,
   LayoutDashboard,
+  BookOpen,
   LifeBuoy,
   Package,
   Plus,
   RefreshCw,
   Store,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Sidebar from '@/components/Sidebar';
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
-import Header from '@/components/Header';
+import AgencyTopBar, { agencyInitials } from '@/components/agency/AgencyTopBar';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
@@ -41,6 +43,8 @@ import {
 import SupportInbox from '../shared/SupportInbox';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import ResellerPackages from './Packages';
+import ModulePriceBook from '@/components/agency/ModulePriceBook';
+import ProductGuidesPage from '../shared/ProductGuidesPage';
 
 function Overview() {
   const { t } = useI18n();
@@ -51,38 +55,159 @@ function Overview() {
     licenseSeats: 0,
     seatsUsed: 0,
     seatsRemaining: 0,
+    monthlyRevenue: 0,
+    currency: 'CHF',
+    openTicketCount: 0,
+    packageCount: 0,
+    addonCount: 0,
+    storesThisMonth: 0,
+    storeGrowth: [] as Array<{ month: string; count: number }>,
+    recentActivity: [] as Array<{ id: string; kind: string; title: string; detail: string; at?: string | null }>,
   });
   useEffect(() => {
     api
       .get('/reseller/overview')
-      .then((r) => setOverview({ ...overview, ...(r.data.overview || {}) }))
+      .then((r) => setOverview((prev) => ({ ...prev, ...(r.data.overview || {}) })))
       .catch(() => null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const licensePct =
+    overview.licenseSeats > 0
+      ? Math.round((overview.seatsUsed / overview.licenseSeats) * 100)
+      : 0;
+  const maxGrowth = Math.max(1, ...overview.storeGrowth.map((row) => row.count));
+  const money = new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: overview.currency || 'CHF',
+    maximumFractionDigits: 0,
+  }).format(overview.monthlyRevenue || 0);
+
   return (
-    <div className="max-w-4xl space-y-4">
-      <h1 className="text-xl font-bold">{t('resellerDashboard')}</h1>
-      <div className="grid sm:grid-cols-3 gap-3">
-        <div className="card p-4">
-          <p className="text-xs text-stone-500">{t('merchants')}</p>
-          <p className="text-2xl font-bold">{overview.merchantCount}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-stone-500">{t('resellerActiveShort')}</p>
-          <p className="text-2xl font-bold">{overview.activeCount}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-stone-500">{t('resellerSuspendedShort')}</p>
-          <p className="text-2xl font-bold">{overview.suspendedCount}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-stone-500">{t('resellerLicenseSeats')}</p>
-          <p className="text-2xl font-bold">
-            {overview.seatsUsed}/{overview.licenseSeats}
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="agency-kpi agency-kpi-wine">
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-white/80">{t('agencyTotalStores')}</p>
+            <Building2 className="h-4 w-4 text-white/70" />
+          </div>
+          <p className="mt-3 text-4xl font-semibold tracking-tight">{overview.merchantCount}</p>
+          <p className="mt-3 text-xs text-white/70">
+            +{overview.storesThisMonth} {t('agencyThisMonth')}
           </p>
-          <p className="text-xs text-stone-500 mt-1">
-            {overview.seatsRemaining} {t('resellerRemaining')}
+        </div>
+        <div className="agency-kpi agency-kpi-paper">
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-stone-500">{t('agencyActiveLicenses')}</p>
+            <KeyRound className="h-4 w-4 text-stone-400" />
+          </div>
+          <p className="mt-3 text-4xl font-semibold tracking-tight text-stone-900">
+            {overview.seatsUsed}
+            <span className="text-lg font-medium text-stone-400">/{overview.licenseSeats}</span>
           </p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
+            <div className="h-full rounded-full bg-rose-700" style={{ width: `${Math.min(100, licensePct)}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-stone-400">
+            {licensePct}% {t('agencyUtilized')} · {overview.seatsRemaining} {t('resellerRemaining')}
+          </p>
+        </div>
+        <div className="agency-kpi agency-kpi-paper">
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-stone-500">{t('agencyMonthlyRevenue')}</p>
+            <span className="text-stone-400">$</span>
+          </div>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-stone-900">{money}</p>
+          <p className="mt-3 text-xs text-stone-400">{t('agencyPaidPlansHint')}</p>
+        </div>
+        <div className="agency-kpi agency-kpi-ink">
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-white/70">{t('agencyOpenTickets')}</p>
+            <LifeBuoy className="h-4 w-4 text-white/60" />
+          </div>
+          <p className="mt-3 text-4xl font-semibold tracking-tight">{overview.openTicketCount}</p>
+          <p className="mt-3 text-xs text-white/55">{t('agencyNeedsAttention')}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-[1.4fr_1fr]">
+        <div className="agency-card p-5">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-stone-900">{t('agencyStoreGrowth')}</p>
+              <p className="text-xs text-stone-400">{t('agencyNewStoresMonthly')}</p>
+            </div>
+            <span className="rounded-full bg-stone-50 px-2.5 py-1 text-xs text-stone-500">
+              {t('agencyLast6Months')}
+            </span>
+          </div>
+          <div className="flex h-44 items-end gap-3">
+            {(overview.storeGrowth.length ? overview.storeGrowth : Array.from({ length: 6 }, () => ({ month: '', count: 0 }))).map((row, idx, all) => {
+              const last = idx === all.length - 1;
+              const label = row.month ? row.month.slice(5) : String(idx + 1);
+              return (
+                <div key={`${row.month}-${idx}`} className="flex flex-1 flex-col items-center gap-2">
+                  <div
+                    className={`w-full rounded-md ${last ? 'bg-rose-800' : 'bg-rose-100'}`}
+                    style={{ height: `${Math.max(8, (row.count / maxGrowth) * 100)}%` }}
+                    title={`${row.month}: ${row.count}`}
+                  />
+                  <span className="text-[11px] text-stone-400">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="agency-card p-5">
+          <p className="mb-4 font-semibold text-stone-900">{t('agencyRecentActivity')}</p>
+          <ul className="space-y-3">
+            {overview.recentActivity.length ? (
+              overview.recentActivity.map((item) => (
+                <li key={item.id} className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-xs ${
+                      item.kind === 'ticket'
+                        ? 'bg-violet-50 text-violet-600'
+                        : item.kind === 'license'
+                          ? 'bg-amber-50 text-amber-600'
+                          : 'bg-emerald-50 text-emerald-600'
+                    }`}
+                  >
+                    {item.kind === 'ticket' ? '•' : item.kind === 'license' ? '!' : '+'}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-stone-800">{item.title}</p>
+                    <p className="truncate text-xs text-stone-400">{item.detail}</p>
+                  </div>
+                </li>
+              ))
+            ) : (
+              <li className="text-sm text-stone-400">{t('agencyNoRecentActivity')}</li>
+            )}
+          </ul>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="agency-card flex items-center gap-3 px-5 py-4">
+          <Package className="h-5 w-5 text-stone-400" />
+          <div>
+            <p className="text-2xl font-semibold text-stone-900">{overview.packageCount}</p>
+            <p className="text-xs text-stone-400">{t('agencyActivePackages')}</p>
+          </div>
+        </div>
+        <div className="agency-card flex items-center gap-3 px-5 py-4">
+          <RefreshCw className="h-5 w-5 text-stone-400" />
+          <div>
+            <p className="text-2xl font-semibold text-stone-900">{overview.addonCount}</p>
+            <p className="text-xs text-stone-400">{t('agencyAddonsAvailable')}</p>
+          </div>
+        </div>
+        <div className="agency-card flex items-center gap-3 px-5 py-4">
+          <Store className="h-5 w-5 text-stone-400" />
+          <div>
+            <p className="text-2xl font-semibold text-stone-900">{overview.activeCount}</p>
+            <p className="text-xs text-stone-400">{t('resellerActiveShort')}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -92,12 +217,15 @@ function Overview() {
 function MerchantsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
   const startImpersonation = useAuthStore((s) => s.startImpersonation);
   const [merchants, setMerchants] = useState<any[]>([]);
   const [editions, setEditions] = useState<any[]>([]);
   const [pool, setPool] = useState({ licenseSeats: 0, seatsUsed: 0, seatsRemaining: 0 });
-  const [search, setSearch] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');
+  const [showCreate, setShowCreate] = useState(() => new URLSearchParams(location.search).has('create'));
+  const [manageOpenId, setManageOpenId] = useState<string | null>(null);
+  const [inventoryBusyId, setInventoryBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [purgeFor, setPurgeFor] = useState<{ id: string; name: string } | null>(null);
   const [purgeConfirm, setPurgeConfirm] = useState('');
@@ -208,6 +336,13 @@ function MerchantsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get('q') || '';
+    setSearch(q);
+    if (params.has('create')) setShowCreate(true);
+  }, [location.search]);
 
   const create = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -378,6 +513,32 @@ function MerchantsPage() {
     }
   };
 
+  const toggleInventory = async (m: any) => {
+    setInventoryBusyId(m.id);
+    try {
+      await api.put(`/reseller/merchants/${m.id}/pos-limits`, {
+        maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
+        maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+        maxLocations: Math.max(0, Number(m.maxLocations) || 1),
+        inventoryAddonEnabled: m.inventoryAddonEnabled !== true,
+        signageAddonEnabled: m.signageAddonEnabled === true,
+        signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
+        kdsAddonEnabled: m.kdsAddonEnabled === true,
+        odsAddonEnabled: m.odsAddonEnabled === true,
+        deliveryPlatformsAddonEnabled:
+          m.deliveryPlatformsAddonEnabled === true ||
+          m.justEatAddonEnabled === true ||
+          m.uberEatsAddonEnabled === true,
+      });
+      toast.success(t('posPostsLimitsSaved'));
+      load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('resellerSaveFailed'));
+    } finally {
+      setInventoryBusyId(null);
+    }
+  };
+
   const saveMerchantPlan = async () => {
     if (!planFor) return;
     if (!planFor.editionId) {
@@ -454,26 +615,28 @@ function MerchantsPage() {
   };
 
   return (
-    <div className="max-w-6xl space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold">{t('resellerStores')}</h1>
-          <p className="text-xs text-stone-500 mt-1">
-            {t('resellerLicenseSeats')}: {pool.seatsUsed}/{pool.licenseSeats} (
-            {pool.seatsRemaining} {t('resellerRemaining')})
-          </p>
-          <p className="text-xs text-stone-500 mt-1">{t('resellerPurgeHint')}</p>
+    <div className="space-y-4">
+      <div className="agency-card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <p className="text-sm text-stone-500">
+          {t('resellerLicenseSeats')}: {pool.seatsUsed}/{pool.licenseSeats} · {pool.seatsRemaining}{' '}
+          {t('resellerRemaining')}
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            className="input max-w-xs rounded-full bg-stone-50"
+            placeholder={t('search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#9f1239] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#861032]"
+            onClick={() => setShowCreate(true)}
+          >
+            <Plus className="h-4 w-4" /> {t('resellerAddStore')}
+          </button>
         </div>
-        <button type="button" className="btn-primary text-sm" onClick={() => setShowCreate(true)}>
-          {t('resellerAddStore')}
-        </button>
       </div>
-      <input
-        className="input max-w-sm"
-        placeholder={t('search')}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
 
       {showCreate && (
         <form onSubmit={create} className="card p-4 grid sm:grid-cols-2 gap-3">
@@ -594,6 +757,10 @@ function MerchantsPage() {
               </label>
             )}
             <p className="sm:col-span-3 text-xs text-stone-500">{t('deviceLicenseSeatsHint')}</p>
+          </div>
+
+          <div className="sm:col-span-2 rounded-xl border border-stone-200 bg-white p-3">
+            <ModulePriceBook compact />
           </div>
 
           <div className="sm:col-span-2 border rounded-lg p-3 bg-stone-50 grid sm:grid-cols-2 gap-3">
@@ -796,185 +963,190 @@ function MerchantsPage() {
         </form>
       )}
 
-      <div className="card !p-0 table-scroll">
-        <table className="w-full text-sm min-w-[560px]">
-          <thead className="bg-stone-50 text-left">
+      <div className="agency-card !p-0 table-scroll">
+        <table className="agency-table w-full text-sm min-w-[720px]">
+          <thead className="text-left">
             <tr>
-              <th className="px-3 py-2">{t('resellerStores')}</th>
-              <th className="px-3 py-2">{t('email')}</th>
-              <th className="px-3 py-2">{t('status')}</th>
-              <th className="px-3 py-2">{t('posVersion')}</th>
-              <th className="px-3 py-2">{t('merchantPlanBilling')}</th>
-              <th className="px-3 py-2">{t('invTitle')}</th>
-              <th className="px-3 py-2" />
+              <th className="px-4 py-3">{t('resellerStores')}</th>
+              <th className="px-4 py-3">{t('status')}</th>
+              <th className="px-4 py-3">{t('posVersion')}</th>
+              <th className="px-4 py-3">{t('merchantPlanBilling')}</th>
+              <th className="px-4 py-3">{t('invTitle')}</th>
+              <th className="px-4 py-3">{t('actions')}</th>
             </tr>
           </thead>
           <tbody>
             {merchants.map((m) => (
-              <tr key={m.id} className="border-t">
-                <td className="px-3 py-2 font-medium">
-                  <span className="cell-truncate block" title={m.name}>
-                    {m.name}
-                  </span>
+              <tr key={m.id} className="border-t border-stone-100">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-50 text-xs font-semibold text-rose-700">
+                      {agencyInitials(m.name)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-stone-900" title={m.name}>
+                        {m.name}
+                      </p>
+                      <p className="truncate text-xs text-stone-400" title={m.email}>
+                        {m.email}
+                      </p>
+                    </div>
+                  </div>
                 </td>
-                <td className="px-3 py-2">
-                  <span className="cell-truncate block" title={m.email}>
-                    {m.email}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
+                <td className="px-4 py-3">
                   <span
-                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    className={`agency-pill ${
                       m.status === 'suspended'
-                        ? 'bg-red-100 text-red-800'
+                        ? 'bg-red-50 text-red-700'
                         : m.status === 'expired'
-                          ? 'bg-stone-200 text-stone-700'
-                          : 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-stone-100 text-stone-600'
+                          : 'bg-emerald-50 text-emerald-700'
                     }`}
                   >
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
                     {m.status === 'suspended' ? t('suspended') : m.status}
                   </span>
                 </td>
-                <td className="px-3 py-2">
-                  <span className="text-xs text-stone-700" title={m.editionName || undefined}>
+                <td className="px-4 py-3">
+                  <span className="text-sm text-stone-700" title={m.editionName || undefined}>
                     {m.editionName || '—'}
                   </span>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-4 py-3">
                   <span
-                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    className={`agency-pill ${
                       m.planBillingPaid !== false
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-amber-100 text-amber-900'
+                        ? 'bg-green-50 text-green-700'
+                        : 'bg-amber-50 text-amber-800'
                     }`}
                   >
                     {m.planBillingPaid !== false ? t('invoiceStatusPaid') : t('invoiceStatusUnpaid')}
                   </span>
                 </td>
-                <td className="px-3 py-2">
-                  {m.inventoryAddonEnabled === true ? (
-                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                      On
-                    </span>
-                  ) : (
-                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">
-                      Off
-                    </span>
-                  )}
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    className="agency-toggle"
+                    data-on={m.inventoryAddonEnabled === true ? 'true' : 'false'}
+                    disabled={inventoryBusyId === m.id}
+                    aria-pressed={m.inventoryAddonEnabled === true}
+                    onClick={() => void toggleInventory(m)}
+                  />
                 </td>
-                <td className="px-3 py-2 text-right space-x-3 whitespace-nowrap">
+                <td className="relative px-4 py-3">
                   <button
                     type="button"
-                    className="text-teal-700 hover:underline"
-                    onClick={() =>
-                      setPlanFor({
-                        id: m.id,
-                        name: m.name,
-                        editionId: m.editionId || '',
-                        planBillingPaid: m.planBillingPaid !== false,
-                        subscriptionPlan: m.subscriptionPlan || 'starter',
-                      })
-                    }
+                    className="inline-flex items-center gap-1 rounded-full border border-stone-200 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+                    onClick={() => setManageOpenId((id) => (id === m.id ? null : m.id))}
                   >
-                    {t('merchantPlanManage')}
+                    {t('agencyManage')}
+                    <ChevronDown className="h-3.5 w-3.5" />
                   </button>
-                  <button
-                    type="button"
-                    className="text-stone-700 hover:underline"
-                    onClick={() =>
-                      setLimitsFor({
-                        id: m.id,
-                        name: m.name,
-                        maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
-                        maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
-                        maxLocations: limitNumberToField(Math.max(0, Number(m.maxLocations) || 1)),
-                        inventoryAddonEnabled: m.inventoryAddonEnabled === true,
-                        signageAddonEnabled: m.signageAddonEnabled === true,
-                        signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
-                        kdsAddonEnabled: m.kdsAddonEnabled === true,
-                        odsAddonEnabled: m.odsAddonEnabled === true,
-                        deliveryPlatformsAddonEnabled:
-                          m.deliveryPlatformsAddonEnabled === true ||
-                          m.justEatAddonEnabled === true ||
-                          m.uberEatsAddonEnabled === true,
-                        bexioAddonEnabled: m.bexioAddonEnabled === true,
-                        odooAddonEnabled: m.odooAddonEnabled === true,
-                        storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
-                        growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
-                        guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
-                      })
-                    }
-                  >
-                    {t('posPostsLimits')}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-stone-700 hover:underline"
-                    onClick={() =>
-                      setPanelNavFor({
-                        id: m.id,
-                        name: m.name,
-                        hidden: Array.isArray(m.panelNavHidden) ? m.panelNavHidden : [],
-                      })
-                    }
-                  >
-                    {t('panelNavManage')}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-stone-700 hover:underline"
-                    onClick={() =>
-                      setShopBillFor({
-                        id: m.id,
-                        name: m.name,
-                        shopCommissionPercent: Number(m.shopCommissionPercent ?? 0) || 0,
-                      })
-                    }
-                  >
-                    {t('shopCommissionManage')}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-teal-700 hover:underline disabled:opacity-40 disabled:no-underline"
-                    disabled={m.status === 'suspended' || m.status === 'expired'}
-                    onClick={() => void openPanel(m)}
-                  >
-                    {t('resellerOpenMerchant')}
-                  </button>
-                  {m.status === 'suspended' ? (
-                    <button
-                      type="button"
-                      className="text-emerald-700 hover:underline disabled:opacity-40"
-                      disabled={statusBusyId === m.id}
-                      onClick={() => void setMerchantStatus(m, 'active')}
-                    >
-                      {t('reactivate')}
-                    </button>
-                  ) : m.status !== 'expired' ? (
-                    <button
-                      type="button"
-                      className="text-amber-700 hover:underline disabled:opacity-40"
-                      disabled={statusBusyId === m.id}
-                      onClick={() => void setMerchantStatus(m, 'suspended')}
-                    >
-                      {t('suspend')}
-                    </button>
+                  {manageOpenId === m.id ? (
+                    <div className="absolute right-4 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-stone-100 bg-white py-1 shadow-lg">
+                      {[
+                        {
+                          label: t('merchantPlanManage'),
+                          onClick: () =>
+                            setPlanFor({
+                              id: m.id,
+                              name: m.name,
+                              editionId: m.editionId || '',
+                              planBillingPaid: m.planBillingPaid !== false,
+                              subscriptionPlan: m.subscriptionPlan || 'starter',
+                            }),
+                        },
+                        {
+                          label: t('posPostsLimits'),
+                          onClick: () =>
+                            setLimitsFor({
+                              id: m.id,
+                              name: m.name,
+                              maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
+                              maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+                              maxLocations: limitNumberToField(Math.max(0, Number(m.maxLocations) || 1)),
+                              inventoryAddonEnabled: m.inventoryAddonEnabled === true,
+                              signageAddonEnabled: m.signageAddonEnabled === true,
+                              signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
+                              kdsAddonEnabled: m.kdsAddonEnabled === true,
+                              odsAddonEnabled: m.odsAddonEnabled === true,
+                              deliveryPlatformsAddonEnabled:
+                                m.deliveryPlatformsAddonEnabled === true ||
+                                m.justEatAddonEnabled === true ||
+                                m.uberEatsAddonEnabled === true,
+                              bexioAddonEnabled: m.bexioAddonEnabled === true,
+                              odooAddonEnabled: m.odooAddonEnabled === true,
+                              storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
+                              growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
+                              guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
+                            }),
+                        },
+                        {
+                          label: t('panelNavManage'),
+                          onClick: () =>
+                            setPanelNavFor({
+                              id: m.id,
+                              name: m.name,
+                              hidden: Array.isArray(m.panelNavHidden) ? m.panelNavHidden : [],
+                            }),
+                        },
+                        {
+                          label: t('shopCommissionManage'),
+                          onClick: () =>
+                            setShopBillFor({
+                              id: m.id,
+                              name: m.name,
+                              shopCommissionPercent: Number(m.shopCommissionPercent ?? 0) || 0,
+                            }),
+                        },
+                        {
+                          label: t('resellerOpenMerchant'),
+                          disabled: m.status === 'suspended' || m.status === 'expired',
+                          onClick: () => void openPanel(m),
+                        },
+                        m.status === 'suspended'
+                          ? {
+                              label: t('reactivate'),
+                              disabled: statusBusyId === m.id,
+                              onClick: () => void setMerchantStatus(m, 'active'),
+                            }
+                          : m.status !== 'expired'
+                            ? {
+                                label: t('suspend'),
+                                disabled: statusBusyId === m.id,
+                                onClick: () => void setMerchantStatus(m, 'suspended'),
+                              }
+                            : null,
+                        {
+                          label: revokingSessionsId === m.id ? '…' : t('revokeAllSessions'),
+                          disabled: revokingSessionsId === m.id,
+                          onClick: () => void revokeAllSessions(m),
+                        },
+                        {
+                          label: t('resellerPurgeSales'),
+                          danger: true,
+                          onClick: () => openPurge(m),
+                        },
+                      ]
+                        .filter(Boolean)
+                        .map((item) => (
+                          <button
+                            key={item!.label}
+                            type="button"
+                            disabled={item!.disabled}
+                            className={`block w-full px-3 py-2 text-left text-sm hover:bg-stone-50 disabled:opacity-40 ${
+                              item!.danger ? 'text-rose-700' : 'text-stone-700'
+                            }`}
+                            onClick={() => {
+                              setManageOpenId(null);
+                              item!.onClick();
+                            }}
+                          >
+                            {item!.label}
+                          </button>
+                        ))}
+                    </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className="text-stone-700 hover:underline disabled:opacity-40"
-                    disabled={revokingSessionsId === m.id}
-                    onClick={() => void revokeAllSessions(m)}
-                  >
-                    {revokingSessionsId === m.id ? '…' : t('revokeAllSessions')}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-rose-700 hover:underline"
-                    onClick={() => openPurge(m)}
-                  >
-                    {t('resellerPurgeSales')}
-                  </button>
                 </td>
               </tr>
             ))}
@@ -1545,23 +1717,19 @@ function LicensesPage() {
   };
 
   return (
-    <div className="max-w-6xl space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold">{t('deviceLicenses')}</h1>
-          <p className="text-sm text-stone-600 mt-1">{t('deviceLicensesHint')}</p>
-          <p className="text-xs text-stone-500 mt-1">
-            {t('resellerLicenseSeats')}: {pool.seatsUsed}/{pool.licenseSeats} (
-            {pool.seatsRemaining} {t('resellerRemaining')})
-          </p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-stone-500">
+          {t('resellerLicenseSeats')}: {pool.seatsUsed}/{pool.licenseSeats} ({pool.seatsRemaining}{' '}
+          {t('resellerRemaining')})
+        </p>
         <div className="flex gap-2">
           <button type="button" className="btn-secondary flex items-center gap-2 text-sm" onClick={load}>
             <RefreshCw className="w-4 h-4" /> {t('refresh')}
           </button>
           <button
             type="button"
-            className="btn-primary flex items-center gap-2 text-sm"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#9f1239] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#861032]"
             onClick={() => setShowIssue(true)}
           >
             <Plus className="w-4 h-4" /> {t('issueDeviceLicenses')}
@@ -1625,44 +1793,41 @@ function LicensesPage() {
         </select>
       </div>
 
-      <div className="card !p-0 table-scroll">
+      <div className="agency-card !p-0 table-scroll">
         {loading ? (
           <div className="text-center py-12">{t('loading')}</div>
         ) : licenses.length === 0 ? (
           <div className="text-center py-12 text-gray-500">{t('noLicenses')}</div>
         ) : (
-          <table className="w-full min-w-[720px]">
-            <thead className="bg-gray-50 border-b">
+          <table className="agency-table w-full min-w-[720px]">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold">{t('merchants')}</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold">{t('device')}</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold">{t('licenseKey')}</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold">{t('licenseType')}</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold">{t('status')}</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold">{t('expires')}</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold">{t('actions')}</th>
+                <th className="px-4 py-3 text-left">{t('merchants')}</th>
+                <th className="px-4 py-3 text-left">{t('device')}</th>
+                <th className="px-4 py-3 text-left">{t('licenseType')}</th>
+                <th className="px-4 py-3 text-left">{t('status')}</th>
+                <th className="px-4 py-3 text-left">{t('expires')}</th>
+                <th className="px-4 py-3 text-left">{t('actions')}</th>
               </tr>
             </thead>
             <tbody>
               {licenses.map((lic) => (
-                <tr key={lic.id} className="border-b hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm">{lic.merchant?.name || '-'}</td>
-                  <td className="px-4 py-3 text-sm">{lic.device?.deviceName || '-'}</td>
-                  <td className="px-4 py-3">
+                <tr key={lic.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                  <td className="px-4 py-3 text-sm font-medium text-stone-800">{lic.merchant?.name || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-stone-600">
                     <div className="flex items-center gap-1">
-                      <span className="font-mono text-xs">{lic.licenseKey}</span>
-                      <button type="button" className="p-1" onClick={() => copyText(lic.licenseKey)}>
-                        <Copy className="w-3 h-3" />
-                      </button>
+                      <span>{lic.device?.deviceName || '-'}</span>
+                      {lic.licenseKey ? (
+                        <button type="button" className="p-1 text-stone-400" onClick={() => copyText(lic.licenseKey)}>
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm capitalize">{lic.licenseType}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-semibold ${statusBadge(
-                        lic.status
-                      )}`}
-                    >
+                    <span className={`agency-pill ${statusBadge(lic.status)}`}>
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
                       {lic.status}
                     </span>
                   </td>
@@ -1932,14 +2097,16 @@ function EditionsPage() {
   };
 
   return (
-    <div className="max-w-6xl space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">{t('posVersionManagement')}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-stone-500">{t('posVersionResellerHint')}</p>
-        </div>
-        <button type="button" className="btn-primary text-sm" onClick={openCreate} disabled={saving}>
-          {t('posVersionNew')}
+        <p className="max-w-2xl text-sm text-stone-500">{t('posVersionResellerHint')}</p>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#9f1239] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#861032] disabled:opacity-50"
+          onClick={openCreate}
+          disabled={saving}
+        >
+          <Plus className="h-4 w-4" /> {t('posVersionNew')}
         </button>
       </div>
       {showForm && (
@@ -1988,88 +2155,69 @@ function EditionsPage() {
           </div>
         </div>
       )}
-      <div className="card table-scroll !p-0">
-        <table className="w-full min-w-[560px] text-sm">
-          <thead className="bg-stone-50 text-left">
-            <tr>
-              <th className="px-3 py-2">{t('name')}</th>
-              <th className="px-3 py-2">{t('owner')}</th>
-              <th className="px-3 py-2">{t('features')}</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {editions.map((ed) => {
-              const feats: string[] = Array.isArray(ed.features) ? ed.features : [];
-              const isPlatform = ed.ownerType === 'platform';
-              return (
-                <tr key={ed.id} className="border-t align-top">
-                  <td className="px-3 py-2">
-                    <p className="font-medium">{ed.name}</p>
-                    {ed.note ? <p className="mt-0.5 text-xs text-stone-500">{ed.note}</p> : null}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase ${
-                        isPlatform ? 'bg-stone-100 text-stone-600' : 'bg-teal-50 text-teal-800'
-                      }`}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {editions.map((ed) => {
+          const feats: string[] = Array.isArray(ed.features) ? ed.features : [];
+          const isPlatform = ed.ownerType === 'platform';
+          return (
+            <div key={ed.id} className="agency-card flex flex-col p-5">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-stone-900">{ed.name}</p>
+                  {ed.note ? <p className="mt-0.5 text-xs text-stone-400">{ed.note}</p> : null}
+                </div>
+                <span className="agency-pill bg-stone-50 text-stone-500">
+                  {isPlatform ? t('posVersionPlatform') : t('posVersionYours')}
+                </span>
+              </div>
+              <div className="flex flex-1 flex-wrap content-start gap-1.5">
+                {feats.slice(0, 8).map((k) => (
+                  <span
+                    key={k}
+                    className="rounded-md bg-stone-50 px-2 py-1 text-[11px] font-medium text-stone-600"
+                    title={k}
+                  >
+                    {featureLabel(k)}
+                  </span>
+                ))}
+                {feats.length > 8 ? (
+                  <span className="rounded-md bg-stone-50 px-2 py-1 text-[11px] text-stone-400">
+                    +{feats.length - 8}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-4 flex gap-2">
+                {isPlatform ? (
+                  <button
+                    type="button"
+                    className="rounded-full bg-[#9f1239] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
+                    disabled={saving}
+                    onClick={() => void customizePlatform(ed)}
+                  >
+                    {t('posVersionCustomize')}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="rounded-full border border-stone-200 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+                      onClick={() => openEdit(ed)}
                     >
-                      {isPlatform ? t('posVersionPlatform') : t('posVersionYours')}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <p className="mb-1 text-xs font-semibold text-stone-500">
-                      {feats.length}/{ALL_EDITION_FEATURES.length}
-                    </p>
-                    <div className="flex max-w-md flex-wrap gap-1">
-                      {feats.slice(0, 8).map((k) => (
-                        <span
-                          key={k}
-                          className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-700"
-                          title={k}
-                        >
-                          {featureLabel(k)}
-                        </span>
-                      ))}
-                      {feats.length > 8 ? (
-                        <span className="text-[10px] text-stone-400">+{feats.length - 8}</span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="space-x-2 px-3 py-2 text-right whitespace-nowrap">
-                    {isPlatform ? (
-                      <button
-                        type="button"
-                        className="text-teal-700 hover:underline disabled:opacity-40"
-                        disabled={saving}
-                        onClick={() => void customizePlatform(ed)}
-                      >
-                        {t('posVersionCustomize')}
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="text-teal-700 hover:underline"
-                          onClick={() => openEdit(ed)}
-                        >
-                          {t('edit')}
-                        </button>
-                        <button
-                          type="button"
-                          className="text-red-600 hover:underline"
-                          onClick={() => void deactivate(ed)}
-                        >
-                          {t('deactivate')}
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      {t('edit')}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-rose-100 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50"
+                      onClick={() => void deactivate(ed)}
+                    >
+                      {t('deactivate')}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2077,7 +2225,7 @@ function EditionsPage() {
 
 function ResellerShell() {
   const { t, locale, setLocale } = useI18n();
-  const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
@@ -2087,8 +2235,15 @@ function ResellerShell() {
   }, []);
 
   const menuItems = [
-    { label: t('overview'), path: '/reseller', icon: <LayoutDashboard /> },
     {
+      heading: true,
+      id: 'main',
+      label: t('agencyNavMain'),
+      icon: <LayoutDashboard />,
+      children: [{ label: t('overview'), path: '/reseller', icon: <LayoutDashboard /> }],
+    },
+    {
+      heading: true,
       id: 'merchants',
       label: t('merchants'),
       icon: <Store />,
@@ -2098,40 +2253,52 @@ function ResellerShell() {
       ],
     },
     {
+      heading: true,
       id: 'editions',
       label: t('posVersions'),
       icon: <Package />,
       children: [
-        { label: t('posVersionManagement'), path: '/reseller/editions', icon: <Package /> },
-        { label: 'Packages & add-ons', path: '/reseller/packages', icon: <Package /> },
+        { label: t('agencyPosManagement'), path: '/reseller/editions', icon: <Package /> },
+        { label: t('agencyPackagesAddons'), path: '/reseller/packages', icon: <Package /> },
       ],
     },
-    { label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> },
+    {
+      heading: true,
+      id: 'support',
+      label: t('agencyNavSupport'),
+      icon: <LifeBuoy />,
+      children: [
+        { label: t('resellerGuidesNav'), path: '/reseller/guides', icon: <BookOpen /> },
+        { label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> },
+      ],
+    },
   ];
 
   return (
-    <div className="flex h-full max-h-full panel-shell">
+    <div className="flex h-full max-h-full panel-shell agency-shell">
       <Sidebar
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         menuItems={menuItems}
         panelKey="reseller"
+        tone="agency"
         language={locale}
         onLanguageChange={(lang: Locale) => setLocale(lang)}
       />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
-        <Header
-          title={`${user?.name || 'Reseller'} — Agency`}
+        <AgencyTopBar
           onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          onAddStore={() => navigate('/reseller/merchants?create=1')}
         />
         <PlatformStatusBannerSlot />
-        <main className="panel-main flex-1 p-3 sm:p-4">
+        <main className="panel-main flex-1 p-4 sm:p-5">
           <Routes>
             <Route index element={<Overview />} />
             <Route path="merchants" element={<MerchantsPage />} />
             <Route path="licenses" element={<LicensesPage />} />
             <Route path="editions" element={<EditionsPage />} />
             <Route path="packages" element={<ResellerPackages />} />
+            <Route path="guides" element={<ProductGuidesPage audience="reseller" />} />
             <Route path="support" element={<SupportInbox mode="reseller" />} />
             <Route path="notifications" element={<PlatformNotificationsHistory />} />
           </Routes>

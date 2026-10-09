@@ -6,6 +6,8 @@ export function reservationStatusBadgeClass(status: string): string {
     confirmed:
       'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-100',
     seated: 'bg-blue-100 text-blue-900 dark:bg-blue-950/50 dark:text-blue-100',
+    waitlist:
+      'bg-violet-100 text-violet-900 dark:bg-violet-950/50 dark:text-violet-100',
     completed:
       'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300',
     cancelled:

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
+  BookOpen,
   ExternalLink,
   LifeBuoy,
   Paperclip,
@@ -170,6 +172,13 @@ export default function Support() {
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t('supportHelpCenter')}</p>
               <h1 className="text-xl font-bold text-stone-900">{t('supportHelpHero')}</h1>
               <p className="text-sm text-stone-600 mt-1 max-w-2xl">{t('supportHelpHeroHint')}</p>
+              <Link
+                to="/merchant/guides"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-800 underline underline-offset-2"
+              >
+                <BookOpen className="h-4 w-4" />
+                {t('productGuidesTitle')}
+              </Link>
             </div>
             <div className="flex items-center gap-1">
               {(['en', 'fr', 'de'] as Locale[]).map((lang) => (

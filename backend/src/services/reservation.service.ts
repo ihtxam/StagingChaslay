@@ -20,13 +20,20 @@ const DAY_KEYS: DayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 export const DEFAULT_RESERVATION_SETTINGS: Required<
   Omit<
     ReservationSettings,
-    "maxCoversPerSlot" | "policiesText" | "slotDiscounts" | "lastDailySummaryDate"
+    | "maxCoversPerSlot"
+    | "policiesText"
+    | "slotDiscounts"
+    | "lastDailySummaryDate"
+    | "googleReserveUrl"
+    | "googleOrderUrl"
   >
 > & {
   maxCoversPerSlot: number | null;
   policiesText: string | null;
   slotDiscounts: NonNullable<ReservationSettings["slotDiscounts"]>;
   lastDailySummaryDate: string | null;
+  googleReserveUrl: string | null;
+  googleOrderUrl: string | null;
 } = {
   dineInHoursMode: "same_as_takeaway",
   slotIntervalMinutes: 30,
@@ -49,6 +56,11 @@ export const DEFAULT_RESERVATION_SETTINGS: Required<
   policiesText: null,
   slotDiscounts: [],
   lastDailySummaryDate: null,
+  waitlistEnabled: true,
+  liveTableLink: true,
+  photoMenuEnabled: true,
+  googleReserveUrl: null,
+  googleOrderUrl: null,
 };
 
 const ACTIVE_STATUSES: ReservationStatus[] = ["pending", "confirmed", "seated"];
@@ -103,6 +115,11 @@ export function normalizeReservationSettings(
             enabled: d.enabled !== false,
           }))
       : [],
+    waitlistEnabled: s.waitlistEnabled !== false,
+    liveTableLink: s.liveTableLink !== false,
+    photoMenuEnabled: s.photoMenuEnabled !== false,
+    googleReserveUrl: s.googleReserveUrl?.trim() || null,
+    googleOrderUrl: s.googleOrderUrl?.trim() || null,
   };
 }
 
@@ -416,6 +433,7 @@ export class ReservationService {
     const slots: Array<{
       time: string;
       available: boolean;
+      waitlistAvailable?: boolean;
       remainingCovers: number;
       discountPercent?: number;
       discountLabel?: string | null;
@@ -454,9 +472,11 @@ export class ReservationService {
           .reduce((s, r) => s + (Number(r.partySize) || 0), 0);
         const remaining = Math.max(0, maxCovers - used);
         const disc = matchDiscount(hm);
+        const available = remaining >= size;
         slots.push({
           time: hm,
-          available: remaining >= size,
+          available,
+          waitlistAvailable: !available && settings.waitlistEnabled !== false,
           remainingCovers: remaining,
           discountPercent: disc?.percentOff || undefined,
           discountLabel: disc?.label || null,
@@ -471,6 +491,7 @@ export class ReservationService {
       bufferMinutes: buffer,
       minHoursBefore: settings.minHoursBefore,
       maxDaysAhead: settings.maxDaysAhead,
+      waitlistEnabled: settings.waitlistEnabled !== false,
     }};
   }
 
@@ -511,12 +532,19 @@ export class ReservationService {
     const reservedAt = input.reservedAt instanceof Date ? input.reservedAt : new Date(input.reservedAt);
     assertReservationNotInPast(reservedAt);
 
+    let waitlisted = false;
     if (input.source === "web" || !input.skipSlotCheck) {
       const dateYmd = formatZurichDate(reservedAt);
       const hm = formatZurichHm(reservedAt);
       const slotRes = await this.getSlots(merchantId, dateYmd, partySize);
       const match = slotRes.slots.find((s) => s.time === hm && s.available);
-      if (!match) throw new Error("Selected time is not available");
+      if (!match) {
+        if (settings.waitlistEnabled && (input.source === "web" || input.source === "phone")) {
+          waitlisted = true;
+        } else {
+          throw new Error("Selected time is not available");
+        }
+      }
       const minStart = new Date(Date.now() + settings.minHoursBefore * 3600_000);
       if (reservedAt < minStart) {
         throw new Error(`Please book at least ${settings.minHoursBefore} hour(s) in advance`);
@@ -525,11 +553,13 @@ export class ReservationService {
 
     let status: ReservationStatus =
       input.status ||
-      (settings.autoAccept || input.source === "dashboard" || input.source === "pos" || input.source === "phone"
+      (waitlisted
+        ? "waitlist"
+        : settings.autoAccept || input.source === "dashboard" || input.source === "pos" || input.source === "phone"
         ? "confirmed"
         : "pending");
     if (input.source === "web") {
-      status = settings.autoAccept ? "confirmed" : "pending";
+      status = waitlisted ? "waitlist" : settings.autoAccept ? "confirmed" : "pending";
     }
 
     let tableId = input.tableId || null;
@@ -706,6 +736,8 @@ export class ReservationService {
       | "complete"
       | "cancel"
       | "no_show"
+      | "waitlist"
+      | "promote_waitlist"
       | "assign_table"
       | "unassign_table",
     payload: {
@@ -718,8 +750,18 @@ export class ReservationService {
     const db = getDb();
     const merchant = await getMerchant(merchantId);
     const current = await this.get(merchantId, id);
+    const liveLink = resolveSettings(merchant.reservationSettings).liveTableLink !== false;
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     let emailKind: "confirmed" | "rejected" | "cancelled" | "seated" | null = null;
+
+    const setFloor = async (tableId: string | null | undefined, status: string) => {
+      if (!liveLink || !tableId) return;
+      try {
+        await FloorPlanService.setTableStatus(merchantId, tableId, status);
+      } catch {
+        /* ignore */
+      }
+    };
 
     if (payload.internalNotes !== undefined) {
       patch.internalNotes = payload.internalNotes;
@@ -730,77 +772,88 @@ export class ReservationService {
 
     switch (action) {
       case "accept":
-        if (!["pending", "rejected"].includes(current.status)) {
-          throw new Error("Only pending reservations can be accepted");
+        if (!["pending", "rejected", "waitlist"].includes(current.status)) {
+          throw new Error("Only pending, waitlist, or rejected reservations can be accepted");
         }
         patch.status = "confirmed";
         patch.acceptedAt = new Date();
         emailKind = "confirmed";
         break;
-      case "reject":
+      case "promote_waitlist":
+        if (current.status !== "waitlist") throw new Error("Only waitlist guests can be promoted");
+        patch.status = "confirmed";
+        patch.acceptedAt = new Date();
+        emailKind = "confirmed";
+        break;
+      case "waitlist":
         if (!["pending", "confirmed"].includes(current.status)) {
-          throw new Error("Only pending or confirmed reservations can be rejected");
+          throw new Error("Only pending or confirmed reservations can move to the waitlist");
+        }
+        patch.status = "waitlist";
+        await setFloor(current.tableId, "available");
+        break;
+      case "reject":
+        if (!["pending", "confirmed", "waitlist"].includes(current.status)) {
+          throw new Error("Only pending, waitlist, or confirmed reservations can be rejected");
         }
         patch.status = "rejected";
         patch.cancelledAt = new Date();
         emailKind = "rejected";
         if (current.tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
+          await setFloor(current.tableId, "available");
           patch.tableId = null;
           patch.tableLabel = null;
         }
         break;
       case "seat":
-        if (!["confirmed", "pending"].includes(current.status)) {
+        if (!["confirmed", "pending", "waitlist"].includes(current.status)) {
           throw new Error("Cannot seat this reservation");
         }
         patch.status = "seated";
         patch.seatedAt = new Date();
-        if (current.tableId) {
+        await setFloor(current.tableId, "occupied");
+        if (liveLink && current.tableId) {
           try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "occupied");
+            const { PosOrdersService } = await import("@/services/pos-orders.service");
+            await PosOrdersService.holdOrder(merchantId, {
+              label: current.guestName,
+              channel: "dine_in",
+              notes: `Reservation ${current.code} · ${current.partySize} guests`,
+              cartJson: {
+                cart: [],
+                tableId: current.tableId,
+                tableLabel: current.tableLabel,
+                channel: "dine_in",
+                reservationId: current.id,
+                guestName: current.guestName,
+                partySize: current.partySize,
+              },
+            });
           } catch {
-            /* ignore */
+            /* ticket can still be opened from the table */
           }
         }
         break;
       case "complete":
-        patch.status = "completed";
-        if (current.tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "dirty");
-          } catch {
-            /* ignore */
-          }
+        if (current.status !== "seated") {
+          throw new Error("Complete only after the party is seated — keep the booking open until then");
         }
+        patch.status = "completed";
+        await setFloor(current.tableId, "dirty");
         break;
       case "cancel":
         patch.status = "cancelled";
         patch.cancelledAt = new Date();
         emailKind = payload.sendRejectionEmail ? "rejected" : "cancelled";
         if (current.tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
+          await setFloor(current.tableId, "available");
           patch.tableId = null;
           patch.tableLabel = null;
         }
         break;
       case "no_show":
         patch.status = "no_show";
-        if (current.tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
-        }
+        await setFloor(current.tableId, "available");
         break;
       case "assign_table": {
         const tableId = payload.tableId;
@@ -812,31 +865,17 @@ export class ReservationService {
           throw new Error("Table is too small for this party");
         }
         if (current.tableId && current.tableId !== tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
+          await setFloor(current.tableId, "available");
         }
         patch.tableId = tableId;
         patch.tableLabel = table.label;
-        if (["confirmed", "pending"].includes(current.status)) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, tableId, "reserved");
-          } catch {
-            /* ignore */
-          }
+        if (["confirmed", "pending", "seated", "waitlist"].includes(current.status)) {
+          await setFloor(tableId, current.status === "seated" ? "occupied" : "reserved");
         }
         break;
       }
       case "unassign_table":
-        if (current.tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
-        }
+        await setFloor(current.tableId, "available");
         patch.tableId = null;
         patch.tableLabel = null;
         break;
