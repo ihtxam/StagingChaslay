@@ -49,6 +49,7 @@ import Billing from './Billing';
 import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
 import Newsletter from './Newsletter';
+import SmsPage from './Sms';
 import WebPos from './WebPos';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import LazyRouteErrorBoundary from '@/components/LazyRouteErrorBoundary';
@@ -231,6 +232,7 @@ function MerchantShell() {
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [kioskLicensed, setKioskLicensed] = useState(false);
+  const [smsLicensed, setSmsLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -377,6 +379,7 @@ function MerchantShell() {
       signageEnabled?: boolean;
       kioskAddonEnabled?: boolean;
       kioskEnabled?: boolean;
+      smsAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
     } | null) => {
@@ -390,6 +393,7 @@ function MerchantShell() {
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setKioskLicensed(isKioskLicensed(settings));
+      setSmsLicensed(settings?.smsAddonEnabled === true);
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
       setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
@@ -973,6 +977,7 @@ function MerchantShell() {
         { label: t('offers'), path: '/merchant/offers', icon: '🏷️' },
         { label: t('vouchers'), path: '/merchant/vouchers', icon: '🎟️' },
         { label: t('newsletter'), path: '/merchant/newsletter', icon: '✉️' },
+        ...(smsLicensed ? [{ label: t('smsNav'), path: '/merchant/sms', icon: '💬' }] : []),
       ].filter((item) => allow(item.path)),
     },
     {
@@ -1448,6 +1453,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/newsletter" allow={allow}>
                   <Newsletter />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="sms"
+              element={
+                <PanelRouteGuard path="/merchant/sms" allow={allow}>
+                  <SmsPage />
                 </PanelRouteGuard>
               }
             />

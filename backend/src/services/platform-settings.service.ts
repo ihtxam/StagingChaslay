@@ -30,6 +30,21 @@ export const PLATFORM_MAILCO_KEYS = {
   emailPrimary: "platform_email_primary",
 } as const;
 
+export const PLATFORM_ESENDEX_KEYS = {
+  user: "esendex_api_user",
+  password: "esendex_api_password",
+  accountRef: "esendex_account_ref",
+  originator: "esendex_default_originator",
+} as const;
+
+export type PlatformEsendexSettings = {
+  user?: string | null;
+  password?: string | null;
+  apiKey?: string | null;
+  accountRef?: string | null;
+  originator?: string | null;
+};
+
 export type PlatformEmailPrimary = "mailco" | "brevo";
 
 export type PlatformMailcoSettings = {
@@ -439,6 +454,69 @@ export class PlatformSettingsService {
       await this.set(PLATFORM_MAILCO_KEYS.apiKey, input.apiKey.trim());
     }
     return this.getMailcoSettingsPublic();
+  }
+
+  static async getEsendexSettings(): Promise<PlatformEsendexSettings> {
+    const rows = await this.getMany(Object.values(PLATFORM_ESENDEX_KEYS));
+    return {
+      user: rows[PLATFORM_ESENDEX_KEYS.user],
+      password: rows[PLATFORM_ESENDEX_KEYS.password],
+      apiKey: rows[PLATFORM_ESENDEX_KEYS.password],
+      accountRef: rows[PLATFORM_ESENDEX_KEYS.accountRef],
+      originator: rows[PLATFORM_ESENDEX_KEYS.originator],
+    };
+  }
+
+  static async getEsendexSettingsPublic() {
+    const s = await this.getEsendexSettings();
+    const user = (s.user || process.env.ESENDEX_API_USER || "").trim();
+    const password = (
+      s.password ||
+      process.env.ESENDEX_API_PASSWORD ||
+      process.env.ESENDEX_API_KEY ||
+      ""
+    ).trim();
+    const accountRef = (s.accountRef || process.env.ESENDEX_ACCOUNT_REF || "").trim();
+    const originator = (
+      s.originator ||
+      process.env.ESENDEX_DEFAULT_ORIGINATOR ||
+      "Reborn"
+    ).trim();
+    return {
+      user: user || "",
+      accountRef: accountRef || "",
+      originator: originator.slice(0, 11),
+      passwordMasked: maskSecret(password),
+      passwordSet: !!password,
+      usingEnvFallback: !s.password && !!(process.env.ESENDEX_API_PASSWORD || process.env.ESENDEX_API_KEY),
+      configured: !!(user && password && accountRef),
+    };
+  }
+
+  static async updateEsendexSettings(input: {
+    user?: string;
+    password?: string;
+    apiKey?: string;
+    accountRef?: string;
+    originator?: string;
+  }) {
+    if (input.user !== undefined) {
+      await this.set(PLATFORM_ESENDEX_KEYS.user, input.user.trim() || null);
+    }
+    if (input.accountRef !== undefined) {
+      await this.set(PLATFORM_ESENDEX_KEYS.accountRef, input.accountRef.trim() || null);
+    }
+    if (input.originator !== undefined) {
+      await this.set(
+        PLATFORM_ESENDEX_KEYS.originator,
+        input.originator.replace(/[^A-Za-z0-9 ]/g, "").trim().slice(0, 11) || null
+      );
+    }
+    const secret = input.password ?? input.apiKey;
+    if (secret !== undefined && secret.trim() && !secret.includes("••••")) {
+      await this.set(PLATFORM_ESENDEX_KEYS.password, secret.trim());
+    }
+    return this.getEsendexSettingsPublic();
   }
 
   static async getPlatformEmailPrimary(): Promise<PlatformEmailPrimary> {

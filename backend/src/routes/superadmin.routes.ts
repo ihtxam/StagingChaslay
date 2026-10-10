@@ -281,6 +281,28 @@ router.put("/platform-settings/mailco", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/platform-settings/esendex", async (_req: Request, res: Response) => {
+  try {
+    const esendex = await PlatformSettingsService.getEsendexSettingsPublic();
+    res.json({ success: true, esendex });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load Esendex settings",
+    });
+  }
+});
+
+router.put("/platform-settings/esendex", async (req: Request, res: Response) => {
+  try {
+    const esendex = await PlatformSettingsService.updateEsendexSettings(req.body || {});
+    res.json({ success: true, esendex });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save Esendex settings",
+    });
+  }
+});
+
 /**
  * GET /api/superadmin/platform-settings/legal
  */
@@ -500,6 +522,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
       kioskAddonEnabled,
+      smsAddonEnabled,
+      smsTier,
       bexioAddonEnabled,
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
@@ -546,6 +570,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
         deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
         storekeeperAddonEnabled: isStorekeeperAddonEnabled(storekeeperAddonEnabled),
         kioskAddonEnabled: isKioskAddonEnabled(kioskAddonEnabled),
+        smsAddonEnabled: smsAddonEnabled === true,
+        smsTier: smsTier || undefined,
         bexioAddonEnabled: bexioAddonEnabled === true,
         odooAddonEnabled: odooAddonEnabled === true,
         growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
@@ -625,6 +651,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
       updates.kioskEnabled != null ||
+      updates.smsAddonEnabled != null ||
+      updates.smsTier != null ||
       updates.growthAnalyticsAddonEnabled != null ||
       updates.guestCrmAddonEnabled != null ||
       updates.marketingAutomationAddonEnabled != null ||
@@ -682,6 +710,9 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.kioskEnabled != null
               ? isKioskAddonEnabled(updates.kioskEnabled)
               : undefined,
+        smsAddonEnabled:
+          updates.smsAddonEnabled != null ? updates.smsAddonEnabled === true : undefined,
+        smsTier: updates.smsTier != null ? String(updates.smsTier) : undefined,
         growthAnalyticsAddonEnabled:
           updates.growthAnalyticsAddonEnabled != null
             ? updates.growthAnalyticsAddonEnabled === true
@@ -723,6 +754,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.storekeeperAddonEnabled;
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;
+      delete updates.smsAddonEnabled;
+      delete updates.smsTier;
       delete updates.growthAnalyticsAddonEnabled;
       delete updates.guestCrmAddonEnabled;
       delete updates.marketingAutomationAddonEnabled;

@@ -67,6 +67,8 @@ interface Merchant {
   storekeeperAddonEnabled?: boolean;
   kioskAddonEnabled?: boolean;
   kioskEnabled?: boolean;
+  smsAddonEnabled?: boolean;
+  smsTier?: string;
   growthAnalyticsAddonEnabled?: boolean;
   guestCrmAddonEnabled?: boolean;
   createdAt: string;
@@ -133,6 +135,8 @@ const emptyForm = {
   odooAddonEnabled: false,
   storekeeperAddonEnabled: false,
   kioskAddonEnabled: false,
+  smsAddonEnabled: false,
+  smsTier: 'starter',
   growthAnalyticsAddonEnabled: false,
   guestCrmAddonEnabled: false,
   productSurface: 'full_pos' as MerchantProductSurface,
@@ -172,6 +176,8 @@ export default function Merchants() {
     odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
     kioskAddonEnabled: boolean;
+    smsAddonEnabled: boolean;
+    smsTier: string;
     growthAnalyticsAddonEnabled: boolean;
     guestCrmAddonEnabled: boolean;
   }>({
@@ -188,6 +194,8 @@ export default function Merchants() {
     odooAddonEnabled: false,
     storekeeperAddonEnabled: false,
     kioskAddonEnabled: false,
+    smsAddonEnabled: false,
+    smsTier: 'starter',
     growthAnalyticsAddonEnabled: false,
     guestCrmAddonEnabled: false,
   });
@@ -303,6 +311,8 @@ export default function Merchants() {
         odooAddonEnabled: res.data.merchant?.odooAddonEnabled === true,
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
         kioskAddonEnabled: res.data.merchant?.kioskAddonEnabled === true,
+        smsAddonEnabled: res.data.merchant?.smsAddonEnabled === true,
+        smsTier: String(res.data.merchant?.smsTier || 'starter'),
         growthAnalyticsAddonEnabled: res.data.merchant?.growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: res.data.merchant?.guestCrmAddonEnabled === true,
       });
@@ -336,6 +346,8 @@ export default function Merchants() {
         odooAddonEnabled: !!posLimits.odooAddonEnabled,
         storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
         kioskAddonEnabled: !!posLimits.kioskAddonEnabled,
+        smsAddonEnabled: !!posLimits.smsAddonEnabled,
+        smsTier: posLimits.smsTier || 'starter',
         growthAnalyticsAddonEnabled: !!posLimits.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!posLimits.guestCrmAddonEnabled,
       });
@@ -346,6 +358,7 @@ export default function Merchants() {
       const odsOn = saved?.odsAddonEnabled === true || saved?.odsEnabled === true;
       const storekeeperOn = saved?.storekeeperAddonEnabled === true;
       const kioskOn = saved?.kioskAddonEnabled === true || saved?.kioskEnabled === true;
+      const smsOn = saved?.smsAddonEnabled === true;
       const growthAnalyticsOn = saved?.growthAnalyticsAddonEnabled === true;
       const guestCrmOn = saved?.guestCrmAddonEnabled === true;
       setPosLimits({
@@ -367,6 +380,8 @@ export default function Merchants() {
         odooAddonEnabled: saved?.odooAddonEnabled === true,
         storekeeperAddonEnabled: storekeeperOn,
         kioskAddonEnabled: kioskOn,
+        smsAddonEnabled: smsOn,
+        smsTier: String(saved?.smsTier || posLimits.smsTier || 'starter'),
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
         guestCrmAddonEnabled: guestCrmOn,
       });
@@ -386,6 +401,8 @@ export default function Merchants() {
               storekeeperAddonEnabled: storekeeperOn,
               kioskAddonEnabled: kioskOn,
               kioskEnabled: kioskOn,
+              smsAddonEnabled: smsOn,
+              smsTier: String(saved?.smsTier || posLimits.smsTier || 'starter'),
               growthAnalyticsAddonEnabled: growthAnalyticsOn,
               guestCrmAddonEnabled: guestCrmOn,
             }
@@ -580,6 +597,8 @@ export default function Merchants() {
         odooAddonEnabled: !!form.odooAddonEnabled,
         storekeeperAddonEnabled: !!form.storekeeperAddonEnabled,
         kioskAddonEnabled: !!form.kioskAddonEnabled,
+        smsAddonEnabled: !!form.smsAddonEnabled,
+        smsTier: form.smsTier || 'starter',
         growthAnalyticsAddonEnabled: !!form.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!form.guestCrmAddonEnabled,
       });
@@ -1346,6 +1365,29 @@ export default function Merchants() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
+                    checked={!!form.smsAddonEnabled}
+                    onChange={(e) => setForm({ ...form, smsAddonEnabled: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium block">SMS (Esendex)</span>
+                    <span className="text-xs text-gray-500">
+                      Phone login OTP, order/reservation alerts, marketing SMS. Monthly quota by tier.
+                    </span>
+                    <select
+                      className="mt-1 border rounded px-2 py-1 text-xs"
+                      value={form.smsTier || 'starter'}
+                      onChange={(e) => setForm({ ...form, smsTier: e.target.value })}
+                    >
+                      <option value="starter">Starter — 100 SMS/mo</option>
+                      <option value="growth">Growth — 500 SMS/mo</option>
+                      <option value="pro">Pro — 2000 SMS/mo</option>
+                    </select>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
                     checked={!!form.deliveryPlatformsAddonEnabled}
                     onChange={(e) =>
                       setForm({ ...form, deliveryPlatformsAddonEnabled: e.target.checked })
@@ -1891,6 +1933,40 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.kioskAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.smsAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, smsAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">SMS (Esendex)</span>
+                      <span className="text-xs text-gray-500">
+                        Phone OTP, order/reservation alerts, marketing SMS.
+                      </span>
+                      <select
+                        className="mt-1 border rounded px-2 py-1 text-xs"
+                        value={posLimits.smsTier || 'starter'}
+                        onChange={(e) => setPosLimits({ ...posLimits, smsTier: e.target.value })}
+                      >
+                        <option value="starter">Starter — 100 SMS/mo</option>
+                        <option value="growth">Growth — 500 SMS/mo</option>
+                        <option value="pro">Pro — 2000 SMS/mo</option>
+                      </select>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.smsAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.smsAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

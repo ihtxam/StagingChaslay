@@ -9,6 +9,7 @@ export type ModulePriceKey =
   | "ods"
   | "loyalty"
   | "gift_cards"
+  | "sms"
   | "delivery_platforms"
   | "photo_menu";
 
@@ -91,6 +92,14 @@ export const MODULE_PRICE_BOOK: ModulePriceEntry[] = [
     description: "Sell and redeem e-gift cards in shop and POS.",
     group: "guest",
     suggestedMonthlyChf: 19,
+  },
+  {
+    key: "sms",
+    label: "SMS (Esendex)",
+    description: "Phone login OTP, order/reservation alerts, marketing SMS. Tiered monthly quota.",
+    group: "guest",
+    suggestedMonthlyChf: 19,
+    addonKey: "sms",
   },
   {
     key: "delivery_platforms",

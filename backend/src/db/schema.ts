@@ -260,6 +260,15 @@ export const merchants = pgTable(
     giftCardSettings: json("gift_card_settings").$type<Record<string, unknown> | null>(),
     /** Paid gift cards addon (reseller/superadmin extra). */
     giftCardAddonEnabled: boolean("gift_card_addon_enabled").default(false).notNull(),
+    /** Paid Esendex SMS addon (OTP, transactional alerts, marketing). */
+    smsAddonEnabled: boolean("sms_addon_enabled").default(false).notNull(),
+    /** starter | growth | pro — monthly SMS allowance. */
+    smsTier: varchar("sms_tier", { length: 20 }).default("starter").notNull(),
+    /**
+     * SMS templates + event toggles:
+     * { senderName, defaultCountry, events, templates }
+     */
+    smsSettings: json("sms_settings").$type<Record<string, unknown> | null>(),
     /** Fiskaly SIGN DE / SIGN FR merchant credentials */
     fiskalySettings: json("fiskaly_settings").$type<Record<string, unknown> | null>(),
     /** Fixed CHF surcharge added to online card checkouts */
@@ -1336,6 +1345,10 @@ export const customers = pgTable(
     totalSpent: decimal("total_spent", { precision: 10, scale: 2 }).default("0"),
     /** Opt-in for newsletters / marketing (default true when email known from orders) */
     marketingOptIn: boolean("marketing_opt_in").default(true).notNull(),
+    /** Separate consent for marketing SMS (never inferred from email opt-in). */
+    marketingSmsOptIn: boolean("marketing_sms_opt_in").default(false).notNull(),
+    /** Set when the customer verifies their phone via SMS OTP. */
+    phoneVerifiedAt: timestamp("phone_verified_at"),
     /** Denormalized last paid/completed web or POS order time */
     lastOrderAt: timestamp("last_order_at"),
     /** Last automatic reorder-reminder email sent */
@@ -3618,6 +3631,103 @@ export const emailSendLog = pgTable(
       table.merchantId,
       table.createdAt
     ),
+  })
+);
+
+/** Outbound SMS log (OTP, transactional, marketing). */
+export const smsMessages = pgTable(
+  "sms_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    campaignId: uuid("campaign_id"),
+    toE164: varchar("to_e164", { length: 20 }).notNull(),
+    type: varchar("type", { length: 20 }).notNull(),
+    event: varchar("event", { length: 60 }).notNull(),
+    body: text("body").notNull(),
+    segments: integer("segments").default(1).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("queued"),
+    providerId: varchar("provider_id", { length: 80 }),
+    providerBatchId: varchar("provider_batch_id", { length: 80 }),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("sms_messages_merchant_idx").on(table.merchantId, table.createdAt),
+    toIdx: index("sms_messages_to_idx").on(table.merchantId, table.toE164),
+    typeIdx: index("sms_messages_type_idx").on(table.merchantId, table.type),
+  })
+);
+
+/** Hashed SMS OTP codes (never store the raw code). */
+export const smsOtps = pgTable(
+  "sms_otps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    phoneE164: varchar("phone_e164", { length: 20 }).notNull(),
+    purpose: varchar("purpose", { length: 20 }).notNull(),
+    codeHash: varchar("code_hash", { length: 64 }).notNull(),
+    meta: json("meta").$type<Record<string, unknown> | null>(),
+    ip: varchar("ip", { length: 64 }),
+    attempts: integer("attempts").default(0).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    lookupIdx: index("sms_otps_lookup_idx").on(table.merchantId, table.phoneE164, table.purpose),
+    createdIdx: index("sms_otps_created_idx").on(table.merchantId, table.createdAt),
+  })
+);
+
+/** Monthly SMS usage per merchant (atomic increment). */
+export const smsUsage = pgTable(
+  "sms_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    periodYm: varchar("period_ym", { length: 7 }).notNull(),
+    sentCount: integer("sent_count").default(0).notNull(),
+    failedCount: integer("failed_count").default(0).notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantPeriodUq: uniqueIndex("sms_usage_merchant_period_uq").on(table.merchantId, table.periodYm),
+  })
+);
+
+/** Marketing SMS campaigns (parallel to newsletter). */
+export const smsCampaigns = pgTable(
+  "sms_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 200 }).notNull(),
+    body: text("body").notNull(),
+    audience: varchar("audience", { length: 20 }).notNull().default("all"),
+    selectedPhones: jsonb("selected_phones").$type<string[] | null>(),
+    status: varchar("status", { length: 20 }).notNull().default("draft"),
+    recipientCount: integer("recipient_count").default(0).notNull(),
+    sentCount: integer("sent_count").default(0).notNull(),
+    failedCount: integer("failed_count").default(0).notNull(),
+    skippedCount: integer("skipped_count").default(0).notNull(),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("sms_campaigns_merchant_idx").on(table.merchantId, table.createdAt),
   })
 );
 

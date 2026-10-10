@@ -102,6 +102,21 @@ export default function Settings() {
     emailPrimary: 'mailco' as 'mailco' | 'brevo',
   });
   const [savingMailco, setSavingMailco] = useState(false);
+  const [esendex, setEsendex] = useState<{
+    user: string;
+    accountRef: string;
+    originator: string;
+    passwordMasked: string;
+    passwordSet: boolean;
+    configured: boolean;
+  } | null>(null);
+  const [esendexForm, setEsendexForm] = useState({
+    user: '',
+    password: '',
+    accountRef: '',
+    originator: 'Reborn',
+  });
+  const [savingEsendex, setSavingEsendex] = useState(false);
   const [emailUsage, setEmailUsage] = useState<EmailUsageSummary | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState('');
@@ -126,11 +141,12 @@ export default function Settings() {
   const load = async () => {
     try {
       setLoading(true);
-      const [adyenRes, brevoRes, mailcoRes, legalRes] = await Promise.all([
+      const [adyenRes, brevoRes, mailcoRes, legalRes, esendexRes] = await Promise.all([
         api.get('/superadmin/platform-settings/adyen'),
         api.get('/superadmin/platform-settings/brevo'),
         api.get('/superadmin/platform-settings/mailco'),
         api.get('/superadmin/platform-settings/legal'),
+        api.get('/superadmin/platform-settings/esendex'),
       ]);
       const a = adyenRes.data.adyen as AdyenSettings;
       setAdyen(a);
@@ -157,6 +173,14 @@ export default function Settings() {
         apiBase: m.apiBase || 'https://ees.mailco.ch/api/v1',
         templateSlug: m.templateSlug || 'platform-transactional',
         emailPrimary: m.emailPrimary === 'brevo' ? 'brevo' : 'mailco',
+      });
+      const ex = esendexRes.data.esendex;
+      setEsendex(ex);
+      setEsendexForm({
+        user: ex?.user || '',
+        password: '',
+        accountRef: ex?.accountRef || '',
+        originator: ex?.originator || 'Reborn',
       });
       const leg = legalRes.data.legal as PlatformLegalSettings;
       setLegal(leg);
@@ -851,6 +875,78 @@ export default function Settings() {
               onClick={() => sendPlatformTestEmail('brevo')}
             >
               {sendingBrevoTestEmail ? 'Sending…' : 'Send Brevo test'}
+            </button>
+          </div>
+        </form>
+
+        <form
+          onSubmit={async (e: FormEvent) => {
+            e.preventDefault();
+            try {
+              setSavingEsendex(true);
+              const res = await api.put('/superadmin/platform-settings/esendex', {
+                user: esendexForm.user,
+                accountRef: esendexForm.accountRef,
+                originator: esendexForm.originator,
+                password: esendexForm.password || undefined,
+              });
+              setEsendex(res.data.esendex);
+              setEsendexForm((f) => ({ ...f, password: '' }));
+              toast.success('Esendex settings saved');
+            } catch {
+              toast.error('Failed to save Esendex settings');
+            } finally {
+              setSavingEsendex(false);
+            }
+          }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl border-t border-stone-200 pt-8"
+        >
+          <h3 className="md:col-span-2 text-lg font-semibold">Esendex SMS</h3>
+          <p className="text-sm text-stone-600 md:col-span-2">
+            Platform credentials for merchant SMS (OTP, order/reservation alerts, marketing). Env
+            fallbacks: ESENDEX_API_USER, ESENDEX_API_PASSWORD or ESENDEX_API_KEY, ESENDEX_ACCOUNT_REF.
+            {esendex?.configured ? ' Status: configured.' : ' Status: not configured.'}
+          </p>
+          <label className="block">
+            <span className="text-sm font-medium">API user</span>
+            <input
+              className="input mt-1"
+              value={esendexForm.user}
+              onChange={(e) => setEsendexForm({ ...esendexForm, user: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Account reference</span>
+            <input
+              className="input mt-1"
+              value={esendexForm.accountRef}
+              onChange={(e) => setEsendexForm({ ...esendexForm, accountRef: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Default sender name</span>
+            <input
+              className="input mt-1"
+              maxLength={11}
+              value={esendexForm.originator}
+              onChange={(e) => setEsendexForm({ ...esendexForm, originator: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">
+              API password / key {esendex?.passwordSet ? `(${esendex.passwordMasked})` : ''}
+            </span>
+            <input
+              className="input mt-1"
+              type="password"
+              value={esendexForm.password}
+              onChange={(e) => setEsendexForm({ ...esendexForm, password: e.target.value })}
+              placeholder={esendex?.passwordSet ? 'Leave blank to keep current' : ''}
+            />
+          </label>
+          <div className="md:col-span-2">
+            <button type="submit" className="btn btn-primary" disabled={savingEsendex}>
+              {savingEsendex ? t('saving') : 'Save Esendex settings'}
             </button>
           </div>
         </form>

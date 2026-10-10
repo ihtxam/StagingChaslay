@@ -434,6 +434,8 @@ export class MerchantService {
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
+      smsAddonEnabled?: boolean;
+      smsTier?: string;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
@@ -603,6 +605,11 @@ export class MerchantService {
       }
       if (options?.kioskAddonEnabled === true) {
         await writeKioskAddonEnabled(created.id, true);
+      }
+      if (options?.smsAddonEnabled === true) {
+        const { writeSmsAddonEnabled, writeSmsTier } = await import("@/lib/sms-addon");
+        await writeSmsAddonEnabled(created.id, true);
+        if (options.smsTier) await writeSmsTier(created.id, options.smsTier);
       }
       if (options?.deliveryPlatformsAddonEnabled === true) {
         await writeJustEatAddonEnabled(created.id, true);
@@ -779,6 +786,8 @@ export class MerchantService {
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
+      smsAddonEnabled?: boolean;
+      smsTier?: string;
       deliveryPlatformsAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
@@ -845,6 +854,16 @@ export class MerchantService {
       await writeKioskAddonEnabled(merchantId, limits.kioskAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.smsAddonEnabled !== undefined || limits.smsTier !== undefined) {
+      const { writeSmsAddonEnabled, writeSmsTier } = await import("@/lib/sms-addon");
+      if (limits.smsAddonEnabled !== undefined) {
+        await writeSmsAddonEnabled(merchantId, limits.smsAddonEnabled);
+      }
+      if (limits.smsTier !== undefined) {
+        await writeSmsTier(merchantId, limits.smsTier);
+      }
+      wroteAddon = true;
+    }
     if (limits.storekeeperAddonEnabled !== undefined) {
       await writeStorekeeperAddonEnabled(merchantId, limits.storekeeperAddonEnabled);
       wroteAddon = true;
@@ -883,7 +902,7 @@ export class MerchantService {
     }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, smsAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

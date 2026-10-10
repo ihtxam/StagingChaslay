@@ -286,6 +286,8 @@ export class MerchantSettingsService {
       storekeeperAddonEnabled: storekeeperOn,
       kioskAddonEnabled: kioskOn,
       kioskEnabled: kioskOn,
+      smsAddonEnabled: (merchant as { smsAddonEnabled?: boolean }).smsAddonEnabled === true,
+      smsTier: String((merchant as { smsTier?: string }).smsTier || "starter"),
       growthAnalyticsAddonEnabled: growthAnalyticsOn,
       guestCrmAddonEnabled: guestCrmOn,
       marketingAutomationAddonEnabled: marketingAutomationOn,

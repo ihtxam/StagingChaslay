@@ -272,12 +272,20 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   gift_card_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_addon_enabled boolean NOT NULL DEFAULT false",
   fiskaly_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiskaly_settings jsonb",
+  sms_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_addon_enabled boolean NOT NULL DEFAULT false",
+  sms_tier: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_tier varchar(20) NOT NULL DEFAULT 'starter'",
+  sms_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   customers_crm_tags:
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
+  customers_marketing_sms_opt_in:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS marketing_sms_opt_in boolean NOT NULL DEFAULT false",
+  customers_phone_verified_at:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone_verified_at timestamp",
   chaslay_homepage_builders_last_good_editor_state:
     "ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   chaslay_homepage_builder_pages_last_good_editor_state:
@@ -1376,6 +1384,67 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_code_uq ON reservation_growth_campaigns(merchant_id, code)`,
   `CREATE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_idx ON reservation_growth_campaigns(merchant_id, active)`,
+  `CREATE TABLE IF NOT EXISTS sms_messages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
+    campaign_id uuid,
+    to_e164 varchar(20) NOT NULL,
+    type varchar(20) NOT NULL,
+    event varchar(60) NOT NULL,
+    body text NOT NULL,
+    segments integer NOT NULL DEFAULT 1,
+    status varchar(20) NOT NULL DEFAULT 'queued',
+    provider_id varchar(80),
+    provider_batch_id varchar(80),
+    error text,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_merchant_idx ON sms_messages(merchant_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_to_idx ON sms_messages(merchant_id, to_e164)`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_type_idx ON sms_messages(merchant_id, type)`,
+  `CREATE TABLE IF NOT EXISTS sms_otps (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    phone_e164 varchar(20) NOT NULL,
+    purpose varchar(20) NOT NULL,
+    code_hash varchar(64) NOT NULL,
+    meta jsonb,
+    ip varchar(64),
+    attempts integer NOT NULL DEFAULT 0,
+    expires_at timestamp NOT NULL,
+    consumed_at timestamp,
+    created_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_otps_lookup_idx ON sms_otps(merchant_id, phone_e164, purpose)`,
+  `CREATE INDEX IF NOT EXISTS sms_otps_created_idx ON sms_otps(merchant_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS sms_usage (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    period_ym varchar(7) NOT NULL,
+    sent_count integer NOT NULL DEFAULT 0,
+    failed_count integer NOT NULL DEFAULT 0,
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS sms_usage_merchant_period_uq ON sms_usage(merchant_id, period_ym)`,
+  `CREATE TABLE IF NOT EXISTS sms_campaigns (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    title varchar(200) NOT NULL,
+    body text NOT NULL,
+    audience varchar(20) NOT NULL DEFAULT 'all',
+    selected_phones jsonb,
+    status varchar(20) NOT NULL DEFAULT 'draft',
+    recipient_count integer NOT NULL DEFAULT 0,
+    sent_count integer NOT NULL DEFAULT 0,
+    failed_count integer NOT NULL DEFAULT 0,
+    skipped_count integer NOT NULL DEFAULT 0,
+    sent_at timestamp,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_campaigns_merchant_idx ON sms_campaigns(merchant_id, created_at)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1607,6 +1676,15 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
 
 export async function ensureGiftCardAddonColumn(): Promise<void> {
   await runPatch("gift_card_addon_enabled");
+}
+
+export async function ensureSmsAddonColumns(): Promise<void> {
+  await runPatch("sms_addon_enabled");
+  await runPatch("sms_tier");
+  await runPatch("sms_settings");
+  await runPatch("customers_marketing_sms_opt_in");
+  await runPatch("customers_phone_verified_at");
+  await ensureMerchantTables();
 }
 
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */

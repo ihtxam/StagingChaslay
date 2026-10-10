@@ -50,6 +50,7 @@ const VALID_ADDON_KEYS = new Set([
   "ai_coach",
   "google_reputation",
   "ai_web_seo",
+  "sms",
 ]);
 
 export class SubscriptionAddonsService {
@@ -247,6 +248,15 @@ export class SubscriptionAddonsService {
         sortOrder: 35,
       },
       {
+        name: "SMS (Esendex)",
+        slug: "sms",
+        addonKey: "sms",
+        description: "Shop phone login, order/reservation alerts, and marketing SMS with monthly quota",
+        priceMonthly: 19,
+        priceYearly: 190,
+        sortOrder: 36,
+      },
+      {
         name: "Extra POS station",
         slug: "extra-pos",
         addonKey: "extra_pos_post",
@@ -355,6 +365,15 @@ export class SubscriptionAddonsService {
         priceMonthly: 29,
         priceYearly: 290,
         sortOrder: 35,
+      },
+      {
+        name: "SMS (Esendex)",
+        slug: "sms",
+        addonKey: "sms",
+        description: "Shop phone login, order/reservation alerts, and marketing SMS with monthly quota",
+        priceMonthly: 19,
+        priceYearly: 190,
+        sortOrder: 36,
       },
       {
         name: "Sales mix & analytics",
