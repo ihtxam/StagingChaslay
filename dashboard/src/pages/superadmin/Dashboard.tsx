@@ -13,6 +13,7 @@ import Settings from './Settings';
 import DirectSalesPackages from './DirectSalesPackages';
 import PlatformShop from './PlatformShop';
 import SystemLogs from './SystemLogs';
+import AppDownloads from './AppDownloads';
 import PlatformMessagesAdmin from './PlatformMessagesAdmin';
 import SupportInbox from '../shared/SupportInbox';
 import SupportAgents from './SupportAgents';
@@ -46,6 +47,7 @@ function SuperadminShell() {
         { label: t('merchants'), path: '/superadmin/merchants', icon: '🏪' },
         { label: t('licenses'), path: '/superadmin/licenses', icon: '🔑' },
         { label: t('posVersions'), path: '/superadmin/editions', icon: '📦' },
+        { label: t('appDownloadsNav'), path: '/superadmin/app-downloads', icon: '💾' },
         { label: t('resellerManage'), path: '/superadmin/resellers', icon: '🤝' },
         { label: 'Chaslay catalog', path: '/superadmin/direct-sales/packages', icon: '💳' },
       ],
@@ -89,6 +91,7 @@ function SuperadminShell() {
             <Route path="merchants" element={<Merchants />} />
             <Route path="licenses" element={<Licenses />} />
             <Route path="editions" element={<Editions />} />
+            <Route path="app-downloads" element={<AppDownloads />} />
             <Route path="resellers" element={<Resellers />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="platform-shop" element={<PlatformShop />} />

@@ -19,6 +19,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { listAppVersionHistory } from "@/lib/downloads";
 
 const router = Router();
 const imageUpload = multer({
@@ -1238,6 +1239,31 @@ router.get("/analytics/subscription-distribution", async (req: Request, res: Res
   } catch (error) {
     console.error("Error getting subscription distribution:", error);
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to get distribution" });
+  }
+});
+
+// ============================================================================
+// APP DOWNLOADS (desktop EXE + Android APK history from disk)
+// ============================================================================
+
+/**
+ * GET /api/superadmin/app-downloads
+ * Version history for Windows POS / print-agent installers and Android APKs.
+ * Built from files in backend/public/downloads plus JSON manifests.
+ */
+router.get("/app-downloads", (_req: Request, res: Response) => {
+  try {
+    const products = listAppVersionHistory();
+    res.json({
+      success: true,
+      products,
+      scannedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error listing app downloads:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list app downloads",
+    });
   }
 });
 

@@ -91,19 +91,47 @@ router.get("/reborn-print-bridge.apk", (_req: Request, res: Response) => {
   sendPrintBridgeApk(res);
 });
 
-/** Versioned filename so Android Chrome cannot reuse a stale Downloads copy. */
-router.get("/reborn-print-bridge-:version.apk", (req: Request, res: Response) => {
-  const desc = describePrintBridgeApk();
-  const requested = String(req.params.version || "").trim();
-  if (desc.version && requested && requested !== desc.version && requested !== "latest") {
-    return res
-      .status(404)
-      .type("text/plain")
-      .send(
-        `This server has Bridge v${desc.version}, not v${requested}. Download /downloads/reborn-print-bridge-${desc.version}.apk`
-      );
-  }
+/** Staging / merchant alias for the current Bridge APK. */
+router.get("/RebornPrint.apk", (_req: Request, res: Response) => {
   sendPrintBridgeApk(res);
+});
+
+function sendVersionedPrintBridgeApk(res: Response, requested: string) {
+  const version = requested.trim();
+  if (!version || version.toLowerCase() === "latest") {
+    return sendPrintBridgeApk(res);
+  }
+
+  const candidates = [`reborn-print-bridge-${version}.apk`, `RebornPrint-${version}.apk`];
+  for (const filename of candidates) {
+    const filePath = downloadsFilePath(filename);
+    if (fileMagicOk(filePath, "apk")) {
+      return sendBinary(res, filePath, filename, "application/vnd.android.package-archive");
+    }
+  }
+
+  const desc = describePrintBridgeApk();
+  if (desc.version && version === desc.version) {
+    return sendPrintBridgeApk(res);
+  }
+
+  return res
+    .status(404)
+    .type("text/plain")
+    .send(
+      desc.version
+        ? `This server does not have Bridge v${version}. Current is v${desc.version}: /downloads/reborn-print-bridge-${desc.version}.apk`
+        : "Reborn Print Bridge APK is not available on this server."
+    );
+}
+
+/** Versioned filename so Android Chrome cannot reuse a stale Downloads copy. Also serves archived APKs. */
+router.get("/reborn-print-bridge-:version.apk", (req: Request, res: Response) => {
+  sendVersionedPrintBridgeApk(res, String(req.params.version || ""));
+});
+
+router.get("/RebornPrint-:version.apk", (req: Request, res: Response) => {
+  sendVersionedPrintBridgeApk(res, String(req.params.version || ""));
 });
 
 router.use(
