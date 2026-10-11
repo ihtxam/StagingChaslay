@@ -21,6 +21,7 @@ import {
   type PosCheckoutSettings,
 } from "@/lib/pos-checkout-settings";
 import { normalizeBusinessModule, posModeForModule } from "@/lib/business-module";
+import { normalizePanelNavHidden } from "@/lib/panel-nav-hidden";
 import {
   normalizeTableQrSettings,
   type TableQrSettings,
@@ -386,9 +387,9 @@ export class MerchantSettingsService {
         (merchant as { businessCategory?: string | null }).businessCategory
       ),
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
-      panelNavHidden: Array.isArray((merchant as { panelNavHidden?: string[] | null }).panelNavHidden)
-        ? (merchant as { panelNavHidden?: string[] | null }).panelNavHidden
-        : [],
+      panelNavHidden: normalizePanelNavHidden(
+        (merchant as { panelNavHidden?: unknown }).panelNavHidden
+      ),
       shopCommissionPercent: Number(
         (merchant as { shopCommissionPercent?: string | number | null }).shopCommissionPercent ?? 0
       ) || 0,

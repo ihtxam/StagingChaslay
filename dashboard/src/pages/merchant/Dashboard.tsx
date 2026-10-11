@@ -141,7 +141,11 @@ import {
   normalizeDesktopPath,
 } from '@/lib/desktop-hub';
 import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-product-flags';
-import { isPanelNavGroupHidden, isPanelNavHidden } from '@/lib/panel-nav-hidden';
+import {
+  isPanelNavGroupHidden,
+  isPanelNavHidden,
+  parsePanelNavHidden,
+} from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
 import HqDashboardPage from './HqDashboard';
 import BulkPricingPage from './BulkPricingPage';
@@ -392,7 +396,7 @@ function MerchantShell() {
       setKioskLicensed(isKioskLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
-      setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
+      setPanelNavHidden(parsePanelNavHidden(settings?.panelNavHidden));
       setProductFlagsReady(true);
     };
     const load = () => {
@@ -601,15 +605,18 @@ function MerchantShell() {
   const allowInventory = useCallback(
     (path: string) =>
       inventoryLicensed &&
+      !isPanelNavHidden(path, panelNavHidden) &&
+      !isPanelNavGroupHidden('inventory', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [inventoryLicensed, effective.permissions, effective.isOwner, businessModule]
+    [inventoryLicensed, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
 
   const allowStorekeeper = useCallback(
     (path: string) =>
       storekeeperLicensed &&
+      !isPanelNavHidden(path, panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null),
-    [storekeeperLicensed, effective.permissions, effective.isOwner]
+    [storekeeperLicensed, effective.permissions, effective.isOwner, panelNavHidden]
   );
 
   const allowSignage = useCallback(
@@ -634,8 +641,10 @@ function MerchantShell() {
   const allowHq = useCallback(
     (path: string) =>
       showHq &&
+      !isPanelNavHidden(path, panelNavHidden) &&
+      !isPanelNavGroupHidden('hq', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [showHq, effective.permissions, effective.isOwner, businessModule]
+    [showHq, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
 
   // Block direct URL access to panel pages the role may not open.
@@ -949,6 +958,7 @@ function MerchantShell() {
             .filter((item) => {
               if ('heading' in item && item.heading) return true;
               const path = 'path' in item ? item.path : '';
+              if (!path || !allowInventory(path)) return false;
               if (
                 path === '/merchant/inventory/cookbook' ||
                 path === '/merchant/inventory/consumption'
