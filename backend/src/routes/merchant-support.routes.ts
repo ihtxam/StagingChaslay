@@ -110,6 +110,25 @@ router.post('/tickets/:ticketId/reply', upload.single('attachment'), async (req:
   }
 });
 
+router.post('/tickets/:ticketId/close', async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const ticket = await SupportTicketService.closeTicket(
+      req.params.ticketId,
+      {
+        authorRole: 'merchant',
+        authorId: req.user?.staffId || req.user?.id,
+        authorName: req.user?.name,
+      },
+      { merchantId }
+    );
+    res.json({ success: true, ticket });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to close ticket';
+    res.status(message === 'Ticket not found' ? 404 : 400).json({ error: message });
+  }
+});
+
 /** POS diagnostic logs — superadmin System Logs only (not merchant Support or inbox). */
 router.post('/diagnostic-report', async (req: Request, res: Response) => {
   try {
