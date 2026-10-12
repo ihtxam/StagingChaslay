@@ -101,20 +101,20 @@ import {
   mergeOrdersWithOnlineForAllFilter,
   onlineOrderAsPosOrder,
 } from '@/lib/webpos-orders-merge';
+import { posBoardItemTimeMs } from '@/lib/webpos-orders-board-sort';
 
-function toMs(raw: string | number | Date | null | undefined): number {
-  if (raw == null || raw === '') return 0;
-  const n = new Date(raw as string | number | Date).getTime();
-  return Number.isFinite(n) ? n : 0;
+function orderTimeMs(
+  o: PosOrderForReceipt & {
+    completedAt?: string | number | Date | null;
+    createdAt?: string | number | Date | null;
+  },
+  nowMs = Date.now()
+) {
+  return posBoardItemTimeMs({ createdAt: o.createdAt, completedAt: o.completedAt }, nowMs);
 }
 
-/** Newest activity first — prefer the later of created/completed. */
-function orderTimeMs(o: PosOrderForReceipt & { completedAt?: string | number | Date | null; createdAt?: string | number | Date | null }) {
-  return Math.max(toMs(o.completedAt), toMs(o.createdAt));
-}
-
-function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null }) {
-  return Math.max(toMs(h.updatedAt), toMs(h.createdAt));
+function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null }, nowMs = Date.now()) {
+  return posBoardItemTimeMs({ createdAt: h.createdAt, updatedAt: h.updatedAt }, nowMs);
 }
 
 function heldTicketKeys(h: HeldRow): string[] {
@@ -454,8 +454,8 @@ type ListItem =
   | { kind: 'held'; held: HeldRow }
   | { kind: 'order'; order: PosOrder };
 
-function listItemTimeMs(item: ListItem): number {
-  return item.kind === 'held' ? heldTimeMs(item.held) : orderTimeMs(item.order);
+function listItemTimeMs(item: ListItem, nowMs = Date.now()): number {
+  return item.kind === 'held' ? heldTimeMs(item.held, nowMs) : orderTimeMs(item.order, nowMs);
 }
 
 const PAGE_SIZE_LIST = 10;
@@ -929,13 +929,8 @@ export default function WebPosOrdersPanel({
     for (const h of heldBucket) items.push({ kind: 'held', held: h });
     for (const o of activeBucket) items.push({ kind: 'order', order: o });
     for (const o of doneBucket) items.push({ kind: 'order', order: o });
-    items.sort((a, b) => {
-      if (view === 'active') {
-        if (a.kind === 'held' && b.kind !== 'held') return -1;
-        if (b.kind === 'held' && a.kind !== 'held') return 1;
-      }
-      return listItemTimeMs(b) - listItemTimeMs(a);
-    });
+    const now = Date.now();
+    items.sort((a, b) => listItemTimeMs(b, now) - listItemTimeMs(a, now));
     return items;
   }, [held, ordersForList, statusFilter, channelFilter, search]);
 
@@ -1780,7 +1775,7 @@ export default function WebPosOrdersPanel({
                       heldMeta.ticketDisplay ||
                       h.label ||
                       '—';
-                    const age = formatOrderAge(heldTimeMs(h) || nowMs, nowMs);
+                    const age = formatOrderAge(heldTimeMs(h, nowMs), nowMs);
                     const heldCh = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
                     return (
                       <button
@@ -1834,7 +1829,7 @@ export default function WebPosOrdersPanel({
                   const o = item.order;
                   const refs = orderPublicRefs(o);
                   const idLabel = orderListPrimaryLabel(o);
-                  const age = formatOrderAge(orderTimeMs(o) || nowMs, nowMs);
+                  const age = formatOrderAge(orderTimeMs(o, nowMs), nowMs);
                   const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                   const purgeSelected = purgeMode && selectedPurgeIds.has(o.id);
                   return (
