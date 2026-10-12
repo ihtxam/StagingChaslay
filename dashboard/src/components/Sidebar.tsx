@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { displaySidebarAccountName, REBORN_LOGO_WHITE } from '@/lib/brand';
+import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
 import { useI18n, type Locale } from '@/lib/i18n';
 import StaffSwitchButton, { type StaffSwitchButtonHandle } from '@/components/StaffSwitchButton';
 
@@ -238,6 +238,12 @@ export default function Sidebar({
     if (window.innerWidth < 1024) onToggle();
   };
 
+  const settingsActive = Boolean(
+    profileMenu?.settingsPath &&
+      isPathActive(location.pathname, profileMenu.settingsPath, location.search)
+  );
+  const shopLabel = shopName?.trim() ? displaySidebarShopName(shopName) : '';
+
   // Closed off-canvas drawer must not trap touch/scroll on mobile.
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 1023px)');
@@ -292,12 +298,19 @@ export default function Sidebar({
                 </div>
               </div>
             ) : (
-              <div className="h-9 shrink-0 overflow-hidden" aria-hidden>
-                <img
-                  src={REBORN_LOGO_WHITE}
-                  alt=""
-                  className="h-9 w-auto max-w-none object-contain object-left"
-                />
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-9 shrink-0 overflow-hidden" aria-hidden>
+                  <img
+                    src={REBORN_LOGO_WHITE}
+                    alt=""
+                    className="h-9 w-auto max-w-none object-contain object-left"
+                  />
+                </div>
+                {!railMode && shopLabel ? (
+                  <span className="min-w-0 truncate text-sm font-semibold text-white" title={shopLabel}>
+                    {shopLabel}
+                  </span>
+                ) : null}
               </div>
             )}
           </div>
@@ -548,19 +561,36 @@ export default function Sidebar({
             </Link>
           ) : null}
 
-          {profileMenu?.settingsPath &&
-          !isPathActive(location.pathname, profileMenu.settingsPath, location.search) ? (
+          {profileMenu?.settingsPath ? (
             <Link
               to={profileMenu.settingsPath}
               onClick={closeMobile}
-              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
-                'text-white/90 hover:bg-white/10 hover:text-white'
-              }`}
+              aria-label={t('settings')}
+              aria-current={settingsActive ? 'page' : undefined}
+              aria-pressed={settingsActive || undefined}
+              title={t('settings')}
+              className={
+                railMode
+                  ? `flex flex-col items-center justify-center gap-1 rounded-lg px-1 py-2.5 text-[10px] font-semibold leading-tight transition-colors ${
+                      settingsActive
+                        ? 'bg-black/25 text-white shadow-sm'
+                        : 'text-white/85 hover:bg-white/10 hover:text-white'
+                    }`
+                  : `flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors ${
+                      settingsActive
+                        ? 'bg-black/25 text-white shadow-sm'
+                        : 'text-white/90 hover:bg-white/10 hover:text-white'
+                    }`
+              }
             >
-              <span className="inline-flex w-5 shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4">
+              <span
+                className={`inline-flex shrink-0 items-center justify-center opacity-80 [&_svg]:h-4 [&_svg]:w-4 ${
+                  railMode ? '' : 'w-5'
+                }`}
+              >
                 <Settings />
               </span>
-              <span className="font-medium truncate">{t('settings')}</span>
+              {!railMode ? <span className="font-medium truncate">{t('settings')}</span> : null}
             </Link>
           ) : null}
 

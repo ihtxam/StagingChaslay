@@ -157,6 +157,7 @@ import HqDashboardPage from './HqDashboard';
 import BulkPricingPage from './BulkPricingPage';
 import ScheduledMenusPage from './ScheduledMenusPage';
 import PizzaBuilderPage from './PizzaBuilderPage';
+import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
 import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
@@ -378,6 +379,7 @@ function MerchantShell() {
     let cancelled = false;
     const applySettings = (settings: {
       name?: string | null;
+      businessName?: string | null;
       shopLogoUrl?: string | null;
       posPrintSettings?: { receiptLogoUrl?: string | null } | null;
       editionFeatures?: EditionFeatureKey[] | null;
@@ -412,7 +414,12 @@ function MerchantShell() {
       setKioskLicensed(isKioskLicensed(settings));
       setCateringLicensed(isCateringLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
-      setMerchantShopName(settings?.name?.trim() || pinGateSessionMerchantName(user) || null);
+      setMerchantShopName(
+        settings?.name?.trim() ||
+          settings?.businessName?.trim() ||
+          pinGateSessionMerchantName(user) ||
+          null
+      );
       setMerchantShopLogoUrl(
         settings?.shopLogoUrl?.trim() ||
           settings?.posPrintSettings?.receiptLogoUrl?.trim() ||
@@ -1300,6 +1307,7 @@ function MerchantShell() {
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
+            storeName={merchantShopName}
             registerDisplay={registerDisplay}
             showAcceptingMenu={!isStorekeeperRoute}
           />
@@ -1570,6 +1578,22 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
                   <PizzaBuilderPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products/pizza-builder/new"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products/pizza-builder/:templateId"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
                 </PanelRouteGuard>
               }
             />
