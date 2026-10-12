@@ -123,14 +123,33 @@ export default function Settings() {
   const [legalForm, setLegalForm] = useState({ privacy: '', terms: '', cookies: '' });
   const [savingLegal, setSavingLegal] = useState(false);
 
+  type DesktopBrandingSettings = {
+    splashUrl: string;
+    iconUrl: string;
+    appName: string;
+    tagline: string;
+    backgroundColor: string;
+    splashCustom?: boolean;
+    iconCustom?: boolean;
+  };
+  const [desktop, setDesktop] = useState<DesktopBrandingSettings | null>(null);
+  const [desktopForm, setDesktopForm] = useState({
+    appName: 'RebornPOS',
+    tagline: 'Restaurant POS & online ordering',
+    backgroundColor: '#17252b',
+  });
+  const [savingDesktop, setSavingDesktop] = useState(false);
+  const [uploadingDesktop, setUploadingDesktop] = useState<'splash' | 'icon' | null>(null);
+
   const load = async () => {
     try {
       setLoading(true);
-      const [adyenRes, brevoRes, mailcoRes, legalRes] = await Promise.all([
+      const [adyenRes, brevoRes, mailcoRes, legalRes, desktopRes] = await Promise.all([
         api.get('/superadmin/platform-settings/adyen'),
         api.get('/superadmin/platform-settings/brevo'),
         api.get('/superadmin/platform-settings/mailco'),
         api.get('/superadmin/platform-settings/legal'),
+        api.get('/superadmin/platform-settings/desktop'),
       ]);
       const a = adyenRes.data.adyen as AdyenSettings;
       setAdyen(a);
@@ -164,6 +183,13 @@ export default function Settings() {
         privacy: leg.privacy || '',
         terms: leg.terms || '',
         cookies: leg.cookies || '',
+      });
+      const desk = desktopRes.data.desktop as DesktopBrandingSettings;
+      setDesktop(desk);
+      setDesktopForm({
+        appName: desk.appName || 'RebornPOS',
+        tagline: desk.tagline || 'Restaurant POS & online ordering',
+        backgroundColor: desk.backgroundColor || '#17252b',
       });
       await refreshEmailUsage();
     } catch {
@@ -304,6 +330,59 @@ export default function Settings() {
     }
   };
 
+  const saveDesktop = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingDesktop(true);
+    try {
+      const res = await api.put('/superadmin/platform-settings/desktop', desktopForm);
+      const next = res.data.desktop as DesktopBrandingSettings;
+      setDesktop(next);
+      setDesktopForm({
+        appName: next.appName || 'RebornPOS',
+        tagline: next.tagline || 'Restaurant POS & online ordering',
+        backgroundColor: next.backgroundColor || '#17252b',
+      });
+      toast.success(t('desktopAppBrandingSaved'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('desktopAppBrandingSaveFailed'));
+    } finally {
+      setSavingDesktop(false);
+    }
+  };
+
+  const uploadDesktopAsset = async (asset: 'splash' | 'icon', file: File | undefined) => {
+    if (!file) return;
+    setUploadingDesktop(asset);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post(`/superadmin/platform-settings/desktop/${asset}`, fd);
+      const next = res.data.desktop as DesktopBrandingSettings;
+      setDesktop(next);
+      toast.success(t('desktopAppBrandingSaved'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('desktopAppBrandingUploadFailed'));
+    } finally {
+      setUploadingDesktop(null);
+    }
+  };
+
+  const clearDesktopAsset = async (asset: 'splash' | 'icon') => {
+    setUploadingDesktop(asset);
+    try {
+      const res = await api.put('/superadmin/platform-settings/desktop', {
+        clearSplash: asset === 'splash',
+        clearIcon: asset === 'icon',
+      });
+      setDesktop(res.data.desktop as DesktopBrandingSettings);
+      toast.success(t('desktopAppBrandingSaved'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('desktopAppBrandingSaveFailed'));
+    } finally {
+      setUploadingDesktop(null);
+    }
+  };
+
   if (loading) {
     return <div className="card">Loading platform settings…</div>;
   }
@@ -316,6 +395,114 @@ export default function Settings() {
           Platform credentials and security. Subscription packages are managed under{' '}
           <strong>Merchants → Direct sales catalog</strong>.
         </p>
+      </div>
+
+      <div className="card">
+        <h2 className="text-xl font-bold">{t('desktopAppBrandingTitle')}</h2>
+        <p className="text-gray-600 mt-1 mb-4">{t('desktopAppBrandingHint')}</p>
+        <form onSubmit={saveDesktop} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+          <label className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingName')}</span>
+            <input
+              className="input mt-1"
+              value={desktopForm.appName}
+              onChange={(e) => setDesktopForm({ ...desktopForm, appName: e.target.value })}
+              maxLength={80}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingBackground')}</span>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="color"
+                className="h-10 w-12 cursor-pointer rounded border border-stone-200 bg-white p-1"
+                value={desktopForm.backgroundColor}
+                onChange={(e) => setDesktopForm({ ...desktopForm, backgroundColor: e.target.value })}
+              />
+              <input
+                className="input flex-1"
+                value={desktopForm.backgroundColor}
+                onChange={(e) => setDesktopForm({ ...desktopForm, backgroundColor: e.target.value })}
+              />
+            </div>
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">{t('desktopAppBrandingTagline')}</span>
+            <input
+              className="input mt-1"
+              value={desktopForm.tagline}
+              onChange={(e) => setDesktopForm({ ...desktopForm, tagline: e.target.value })}
+              maxLength={160}
+            />
+          </label>
+          <div className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingSplash')}</span>
+            <div
+              className="mt-2 flex min-h-[140px] items-center justify-center rounded-xl border border-stone-200 p-4"
+              style={{ background: desktopForm.backgroundColor }}
+            >
+              {desktop?.splashUrl ? (
+                <img src={desktop.splashUrl} alt="" className="max-h-24 w-auto object-contain" />
+              ) : null}
+            </div>
+            <input
+              className="mt-2 block w-full text-sm"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={uploadingDesktop !== null}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                void uploadDesktopAsset('splash', file);
+              }}
+            />
+            {desktop?.splashCustom ? (
+              <button
+                type="button"
+                className="btn btn-secondary mt-2 text-sm"
+                disabled={uploadingDesktop !== null}
+                onClick={() => void clearDesktopAsset('splash')}
+              >
+                {t('desktopAppBrandingClearSplash')}
+              </button>
+            ) : null}
+          </div>
+          <div className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingIcon')}</span>
+            <div className="mt-2 flex min-h-[140px] items-center justify-center rounded-xl border border-stone-200 bg-stone-50 p-4">
+              {desktop?.iconUrl ? (
+                <img src={desktop.iconUrl} alt="" className="h-16 w-16 object-contain" />
+              ) : null}
+            </div>
+            <input
+              className="mt-2 block w-full text-sm"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={uploadingDesktop !== null}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                void uploadDesktopAsset('icon', file);
+              }}
+            />
+            {desktop?.iconCustom ? (
+              <button
+                type="button"
+                className="btn btn-secondary mt-2 text-sm"
+                disabled={uploadingDesktop !== null}
+                onClick={() => void clearDesktopAsset('icon')}
+              >
+                {t('desktopAppBrandingClearIcon')}
+              </button>
+            ) : null}
+            <p className="mt-2 text-xs text-stone-500">{t('desktopAppBrandingIconNote')}</p>
+          </div>
+          <div className="md:col-span-2">
+            <button type="submit" className="btn btn-primary" disabled={savingDesktop}>
+              {savingDesktop || uploadingDesktop ? t('saving') : t('desktopAppBrandingSave')}
+            </button>
+          </div>
+        </form>
       </div>
 
       <div className="card">
