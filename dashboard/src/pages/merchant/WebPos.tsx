@@ -496,8 +496,7 @@ import { readDeliveryAutoAccept, shouldAlertForOnlineOrder, shouldAutoAcceptOrde
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM, ONLINE_ORDER_HISTORY_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 import {
-  posSaleToNotificationOrder,
-  subscribeWebPosOrderCompleted,
+  isBellVisibleOrder,
   subscribeWebPosReservationCreated,
 } from '@/lib/webpos-notifications';
 
@@ -3276,15 +3275,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   }, []);
 
-  const pushLocalPosOrderNotification = useCallback((order: OnlineOrder) => {
-    localPosOrderIdsRef.current.add(order.id);
-    setLocalPosOrderCount(localPosOrderIdsRef.current.size);
-    setLocalPosOrderAlerts((prev) => {
-      const next = [order, ...prev.filter((row) => row.id !== order.id)];
-      return next.slice(0, 20);
-    });
-  }, []);
-
   const pushReservationNotification = useCallback((reservation: WebPosReservationAlert) => {
     if (!['pending', 'confirmed'].includes(reservation.status)) return;
     knownReservationIdsRef.current ??= new Set<string>();
@@ -3499,14 +3489,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const unsubReservation = subscribeWebPosReservationCreated((reservation) => {
       pushReservationNotification(reservation);
     });
-    const unsubOrder = subscribeWebPosOrderCompleted((order) => {
-      pushLocalPosOrderNotification(order);
-    });
     return () => {
       unsubReservation();
-      unsubOrder();
     };
-  }, [pushLocalPosOrderNotification, pushReservationNotification]);
+  }, [pushReservationNotification]);
 
   // Browsers block audio until a user gesture - unlock AudioContext on first tap
   useEffect(() => {
@@ -7531,25 +7517,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clearCollectCheckout();
       setOrdersRefreshToken((n) => n + 1);
       if (orderForReceipt && isPaidOrder(orderForReceipt)) dismissOdsForOrder(orderForReceipt);
-      pushLocalPosOrderNotification(
-        posSaleToNotificationOrder({
-          id: String(orderForReceipt?.id || ctx.id),
-          orderNumber: orderForReceipt?.orderNumber || ctx.orderNumber,
-          total: ctx.total,
-          customerName: orderForReceipt?.customerName || null,
-          items: (orderForReceipt?.items || cart).map((item) => {
-            const line = item as {
-              name?: string;
-              productName?: string | null;
-              quantity?: string | number;
-            };
-            return {
-              name: line.name || line.productName || '',
-              quantity: Number(line.quantity || 1),
-            };
-          }),
-        })
-      );
       setPosView('success');
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
@@ -9436,17 +9403,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (method === 'invoice' && backendOrderId) {
       void openInvoicePdf(backendOrderId);
     }
-    if (!payLater && !moreSplits) {
-      pushLocalPosOrderNotification(
-        posSaleToNotificationOrder({
-          id: backendOrderId || clientId,
-          orderNumber: ticket.orderNumber || ticket.display || sale.orderNumber,
-          total: paidTotal,
-          customerName: sale.customerName,
-          items: saleLines.map((line) => ({ name: line.name, quantity: line.quantity })),
-        })
-      );
-    }
   };
 
   const guardOfflineCheckout = (
@@ -10486,6 +10442,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const local = localPosOrderAlerts.filter((o) => localPosOrderIdsRef.current.has(o.id));
     const seen = new Set<string>();
     return [...local, ...online].filter((order) => {
+      if (!isBellVisibleOrder(order)) return false;
       if (seen.has(order.id)) return false;
       seen.add(order.id);
       return true;
