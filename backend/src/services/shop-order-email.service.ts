@@ -16,6 +16,7 @@ import {
 } from '@/lib/shop-order-email-template';
 import { buildGuestOrderTrackingUrl } from '@/lib/delivery-tracking-url';
 import { EmailService } from '@/services/email.service';
+import { publicGoogleReviewUrl } from '@/lib/pos-print-settings';
 
 function formatWhen(value: Date | string | null | undefined, locale: string): string | null {
   const d = value ? new Date(value) : null;
@@ -73,6 +74,7 @@ export class ShopOrderEmailService {
         slug: true,
         subdomain: true,
         customDomain: true,
+        posPrintSettings: true,
       },
     });
     if (!merchant) return;
@@ -150,6 +152,7 @@ export class ShopOrderEmailService {
       notes: cleanOrderNotes(order.notes),
       trackingUrl,
       trackLabel,
+      reviewUrl: publicGoogleReviewUrl(merchant.posPrintSettings),
     };
 
     const html = buildShopOrderGuestEmailHtml(templateInput);

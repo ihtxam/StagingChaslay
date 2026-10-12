@@ -77,6 +77,7 @@ import {
 import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { publicShopDbError } from "@/lib/public-shop-error";
 import { resolveSettings as resolveReservationSettings } from "@/services/reservation.service";
+import { publicGoogleReviewUrl } from "@/lib/pos-print-settings";
 
 const router = Router();
 
@@ -695,6 +696,7 @@ function publicReservationGuestLinks(
     googleReserveUrl: s.googleReserveUrl,
     googleOrderUrl: s.googleOrderUrl,
     photoMenuEnabled: s.photoMenuEnabled !== false,
+    googleReviewUrl: publicGoogleReviewUrl(merchant.posPrintSettings),
   };
 }
 
@@ -3727,6 +3729,7 @@ router.get("/:slug/orders/:orderId", async (req: Request, res: Response) => {
           phone: merchant.phone,
           shopLogoUrl: merchant.shopLogoUrl || null,
           cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
+          googleReviewUrl: publicGoogleReviewUrl(merchant.posPrintSettings),
         },
       },
     });
