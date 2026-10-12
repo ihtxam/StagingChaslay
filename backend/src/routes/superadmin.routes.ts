@@ -18,6 +18,7 @@ import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signag
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 
 const router = Router();
@@ -625,6 +626,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
       updates.kioskEnabled != null ||
+      updates.cateringEnabled != null ||
+      updates.cateringAddonEnabled != null ||
       updates.growthAnalyticsAddonEnabled != null ||
       updates.guestCrmAddonEnabled != null ||
       updates.marketingAutomationAddonEnabled != null ||
@@ -682,6 +685,12 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.kioskEnabled != null
               ? isKioskAddonEnabled(updates.kioskEnabled)
               : undefined,
+        cateringEnabled:
+          updates.cateringEnabled != null
+            ? isCateringAddonEnabled(updates.cateringEnabled)
+            : updates.cateringAddonEnabled != null
+              ? isCateringAddonEnabled(updates.cateringAddonEnabled)
+              : undefined,
         growthAnalyticsAddonEnabled:
           updates.growthAnalyticsAddonEnabled != null
             ? updates.growthAnalyticsAddonEnabled === true
@@ -723,6 +732,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.storekeeperAddonEnabled;
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;
+      delete updates.cateringEnabled;
+      delete updates.cateringAddonEnabled;
       delete updates.growthAnalyticsAddonEnabled;
       delete updates.guestCrmAddonEnabled;
       delete updates.marketingAutomationAddonEnabled;

@@ -48,6 +48,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { normalizeGiftCardSettings } from "@/lib/gift-card-settings";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isGrowthAnalyticsAddonEnabled } from "@/lib/growth-analytics-addon";
 import { isGuestCrmAddonEnabled } from "@/lib/guest-crm-addon";
 import { isMarketingAutomationAddonEnabled } from "@/lib/marketing-automation-addon";
@@ -154,6 +155,9 @@ export class MerchantSettingsService {
     );
     const storekeeperOn = isStorekeeperAddonEnabled(merchant.storekeeperAddonEnabled);
     const kioskOn = isKioskAddonEnabled(merchant.kioskAddonEnabled);
+    const cateringOn = isCateringAddonEnabled(
+      (merchant as { cateringEnabled?: boolean }).cateringEnabled
+    );
     const growthAnalyticsOn = isGrowthAnalyticsAddonEnabled(
       (merchant as { growthAnalyticsAddonEnabled?: boolean }).growthAnalyticsAddonEnabled
     );
@@ -287,6 +291,8 @@ export class MerchantSettingsService {
       storekeeperAddonEnabled: storekeeperOn,
       kioskAddonEnabled: kioskOn,
       kioskEnabled: kioskOn,
+      cateringEnabled: cateringOn,
+      cateringAddonEnabled: cateringOn,
       growthAnalyticsAddonEnabled: growthAnalyticsOn,
       guestCrmAddonEnabled: guestCrmOn,
       marketingAutomationAddonEnabled: marketingAutomationOn,

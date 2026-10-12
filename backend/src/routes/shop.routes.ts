@@ -25,6 +25,7 @@ import {
   normalizeCateringConfig,
 } from "@/lib/catering-config";
 import { computeCateringLineUnitPrice, scaleModifierPrice, resolveCateringComboPricing } from "@/lib/catering-pricing";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { geocodeQuery } from "@/lib/geocode";
 import { autocompleteAddress, suggestHouseNumbers } from "@/lib/location-service";
@@ -719,6 +720,7 @@ function shopPageMerchantPayload(
     phone: merchant.phone,
     email: merchant.email,
     reservationsEnabled: !!merchant.reservationsEnabled,
+    cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
     giftCards: ShopGiftCardService.publicSettings(ShopGiftCardService.settingsFromMerchant(merchant)),
     acceptingOrders: merchant.acceptingOrders !== false,
     acceptingReservations: merchant.acceptingReservations !== false,
@@ -1205,10 +1207,15 @@ router.get("/:slug/locations", async (req: Request, res: Response) => {
         limit: 100,
       })
     );
-    const hasCatering = cateringProducts.some((p) => {
-      const c = p.cateringConfig as { enabled?: boolean } | null;
-      return c?.enabled === true;
-    });
+    const merchantCateringOn = isCateringAddonEnabled(
+      (merchant as { cateringEnabled?: boolean }).cateringEnabled
+    );
+    const hasCatering =
+      merchantCateringOn &&
+      cateringProducts.some((p) => {
+        const c = p.cateringConfig as { enabled?: boolean } | null;
+        return c?.enabled === true;
+      });
     res.json({
       success: true,
       hasCatering,
@@ -2807,7 +2814,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
       let comboSelections: (typeof lineItems)[number]["comboSelections"] = [];
       let comboSurcharge = 0;
-      const cateringOn = isCateringProduct(product.productType, product.cateringConfig);
+      const cateringOn =
+        isCateringAddonEnabled((merchant as { cateringEnabled?: boolean }).cateringEnabled) &&
+        isCateringProduct(product.productType, product.cateringConfig);
       const cateringCfg = normalizeCateringConfig(product.cateringConfig);
       let cateringGuests: number | null = null;
       if (cateringOn) {

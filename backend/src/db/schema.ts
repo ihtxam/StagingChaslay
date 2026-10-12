@@ -344,6 +344,8 @@ export const merchants = pgTable(
     odsAddonEnabled: boolean("ods_addon_enabled").default(false).notNull(),
     /** Paid self-order kiosk addon. Superadmin/reseller only. */
     kioskAddonEnabled: boolean("kiosk_addon_enabled").default(false).notNull(),
+    /** Paid catering module. Superadmin/reseller only — off for every merchant by default. */
+    cateringEnabled: boolean("catering_enabled").default(false).notNull(),
     /**
      * Self-order kiosk configuration:
      * { accessToken, promoSlides, enabledLanguages, terminalId, tableMode, ... }

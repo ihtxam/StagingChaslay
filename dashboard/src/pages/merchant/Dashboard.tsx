@@ -133,6 +133,8 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
+import { isCateringLicensed } from '@/lib/catering-addon';
+import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import {
   desktopHubRedirectTarget,
@@ -235,6 +237,7 @@ function MerchantShell() {
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [kioskLicensed, setKioskLicensed] = useState(false);
+  const [cateringLicensed, setCateringLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -381,6 +384,8 @@ function MerchantShell() {
       signageEnabled?: boolean;
       kioskAddonEnabled?: boolean;
       kioskEnabled?: boolean;
+      cateringEnabled?: boolean;
+      cateringAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
     } | null) => {
@@ -394,6 +399,7 @@ function MerchantShell() {
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setKioskLicensed(isKioskLicensed(settings));
+      setCateringLicensed(isCateringLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
       setPanelNavHidden(parsePanelNavHidden(settings?.panelNavHidden));
@@ -413,6 +419,7 @@ function MerchantShell() {
           setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
           setKioskLicensed(false);
+          setCateringLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
           setProductFlagsReady(true);
         });
@@ -863,7 +870,9 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const moreOptionsLinks = [
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
-        { label: t('cateringGuideNav'), path: '/merchant/products/catering-guide', icon: '🍱' },
+        ...(cateringLicensed
+          ? [{ label: t('cateringGuideNav'), path: '/merchant/products/catering-guide', icon: '🍱' }]
+          : []),
         { label: t('scheduledMenusTitle'), path: MERCHANT_SCHEDULED_MENUS_PATH, icon: '🕐' },
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('pizzaBuilderTitle'), path: MERCHANT_PIZZA_BUILDER_PATH, icon: '🍕' }]
@@ -1359,9 +1368,13 @@ function MerchantShell() {
             <Route
               path="products/catering-guide"
               element={
-                <PanelRouteGuard path="/merchant/products" allow={allow}>
-                  <CateringGuidePage />
-                </PanelRouteGuard>
+                cateringLicensed ? (
+                  <PanelRouteGuard path="/merchant/products" allow={allow}>
+                    <CateringGuidePage />
+                  </PanelRouteGuard>
+                ) : (
+                  <Navigate to="/merchant/products" replace />
+                )
               }
             />
             <Route
