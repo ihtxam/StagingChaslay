@@ -226,6 +226,7 @@ function MerchantShell() {
   /** When true on /merchant/pos, hide sidebar + header so WebPOS feels like its own app. */
   const [posAppMode, setPosAppMode] = useState(true);
   const [merchantShopName, setMerchantShopName] = useState<string | null>(null);
+  const [merchantShopLogoUrl, setMerchantShopLogoUrl] = useState<string | null>(null);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
@@ -363,6 +364,8 @@ function MerchantShell() {
     let cancelled = false;
     const applySettings = (settings: {
       name?: string | null;
+      shopLogoUrl?: string | null;
+      posPrintSettings?: { receiptLogoUrl?: string | null } | null;
       editionFeatures?: EditionFeatureKey[] | null;
       businessCategory?: string | null;
       shopEnabled?: boolean;
@@ -392,6 +395,11 @@ function MerchantShell() {
       setKioskLicensed(isKioskLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
+      setMerchantShopLogoUrl(
+        settings?.shopLogoUrl?.trim() ||
+          settings?.posPrintSettings?.receiptLogoUrl?.trim() ||
+          null
+      );
       setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
       setProductFlagsReady(true);
     };
@@ -1151,6 +1159,7 @@ function MerchantShell() {
           onSuccess={onPanelPinSuccess}
           onLogout={handlePanelPinLogout}
           productName={merchantShopName}
+          logoUrl={merchantShopLogoUrl}
         />
       </div>
     );

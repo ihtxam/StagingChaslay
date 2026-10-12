@@ -1930,6 +1930,12 @@ button {
       padding-bottom: 0.25rem;
     }
 
+    .webpos-pin-gate-merchant-logo img,
+    .webpos-pin-gate-merchant-logo span {
+      height: 2rem;
+      width: 2rem;
+    }
+
     .webpos-pin-gate-entry h1 {
       font-size: 1rem;
     }
