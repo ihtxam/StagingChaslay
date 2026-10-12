@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import toast, { Toaster, ToastBar } from 'react-hot-toast';
-import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
+import { POS_TOAST_PREF_EVENT, readShowPosToasts, shouldShowPosToast } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
 import { isPanelAppHost, isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
@@ -86,10 +86,6 @@ function AppToaster() {
     return () => window.removeEventListener(POS_TOAST_PREF_EVENT, onPref);
   }, []);
 
-  if (webPos && !showPosToasts) {
-    return null;
-  }
-
   return (
     <Toaster
       position={webPos ? 'top-center' : shopCheckout ? 'bottom-center' : 'top-right'}
@@ -136,7 +132,8 @@ function AppToaster() {
           : { cursor: 'pointer' },
       }}
     >
-      {(t) => (
+      {(t) =>
+        webPos && !shouldShowPosToast({ showPosToasts, toastType: t.type }) ? null : (
         <div
           role="presentation"
           className="cursor-pointer"
@@ -144,7 +141,8 @@ function AppToaster() {
         >
           <ToastBar toast={t} />
         </div>
-      )}
+        )
+      }
     </Toaster>
   );
 }

@@ -70,8 +70,10 @@ import {
   buildKdsReadyMap,
   fetchKdsTicketStatus,
   lineKitchenReady,
-  type KdsBoardTicket,
+  isKdsPollingStopped,
 } from '@/lib/kds-push';
+import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
+import { asArray } from '@/lib/safe-iterables';
 import {
   kitchenProgressFromLines,
   kitchenTicketKeyBase,
@@ -300,6 +302,8 @@ type Props = {
   canGandolaPurge?: boolean;
   /** When true, poll KDS for per-line ready state on held kitchen tickets */
   kitchenEnabled?: boolean;
+  /** Paid KDS addon — skip board polls when off */
+  kdsAddonEnabled?: boolean;
   /** Merchant Settings — auto-print receipt after collect payment */
   autoPrintReceipt?: boolean;
   /** Merchant tax mode — drives VAT breakdown in order detail */
@@ -545,6 +549,7 @@ export default function WebPosOrdersPanel({
   onOpenDeliveryHub,
   canGandolaPurge = false,
   kitchenEnabled = true,
+  kdsAddonEnabled,
   autoPrintReceipt = true,
   taxIncludedInPrice,
   vatAfterDiscount = true,
@@ -603,21 +608,33 @@ export default function WebPosOrdersPanel({
     Record<string, { ready: number; sent: number; readyLineIds: string[] }>
   >({});
 
+  const kdsAddonOn = readAddonLicenseFlag(kdsAddonEnabled);
+
   useEffect(() => {
     if (!open || !kitchenEnabled) return;
+    if (!shouldPollLicensedAddon(kdsAddonOn, isKdsPollingStopped())) return;
     let cancelled = false;
+    let timer = 0;
     const sync = async () => {
+      if (cancelled || isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       const board = await fetchKdsBoardStatus();
       if (cancelled) return;
+      if (isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       setKdsReadyMap(buildKdsReadyMap(board));
     };
     void sync();
-    const timer = window.setInterval(() => void sync(), 4000);
+    timer = window.setInterval(() => void sync(), 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [open, refreshToken, kitchenEnabled]);
+  }, [open, refreshToken, kitchenEnabled, kdsAddonOn]);
 
   useEffect(() => {
     try {
@@ -942,12 +959,12 @@ export default function WebPosOrdersPanel({
 
   const refreshKdsHeld = useCallback(
     async (rows: HeldRow[]) => {
-      if (!kitchenEnabled) {
+      if (!kitchenEnabled || !shouldPollLicensedAddon(kdsAddonOn, isKdsPollingStopped())) {
         setKdsByTicket({});
         return;
       }
       const keys = new Set<string>();
-      for (const h of rows) {
+      for (const h of asArray<HeldRow>(rows)) {
         if (h.status !== 'sent_to_kitchen') continue;
         const meta = parseHeldCartJson(h.cartJson);
         const key = resolveKitchenTicketKey(meta);
@@ -972,7 +989,7 @@ export default function WebPosOrdersPanel({
       );
       setKdsByTicket(next);
     },
-    [kitchenEnabled]
+    [kitchenEnabled, kdsAddonOn]
   );
 
   const heldKitchenProgress = useCallback(
