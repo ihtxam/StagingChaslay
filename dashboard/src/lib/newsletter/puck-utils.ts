@@ -1,6 +1,6 @@
 import type { Data } from '@measured/puck';
 
-export const NEWSLETTER_PUCK_BLOCK_TYPES = ['Heading', 'Text', 'Button', 'Spacer'] as const;
+export const NEWSLETTER_PUCK_BLOCK_TYPES = ['Heading', 'Text', 'Image', 'Button', 'Spacer'] as const;
 export type NewsletterPuckBlockType = (typeof NEWSLETTER_PUCK_BLOCK_TYPES)[number];
 
 const ALLOWED_TYPES = new Set<string>(NEWSLETTER_PUCK_BLOCK_TYPES);
@@ -8,9 +8,18 @@ const ALLOWED_TYPES = new Set<string>(NEWSLETTER_PUCK_BLOCK_TYPES);
 const DEFAULT_PROPS: Record<NewsletterPuckBlockType, Record<string, unknown>> = {
   Heading: { text: 'Newsletter headline', level: 'h1' },
   Text: { content: '<p></p>' },
-  Button: { label: 'Order online', url: '{{shopUrl}}', color: '#0f766e' },
+  Image: { src: '', alt: '', href: '' },
+  Button: { label: 'Order online', url: '{{shopUrl}}', color: '#0f766e', size: 'md' },
   Spacer: { height: 24 },
 };
+
+/** Historical OpenPage iframe design — no longer opened in merchant Newsletter. */
+export function isOpenPageNewsletterDesign(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const o = raw as Record<string, unknown>;
+  if (o.engine === 'openpage') return true;
+  return Array.isArray(o.blocks) && !Array.isArray(o.content) && o.engine !== 'native' && o.engine !== 'puck';
+}
 
 function puckItemId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -28,17 +37,23 @@ function sanitizeProps(type: NewsletterPuckBlockType, raw: Record<string, unknow
   const defaults = DEFAULT_PROPS[type];
   const props = { ...defaults, ...raw };
   if (type === 'Heading') {
-    props.level = props.level === 'h2' ? 'h2' : 'h1';
+    props.level = props.level === 'h3' ? 'h3' : props.level === 'h2' ? 'h2' : 'h1';
     props.text = String(props.text ?? '');
   }
   if (type === 'Text') {
     props.content = String(props.content ?? '');
+  }
+  if (type === 'Image') {
+    props.src = String(props.src ?? '');
+    props.alt = String(props.alt ?? '');
+    props.href = String(props.href ?? '');
   }
   if (type === 'Button') {
     props.label = String(props.label ?? defaults.label);
     props.url = String(props.url ?? defaults.url);
     const color = String(props.color ?? '');
     props.color = /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : '#0f766e';
+    props.size = props.size === 'sm' || props.size === 'lg' ? props.size : 'md';
   }
   if (type === 'Spacer') {
     const height = Number(props.height);
