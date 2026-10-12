@@ -32,6 +32,12 @@ router.get('/tickets/:ticketId', async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     const ticket = await SupportTicketService.getTicketWithMessages(req.params.ticketId, { merchantId });
+    try {
+      const { PlatformMessageService } = await import('@/services/platform-message.service');
+      await PlatformMessageService.acknowledgeMerchantTicketAlert(merchantId, ticket.id);
+    } catch (ackErr) {
+      console.warn('[support] ticket alert ack failed:', ackErr);
+    }
     res.json({ success: true, ticket });
   } catch (error) {
     res.status(404).json({ error: error instanceof Error ? error.message : 'Ticket not found' });

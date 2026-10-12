@@ -1,7 +1,8 @@
 import { ExternalLink, X } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type { PlatformMessage } from '@/hooks/usePlatformMessages';
 import { useI18n } from '@/lib/i18n';
+import { SUPPORT_TICKET_ALERT_KIND, isInternalPanelPath } from '@/lib/support-ticket-alert';
 
 function formatDate(dateStr: string) {
   return new Date(dateStr)
@@ -28,6 +29,7 @@ export default function PlatformWhatsNewModal({
 }) {
   const { t } = useI18n();
   const location = useLocation();
+  const navigate = useNavigate();
   const seeAllTo = seeAllEntriesPath(location.pathname);
 
   if (!open) return null;
@@ -69,7 +71,23 @@ export default function PlatformWhatsNewModal({
             <p className="text-sm text-stone-500 py-8 text-center">{t('platformNoMessages')}</p>
           ) : (
             messages.map((msg, idx) => (
-              <article key={msg.id} className={idx > 0 ? 'pt-6 border-t border-stone-100 dark:border-stone-800' : ''}>
+              <article
+                key={msg.id}
+                className={`${idx > 0 ? 'pt-6 border-t border-stone-100 dark:border-stone-800' : ''}${
+                  msg.kind === SUPPORT_TICKET_ALERT_KIND && isInternalPanelPath(msg.externalUrl)
+                    ? ' cursor-pointer'
+                    : ''
+                }`}
+                onClick={
+                  msg.kind === SUPPORT_TICKET_ALERT_KIND && isInternalPanelPath(msg.externalUrl)
+                    ? () => {
+                        void onDismiss(msg.id);
+                        onClose();
+                        navigate(msg.externalUrl!);
+                      }
+                    : undefined
+                }
+              >
                 <p className="text-[11px] font-medium tracking-wide text-stone-400 mb-2">
                   {formatDate(msg.createdAt)}
                 </p>
@@ -78,17 +96,24 @@ export default function PlatformWhatsNewModal({
                   <div className="min-w-0 flex-1">
                     <h3 className="font-bold text-stone-900 dark:text-stone-100 text-base">{msg.title}</h3>
                     <p className="text-sm text-stone-600 dark:text-stone-300 mt-2 whitespace-pre-wrap leading-relaxed">
-                      {msg.body}
+                      {msg.kind === SUPPORT_TICKET_ALERT_KIND ? t('supportTicketAnswered') : msg.body}
                     </p>
                     {msg.externalUrl ? (
-                      msg.externalUrl.startsWith('/') ? (
-                        <Link
-                          to={msg.externalUrl}
-                          onClick={onClose}
+                      isInternalPanelPath(msg.externalUrl) ? (
+                        <button
+                          type="button"
                           className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void onDismiss(msg.id);
+                            onClose();
+                            navigate(msg.externalUrl!);
+                          }}
                         >
-                          {msg.externalLabel || msg.externalUrl}
-                        </Link>
+                          {msg.kind === SUPPORT_TICKET_ALERT_KIND
+                            ? t('supportTicketAnsweredCta')
+                            : msg.externalLabel || msg.externalUrl}
+                        </button>
                       ) : (
                         <a
                           href={msg.externalUrl}
@@ -104,7 +129,10 @@ export default function PlatformWhatsNewModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => onDismiss(msg.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void onDismiss(msg.id);
+                    }}
                     className="shrink-0 p-1 rounded hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400"
                     aria-label={t('dismiss')}
                   >

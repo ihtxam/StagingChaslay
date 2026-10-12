@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildNotificationTray } from './platform-message.service';
+import { buildNotificationTray, filterMessagesForViewer } from './platform-message.service';
 
 const visible = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
 const dismissed = new Set(['b']);
@@ -16,5 +16,18 @@ assert.deepEqual(
 
 const empty = buildNotificationTray([], new Set(), 20);
 assert.deepEqual(empty, []);
+
+const mixed = [
+  { id: 'a', kind: 'announcement' },
+  { id: 't', kind: 'support_reply' },
+];
+assert.deepEqual(
+  filterMessagesForViewer(mixed, { canSeeSupport: false }).map((m) => m.id),
+  ['a']
+);
+assert.deepEqual(
+  filterMessagesForViewer(mixed, { canSeeSupport: true }).map((m) => m.id),
+  ['a', 't']
+);
 
 console.log('platform-message.tray.test.ts: ok');

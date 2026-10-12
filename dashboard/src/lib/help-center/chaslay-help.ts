@@ -215,7 +215,7 @@ const en: HelpCategory[] = [
         id: 'tickets',
         title: 'Support tickets',
         summary: 'Contact your agency or Reborn support.',
-        body: 'Open Support from the sidebar. Browse setup guides and help articles first, then create a ticket if needed. Tickets auto-close after 3 days — open a new ticket for ongoing issues. Check the bell icon for platform announcements.',
+        body: 'Open Support from the sidebar. Browse setup guides and help articles first, then create a ticket if needed. Tickets auto-close after 3 days — open a new ticket for ongoing issues. When your reseller answers, a banner appears on the dashboard and under the bell — tap it to open the ticket.',
       },
     ],
   },

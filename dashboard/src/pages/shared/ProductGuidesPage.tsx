@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
@@ -7,13 +7,21 @@ import { guidesForAudience, type GuideAudience } from '@/lib/product-guides';
 export default function ProductGuidesPage({
   audience,
   embedded = false,
+  initialChapterId,
 }: {
   audience: GuideAudience;
   embedded?: boolean;
+  initialChapterId?: string;
 }) {
   const { t } = useI18n();
   const chapters = useMemo(() => guidesForAudience(audience), [audience]);
-  const [activeId, setActiveId] = useState(chapters[0]?.id || '');
+  const [activeId, setActiveId] = useState(initialChapterId || chapters[0]?.id || '');
+
+  useEffect(() => {
+    if (initialChapterId && chapters.some((c) => c.id === initialChapterId)) {
+      setActiveId(initialChapterId);
+    }
+  }, [initialChapterId, chapters]);
   const active = chapters.find((c) => c.id === activeId) || chapters[0];
 
   const title = audience === 'reseller' ? t('resellerGuidesTitle') : t('productGuidesTitle');

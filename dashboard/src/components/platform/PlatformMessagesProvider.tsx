@@ -3,6 +3,8 @@ import { usePlatformMessages, type PlatformMessage, type PlatformTrayMessage } f
 import PlatformStatusBanner from '@/components/platform/PlatformStatusBanner';
 import PlatformWhatsNewModal from '@/components/platform/PlatformWhatsNewModal';
 import PlatformBellButton from '@/components/platform/PlatformBellButton';
+import SupportTicketAlertBanner from '@/components/platform/SupportTicketAlertBanner';
+import { SUPPORT_TICKET_ALERT_KIND } from '@/lib/support-ticket-alert';
 
 type PlatformMessagesContextValue = {
   unreadCount: number;
@@ -11,6 +13,7 @@ type PlatformMessagesContextValue = {
   banner: PlatformMessage[];
   dismiss: (id: string) => Promise<void>;
   dismissAll: () => Promise<void>;
+  refresh: () => Promise<void>;
 };
 
 const PlatformMessagesContext = createContext<PlatformMessagesContextValue | null>(null);
@@ -23,12 +26,24 @@ export function usePlatformMessagesUi() {
 export function PlatformStatusBannerSlot() {
   const ctx = usePlatformMessagesUi();
   if (!ctx?.banner.length) return null;
+  const ticketAlerts = ctx.banner.filter((m) => m.kind === SUPPORT_TICKET_ALERT_KIND);
+  const other = ctx.banner.filter((m) => m.kind !== SUPPORT_TICKET_ALERT_KIND);
   return (
-    <PlatformStatusBanner
-      messages={ctx.banner}
-      onDismiss={(id) => void ctx.dismiss(id)}
-      onDismissAll={() => void ctx.dismissAll()}
-    />
+    <>
+      {ticketAlerts.length ? (
+        <SupportTicketAlertBanner
+          messages={ticketAlerts}
+          onDismiss={(id) => void ctx.dismiss(id)}
+        />
+      ) : null}
+      {other.length ? (
+        <PlatformStatusBanner
+          messages={other}
+          onDismiss={(id) => void ctx.dismiss(id)}
+          onDismissAll={() => void ctx.dismissAll()}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -58,7 +73,7 @@ export default function PlatformMessagesProvider({
   children: React.ReactNode;
   enabled?: boolean;
 }) {
-  const { messages, banner, loginPopup, whatsNew, tray, unreadCount, loading, dismiss, dismissAll } =
+  const { messages, banner, loginPopup, whatsNew, tray, unreadCount, loading, dismiss, dismissAll, refresh } =
     usePlatformMessages(enabled);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -105,8 +120,9 @@ export default function PlatformMessagesProvider({
       banner,
       dismiss: handleDismiss,
       dismissAll: handleDismissAll,
+      refresh,
     }),
-    [unreadCount, openWhatsNew, Bell, banner, handleDismiss, handleDismissAll]
+    [unreadCount, openWhatsNew, Bell, banner, handleDismiss, handleDismissAll, refresh]
   );
 
   if (!enabled) {

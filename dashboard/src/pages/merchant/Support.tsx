@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ExternalLink, LifeBuoy, Paperclip, Search, Send, X } from 'lucide-react';
+import { BookOpen, ExternalLink, LifeBuoy, Paperclip, Search, Send, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n, type Locale } from '@/lib/i18n';
 import {
@@ -9,6 +10,9 @@ import {
   searchHelpArticles,
   SUPPORT_SUBCATEGORIES,
 } from '@/lib/help-center/chaslay-help';
+import { searchGuideChapters } from '@/lib/product-guides';
+import { parseSupportTicketIdFromPath } from '@/lib/support-ticket-alert';
+import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
 import ProductGuidesPage from '../shared/ProductGuidesPage';
 
 type Tab = 'help' | 'tickets';
@@ -41,12 +45,14 @@ function Sheet({
   title,
   subtitle,
   onClose,
+  headerAction,
   children,
   footer,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
+  headerAction?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -77,13 +83,16 @@ function Sheet({
             </h3>
             {subtitle ? <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p> : null}
           </div>
-          <button
-            type="button"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-stone-100"
-            onClick={onClose}
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {headerAction}
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-stone-100"
+              onClick={onClose}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch]">
           {children}
@@ -96,10 +105,13 @@ function Sheet({
 
 export default function Support() {
   const { t, locale, setLocale } = useI18n();
-  const [tab, setTab] = useState<Tab>('help');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const platformUi = usePlatformMessagesUi();
+  const [tab, setTab] = useState<Tab>(() => (searchParams.get('ticket') ? 'tickets' : 'help'));
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
+  const [guideChapterId, setGuideChapterId] = useState<string | null>(null);
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [ticketFilter, setTicketFilter] = useState('open');
@@ -120,6 +132,10 @@ export default function Support() {
     () => (search.trim() ? searchHelpArticles(locale, search) : []),
     [locale, search]
   );
+  const guideResults = useMemo(
+    () => (search.trim() ? searchGuideChapters('merchant', search) : []),
+    [search]
+  );
   const subcategories = SUPPORT_SUBCATEGORIES[formCategory]?.[locale] || [];
 
   const loadTickets = useCallback(async () => {
@@ -135,15 +151,39 @@ export default function Support() {
     if (tab === 'tickets') void loadTickets();
   }, [tab, loadTickets]);
 
-  const openTicket = async (id: string) => {
-    try {
-      const res = await api.get(`/merchant/support/tickets/${id}`);
-      setActiveTicket(res.data.ticket);
-      setReply('');
-    } catch (e: unknown) {
-      toast.error(
-        (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load ticket'
-      );
+  const refreshAlerts = platformUi?.refresh;
+  const openTicket = useCallback(
+    async (id: string) => {
+      try {
+        const res = await api.get(`/merchant/support/tickets/${id}`);
+        setActiveTicket(res.data.ticket);
+        setReply('');
+        setTab('tickets');
+        void refreshAlerts?.();
+      } catch (e: unknown) {
+        toast.error(
+          (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load ticket'
+        );
+      }
+    },
+    [refreshAlerts]
+  );
+
+  const ticketFromQuery = searchParams.get('ticket');
+  useEffect(() => {
+    const fromQuery =
+      ticketFromQuery ||
+      parseSupportTicketIdFromPath(`${window.location.pathname}${window.location.search}`);
+    if (!fromQuery) return;
+    void openTicket(fromQuery);
+  }, [ticketFromQuery, openTicket]);
+
+  const closeSheet = () => {
+    setActiveTicket(null);
+    if (searchParams.get('ticket')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('ticket');
+      setSearchParams(next, { replace: true });
     }
   };
 
@@ -228,6 +268,8 @@ export default function Support() {
     return cat?.articles.find((a) => a.id === selectedArticle) || null;
   }, [categories, selectedCategory, selectedArticle]);
 
+  const searching = Boolean(search.trim());
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4 pb-10">
       <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-2">
@@ -296,26 +338,62 @@ export default function Support() {
             />
           </div>
 
-          {searchResults.length ? (
-            <ul className="space-y-2">
-              {searchResults.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    className="w-full rounded-xl border border-teal-200 bg-white p-4 text-left hover:bg-teal-50/50"
-                    onClick={() => {
-                      setSelectedCategory(r.categoryId);
-                      setSelectedArticle(r.id);
-                      setSearch('');
-                    }}
-                  >
-                    <p className="text-xs text-teal-700">{r.categoryTitle}</p>
-                    <p className="font-semibold text-stone-900">{r.title}</p>
-                    <p className="mt-1 text-sm text-stone-600">{r.summary}</p>
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {searching ? (
+            <div className="space-y-4">
+              {guideResults.length ? (
+                <div className="space-y-2">
+                  <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-800">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    {t('supportGuidesHeading')}
+                  </p>
+                  <ul className="space-y-2">
+                    {guideResults.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          className="w-full rounded-xl border border-rose-200 bg-white p-4 text-left hover:bg-rose-50/50"
+                          onClick={() => {
+                            setGuideChapterId(r.id);
+                            setSelectedArticle(null);
+                            setSelectedCategory(null);
+                            setSearch('');
+                          }}
+                        >
+                          <p className="text-xs text-rose-800">{t('supportGuidesHeading')}</p>
+                          <p className="font-semibold text-stone-900">{r.title}</p>
+                          <p className="mt-1 text-sm text-stone-600">{r.summary}</p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {searchResults.length ? (
+                <ul className="space-y-2">
+                  {searchResults.map((r) => (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl border border-teal-200 bg-white p-4 text-left hover:bg-teal-50/50"
+                        onClick={() => {
+                          setSelectedCategory(r.categoryId);
+                          setSelectedArticle(r.id);
+                          setGuideChapterId(null);
+                          setSearch('');
+                        }}
+                      >
+                        <p className="text-xs text-teal-700">{r.categoryTitle}</p>
+                        <p className="font-semibold text-stone-900">{r.title}</p>
+                        <p className="mt-1 text-sm text-stone-600">{r.summary}</p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {!guideResults.length && !searchResults.length ? (
+                <p className="text-sm text-stone-500">{t('supportNoSearchResults')}</p>
+              ) : null}
+            </div>
           ) : article ? (
             <div className="space-y-3 rounded-xl border border-stone-200 bg-white p-5">
               <button type="button" className="text-sm text-teal-600" onClick={() => setSelectedArticle(null)}>
@@ -326,7 +404,11 @@ export default function Support() {
             </div>
           ) : (
             <>
-              <ProductGuidesPage audience="merchant" embedded />
+              <ProductGuidesPage
+                audience="merchant"
+                embedded
+                initialChapterId={guideChapterId || undefined}
+              />
               <div className="grid gap-3 sm:grid-cols-2">
                 {categories.map((cat) => (
                   <button
@@ -386,7 +468,7 @@ export default function Support() {
                 >
                   <p className="font-mono text-xs text-stone-500">{tk.ticketNumber}</p>
                   <p className="font-medium text-stone-900">{tk.subject}</p>
-                  <p className="text-xs capitalize text-stone-500">{tk.status}</p>
+                  <p className="text-xs text-stone-500">{ticketStatusLabel(tk.status)}</p>
                 </button>
               </li>
             ))}
@@ -400,29 +482,31 @@ export default function Support() {
         <Sheet
           title={activeTicket.subject}
           subtitle={`${activeTicket.ticketNumber} · ${ticketStatusLabel(activeTicket.status)}`}
-          onClose={() => setActiveTicket(null)}
+          onClose={closeSheet}
+          headerAction={
+            activeTicket.status !== 'closed' ? (
+              <button
+                type="button"
+                className="btn-secondary text-sm"
+                disabled={busy}
+                onClick={() => void closeTicket()}
+              >
+                {t('supportCloseTicket')}
+              </button>
+            ) : null
+          }
           footer={
             activeTicket.status !== 'closed' ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-2">
-                  <input
-                    className="input flex-1 text-sm"
-                    placeholder={t('supportTypeReply')}
-                    value={reply}
-                    onChange={(e) => setReply(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void sendReply()}
-                  />
-                  <button type="button" className="btn-primary px-3" disabled={busy} onClick={() => void sendReply()}>
-                    <Send className="h-4 w-4" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="btn-secondary self-start text-sm"
-                  disabled={busy}
-                  onClick={() => void closeTicket()}
-                >
-                  {t('supportCloseTicket')}
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1 text-sm"
+                  placeholder={t('supportTypeReply')}
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void sendReply()}
+                />
+                <button type="button" className="btn-primary px-3" disabled={busy} onClick={() => void sendReply()}>
+                  <Send className="h-4 w-4" />
                 </button>
               </div>
             ) : (

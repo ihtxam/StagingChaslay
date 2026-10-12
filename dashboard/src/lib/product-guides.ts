@@ -353,3 +353,19 @@ export const PRODUCT_GUIDE_CHAPTERS: GuideChapter[] = [
 export function guidesForAudience(audience: GuideAudience): GuideChapter[] {
   return PRODUCT_GUIDE_CHAPTERS.filter((c) => c.audience === audience || c.audience === 'both');
 }
+
+export function searchGuideChapters(audience: GuideAudience, query: string): GuideChapter[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return guidesForAudience(audience).filter((chapter) => {
+    const hay = [
+      chapter.title,
+      chapter.summary,
+      chapter.outcome,
+      ...chapter.steps.flatMap((step) => [step.title, step.detail]),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(q);
+  });
+}
