@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Send } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import ProductGuidesPage from './ProductGuidesPage';
 
 type Ticket = {
   id: string;
@@ -100,7 +101,16 @@ export default function SupportInbox({ mode }: Props) {
 
   return (
     <div className={`${agency ? '' : 'max-w-6xl mx-auto'} space-y-4`}>
-      {agency ? null : (
+      {agency ? (
+        <details className="rounded-2xl border border-stone-200 bg-white p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-stone-800">
+            {t('supportGuidesHeading')}
+          </summary>
+          <div className="mt-4">
+            <ProductGuidesPage audience="reseller" embedded />
+          </div>
+        </details>
+      ) : (
         <div>
           <h1 className="text-xl font-bold">{t('supportInboxTitle')}</h1>
           <p className="text-sm text-stone-600">{t('supportInboxSaHint')}</p>
@@ -116,7 +126,7 @@ export default function SupportInbox({ mode }: Props) {
             <option value="closed">{t('supportFilterClosed')}</option>
             <option value="all">{t('all')}</option>
           </select>
-          <ul className="space-y-1 max-h-[520px] overflow-y-auto">
+          <ul className="space-y-1 lg:max-h-[520px] lg:overflow-y-auto">
             {tickets.map((tk) => (
               <li key={tk.id}>
                 <button

@@ -40,7 +40,7 @@ export const PRODUCT_GUIDE_CHAPTERS: GuideChapter[] = [
       {
         title: 'Support split inbox',
         detail:
-          'Agency → Support is your merchant tickets. Answer from here; merchants never see Superadmin. Link them to Merchant guides (/merchant/guides) for self-serve setup.',
+          'Agency → Support is your merchant tickets. Answer from here; merchants never see Superadmin. Point them to Support → Help center for self-serve setup guides.',
       },
     ],
   },

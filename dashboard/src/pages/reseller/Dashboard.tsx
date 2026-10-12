@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Ban,
   Building2,
@@ -7,7 +7,6 @@ import {
   Copy,
   KeyRound,
   LayoutDashboard,
-  BookOpen,
   LifeBuoy,
   Package,
   Plus,
@@ -44,7 +43,6 @@ import SupportInbox from '../shared/SupportInbox';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import ResellerPackages from './Packages';
 import ModulePriceBook from '@/components/agency/ModulePriceBook';
-import ProductGuidesPage from '../shared/ProductGuidesPage';
 
 function Overview() {
   const { t } = useI18n();
@@ -2268,7 +2266,6 @@ function ResellerShell() {
       label: t('agencyNavSupport'),
       icon: <LifeBuoy />,
       children: [
-        { label: t('resellerGuidesNav'), path: '/reseller/guides', icon: <BookOpen /> },
         { label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> },
       ],
     },
@@ -2298,7 +2295,7 @@ function ResellerShell() {
             <Route path="licenses" element={<LicensesPage />} />
             <Route path="editions" element={<EditionsPage />} />
             <Route path="packages" element={<ResellerPackages />} />
-            <Route path="guides" element={<ProductGuidesPage audience="reseller" />} />
+            <Route path="guides" element={<Navigate to="/reseller/support" replace />} />
             <Route path="support" element={<SupportInbox mode="reseller" />} />
             <Route path="notifications" element={<PlatformNotificationsHistory />} />
           </Routes>
