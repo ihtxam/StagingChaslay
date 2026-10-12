@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ComponentProps } from 'react';
 import { Editor } from '@hugerte/hugerte-react';
 import 'hugerte/skins/ui/oxide/skin.min.css';
 import 'hugerte/skins/content/default/content.min.css';
@@ -16,7 +16,10 @@ type HugeRteEditorProps = {
   variant?: HugeRteVariant;
 };
 
-async function uploadRteImage(blobInfo: { blob: () => Blob; filename: () => string }): Promise<string> {
+async function uploadRteImage(
+  blobInfo: { blob: () => Blob; filename: () => string },
+  _progress?: (pct: number) => void
+): Promise<string> {
   const blob = blobInfo.blob();
   const name = blobInfo.filename() || 'image.png';
   const file = new File([blob], name, { type: blob.type || 'image/png' });
@@ -61,7 +64,7 @@ export default function HugeRteEditor({
 }: HugeRteEditorProps) {
   const init = useMemo(() => {
     const { plugins, toolbar, forcedRoot } = toolbarFor(variant);
-    return {
+    const options: Record<string, unknown> = {
       height: minHeight,
       menubar: false,
       statusbar: false,
@@ -73,26 +76,32 @@ export default function HugeRteEditor({
       forced_root_block: forcedRoot,
       font_size_formats: '12px 14px 16px 18px 22px 28px 32px',
       block_formats: 'Paragraph=p; Heading large=h1; Heading medium=h2; Heading small=h3',
-      automatic_uploads: true,
-      images_reuse_filename: true,
       convert_urls: false,
-      images_file_types: 'jpg,jpeg,png,gif,webp',
-      file_picker_types: variant === 'email' ? 'image' : '',
-      images_upload_handler: variant === 'email' ? uploadRteImage : undefined,
       content_style:
         'body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; font-size: 14px; color: #1c1917; } img { max-width: 100%; height: auto; }',
     };
+    if (variant === 'email') {
+      options.automatic_uploads = true;
+      options.images_reuse_filename = true;
+      options.images_file_types = 'jpg,jpeg,png,gif,webp';
+      options.file_picker_types = 'image';
+      options.images_upload_handler = uploadRteImage;
+    }
+    return options;
   }, [minHeight, placeholder, variant]);
+
+  const editorProps = {
+    licenseKey: 'gpl',
+    value,
+    onEditorChange: (content: string) => onChange(content),
+    init,
+    disabled,
+  };
 
   return (
     <div className={disabled ? 'pointer-events-none opacity-60' : undefined}>
-      <Editor
-        licenseKey="gpl"
-        value={value}
-        onEditorChange={(content) => onChange(content)}
-        init={init}
-        disabled={disabled}
-      />
+      {/* HugeRTE InitOptions omit several valid editor keys (image upload, font sizes). */}
+      <Editor {...(editorProps as ComponentProps<typeof Editor>)} />
     </div>
   );
 }
