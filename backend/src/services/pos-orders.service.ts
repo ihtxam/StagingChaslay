@@ -34,7 +34,7 @@ import {
 } from "@/lib/pos-open-ticket";
 
 
-const COMPLETED_STATUSES = new Set(["completed", "partially_refunded"]);
+const COMPLETED_STATUSES = new Set(["completed", "paid", "partially_refunded"]);
 const BLOCKED_CANCEL_STATUSES = new Set([
   "completed",
   "partially_refunded",

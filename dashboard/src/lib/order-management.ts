@@ -454,6 +454,7 @@ export function canEditPayment(o: MerchantOrder): boolean {
     status === 'completed' ||
     status === 'partially_refunded' ||
     pay === 'completed' ||
+    pay === 'paid' ||
     pay === 'partially_refunded'
   );
 }
