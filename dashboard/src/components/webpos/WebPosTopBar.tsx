@@ -26,6 +26,7 @@ import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
 import type { PosTab, PosView } from './types';
 import { cycleWebPosTextSize } from '@/lib/webpos-appearance';
+import { shouldShowPosOptionChooser } from '@/lib/pos-hub-visibility';
 export type {
   WebPosAppearance,
   WebPosColorTheme,
@@ -970,7 +971,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {terminalEnabled && terminals.length > 0 && onTerminalChange ? (
+      {terminalEnabled && shouldShowPosOptionChooser(terminals.length) && onTerminalChange ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosMyTerminal')}

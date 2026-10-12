@@ -15,6 +15,7 @@ import {
 } from '@/lib/terminal-checkout-extras';
 import { APP_NAME } from '@/lib/brand';
 import { isGiftCardsLicensed } from '@/lib/gift-card-addon';
+import { shouldShowOnlineReservationsToggle } from '@/lib/pos-hub-visibility';
 import {
   buildKitchenPrintJobs,
   buildKitchenCrossStationFooters,
@@ -1856,7 +1857,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const coursesEnabled =
     !!merchant?.coursesEnabled && kitchenEnabled && editionAllows('pos_courses');
   /** Bookings tab + reservation alerts — restaurant only when module is on. */
-  const reservationsPosUiEnabled = !isRetail && !!merchant?.reservationsEnabled;
+  const reservationsPosUiEnabled = shouldShowOnlineReservationsToggle({
+    isRetail,
+    reservationsEnabled: merchant?.reservationsEnabled,
+    editionFeatures,
+  });
   const giftCardsEditionOk = isGiftCardsLicensed({
     giftCardAddonEnabled: merchant?.giftCardAddonEnabled === true,
     editionFeatures,
@@ -10923,7 +10928,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               canManageOnlineShop ? (enabled) => void toggleShopEnabled(enabled) : undefined
             }
             onReservationsEnabledChange={
-              canManageOnlineShop && !isRetail
+              canManageOnlineShop && reservationsPosUiEnabled
                 ? (enabled) => void toggleReservationsEnabled(enabled)
                 : undefined
             }
