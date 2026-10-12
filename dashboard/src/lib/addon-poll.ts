@@ -1,6 +1,6 @@
 /**
- * POS polls paid addons (KDS / ODS). Treat HTTP 403 as "not licensed":
- * stop the loop and never throw into checkout.
+ * POS / panel polls paid addons (KDS / ODS / inventory). Treat HTTP 403 as
+ * "not licensed": stop the loop and never throw into checkout or settings.
  */
 
 export function isAddonForbiddenStatus(error: unknown): boolean {
@@ -11,7 +11,11 @@ export function isAddonForbiddenStatus(error: unknown): boolean {
   const status = err?.response?.status ?? err?.status;
   if (status === 403) return true;
   const code = String(err?.response?.data?.code || '');
-  return code === 'KDS_ADDON_REQUIRED' || code === 'ODS_ADDON_REQUIRED';
+  return (
+    code === 'KDS_ADDON_REQUIRED' ||
+    code === 'ODS_ADDON_REQUIRED' ||
+    code === 'INVENTORY_ADDON_REQUIRED'
+  );
 }
 
 /** Skip the request when the merchant flag is off or a prior 403 stopped the gate. */
