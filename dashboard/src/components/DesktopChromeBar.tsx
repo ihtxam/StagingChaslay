@@ -62,7 +62,7 @@ export default function DesktopChromeBar() {
 
   return (
     <div
-      className="desktop-chrome-bar fixed inset-x-0 top-0 z-[200] flex h-10 items-center gap-1 border-b border-black/10 bg-[#1a2428]/95 px-2 text-slate-50 backdrop-blur-sm"
+      className="desktop-chrome-bar fixed inset-x-0 top-0 z-[220] flex h-10 items-center gap-1 border-b border-black/10 bg-[#1a2428]/95 px-2 text-slate-50 backdrop-blur-sm"
       data-tauri-drag-region
     >
       <DesktopHubActiveLabel />

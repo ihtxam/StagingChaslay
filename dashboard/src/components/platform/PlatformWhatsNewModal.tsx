@@ -81,15 +81,25 @@ export default function PlatformWhatsNewModal({
                       {msg.body}
                     </p>
                     {msg.externalUrl ? (
-                      <a
-                        href={msg.externalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
-                      >
-                        {msg.externalLabel || msg.externalUrl}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                      msg.externalUrl.startsWith('/') ? (
+                        <Link
+                          to={msg.externalUrl}
+                          onClick={onClose}
+                          className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
+                        >
+                          {msg.externalLabel || msg.externalUrl}
+                        </Link>
+                      ) : (
+                        <a
+                          href={msg.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
+                        >
+                          {msg.externalLabel || msg.externalUrl}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )
                     ) : null}
                   </div>
                   <button

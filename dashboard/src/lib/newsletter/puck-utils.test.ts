@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { buildPuckNewsletterEmailHtml } from './puck-email-html';
 import {
   defaultNewsletterPuckData,
+  isOpenPageNewsletterDesign,
   isSparseNewsletterPuckData,
   newsletterCopyFromT,
   newsletterPuckDataOrDefault,
@@ -101,6 +102,32 @@ import {
   assert.equal(data.content[0].props.text, 'Café Test');
   const cta = data.content.find((b) => b.type === 'Button');
   assert.equal(cta?.props.label, 'Commander');
+}
+
+{
+  const withImage = normalizePuckData({
+    content: [
+      { type: 'Heading', props: { text: '<strong>Sale</strong>', level: 'h3' } },
+      { type: 'Image', props: { src: '/api/uploads/m/hero.png', alt: 'Dish', href: '{{shopUrl}}' } },
+      { type: 'Button', props: { label: '<em>Go</em>', size: 'lg', color: '#111111' } },
+    ],
+  });
+  assert.equal(withImage.content[0].props.level, 'h3');
+  assert.equal(withImage.content[1].type, 'Image');
+  assert.equal(withImage.content[1].props.src, '/api/uploads/m/hero.png');
+  assert.equal(withImage.content[2].props.size, 'lg');
+  const html = buildPuckNewsletterEmailHtml(withImage, 'Img campaign');
+  assert.match(html, /<strong>Sale<\/strong>/);
+  assert.match(html, /<img src="\/api\/uploads\/m\/hero\.png"/);
+  assert.match(html, /<em>Go<\/em>/);
+  assert.match(html, /font-size:17px/);
+}
+
+{
+  assert.equal(isOpenPageNewsletterDesign({ engine: 'openpage', config: { name: 'x', blocks: [] }, html: '<p>Hi</p>' }), true);
+  assert.equal(isOpenPageNewsletterDesign({ blocks: [{ id: '1', type: 'hero', props: {} }] }), true);
+  assert.equal(isOpenPageNewsletterDesign({ engine: 'puck', content: [] }), false);
+  assert.equal(isOpenPageNewsletterDesign({ engine: 'native', headline: 'Hi' }), false);
 }
 
 console.log('puck-utils.test.ts ok');

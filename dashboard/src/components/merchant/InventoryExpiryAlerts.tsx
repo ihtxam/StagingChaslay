@@ -2,8 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '@/lib/api';
+import {
+  createAddonPollGate,
+  readAddonLicenseFlag,
+  shouldPollLicensedAddon,
+} from '@/lib/addon-poll';
+import { loadExpiringSoonIfLicensed } from '@/lib/inventory-expiry-poll';
 import { useI18n } from '@/lib/i18n';
 import { playOrderAlertOnce } from '@/lib/order-alert';
+import { useAuthStore } from '@/store/auth';
 
 type ExpiringLot = {
   id: string;
@@ -25,44 +32,63 @@ function lotFingerprint(lots: ExpiringLot[]): string {
     .join(',');
 }
 
-export default function InventoryExpiryAlerts() {
+export default function InventoryExpiryAlerts({ licensed }: { licensed?: boolean | null } = {}) {
   const { t, formatDate } = useI18n();
+  const user = useAuthStore((s) => s.user);
+  const addonOn = readAddonLicenseFlag(
+    licensed,
+    user?.inventoryAddonEnabled,
+    (user as { inventoryEnabled?: boolean } | null)?.inventoryEnabled
+  );
   const [lots, setLots] = useState<ExpiringLot[]>([]);
   const [leadDays, setLeadDays] = useState(30);
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
   const prevCountRef = useRef(0);
-  const disabledRef = useRef(false);
+  const gateRef = useRef(createAddonPollGate());
 
   const fingerprint = useMemo(() => lotFingerprint(lots), [lots]);
 
   const load = useCallback(async () => {
-    if (disabledRef.current) return;
-    try {
-      const res = await api.get('/merchant/inventory/expiring-soon', {
-        validateStatus: (status) => status < 500,
-      });
-      if (res.status === 404 || res.status === 403 || res.status === 400 || res.status === 401) {
-        disabledRef.current = true;
-        return;
-      }
-      if (res.status !== 200) return;
-      const next = (res.data.lots || []) as ExpiringLot[];
-      setLeadDays(Number(res.data.leadDays) || 30);
-      setLots(next);
-      if (next.length > prevCountRef.current && prevCountRef.current >= 0) {
-        playOrderAlertOnce();
-      }
-      prevCountRef.current = next.length;
-    } catch {
-      /* inventory addon may be off */
+    const gate = gateRef.current;
+    if (!shouldPollLicensedAddon(addonOn, gate.isStopped())) return;
+    const result = await loadExpiringSoonIfLicensed({
+      licensed: addonOn,
+      stopped: gate.isStopped(),
+      get: (url) => api.get(url),
+    });
+    if (result.unlicensed) {
+      gate.stop();
+      setLots([]);
+      return;
     }
-  }, []);
+    if (result.error) {
+      console.error('[inventory-expiry] expiring-soon failed', result.error);
+      return;
+    }
+    const next = (result.payload.lots || []) as ExpiringLot[];
+    setLeadDays(Number(result.payload.leadDays) || 30);
+    setLots(next);
+    if (next.length > prevCountRef.current && prevCountRef.current >= 0) {
+      playOrderAlertOnce();
+    }
+    prevCountRef.current = next.length;
+  }, [addonOn]);
 
   useEffect(() => {
+    if (!shouldPollLicensedAddon(addonOn, gateRef.current.isStopped())) {
+      gateRef.current.stop();
+      return;
+    }
     void load();
-    const id = window.setInterval(() => void load(), 120_000);
+    const id = window.setInterval(() => {
+      if (!shouldPollLicensedAddon(addonOn, gateRef.current.isStopped())) {
+        window.clearInterval(id);
+        return;
+      }
+      void load();
+    }, 120_000);
     return () => window.clearInterval(id);
-  }, [load]);
+  }, [addonOn, load]);
 
   useEffect(() => {
     try {

@@ -40,7 +40,7 @@ export const PRODUCT_GUIDE_CHAPTERS: GuideChapter[] = [
       {
         title: 'Support split inbox',
         detail:
-          'Agency → Support is your merchant tickets. Answer from here; merchants never see Superadmin. Link them to Merchant guides (/merchant/guides) for self-serve setup.',
+          'Agency → Support is your merchant tickets. Answer from here; merchants never see Superadmin. Point them to Support → Help center for self-serve setup guides.',
       },
     ],
   },
@@ -204,7 +204,7 @@ export const PRODUCT_GUIDE_CHAPTERS: GuideChapter[] = [
       {
         title: 'Seat opens a POS ticket when live-linked',
         detail:
-          'If Live table link is on and a table is assigned, Seat marks the floor table occupied and holds an empty dine-in order with the guest name. Add food on POS as usual. If live link is off, Seat only updates the booking — you pick a table on POS yourself.',
+          'If Live table link is on and a table is assigned, Seat marks the floor table occupied and holds an empty dine-in order with the guest name. Add food on POS as usual. If live link is off, Seat only updates the booking — you pick a table on POS yourself. Assigning a table for a future night keeps it green until that day — orange reserved only on the reservation date.',
       },
       {
         title: 'Keep the booking open until you close it',

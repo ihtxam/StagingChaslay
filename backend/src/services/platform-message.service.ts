@@ -5,6 +5,10 @@ import type {
   PlatformMessageKind,
   PlatformMessageSeverity,
 } from '@/db/schema';
+import {
+  SUPPORT_REPLY_MESSAGE_KIND,
+  resellerTicketAlertPath,
+} from '@/lib/support-ticket-reseller';
 
 export type PlatformMessageInput = {
   kind?: PlatformMessageKind;
@@ -215,8 +219,12 @@ export class PlatformMessageService {
 
     return {
       messages: undismissed,
-      banner: undismissed.filter((m) => m.showInBanner || m.kind === 'incident'),
-      loginPopup: undismissed.filter((m) => m.showOnLogin && m.kind !== 'incident'),
+      banner: undismissed.filter(
+        (m) => m.showInBanner || m.kind === 'incident' || m.kind === SUPPORT_REPLY_MESSAGE_KIND
+      ),
+      loginPopup: undismissed.filter(
+        (m) => m.showOnLogin && m.kind !== 'incident' && m.kind !== SUPPORT_REPLY_MESSAGE_KIND
+      ),
       whatsNew: undismissed.filter((m) => m.kind === 'whats_new' || m.kind === 'announcement'),
       tray,
       unreadCount: undismissed.length,
@@ -281,6 +289,78 @@ export class PlatformMessageService {
         viewerId: viewer.viewerId,
       });
     }
+  }
+
+  static async upsertResellerTicketAnswered(input: {
+    resellerId: string;
+    ticketId: string;
+    subject: string;
+    ticketNumber?: string | null;
+  }) {
+    const db = getDb();
+    const path = resellerTicketAlertPath(input.ticketId);
+    const title = input.subject.trim().slice(0, 255) || input.ticketNumber || 'Support ticket';
+    const body = 'Your ticket was answered';
+    const existing = await db.query.platformMessages.findFirst({
+      where: and(
+        eq(schema.platformMessages.kind, SUPPORT_REPLY_MESSAGE_KIND),
+        eq(schema.platformMessages.audience, 'reseller'),
+        eq(schema.platformMessages.targetResellerId, input.resellerId),
+        eq(schema.platformMessages.externalUrl, path)
+      ),
+    });
+
+    if (existing) {
+      const [row] = await db
+        .update(schema.platformMessages)
+        .set({
+          title,
+          body,
+          showInBanner: true,
+          showOnLogin: false,
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.platformMessages.id, existing.id))
+        .returning();
+      await db
+        .delete(schema.platformMessageDismissals)
+        .where(eq(schema.platformMessageDismissals.messageId, existing.id));
+      return row!;
+    }
+
+    return this.create({
+      kind: SUPPORT_REPLY_MESSAGE_KIND,
+      audience: 'reseller',
+      targetResellerId: input.resellerId,
+      title,
+      body,
+      severity: 'info',
+      externalUrl: path,
+      externalLabel: 'Open ticket',
+      showOnLogin: false,
+      showInBanner: true,
+    });
+  }
+
+  static async acknowledgeResellerTicketAlert(resellerId: string, ticketId: string) {
+    const db = getDb();
+    const path = resellerTicketAlertPath(ticketId);
+    const existing = await db.query.platformMessages.findFirst({
+      where: and(
+        eq(schema.platformMessages.kind, SUPPORT_REPLY_MESSAGE_KIND),
+        eq(schema.platformMessages.audience, 'reseller'),
+        eq(schema.platformMessages.targetResellerId, resellerId),
+        eq(schema.platformMessages.externalUrl, path),
+        eq(schema.platformMessages.isActive, true)
+      ),
+      columns: { id: true },
+    });
+    if (!existing) return;
+    await this.dismiss(
+      { role: 'reseller', viewerId: resellerId, resellerId },
+      existing.id
+    );
   }
 
   static async dismissAll(viewer: PanelViewer, messageIds: string[]) {

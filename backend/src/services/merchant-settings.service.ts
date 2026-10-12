@@ -407,6 +407,14 @@ export class MerchantSettingsService {
       editionFeatures,
       orderCenterEnabled,
       ...productFlags,
+      latestSoftwareRelease: await (async () => {
+        try {
+          const { SoftwareReleaseService } = await import("@/services/software-release.service");
+          return await SoftwareReleaseService.latestPublished();
+        } catch {
+          return null;
+        }
+      })(),
     };
   }
 

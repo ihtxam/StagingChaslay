@@ -101,9 +101,22 @@ export function isMerchantProductSurface(raw: unknown): raw is MerchantProductSu
   return typeof raw === "string" && MERCHANT_PRODUCT_SURFACES.includes(raw as MerchantProductSurface);
 }
 
+export function getProductSurfacePreset(
+  surface: MerchantProductSurface | string | null | undefined
+): ProductSurfacePreset {
+  if (isMerchantProductSurface(surface)) {
+    const preset = PRODUCT_SURFACE_PRESETS[surface];
+    if (preset) return preset;
+  }
+  return PRODUCT_SURFACE_PRESETS.full_pos;
+}
+
 /** Platform packaging editions (shop-only / CMS / no-POS bundles) — not merchant POS feature tiers. */
 export function productSurfacePackagingEditionNames(): string[] {
-  return MERCHANT_PRODUCT_SURFACES.map((s) => PRODUCT_SURFACE_PRESETS[s].editionName);
+  return MERCHANT_PRODUCT_SURFACES.flatMap((s) => {
+    const preset = PRODUCT_SURFACE_PRESETS[s];
+    return preset?.editionName ? [preset.editionName] : [];
+  });
 }
 
 export function isProductSurfacePackagingEditionName(name: string): boolean {

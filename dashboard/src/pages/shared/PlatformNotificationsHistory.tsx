@@ -21,6 +21,7 @@ function formatStamp(dateStr: string) {
 function kindLabel(kind: string, t: (key: string) => string) {
   if (kind === 'incident') return t('platformIncident');
   if (kind === 'whats_new') return t('platformWhatsNew');
+  if (kind === 'support_reply') return t('supportTicketAnswered');
   return t('platformAnnouncement');
 }
 
@@ -113,12 +114,12 @@ export default function PlatformNotificationsHistory() {
                 {msg.externalUrl ? (
                   <a
                     href={msg.externalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    target={msg.externalUrl.startsWith('/') ? undefined : '_blank'}
+                    rel={msg.externalUrl.startsWith('/') ? undefined : 'noopener noreferrer'}
                     className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
                   >
                     {msg.externalLabel || msg.externalUrl}
-                    <ExternalLink className="w-3 h-3" />
+                    {msg.externalUrl.startsWith('/') ? null : <ExternalLink className="w-3 h-3" />}
                   </a>
                 ) : null}
               </div>

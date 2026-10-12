@@ -14,8 +14,25 @@ assert.match(alerts, /rejectReason: reason/);
 
 const eta = readFileSync(join(root, '../components/webpos/OrderAcceptWithEtaModal.tsx'), 'utf8');
 assert.match(eta, /formatOrderAlertPaymentLine/);
+assert.match(eta, /max-w-2xl/);
+assert.match(eta, /NewOrderAlertHeader/);
+assert.match(eta, /fulfillmentChannel=\{order\.fulfillmentChannel\}/);
+assert.match(eta, /paymentStatus=\{order\.paymentStatus\}/);
 const newAlert = readFileSync(join(root, '../components/webpos/WebPosNewOrderAlertModal.tsx'), 'utf8');
 assert.match(newAlert, /formatOrderAlertPaymentLine/);
+assert.match(newAlert, /max-w-2xl/);
+assert.match(newAlert, /NewOrderAlertHeader/);
+const header = readFileSync(join(root, '../components/webpos/NewOrderAlertHeader.tsx'), 'utf8');
+assert.match(header, /orderAlertFulfillmentLabel/);
+assert.match(header, /orderAlertPaidLabel/);
+const i18n = readFileSync(join(root, 'i18n.tsx'), 'utf8');
+assert.match(i18n, /orderAlertTakeaway: 'TAKEAWAY'/);
+assert.match(i18n, /orderAlertTakeaway: 'À EMPORTER'/);
+assert.match(i18n, /orderAlertTakeaway: 'ZUM MITNEHMEN'/);
+assert.match(i18n, /orderAlertDelivery: 'LIVRAISON'/);
+assert.match(i18n, /orderAlertPaid: 'PAYÉ'/);
+assert.match(i18n, /orderAlertUnpaid: 'IMPAYÉ'/);
+assert.match(i18n, /orderAlertUnpaid: 'UNBEZAHLT'/);
 
 const nav = readFileSync(join(root, '../components/shop/ShopNavActions.tsx'), 'utf8');
 assert.match(nav, /loggedIn \? t\('shopMyAccount'\) : t\('shopLogIn'\)/);

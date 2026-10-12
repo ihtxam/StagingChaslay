@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { mountAdyenDropin, normalizeAdyenPaymentSession, formatAdyenError } from '@/lib/adyen-checkout';
+import {
+  mountAdyenDropin,
+  normalizeAdyenPaymentSession,
+  merchantBillingUserMessage,
+} from '@/lib/adyen-checkout';
 import { useI18n } from '@/lib/i18n';
 import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
 
@@ -180,14 +184,14 @@ export default function Billing() {
           },
           onError: (err) => {
             if (!cancelled) {
-              setPayMsg(formatAdyenError(err, 'dropin') || 'Payment failed');
+              setPayMsg(merchantBillingUserMessage(err, t('billingTemporarilyUnavailable')));
             }
           },
         });
         if (!cancelled) dropinMounted.current = true;
       } catch (err) {
         if (!cancelled) {
-          setPayMsg(formatAdyenError(err, 'dropin'));
+          setPayMsg(merchantBillingUserMessage(err, t('billingTemporarilyUnavailable')));
         }
       }
     })();
@@ -234,7 +238,7 @@ export default function Billing() {
       setSession(normalized);
     } catch (err: any) {
       resetCheckout();
-      toast.error(err.response?.data?.error || 'Checkout failed');
+      toast.error(merchantBillingUserMessage(err, t('billingTemporarilyUnavailable')));
     } finally {
       setBusy(false);
     }
@@ -269,7 +273,7 @@ export default function Billing() {
       setSession(normalized);
     } catch (err: any) {
       resetCheckout();
-      toast.error(err.response?.data?.error || 'Add-on checkout failed');
+      toast.error(merchantBillingUserMessage(err, t('billingTemporarilyUnavailable')));
     } finally {
       setBusy(false);
     }
@@ -323,7 +327,7 @@ export default function Billing() {
         ) : null}
         {!adyenReady && (
           <p className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            {t('billingAdyenNotConfigured')}
+            {t('billingTemporarilyUnavailable')}
           </p>
         )}
       </div>

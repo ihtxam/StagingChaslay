@@ -1,5 +1,7 @@
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { overlayTableStatusWithTodayReservations } from "@/lib/reservation-floor";
+import { ymdZurich, zurichDayBounds } from "@/lib/vacation";
 
 export type TableShape = "rect" | "round";
 export type TableStatus = "available" | "occupied" | "reserved" | "dirty";
@@ -38,7 +40,8 @@ export class FloorPlanService {
       },
       orderBy: [asc(schema.floorPlans.sortOrder), asc(schema.floorPlans.name)],
     });
-    return plans.map((p) => this.serializePlan(p));
+    const holds = await this.todayReservationHolds(merchantId);
+    return plans.map((p) => this.serializePlan(p, holds));
   }
 
   static async getPlan(merchantId: string, planId: string) {
@@ -50,7 +53,7 @@ export class FloorPlanService {
       },
     });
     if (!plan) throw new Error("Floor plan not found");
-    return this.serializePlan(plan);
+    return this.serializePlan(plan, await this.todayReservationHolds(merchantId));
   }
 
   static async createPlan(merchantId: string, name: string) {
@@ -442,6 +445,7 @@ export class FloorPlanService {
       with: { floorPlan: true },
       orderBy: [asc(schema.diningTables.label)],
     });
+    const holds = await this.todayReservationHolds(merchantId);
     return tables.map((t) => ({
       id: t.id,
       floorPlanId: t.floorPlanId,
@@ -454,12 +458,47 @@ export class FloorPlanService {
       width: t.width,
       height: t.height,
       rotation: t.rotation,
-      status: t.status,
+      status: overlayTableStatusWithTodayReservations(
+        t.status as TableStatus,
+        t.id,
+        holds.reserved,
+        holds.seated
+      ),
       currentOrderId: t.currentOrderId,
     }));
   }
 
-  private static serializePlan(p: any) {
+  private static async todayReservationHolds(merchantId: string) {
+    const reserved = new Set<string>();
+    const seated = new Set<string>();
+    try {
+      const db = getDb();
+      const { start, end } = zurichDayBounds(ymdZurich());
+      const rows = await db.query.reservations.findMany({
+        where: and(
+          eq(schema.reservations.merchantId, merchantId),
+          isNotNull(schema.reservations.tableId),
+          inArray(schema.reservations.status, ["pending", "confirmed", "waitlist", "seated"]),
+          gte(schema.reservations.reservedAt, start),
+          lte(schema.reservations.reservedAt, end)
+        ),
+        columns: { tableId: true, status: true },
+      });
+      for (const row of rows) {
+        if (!row.tableId) continue;
+        if (row.status === "seated") seated.add(row.tableId);
+        else reserved.add(row.tableId);
+      }
+    } catch {
+      /* floor plan still loads if reservation overlay cannot */
+    }
+    return { reserved, seated };
+  }
+
+  private static serializePlan(
+    p: any,
+    holds: { reserved: Set<string>; seated: Set<string> } = { reserved: new Set(), seated: new Set() }
+  ) {
     return {
       id: p.id,
       name: p.name,
@@ -477,7 +516,12 @@ export class FloorPlanService {
         width: t.width,
         height: t.height,
         rotation: t.rotation,
-        status: t.status,
+        status: overlayTableStatusWithTodayReservations(
+          t.status as TableStatus,
+          t.id,
+          holds.reserved,
+          holds.seated
+        ),
         currentOrderId: t.currentOrderId,
         sortOrder: t.sortOrder,
       })),

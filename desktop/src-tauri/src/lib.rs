@@ -36,6 +36,14 @@ const DESKTOP_BOOT_OVERLAY_SCRIPT: &str = r#"
     '<div style="width:32px;height:32px;border-radius:999px;border:2px solid rgba(250,248,243,.18);border-top-color:#faf8f3;animation:reborn-boot-spin .9s linear infinite"></div>' +
     '<style>@keyframes reborn-boot-spin{to{transform:rotate(360deg)}}</style>';
   (document.documentElement || document.body).appendChild(root);
+  fetch('/api/public/desktop-branding').then(function (res) { return res.json(); }).then(function (data) {
+    var b = (data && data.branding) || {};
+    if (b.backgroundColor) root.style.background = b.backgroundColor;
+    var img = root.querySelector('img');
+    var p = root.querySelector('p');
+    if (img && b.splashUrl) { img.src = b.splashUrl; img.alt = b.appName || 'RebornPOS'; }
+    if (p && b.tagline) p.textContent = b.tagline;
+  }).catch(function () {});
 })();
 "#;
 
@@ -764,6 +772,15 @@ pub fn run() {
                 return Ok(());
             }
 
+            let start = pos_start_url();
+            let parsed = Url::parse(&start).unwrap_or_else(|_| {
+                Url::parse("https://app.rebornsense.com/login").expect("static url")
+            });
+            let splash_origin = parsed.origin().ascii_serialization();
+            let splash_script = format!(
+                "window.__REBORN_POS_ORIGIN__ = {};",
+                serde_json::to_string(&splash_origin).unwrap_or_else(|_| "\"https://app.rebornsense.com\"".into())
+            );
             let _ = WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
                 .title("RebornPOS")
                 .inner_size(440.0, 320.0)
@@ -773,12 +790,8 @@ pub fn run() {
                 .skip_taskbar(true)
                 .center()
                 .visible(true)
+                .initialization_script(&splash_script)
                 .build()?;
-
-            let start = pos_start_url();
-            let parsed = Url::parse(&start).unwrap_or_else(|_| {
-                Url::parse("https://app.rebornsense.com/login").expect("static url")
-            });
             let app_handle = app.handle().clone();
             let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
                 .title("RebornPOS")

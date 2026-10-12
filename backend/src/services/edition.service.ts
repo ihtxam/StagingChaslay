@@ -88,6 +88,7 @@ export class EditionService {
     const db = getDb();
     for (const surface of MERCHANT_PRODUCT_SURFACES) {
       const preset = PRODUCT_SURFACE_PRESETS[surface];
+      if (!preset) continue;
       const existing = await db.query.editions.findFirst({
         where: and(
           eq(schema.editions.ownerType, "platform"),
