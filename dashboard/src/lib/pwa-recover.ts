@@ -2,6 +2,16 @@
 
 const STALE_RECOVER_KEY = 'webpos_stale_recover_at';
 const STALE_RECOVER_COOLDOWN_MS = 45_000;
+const BUILD_CHECK_KEY = 'reborn_build_check_at';
+const BUILD_CHECK_COOLDOWN_MS = 60_000;
+
+/** Read `<meta name="reborn-build">` from a dashboard index.html body. */
+export function parseRebornBuildStamp(html: string): string | null {
+  const named = html.match(/<meta\s+name=["']reborn-build["']\s+content=["']([^"']+)["']/i);
+  if (named?.[1]?.trim()) return named[1].trim();
+  const reversed = html.match(/<meta\s+content=["']([^"']+)["']\s+name=["']reborn-build["']/i);
+  return reversed?.[1]?.trim() || null;
+}
 
 const STALE_ERROR_RE =
   /Failed to fetch dynamically imported module|Importing a module script failed|Unexpected token|is not a function|is not defined|Cannot read propert/i;
@@ -75,5 +85,38 @@ export async function activateWaitingServiceWorker(): Promise<void> {
     }
   } catch {
     /* best-effort */
+  }
+}
+
+/**
+ * Compare the loaded HTML stamp to a no-store fetch of /index.html.
+ * Reloads when a deploy landed but this till still has the previous shell
+ * (PWA, RebornPOS webview, or browser cache that skipped the inline script).
+ */
+export async function reloadIfDeployedBuildChanged(): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+  const current = document
+    .querySelector('meta[name="reborn-build"]')
+    ?.getAttribute('content')
+    ?.trim();
+  if (!current || current.startsWith('%REBORN')) return false;
+  try {
+    const last = Number(sessionStorage.getItem(BUILD_CHECK_KEY) || '0');
+    if (last && Date.now() - last < BUILD_CHECK_COOLDOWN_MS) return false;
+    sessionStorage.setItem(BUILD_CHECK_KEY, String(Date.now()));
+  } catch {
+    /* still attempt the fetch */
+  }
+  try {
+    const res = await fetch(`/index.html?build_check=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+    });
+    if (!res.ok) return false;
+    const live = parseRebornBuildStamp(await res.text());
+    if (!live || live === current) return false;
+    return recoverStaleWebPosBundle('build-stamp');
+  } catch {
+    return false;
   }
 }

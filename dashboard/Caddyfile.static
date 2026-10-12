@@ -12,7 +12,8 @@
 	}
 
 	# Never cache the app shell or service worker — clients must pick up deploys immediately.
-	@shell path /index.html /sw.js /manifest.webmanifest /kiosk.webmanifest /order-center.webmanifest
+	# Include /pos.webmanifest (installed WebPOS) and SPA fallbacks like /merchant/pos.
+	@shell path /index.html /sw.js /manifest.webmanifest /pos.webmanifest /kiosk.webmanifest /order-center.webmanifest
 	header @shell Cache-Control "no-cache, no-store, must-revalidate"
 	header @shell Pragma "no-cache"
 
@@ -24,6 +25,10 @@
 	}
 
 	handle {
+		# / and /merchant/pos serve index.html via try_files; @shell only matches
+		# the literal /index.html path, so tills would keep a cached POS shell.
+		header Cache-Control "no-cache, no-store, must-revalidate"
+		header Pragma "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

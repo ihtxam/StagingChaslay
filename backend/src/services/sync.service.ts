@@ -7,7 +7,6 @@ import { roundMoney2, roundTo005 } from "@/lib/money";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { isUsableProductName, resolveOrderItemName } from "@/lib/order-item-name";
 import { resolveSalePaymentMethod } from "@/lib/payment-breakdown";
-import { isMerchantFulfillmentChannelEnabled } from "@/lib/merchant-channels";
 
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
@@ -513,11 +512,6 @@ export class SyncService {
       };
     }> = [];
 
-    const merchantRow = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { pickupEnabled: true, deliveryEnabled: true, dineInEnabled: true },
-    });
-
     for (const sale of sales) {
       const existing = await db.query.orders.findFirst({
         where: and(eq(schema.orders.merchantId, merchantId), eq(schema.orders.clientId, sale.clientId)),
@@ -610,9 +604,9 @@ export class SyncService {
           isInvoice);
       const scheduledFor = parseScheduledFor(sale);
       const channel = normalizeFulfillmentChannel(sale);
-      if (merchantRow && !isMerchantFulfillmentChannelEnabled(merchantRow, channel)) {
-        throw new Error(`Order type "${channel}" is not enabled for this merchant`);
-      }
+      // Shop pickup/delivery/dine-in flags are enforced in shop.routes only.
+      // This endpoint is POS/register sync — do not reject cash/card when
+      // the website channels are off (see isFulfillmentChannelAllowedForSource).
       const status =
         sale.status ||
         (payLater ? (scheduledFor ? "accepted" : "preparing") : "completed");

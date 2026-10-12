@@ -66,6 +66,12 @@ export function isNosModifierGroup(title: string): boolean {
   return key === "no's" || key === "nos" || key === "no" || key === "removals";
 }
 
+/** Paid add-on groups shown as the Extras tab on POS / shop. */
+export function isExtrasModifierGroup(title: string): boolean {
+  const key = title.trim().toLowerCase().replace(/['']/g, "'");
+  return key === 'extras' || key === 'extra' || key === 'suppléments' || key === 'supplements';
+}
+
 /** Ticket / kitchen label: ensure exclusion modifiers read as "No …". */
 export function ensureNosTicketName(name: string): string {
   const trimmed = (name || '').trim();

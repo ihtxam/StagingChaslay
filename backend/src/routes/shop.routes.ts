@@ -56,7 +56,7 @@ import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from "@/lib/shop-delivery-pricing";
-import { isMerchantFulfillmentChannelEnabled } from "@/lib/merchant-channels";
+import { isFulfillmentChannelAllowedForSource } from "@/lib/merchant-channels";
 import { normalizeTableQrSettings } from "@/lib/table-qr-settings";
 import { verifyTableAccess } from "@/lib/table-qr-token";
 import { checkShopOrderRateLimit } from "@/lib/shop-rate-limit";
@@ -755,7 +755,7 @@ async function resolveShopLocationId(
 }
 
 function channelEnabled(merchant: typeof schema.merchants.$inferSelect, channel: FulfillmentChannel) {
-  return isMerchantFulfillmentChannelEnabled(merchant, channel);
+  return isFulfillmentChannelAllowedForSource(merchant, channel, "shop");
 }
 
 function mapChannelKey(channel: FulfillmentChannel): "takeaway" | "dine_in" | "delivery" {
