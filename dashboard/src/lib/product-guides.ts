@@ -40,7 +40,7 @@ export const PRODUCT_GUIDE_CHAPTERS: GuideChapter[] = [
       {
         title: 'Support split inbox',
         detail:
-          'Agency → Support is your merchant tickets. Answer from here; merchants never see Superadmin. Link them to Merchant guides (/merchant/guides) for self-serve setup.',
+          'Agency → Support is your merchant tickets. Answer from here; merchants never see Superadmin. Point them to Support → Help center for self-serve setup guides.',
       },
     ],
   },
@@ -352,4 +352,20 @@ export const PRODUCT_GUIDE_CHAPTERS: GuideChapter[] = [
 
 export function guidesForAudience(audience: GuideAudience): GuideChapter[] {
   return PRODUCT_GUIDE_CHAPTERS.filter((c) => c.audience === audience || c.audience === 'both');
+}
+
+export function searchGuideChapters(audience: GuideAudience, query: string): GuideChapter[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return guidesForAudience(audience).filter((chapter) => {
+    const hay = [
+      chapter.title,
+      chapter.summary,
+      chapter.outcome,
+      ...chapter.steps.flatMap((step) => [step.title, step.detail]),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(q);
+  });
 }

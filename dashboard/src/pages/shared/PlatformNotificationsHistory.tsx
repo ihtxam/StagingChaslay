@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import type { PlatformMessage } from '@/hooks/usePlatformMessages';
+import { SUPPORT_TICKET_ALERT_KIND, isInternalPanelPath } from '@/lib/support-ticket-alert';
 
 type HistoryMessage = PlatformMessage & { dismissed?: boolean };
 
@@ -21,6 +23,7 @@ function formatStamp(dateStr: string) {
 function kindLabel(kind: string, t: (key: string) => string) {
   if (kind === 'incident') return t('platformIncident');
   if (kind === 'whats_new') return t('platformWhatsNew');
+  if (kind === SUPPORT_TICKET_ALERT_KIND) return t('platformSupportReply');
   return t('platformAnnouncement');
 }
 
@@ -108,18 +111,29 @@ export default function PlatformNotificationsHistory() {
                 </div>
                 <h2 className="font-semibold text-stone-900 dark:text-stone-100">{msg.title}</h2>
                 <p className="text-sm text-stone-600 dark:text-stone-300 mt-2 whitespace-pre-wrap leading-relaxed">
-                  {msg.body}
+                  {msg.kind === SUPPORT_TICKET_ALERT_KIND ? t('supportTicketAnswered') : msg.body}
                 </p>
                 {msg.externalUrl ? (
-                  <a
-                    href={msg.externalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
-                  >
-                    {msg.externalLabel || msg.externalUrl}
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                  isInternalPanelPath(msg.externalUrl) ? (
+                    <Link
+                      to={msg.externalUrl}
+                      className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
+                    >
+                      {msg.kind === SUPPORT_TICKET_ALERT_KIND
+                        ? t('supportTicketAnsweredCta')
+                        : msg.externalLabel || msg.externalUrl}
+                    </Link>
+                  ) : (
+                    <a
+                      href={msg.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-red-600 hover:underline mt-2"
+                    >
+                      {msg.externalLabel || msg.externalUrl}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )
                 ) : null}
               </div>
             </article>

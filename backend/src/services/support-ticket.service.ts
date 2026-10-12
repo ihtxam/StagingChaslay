@@ -338,6 +338,23 @@ export class SupportTicketService {
       })
       .where(eq(schema.supportTickets.id, ticketId));
 
+    if (
+      ticket.merchantVisible !== false &&
+      (input.authorRole === 'reseller' || input.authorRole === 'superadmin')
+    ) {
+      try {
+        const { PlatformMessageService } = await import('@/services/platform-message.service');
+        await PlatformMessageService.upsertMerchantTicketAnswered({
+          merchantId: ticket.merchantId,
+          ticketId: ticket.id,
+          subject: ticket.subject,
+          ticketNumber: ticket.ticketNumber,
+        });
+      } catch (alertErr) {
+        console.warn('[support] ticket answered alert failed:', alertErr);
+      }
+    }
+
     return this.getTicketWithMessages(ticketId, scope);
   }
 

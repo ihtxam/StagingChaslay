@@ -1,13 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '@/lib/i18n';
 import { guidesForAudience, type GuideAudience } from '@/lib/product-guides';
 
-export default function ProductGuidesPage({ audience }: { audience: GuideAudience }) {
+export default function ProductGuidesPage({
+  audience,
+  embedded = false,
+  initialChapterId,
+}: {
+  audience: GuideAudience;
+  embedded?: boolean;
+  initialChapterId?: string;
+}) {
   const { t } = useI18n();
   const chapters = useMemo(() => guidesForAudience(audience), [audience]);
-  const [activeId, setActiveId] = useState(chapters[0]?.id || '');
+  const [activeId, setActiveId] = useState(initialChapterId || chapters[0]?.id || '');
+
+  useEffect(() => {
+    if (initialChapterId && chapters.some((c) => c.id === initialChapterId)) {
+      setActiveId(initialChapterId);
+    }
+  }, [initialChapterId, chapters]);
   const active = chapters.find((c) => c.id === activeId) || chapters[0];
 
   const title = audience === 'reseller' ? t('resellerGuidesTitle') : t('productGuidesTitle');
@@ -16,7 +30,16 @@ export default function ProductGuidesPage({ audience }: { audience: GuideAudienc
   const otherLabel = t('support');
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className={embedded ? 'space-y-4' : 'mx-auto max-w-6xl space-y-5 pb-8'}>
+      {embedded ? (
+        <div>
+          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-800">
+            <BookOpen className="h-3.5 w-3.5" />
+            {t('supportGuidesHeading')}
+          </p>
+          <p className="mt-1 text-sm text-stone-600">{t('supportGuidesHint')}</p>
+        </div>
+      ) : (
       <header className="rounded-2xl border border-stone-200 bg-white px-5 py-5">
         <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-800">
           <BookOpen className="h-3.5 w-3.5" />
@@ -32,13 +55,14 @@ export default function ProductGuidesPage({ audience }: { audience: GuideAudienc
           .
         </p>
       </header>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-        <aside className="rounded-2xl border border-stone-200 bg-white p-3 lg:sticky lg:top-4 lg:self-start">
+        <aside className="rounded-2xl border border-stone-200 bg-white p-3">
           <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-stone-400">
             {t('productGuidesChapters')}
           </p>
-          <nav className="space-y-1">
+          <nav className="flex flex-wrap gap-1 lg:flex-col lg:gap-0 lg:space-y-1">
             {chapters.map((c, idx) => {
               const on = c.id === active?.id;
               return (
@@ -46,7 +70,7 @@ export default function ProductGuidesPage({ audience }: { audience: GuideAudienc
                   key={c.id}
                   type="button"
                   onClick={() => setActiveId(c.id)}
-                  className={`flex w-full items-start gap-2 rounded-xl px-2.5 py-2 text-left text-sm ${
+                  className={`flex items-start gap-2 rounded-xl px-2.5 py-2 text-left text-sm lg:w-full ${
                     on ? 'bg-rose-50 font-semibold text-rose-950' : 'text-stone-700 hover:bg-stone-50'
                   }`}
                 >

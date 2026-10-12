@@ -38,7 +38,7 @@ const en: HelpCategory[] = [
         id: 'settings-groups',
         title: 'Settings groups (Team / Tables / Service / Guest / Money)',
         summary: 'Find settings by floor job, not leftover tabs.',
-        body: 'Settings are grouped: Business (identity), Team (users + language), Tables (floor + reservations), Service (hours, POS, KDS, ODS, customer display, receipt, kiosk, signage, delivery), Guest (shop, email, delivery map), Money (taxes, payments, fiscal, accounting). Open Guides in the sidebar for the full step-by-step.',
+        body: 'Settings are grouped: Business (identity), Team (users + language), Tables (floor + reservations), Service (hours, POS, KDS, ODS, customer display, receipt, kiosk, signage, delivery), Guest (shop, email, delivery map), Money (taxes, payments, fiscal, accounting). Open Support → Help center for the full step-by-step setup guides.',
       },
       {
         id: 'language',
@@ -175,8 +175,8 @@ const en: HelpCategory[] = [
       {
         id: 'open-guides',
         title: 'Open the full guides',
-        summary: 'Sidebar → Guides, or profile menu → Guides.',
-        body: 'Merchant guides cover first day, Team, Tables, reservations + waitlist, photo menu, Service, Guest, Money, and a dinner-rush walkthrough. Agencies have a matching Guides page under Support: create store, price book, and how to sell shop / reserve / photo menu.',
+        summary: 'Support → Help center, under Setup guides.',
+        body: 'Merchant guides live in Support → Help center. They cover first day, Team, Tables, reservations + waitlist, photo menu, Service, Guest, Money, and a dinner-rush walkthrough.',
       },
     ],
   },
@@ -215,7 +215,7 @@ const en: HelpCategory[] = [
         id: 'tickets',
         title: 'Support tickets',
         summary: 'Contact your agency or Reborn support.',
-        body: 'Open Support from the sidebar profile menu. Browse help articles first, then create a ticket if needed. Tickets auto-close after 3 days — open a new ticket for ongoing issues. Check the bell icon for platform announcements.',
+        body: 'Open Support from the sidebar. Browse setup guides and help articles first, then create a ticket if needed. Tickets auto-close after 3 days — open a new ticket for ongoing issues. When your reseller answers, a banner appears on the dashboard and under the bell — tap it to open the ticket.',
       },
     ],
   },

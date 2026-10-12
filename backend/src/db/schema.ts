@@ -4180,7 +4180,7 @@ export const platformShopOrdersRelations = relations(platformShopOrders, ({ one 
 // ============================================================================
 
 export type PlatformLogLevel = "debug" | "info" | "warn" | "error";
-export type PlatformMessageKind = "announcement" | "incident" | "whats_new";
+export type PlatformMessageKind = "announcement" | "incident" | "whats_new" | "support_reply";
 export type PlatformMessageAudience =
   | "all_merchants"
   | "all_resellers"

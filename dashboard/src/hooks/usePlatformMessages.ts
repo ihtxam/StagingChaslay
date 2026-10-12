@@ -3,7 +3,7 @@ import api from '@/lib/api';
 
 export type PlatformMessage = {
   id: string;
-  kind: 'announcement' | 'incident' | 'whats_new';
+  kind: 'announcement' | 'incident' | 'whats_new' | 'support_reply';
   audience: string;
   title: string;
   body: string;

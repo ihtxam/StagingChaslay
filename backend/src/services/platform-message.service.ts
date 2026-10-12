@@ -5,6 +5,11 @@ import type {
   PlatformMessageKind,
   PlatformMessageSeverity,
 } from '@/db/schema';
+import {
+  SUPPORT_TICKET_ALERT_KIND,
+  staffCanSeeSupportAlerts,
+  supportTicketAlertPath,
+} from '@/lib/support-ticket-alert';
 
 export type PlatformMessageInput = {
   kind?: PlatformMessageKind;
@@ -29,6 +34,8 @@ export type PanelViewer = {
   viewerId: string;
   merchantId?: string | null;
   resellerId?: string | null;
+  /** Staff without Support access must not see ticket-answered alerts. */
+  canSeeSupport?: boolean;
 };
 
 function isActiveWindow(startsAt?: Date | null, endsAt?: Date | null, now = new Date()) {
@@ -72,26 +79,47 @@ export function buildNotificationTray<T extends { id: string }>(
   }));
 }
 
+export function filterMessagesForViewer<T extends { kind: string }>(
+  messages: T[],
+  viewer: Pick<PanelViewer, 'canSeeSupport'>
+): T[] {
+  if (viewer.canSeeSupport === false) {
+    return messages.filter((m) => m.kind !== SUPPORT_TICKET_ALERT_KIND);
+  }
+  return messages;
+}
+
 export class PlatformMessageService {
   static resolveViewer(user?: {
     role?: string;
     id?: string;
     merchantId?: string;
     resellerId?: string;
+    permissions?: string[];
   }): PanelViewer | null {
     if (!user?.id) return null;
     if (user.role === 'superadmin') {
-      return { role: 'superadmin', viewerId: user.id };
+      return { role: 'superadmin', viewerId: user.id, canSeeSupport: true };
     }
     if (user.role === 'reseller' && user.resellerId) {
-      return { role: 'reseller', viewerId: user.resellerId, resellerId: user.resellerId };
+      return {
+        role: 'reseller',
+        viewerId: user.resellerId,
+        resellerId: user.resellerId,
+        canSeeSupport: false,
+      };
     }
     if (user.role === 'merchant') {
       const merchantId = user.merchantId || user.id;
-      return { role: 'merchant', viewerId: merchantId, merchantId };
+      return { role: 'merchant', viewerId: merchantId, merchantId, canSeeSupport: true };
     }
     if (user.role === 'staff' && user.merchantId) {
-      return { role: 'merchant', viewerId: user.merchantId, merchantId: user.merchantId };
+      return {
+        role: 'merchant',
+        viewerId: user.merchantId,
+        merchantId: user.merchantId,
+        canSeeSupport: staffCanSeeSupportAlerts(user.permissions),
+      };
     }
     return null;
   }
@@ -189,7 +217,10 @@ export class PlatformMessageService {
       limit: 100,
     });
 
-    const visible = all.filter((m) => audienceMatches(m, viewer) && isActiveWindow(m.startsAt, m.endsAt, now));
+    const visible = filterMessagesForViewer(
+      all.filter((m) => audienceMatches(m, viewer) && isActiveWindow(m.startsAt, m.endsAt, now)),
+      viewer
+    );
     if (!visible.length) {
       return {
         messages: [],
@@ -215,8 +246,12 @@ export class PlatformMessageService {
 
     return {
       messages: undismissed,
-      banner: undismissed.filter((m) => m.showInBanner || m.kind === 'incident'),
-      loginPopup: undismissed.filter((m) => m.showOnLogin && m.kind !== 'incident'),
+      banner: undismissed.filter(
+        (m) => m.showInBanner || m.kind === 'incident' || m.kind === SUPPORT_TICKET_ALERT_KIND
+      ),
+      loginPopup: undismissed.filter(
+        (m) => m.showOnLogin && m.kind !== 'incident' && m.kind !== SUPPORT_TICKET_ALERT_KIND
+      ),
       whatsNew: undismissed.filter((m) => m.kind === 'whats_new' || m.kind === 'announcement'),
       tray,
       unreadCount: undismissed.length,
@@ -249,7 +284,10 @@ export class PlatformMessageService {
       limit: 500,
     });
 
-    const visible = all.filter((m) => audienceMatches(m, viewer));
+    const visible = filterMessagesForViewer(
+      all.filter((m) => audienceMatches(m, viewer)),
+      viewer
+    );
     const ids = visible.map((m) => m.id);
     const dismissals = ids.length
       ? await db.query.platformMessageDismissals.findMany({
@@ -281,6 +319,78 @@ export class PlatformMessageService {
         viewerId: viewer.viewerId,
       });
     }
+  }
+
+  static async upsertMerchantTicketAnswered(input: {
+    merchantId: string;
+    ticketId: string;
+    subject: string;
+    ticketNumber?: string | null;
+  }) {
+    const db = getDb();
+    const path = supportTicketAlertPath(input.ticketId);
+    const title = input.subject.trim().slice(0, 255) || input.ticketNumber || 'Support ticket';
+    const body = 'Your ticket was answered';
+    const existing = await db.query.platformMessages.findFirst({
+      where: and(
+        eq(schema.platformMessages.kind, SUPPORT_TICKET_ALERT_KIND),
+        eq(schema.platformMessages.audience, 'merchant'),
+        eq(schema.platformMessages.targetMerchantId, input.merchantId),
+        eq(schema.platformMessages.externalUrl, path)
+      ),
+    });
+
+    if (existing) {
+      const [row] = await db
+        .update(schema.platformMessages)
+        .set({
+          title,
+          body,
+          showInBanner: true,
+          showOnLogin: false,
+          isActive: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.platformMessages.id, existing.id))
+        .returning();
+      await db
+        .delete(schema.platformMessageDismissals)
+        .where(eq(schema.platformMessageDismissals.messageId, existing.id));
+      return row!;
+    }
+
+    return this.create({
+      kind: SUPPORT_TICKET_ALERT_KIND,
+      audience: 'merchant',
+      targetMerchantId: input.merchantId,
+      title,
+      body,
+      severity: 'info',
+      externalUrl: path,
+      externalLabel: 'Open ticket',
+      showOnLogin: false,
+      showInBanner: true,
+    });
+  }
+
+  static async acknowledgeMerchantTicketAlert(merchantId: string, ticketId: string) {
+    const db = getDb();
+    const path = supportTicketAlertPath(ticketId);
+    const existing = await db.query.platformMessages.findFirst({
+      where: and(
+        eq(schema.platformMessages.kind, SUPPORT_TICKET_ALERT_KIND),
+        eq(schema.platformMessages.audience, 'merchant'),
+        eq(schema.platformMessages.targetMerchantId, merchantId),
+        eq(schema.platformMessages.externalUrl, path),
+        eq(schema.platformMessages.isActive, true)
+      ),
+      columns: { id: true },
+    });
+    if (!existing) return;
+    await this.dismiss(
+      { role: 'merchant', viewerId: merchantId, merchantId, canSeeSupport: true },
+      existing.id
+    );
   }
 
   static async dismissAll(viewer: PanelViewer, messageIds: string[]) {
