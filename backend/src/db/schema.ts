@@ -450,6 +450,11 @@ export const merchants = pgTable(
      */
     timeSlotPricingSettings: json("time_slot_pricing_settings").$type<Record<string, unknown> | null>(),
     /**
+     * Pizza maker templates:
+     * { templates: [{ id, name, portionType, steps, quantityLevels, freeTopping*, linkedProductIds }] }
+     */
+    pizzaBuilderSettings: json("pizza_builder_settings").$type<Record<string, unknown> | null>(),
+    /**
      * Just Eat / Uber Eats credentials + toggles:
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
      */

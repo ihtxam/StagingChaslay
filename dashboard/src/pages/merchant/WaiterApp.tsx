@@ -75,6 +75,8 @@ import WebPosProductModifiersModal, {
   productHasModifiers,
   type ShopProductForModifiers,
 } from '@/components/webpos/WebPosProductModifiersModal';
+import WebPosPizzaBuilderModal from '@/components/webpos/WebPosPizzaBuilderModal';
+import { findTemplateForProduct, type PizzaBuilderTemplate } from '@/lib/pizza-builder';
 import type { CartLine, Category, PosCategoryId, PosChannel, Product } from '@/components/webpos/types';
 import type { Permission } from '@/lib/permissions';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
@@ -110,6 +112,11 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [tab, setTab] = useState<WaiterTab>('tables');
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [pizzaTemplates, setPizzaTemplates] = useState<PizzaBuilderTemplate[]>([]);
+  const [pendingPizza, setPendingPizza] = useState<{
+    product: ShopProductForModifiers;
+    template: PizzaBuilderTemplate;
+  } | null>(null);
   const [printSettings, setPrintSettings] = useState<Record<string, unknown> | null>(null);
   const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null);
   const [merchantShopName, setMerchantShopName] = useState<string | null>(() =>
@@ -240,6 +247,11 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         if (session) notifyWebPosStaffSessionChanged();
         setCategories(asArray(catRes.data?.categories));
         setProducts(asArray(prodRes.data?.products));
+        setPizzaTemplates(
+          Array.isArray(configRes.data?.config?.pizzaTemplates)
+            ? configRes.data.config.pizzaTemplates
+            : []
+        );
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
         setMerchantLogoUrl(
           String(configRes.data?.config?.shopLogoUrl || '').trim() ||
@@ -527,6 +539,22 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   };
 
   const onProductClick = (p: Product) => {
+    const pizzaTpl = findTemplateForProduct(pizzaTemplates, p.id);
+    if (pizzaTpl) {
+      setPendingPizza({
+        product: {
+          id: p.id,
+          name: p.name,
+          price: Number(p.price) || 0,
+          allowExtras: p.allowExtras,
+          extras: p.extras,
+          modifierGroups: p.modifierGroups,
+          specifications: p.specifications,
+        },
+        template: pizzaTpl,
+      });
+      return;
+    }
     if (productHasModifiers(p as ShopProductForModifiers)) {
       setPendingProduct({
         id: p.id,
@@ -1072,6 +1100,23 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         logoUrl={merchantLogoUrl}
       />
 
+      {pendingPizza && (
+        <WebPosPizzaBuilderModal
+          product={{
+            id: pendingPizza.product.id,
+            name: pendingPizza.product.name,
+            price: Number(pendingPizza.product.price) || 0,
+            specifications: pendingPizza.product.specifications,
+          }}
+          template={pendingPizza.template}
+          onClose={() => setPendingPizza(null)}
+          onConfirm={({ selectedExtras, unitPrice, quantity }) => {
+            const prod = products.find((p) => p.id === pendingPizza.product.id);
+            if (prod) pushLine(prod, unitPrice, selectedExtras, quantity);
+            setPendingPizza(null);
+          }}
+        />
+      )}
       {pendingProduct && (
         <WebPosProductModifiersModal
           product={pendingProduct}
