@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 
 type Profile = {
@@ -34,7 +35,7 @@ export default function GuestCrmPanel() {
       if (err.response?.data?.code === 'GUEST_CRM_ADDON') {
         setProfiles([]);
       } else {
-        toast.error(err.response?.data?.error || t('customersToastLoadFailed'));
+        toastLoadError(e, t('customersToastLoadFailed'));
       }
     } finally {
       setLoading(false);

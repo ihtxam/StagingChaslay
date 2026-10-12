@@ -1,6 +1,14 @@
 import axios, { AxiosInstance } from 'axios';
 import { isShopPathHubHost } from '@/lib/brand';
 import { isMerchantPanelPath, isShopCustomerSurface } from '@/lib/shop-storefront-host';
+import {
+  installDeployToastGuard,
+  isDeployBlip,
+  notifyDeployBlip,
+  shouldSkipDeployToastForRequest,
+} from '@/lib/deploy-blip';
+
+installDeployToastGuard();
 
 /** Prefer same-origin /api in production; Vite dev proxies /api on any port. */
 export function resolveApiBaseUrl(): string {
@@ -137,6 +145,13 @@ api.interceptors.response.use(
         delete cfg.headers['x-location-id'];
       }
       return api.request(cfg);
+    }
+    if (
+      isDeployBlip(error) &&
+      !shouldSkipDeployToastForRequest(error) &&
+      !isPublicShopHost()
+    ) {
+      notifyDeployBlip();
     }
     if (error.response?.status === 401) {
       const path = window.location.pathname || '';

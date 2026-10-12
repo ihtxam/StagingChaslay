@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import GuestCrmPanel from '@/components/customers/GuestCrmPanel';
 import SmartSegmentsPanel from '@/components/growth/SmartSegmentsPanel';
@@ -43,7 +44,7 @@ export default function Customers() {
       const response = await api.get('/merchant/customers', { params: { limit: 500 } });
       setCustomers(response.data.customers || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('customersToastLoadFailed'));
+      toastLoadError(error, t('customersToastLoadFailed'));
     } finally {
       setLoading(false);
     }
