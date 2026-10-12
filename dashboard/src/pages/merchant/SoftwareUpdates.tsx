@@ -21,7 +21,7 @@ function formatDate(value: string) {
   });
 }
 
-export default function SoftwareUpdates() {
+export default function SoftwareUpdates({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const [releases, setReleases] = useState<SoftwareRelease[]>([]);
   const [latest, setLatest] = useState<SoftwareRelease | null>(null);
@@ -53,22 +53,38 @@ export default function SoftwareUpdates() {
   }, [t]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <header className="rounded-2xl border border-stone-200 bg-white px-5 py-5 dark:border-stone-700 dark:bg-stone-900">
-        <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-800">
-          <Sparkles className="h-3.5 w-3.5" />
-          {t('softwareUpdatesNav')}
-        </p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-          {t('softwareUpdatesTitle')}
-        </h1>
-        <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{t('softwareUpdatesHint')}</p>
-        {latest ? (
-          <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-sm font-semibold text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
-            {t('softwareUpdatesLatest')}: v{latest.version}
+    <div className={embedded ? 'space-y-5' : 'mx-auto max-w-3xl space-y-5'}>
+      {embedded ? (
+        <div>
+          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-800">
+            <Sparkles className="h-3.5 w-3.5" />
+            {t('softwareUpdatesNav')}
           </p>
-        ) : null}
-      </header>
+          <h2 className="mt-2 text-xl font-bold text-stone-900">{t('softwareUpdatesTitle')}</h2>
+          <p className="mt-1 text-sm text-stone-600">{t('softwareUpdatesHint')}</p>
+          {latest ? (
+            <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-sm font-semibold text-rose-900">
+              {t('softwareUpdatesLatest')}: v{latest.version}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <header className="rounded-2xl border border-stone-200 bg-white px-5 py-5 dark:border-stone-700 dark:bg-stone-900">
+          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-800">
+            <Sparkles className="h-3.5 w-3.5" />
+            {t('softwareUpdatesNav')}
+          </p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
+            {t('softwareUpdatesTitle')}
+          </h1>
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{t('softwareUpdatesHint')}</p>
+          {latest ? (
+            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-sm font-semibold text-rose-900 dark:bg-rose-950/60 dark:text-rose-100">
+              {t('softwareUpdatesLatest')}: v{latest.version}
+            </p>
+          ) : null}
+        </header>
+      )}
 
       {loading ? (
         <p className="py-8 text-center text-sm text-stone-500">{t('loading')}</p>

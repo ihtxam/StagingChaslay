@@ -11,8 +11,8 @@ export default function ProductGuidesPage({
   audience: GuideAudience;
   embedded?: boolean;
 }) {
-  const { t } = useI18n();
-  const chapters = useMemo(() => guidesForAudience(audience), [audience]);
+  const { t, locale } = useI18n();
+  const chapters = useMemo(() => guidesForAudience(audience, locale), [audience, locale]);
   const [activeId, setActiveId] = useState(chapters[0]?.id || '');
   const active = chapters.find((c) => c.id === activeId) || chapters[0];
 
