@@ -172,6 +172,8 @@ import WebPosProductModifiersModal, {
   type ShopModifierGroup,
   type ShopProductForModifiers,
 } from '@/components/webpos/WebPosProductModifiersModal';
+import WebPosPizzaBuilderModal from '@/components/webpos/WebPosPizzaBuilderModal';
+import { findTemplateForProduct, type PizzaBuilderTemplate } from '@/lib/pizza-builder';
 import WebPosComboModal, {
   productHasComboSlots,
   type ComboSlot,
@@ -684,6 +686,7 @@ type WebPosPaymentConfig = {
   coursesEnabled?: boolean;
   /** null/undefined = legacy full access */
   editionFeatures?: string[] | null;
+  pizzaTemplates?: PizzaBuilderTemplate[];
 };
 
 type CheckoutExtras = CheckoutResult;
@@ -1154,7 +1157,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     null
   );
   const [pendingProduct, setPendingProduct] = useState<ShopProductForModifiers | null>(null);
+  const [pendingPizza, setPendingPizza] = useState<{
+    product: ShopProductForModifiers;
+    template: PizzaBuilderTemplate;
+  } | null>(null);
   const [pendingCombo, setPendingCombo] = useState<ShopComboProduct | null>(null);
+  const [pizzaTemplates, setPizzaTemplates] = useState<PizzaBuilderTemplate[]>([]);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
   const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
@@ -1707,6 +1715,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setPendingProduct(null);
         return;
       }
+      if (pendingPizza) {
+        e.preventDefault();
+        setPendingPizza(null);
+        return;
+      }
       if (pendingCombo) {
         e.preventDefault();
         setPendingCombo(null);
@@ -1735,6 +1748,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [
     pendingWeighed,
     pendingProduct,
+    pendingPizza,
     pendingCombo,
     settingsOpen,
     mobileCartOpen,
@@ -2739,6 +2753,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           editionFeatures: cfg.editionFeatures ?? merch?.editionFeatures ?? null,
         };
         setPaymentConfig(nextPaymentConfig);
+        if (Array.isArray(cfg.pizzaTemplates)) {
+          setPizzaTemplates(cfg.pizzaTemplates);
+        }
         if (cfg.posPrintSettings) {
           nextPrintSettings = cfg.posPrintSettings;
           setPrintSettings(cfg.posPrintSettings);
@@ -3824,6 +3841,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (line.comboSelections?.length) return true;
     if (line.selectedExtras?.length || line.lineNote?.trim()) return true;
     if (product && productHasComboSlots(product)) return true;
+    if (product && findTemplateForProduct(pizzaTemplates, product.id)) return true;
     if (product && productHasModifiers(product as ShopProductForModifiers)) return true;
     return false;
   };
@@ -3843,6 +3861,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setEditingLineId(line.lineId);
     setSelectedLineId(null);
     setKeypadBuffer('');
+    const pizzaTpl = findTemplateForProduct(pizzaTemplates, product.id);
+    if (pizzaTpl) {
+      setPendingPizza({
+        product: {
+          id: product.id,
+          name: product.name,
+          price: Number(product.price) || 0,
+          allowExtras: product.allowExtras,
+          extras: product.extras,
+          modifierGroups: product.modifierGroups,
+          specifications: product.specifications,
+        },
+        template: pizzaTpl,
+      });
+      setPendingProduct(null);
+      setPendingCombo(null);
+      return;
+    }
     if (line.comboSelections?.length || productHasComboSlots(product)) {
       setPendingCombo({
         id: product.id,
@@ -3920,6 +3956,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           return;
         }
         setPendingWeighed(p);
+        return;
+      }
+      const pizzaTpl = findTemplateForProduct(pizzaTemplates, p.id);
+      if (pizzaTpl) {
+        setPendingPizza({
+          product: {
+            id: p.id,
+            name: p.name,
+            price: Number(p.price) || 0,
+            allowExtras: p.allowExtras,
+            extras: p.extras,
+            modifierGroups: p.modifierGroups,
+            specifications: p.specifications,
+          },
+          template: pizzaTpl,
+        });
         return;
       }
       if (productHasComboSlots(p)) {
@@ -12014,6 +12066,40 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
       />
 
+      {pendingPizza && (
+        <WebPosPizzaBuilderModal
+          product={{
+            id: pendingPizza.product.id,
+            name: pendingPizza.product.name,
+            price: Number(pendingPizza.product.price) || 0,
+            specifications: pendingPizza.product.specifications,
+          }}
+          template={pendingPizza.template}
+          onClose={() => {
+            setPendingPizza(null);
+            setEditingLineId(null);
+          }}
+          onConfirm={({ selectedExtras, unitPrice, quantity, lineNote }) => {
+            const base = products.find((p) => p.id === pendingPizza.product.id);
+            if (base) {
+              if (editingLineId) {
+                updateConfiguredLine(
+                  editingLineId,
+                  unitPrice,
+                  selectedExtras,
+                  [],
+                  quantity,
+                  lineNote
+                );
+              } else {
+                pushConfiguredProductWithQty(base, unitPrice, selectedExtras, [], quantity, lineNote);
+              }
+            }
+            setPendingPizza(null);
+            setEditingLineId(null);
+          }}
+        />
+      )}
       {pendingProduct && (
         <WebPosProductModifiersModal
           product={pendingProduct}

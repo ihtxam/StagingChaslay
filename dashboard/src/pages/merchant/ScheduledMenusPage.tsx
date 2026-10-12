@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Clock, Plus, Trash2 } from 'lucide-react';
+import { Clock, Plus, Trash2, X } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useLocationStore } from '@/store/location';
@@ -36,9 +36,8 @@ type ScheduledMenu = {
 
 type CatalogProduct = { id: string; name: string; price?: string | number; categoryId?: string | null };
 type CatalogCategory = { id: string; name: string };
-type HqVersion = { id: string; name: string; version: number };
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 const emptyForm = (): Omit<ScheduledMenu, 'id'> => ({
   name: '',
@@ -110,16 +109,37 @@ function normalizeMenu(row: Record<string, unknown>): ScheduledMenu {
   };
 }
 
+function formFromMenu(menu: ScheduledMenu): Omit<ScheduledMenu, 'id'> {
+  return {
+    name: menu.name,
+    channels: normalizeMenuCatalogChannels(menu.channels || ['shop']),
+    scheduleType: menu.scheduleType || 'weekly',
+    daysOfWeek: menu.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
+    daysOfMonth: menu.daysOfMonth || [],
+    timeRanges: menu.timeRanges?.length ? menu.timeRanges : [{ start: menu.timeStart, end: menu.timeEnd }],
+    timeStart: menu.timeStart || '00:00',
+    timeEnd: menu.timeEnd || '23:59',
+    locationIds: menu.locationIds || [],
+    hqVersionId: menu.hqVersionId || null,
+    productIds: menu.productIds || [],
+    categoryIds: menu.categoryIds || [],
+    productPrices: menu.productPrices || {},
+    isDefault: menu.isDefault,
+    isActive: menu.isActive !== false,
+    sortOrder: menu.sortOrder || 0,
+  };
+}
+
 export default function ScheduledMenusPage() {
   const { t } = useI18n();
   const { locations } = useLocationStore();
   const [menus, setMenus] = useState<ScheduledMenu[]>([]);
-  const [versions, setVersions] = useState<HqVersion[]>([]);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uniformOpen, setUniformOpen] = useState(false);
   const [uniformMode, setUniformMode] = useState<'fixed' | 'percent'>('fixed');
@@ -160,19 +180,61 @@ export default function ScheduledMenusPage() {
     [products]
   );
 
+  const dayLabel = useCallback((idx: number) => t(`scheduledMenuDay_${DAY_KEYS[idx]}`), [t]);
+
+  const scheduleTypeLabel = useCallback(
+    (type: MenuScheduleType) => {
+      if (type === 'daily') return t('scheduledMenuDaily');
+      if (type === 'monthly') return t('scheduledMenuMonthly');
+      return t('scheduledMenuWeekly');
+    },
+    [t]
+  );
+
+  const channelLabel = useCallback((ch: string) => t(`scheduledMenuChannelShort_${ch}`), [t]);
+
+  const formatSchedule = useCallback(
+    (menu: ScheduledMenu) => {
+      if (menu.isDefault) return t('scheduledMenuAlwaysOn');
+      const times = (menu.timeRanges?.length
+        ? menu.timeRanges
+        : [{ start: menu.timeStart, end: menu.timeEnd }]
+      )
+        .map((r) => `${r.start}–${r.end}`)
+        .join(', ');
+      const parts = [scheduleTypeLabel(menu.scheduleType)];
+      if (menu.scheduleType === 'weekly' && menu.daysOfWeek?.length) {
+        const days = [...menu.daysOfWeek].sort((a, b) => a - b).map((d) => dayLabel(d));
+        parts.push(days.join(', '));
+      }
+      if (menu.scheduleType === 'monthly' && menu.daysOfMonth?.length) {
+        parts.push([...menu.daysOfMonth].sort((a, b) => a - b).join(', '));
+      }
+      if (times) parts.push(times);
+      return parts.join(' · ');
+    },
+    [dayLabel, scheduleTypeLabel, t]
+  );
+
+  const formatChannels = useCallback(
+    (channels: string[]) => {
+      const labels = normalizeMenuCatalogChannels(channels).map((ch) => channelLabel(ch));
+      return labels.length ? labels.join(', ') : '—';
+    },
+    [channelLabel]
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [menusRes, versionsRes, categoriesRes, productsRes] = await Promise.all([
+      const [menusRes, categoriesRes, productsRes] = await Promise.all([
         api.get('/merchant/menus'),
-        api.get('/merchant/hq/catalog/versions').catch(() => ({ data: { versions: [] } })),
         api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
         api.get('/merchant/products', { params: { limit: 5000, page: 1 } }).catch(() => ({
           data: { products: [] },
         })),
       ]);
       setMenus((menusRes.data?.menus || []).map((m: Record<string, unknown>) => normalizeMenu(m)));
-      setVersions(versionsRes.data?.versions || []);
       setCategories(categoriesRes.data?.categories || []);
       setProducts(productsRes.data?.products || []);
     } catch {
@@ -186,32 +248,48 @@ export default function ScheduledMenusPage() {
     void load();
   }, [load]);
 
-  const reset = () => {
-    setForm(emptyForm());
+  const closeDialog = useCallback(() => {
+    setDialogOpen(false);
     setEditingId(null);
+    setForm(emptyForm());
+    setUniformOpen(false);
+    setUniformValue('');
+  }, []);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+    setUniformOpen(false);
+    setUniformValue('');
+    setDialogOpen(true);
   };
 
   const startEdit = (menu: ScheduledMenu) => {
     setEditingId(menu.id);
-    setForm({
-      name: menu.name,
-      channels: normalizeMenuCatalogChannels(menu.channels || ['shop']),
-      scheduleType: menu.scheduleType || 'weekly',
-      daysOfWeek: menu.daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
-      daysOfMonth: menu.daysOfMonth || [],
-      timeRanges: menu.timeRanges?.length ? menu.timeRanges : [{ start: menu.timeStart, end: menu.timeEnd }],
-      timeStart: menu.timeStart || '00:00',
-      timeEnd: menu.timeEnd || '23:59',
-      locationIds: menu.locationIds || [],
-      hqVersionId: menu.hqVersionId || null,
-      productIds: menu.productIds || [],
-      categoryIds: menu.categoryIds || [],
-      productPrices: menu.productPrices || {},
-      isDefault: menu.isDefault,
-      isActive: menu.isActive !== false,
-      sortOrder: menu.sortOrder || 0,
-    });
+    setForm(formFromMenu(menu));
+    setUniformOpen(false);
+    setUniformValue('');
+    setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (uniformOpen) {
+        setUniformOpen(false);
+        return;
+      }
+      closeDialog();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [dialogOpen, uniformOpen, closeDialog]);
 
   const buildPayload = () => ({
     name: form.name.trim(),
@@ -247,7 +325,7 @@ export default function ScheduledMenusPage() {
         await api.post('/merchant/menus', payload);
         toast.success(t('scheduledMenuCreated'));
       }
-      reset();
+      closeDialog();
       await load();
     } catch (err: unknown) {
       toast.error(
@@ -267,6 +345,7 @@ export default function ScheduledMenusPage() {
     try {
       await api.delete(`/merchant/menus/${id}`);
       toast.success(t('deleted'));
+      if (editingId === id) closeDialog();
       await load();
     } catch (err: unknown) {
       toast.error(
@@ -354,248 +433,329 @@ export default function ScheduledMenusPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <Clock className="w-5 h-5" />
-          {t('scheduledMenusTitle')}
-        </h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">{t('scheduledMenusDescription')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            {t('scheduledMenusTitle')}
+          </h1>
+          <p className="text-sm text-[var(--text-muted)] mt-1">{t('scheduledMenusDescription')}</p>
+        </div>
+        <button type="button" className="btn-primary inline-flex items-center gap-1.5 shrink-0" onClick={openCreate}>
+          <Plus className="w-4 h-4" />
+          {t('scheduledMenuAdd')}
+        </button>
       </div>
 
-      <form onSubmit={(e) => void onSubmit(e)} className="rounded-lg border border-[var(--border)] p-4 space-y-3">
-        <h2 className="font-medium">
-          {editingId ? t('scheduledMenuEdit') : t('scheduledMenuAdd')}
-          {form.isDefault ? (
-            <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">({t('scheduledMenuDefaultBadge')})</span>
-          ) : null}
-        </h2>
-        <label className="block text-sm">
-          {t('scheduledMenuName')}
-          <input
-            className="input mt-1 w-full"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder={t('scheduledMenuNamePlaceholder')}
-          />
-        </label>
-
-        <label className="block text-sm">
-          {t('scheduledMenuEffective')}
-          <select
-            className="input mt-1 w-full"
-            value={form.scheduleType}
-            disabled={form.isDefault}
-            onChange={(e) =>
-              setForm({ ...form, scheduleType: e.target.value as MenuScheduleType })
-            }
-          >
-            <option value="daily">{t('scheduledMenuDaily')}</option>
-            <option value="weekly">{t('scheduledMenuWeekly')}</option>
-            <option value="monthly">{t('scheduledMenuMonthly')}</option>
-          </select>
-        </label>
-
-        {form.scheduleType === 'weekly' && !form.isDefault ? (
-          <fieldset>
-            <legend className="text-sm font-medium">{t('scheduledMenuDays')}</legend>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {DAY_LABELS.map((label, idx) => (
-                <button
-                  key={label}
-                  type="button"
-                  className={`rounded px-2 py-1 text-xs border ${
-                    form.daysOfWeek.includes(idx) ? 'bg-stone-900 text-white' : 'border-[var(--border)]'
-                  }`}
-                  onClick={() => toggleDay(idx)}
-                >
-                  {label}
+      <div className="rounded-lg border border-[var(--border)] p-4 space-y-2">
+        <h2 className="font-medium">{t('scheduledMenusList')}</h2>
+        {loading ? (
+          <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
+        ) : menus.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">{t('scheduledMenusEmpty')}</p>
+        ) : (
+          menus.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-start justify-between gap-3 rounded border border-[var(--border)] px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">
+                  {m.name}
+                  {m.isDefault ? (
+                    <span className="ml-2 text-xs text-[var(--text-muted)]">({t('scheduledMenuDefaultBadge')})</span>
+                  ) : null}
+                  {!m.isActive ? (
+                    <span className="ml-2 text-xs text-[var(--text-muted)]">({t('inactive')})</span>
+                  ) : (
+                    <span className="ml-2 text-xs text-[var(--text-muted)]">({t('scheduledMenuActive')})</span>
+                  )}
+                </p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">{formatSchedule(m)}</p>
+                <p className="text-xs text-[var(--text-muted)]">{formatChannels(m.channels)}</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" className="btn-secondary text-xs" onClick={() => startEdit(m)}>
+                  {t('edit')}
                 </button>
-              ))}
-            </div>
-          </fieldset>
-        ) : null}
-
-        {form.scheduleType === 'monthly' && !form.isDefault ? (
-          <fieldset>
-            <legend className="text-sm font-medium">{t('scheduledMenuDaysOfMonth')}</legend>
-            <div className="grid grid-cols-7 gap-1 mt-1 max-w-md">
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  className={`rounded px-1 py-0.5 text-xs border ${
-                    form.daysOfMonth.includes(d) ? 'bg-stone-900 text-white' : 'border-[var(--border)]'
-                  }`}
-                  onClick={() => toggleDom(d)}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-        ) : null}
-
-        {!form.isDefault ? (
-          <fieldset>
-            <legend className="text-sm font-medium">{t('scheduledMenuTimeRanges')}</legend>
-            <div className="space-y-2 mt-1">
-              {form.timeRanges.map((range, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="time"
-                    className="input"
-                    value={range.start}
-                    onChange={(e) => updateTimeRange(idx, { start: e.target.value })}
-                  />
-                  <span className="text-sm">–</span>
-                  <input
-                    type="time"
-                    className="input"
-                    value={range.end}
-                    onChange={(e) => updateTimeRange(idx, { end: e.target.value })}
-                  />
-                  <button type="button" className="btn-secondary text-xs" onClick={() => removeTimeRange(idx)}>
-                    <Trash2 className="w-3.5 h-3.5" />
+                {!m.isDefault ? (
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs text-red-600"
+                    aria-label={t('delete')}
+                    onClick={() => void onDelete(m.id, m.isDefault)}
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
-                </div>
-              ))}
-              <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1" onClick={addTimeRange}>
-                <Plus className="w-3.5 h-3.5" />
-                {t('scheduledMenuAddTimeRange')}
+                ) : null}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {dialogOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+          onClick={closeDialog}
+          role="presentation"
+        >
+          <form
+            onSubmit={(e) => void onSubmit(e)}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scheduled-menu-dialog-title"
+            className="w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden rounded-t-2xl sm:rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl flex flex-col"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3 shrink-0">
+              <h2 id="scheduled-menu-dialog-title" className="font-semibold">
+                {editingId ? t('scheduledMenuEdit') : t('scheduledMenuAdd')}
+                {form.isDefault ? (
+                  <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">
+                    ({t('scheduledMenuDefaultBadge')})
+                  </span>
+                ) : null}
+              </h2>
+              <button
+                type="button"
+                className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+                aria-label={t('close')}
+                onClick={closeDialog}
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
-          </fieldset>
-        ) : (
-          <p className="text-xs text-[var(--text-muted)]">{t('scheduledMenuDefaultHoursHint')}</p>
-        )}
 
-        <fieldset>
-          <legend className="text-sm font-medium">{t('scheduledMenuChannels')}</legend>
-          <div className="flex flex-wrap gap-3 mt-1 text-sm">
-            {CATALOG_VISIBILITY_UI_CHANNELS.map((ch) => (
-              <label key={ch} className="inline-flex items-center gap-1.5">
+            <div className="overflow-y-auto overscroll-contain px-4 py-4 space-y-3 flex-1">
+              <label className="block text-sm">
+                {t('scheduledMenuName')}
                 <input
-                  type="checkbox"
-                  checked={form.channels.includes(ch)}
-                  onChange={() => toggleChannel(ch)}
+                  className="input mt-1 w-full"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder={t('scheduledMenuNamePlaceholder')}
                 />
-                {t(`catalogChannel_${ch}`)}
               </label>
-            ))}
-          </div>
-          <p className="text-xs text-[var(--text-muted)] mt-1">{t('catalogVisibilityShopFulfillmentHint')}</p>
-        </fieldset>
 
-        {locations.length > 1 ? (
-          <fieldset>
-            <legend className="text-sm font-medium">{t('scheduledMenuLocations')}</legend>
-            <p className="text-xs text-[var(--text-muted)]">{t('scheduledMenuLocationsHint')}</p>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {locations.map((loc) => (
-                <label key={loc.id} className="inline-flex items-center gap-1.5 text-sm">
+              <label className="block text-sm">
+                {t('scheduledMenuEffective')}
+                <select
+                  className="input mt-1 w-full"
+                  value={form.scheduleType}
+                  disabled={form.isDefault}
+                  onChange={(e) =>
+                    setForm({ ...form, scheduleType: e.target.value as MenuScheduleType })
+                  }
+                >
+                  <option value="daily">{t('scheduledMenuDaily')}</option>
+                  <option value="weekly">{t('scheduledMenuWeekly')}</option>
+                  <option value="monthly">{t('scheduledMenuMonthly')}</option>
+                </select>
+              </label>
+
+              {form.scheduleType === 'weekly' && !form.isDefault ? (
+                <fieldset>
+                  <legend className="text-sm font-medium">{t('scheduledMenuDays')}</legend>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {DAY_KEYS.map((key, idx) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`rounded px-2 py-1 text-xs border ${
+                          form.daysOfWeek.includes(idx) ? 'bg-stone-900 text-white' : 'border-[var(--border)]'
+                        }`}
+                        onClick={() => toggleDay(idx)}
+                      >
+                        {dayLabel(idx)}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+
+              {form.scheduleType === 'monthly' && !form.isDefault ? (
+                <fieldset>
+                  <legend className="text-sm font-medium">{t('scheduledMenuDaysOfMonth')}</legend>
+                  <div className="grid grid-cols-7 gap-1 mt-1 max-w-md">
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        className={`rounded px-1 py-0.5 text-xs border ${
+                          form.daysOfMonth.includes(d) ? 'bg-stone-900 text-white' : 'border-[var(--border)]'
+                        }`}
+                        onClick={() => toggleDom(d)}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+
+              {!form.isDefault ? (
+                <fieldset>
+                  <legend className="text-sm font-medium">{t('scheduledMenuTimeRanges')}</legend>
+                  <div className="space-y-2 mt-1">
+                    {form.timeRanges.map((range, idx) => (
+                      <div key={idx} className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="time"
+                          className="input"
+                          value={range.start}
+                          onChange={(e) => updateTimeRange(idx, { start: e.target.value })}
+                        />
+                        <span className="text-sm">–</span>
+                        <input
+                          type="time"
+                          className="input"
+                          value={range.end}
+                          onChange={(e) => updateTimeRange(idx, { end: e.target.value })}
+                        />
+                        <button type="button" className="btn-secondary text-xs" onClick={() => removeTimeRange(idx)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1" onClick={addTimeRange}>
+                      <Plus className="w-3.5 h-3.5" />
+                      {t('scheduledMenuAddTimeRange')}
+                    </button>
+                  </div>
+                </fieldset>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)]">{t('scheduledMenuDefaultHoursHint')}</p>
+              )}
+
+              <fieldset>
+                <legend className="text-sm font-medium">{t('scheduledMenuChannels')}</legend>
+                <div className="flex flex-wrap gap-3 mt-1 text-sm">
+                  {CATALOG_VISIBILITY_UI_CHANNELS.map((ch) => (
+                    <label key={ch} className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={form.channels.includes(ch)}
+                        onChange={() => toggleChannel(ch)}
+                      />
+                      {t(`catalogChannel_${ch}`)}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{t('catalogVisibilityShopFulfillmentHint')}</p>
+              </fieldset>
+
+              {locations.length > 1 ? (
+                <fieldset>
+                  <legend className="text-sm font-medium">{t('scheduledMenuLocations')}</legend>
+                  <p className="text-xs text-[var(--text-muted)]">{t('scheduledMenuLocationsHint')}</p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {locations.map((loc) => (
+                      <label key={loc.id} className="inline-flex items-center gap-1.5 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={form.locationIds.includes(loc.id)}
+                          onChange={() => toggleLocation(loc.id)}
+                        />
+                        {loc.name}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+
+              <SearchableMultiSelect
+                label={t('scheduledMenuCategories')}
+                helperText={t('scheduledMenuCategoriesHint')}
+                placeholder={t('scheduledMenuSearchCategories')}
+                options={categoryOptions}
+                value={form.categoryIds}
+                onChange={(categoryIds) => setForm((f) => ({ ...f, categoryIds }))}
+              />
+              <SearchableMultiSelect
+                label={t('scheduledMenuProducts')}
+                helperText={t('scheduledMenuProductsHint')}
+                placeholder={t('scheduledMenuSearchProducts')}
+                options={productOptions}
+                value={form.productIds}
+                onChange={(productIds) => setForm((f) => ({ ...f, productIds }))}
+              />
+
+              {menuProductRows.length > 0 ? (
+                <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">{t('scheduledMenuPricing')}</h3>
+                    <button type="button" className="btn-secondary text-xs" onClick={() => setUniformOpen(true)}>
+                      {t('scheduledMenuUniformPricing')}
+                    </button>
+                  </div>
+                  <div className="max-h-48 overflow-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-[var(--text-muted)]">
+                          <th className="py-1">{t('products')}</th>
+                          <th className="py-1">{t('scheduledMenuBasePrice')}</th>
+                          <th className="py-1">{t('scheduledMenuMenuPrice')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {menuProductRows.map((row) => (
+                          <tr key={row.id}>
+                            <td className="py-1 pr-2">{row.name}</td>
+                            <td className="py-1 pr-2">{row.base.toFixed(2)}</td>
+                            <td className="py-1">
+                              <input
+                                className="input w-24"
+                                type="number"
+                                step="0.05"
+                                value={form.productPrices[row.id] ?? row.menuPrice}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value);
+                                  setForm((f) => ({
+                                    ...f,
+                                    productPrices: {
+                                      ...f.productPrices,
+                                      [row.id]: Number.isFinite(v) ? v : row.base,
+                                    },
+                                  }));
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+
+              {!form.isDefault ? (
+                <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={form.locationIds.includes(loc.id)}
-                    onChange={() => toggleLocation(loc.id)}
+                    checked={form.isActive}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
                   />
-                  {loc.name}
+                  {t('scheduledMenuActive')}
                 </label>
-              ))}
+              ) : null}
             </div>
-          </fieldset>
-        ) : null}
 
-        <SearchableMultiSelect
-          label={t('scheduledMenuCategories')}
-          helperText={t('scheduledMenuCategoriesHint')}
-          placeholder={t('scheduledMenuSearchCategories')}
-          options={categoryOptions}
-          value={form.categoryIds}
-          onChange={(categoryIds) => setForm((f) => ({ ...f, categoryIds }))}
-        />
-        <SearchableMultiSelect
-          label={t('scheduledMenuProducts')}
-          helperText={t('scheduledMenuProductsHint')}
-          placeholder={t('scheduledMenuSearchProducts')}
-          options={productOptions}
-          value={form.productIds}
-          onChange={(productIds) => setForm((f) => ({ ...f, productIds }))}
-        />
-
-        {menuProductRows.length > 0 ? (
-          <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">{t('scheduledMenuPricing')}</h3>
-              <button type="button" className="btn-secondary text-xs" onClick={() => setUniformOpen(true)}>
-                {t('scheduledMenuUniformPricing')}
+            <div className="flex justify-end gap-2 border-t border-[var(--border)] px-4 py-3 shrink-0">
+              <button type="button" className="btn-secondary" onClick={closeDialog}>
+                {t('cancel')}
+              </button>
+              <button type="submit" className="btn-primary" disabled={saving}>
+                {saving ? t('saving') : editingId ? t('save') : t('scheduledMenuAdd')}
               </button>
             </div>
-            <div className="max-h-48 overflow-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)]">
-                    <th className="py-1">{t('products')}</th>
-                    <th className="py-1">{t('scheduledMenuBasePrice')}</th>
-                    <th className="py-1">{t('scheduledMenuMenuPrice')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {menuProductRows.map((row) => (
-                    <tr key={row.id}>
-                      <td className="py-1 pr-2">{row.name}</td>
-                      <td className="py-1 pr-2">{row.base.toFixed(2)}</td>
-                      <td className="py-1">
-                        <input
-                          className="input w-24"
-                          type="number"
-                          step="0.05"
-                          value={form.productPrices[row.id] ?? row.menuPrice}
-                          onChange={(e) => {
-                            const v = Number(e.target.value);
-                            setForm((f) => ({
-                              ...f,
-                              productPrices: {
-                                ...f.productPrices,
-                                [row.id]: Number.isFinite(v) ? v : row.base,
-                              },
-                            }));
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : null}
-
-        {!form.isDefault ? (
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.isActive}
-              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-            />
-            {t('scheduledMenuActive')}
-          </label>
-        ) : null}
-
-        <div className="flex gap-2">
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? t('saving') : editingId ? t('save') : t('scheduledMenuAdd')}
-          </button>
-          {editingId ? (
-            <button type="button" className="btn-secondary" onClick={reset}>
-              {t('cancel')}
-            </button>
-          ) : null}
+          </form>
         </div>
-      </form>
+      ) : null}
 
       {uniformOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-[var(--bg)] rounded-lg border border-[var(--border)] p-4 w-full max-w-sm space-y-3">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-[var(--bg-elevated)] rounded-lg border border-[var(--border)] p-4 w-full max-w-sm space-y-3 shadow-xl">
             <h3 className="font-medium">{t('scheduledMenuUniformPricing')}</h3>
             <select
               className="input w-full"
@@ -632,52 +792,6 @@ export default function ScheduledMenusPage() {
           </div>
         </div>
       ) : null}
-
-      <div className="rounded-lg border border-[var(--border)] p-4 space-y-2">
-        <h2 className="font-medium">{t('scheduledMenusList')}</h2>
-        {loading ? (
-          <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
-        ) : menus.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">{t('scheduledMenusEmpty')}</p>
-        ) : (
-          menus.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-start justify-between gap-3 rounded border border-[var(--border)] px-3 py-2"
-            >
-              <div>
-                <p className="font-medium">
-                  {m.name}
-                  {m.isDefault ? (
-                    <span className="ml-2 text-xs text-[var(--text-muted)]">({t('scheduledMenuDefaultBadge')})</span>
-                  ) : null}
-                  {!m.isActive ? (
-                    <span className="ml-2 text-xs text-[var(--text-muted)]">({t('inactive')})</span>
-                  ) : null}
-                </p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {m.scheduleType} · {(m.timeRanges || []).map((r) => `${r.start}–${r.end}`).join(', ')} ·{' '}
-                  {(m.channels || []).join(', ')}
-                </p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button type="button" className="btn-secondary text-xs" onClick={() => startEdit(m)}>
-                  {t('edit')}
-                </button>
-                {!m.isDefault ? (
-                  <button
-                    type="button"
-                    className="btn-secondary text-xs text-red-600"
-                    onClick={() => void onDelete(m.id, m.isDefault)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
     </div>
   );
 }

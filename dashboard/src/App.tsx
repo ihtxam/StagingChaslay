@@ -8,8 +8,12 @@ import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from 
 import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
+import { installDeployToastGuard } from '@/lib/deploy-blip';
+
+installDeployToastGuard();
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 import ShopRouteLayout from '@/components/shop/ShopRouteLayout';
+import ScrollToTop from '@/components/ScrollToTop';
 
 import LoginPage from '@/pages/LoginPage';
 import SetPasswordPage from '@/pages/SetPasswordPage';
@@ -224,6 +228,7 @@ function App() {
     <>
       <BrowserRouter>
         <OnScreenKeyboardProvider autoOpenOnFocus={shouldAutoOpenOnScreenKeyboard()}>
+        <ScrollToTop />
         <DesktopLoadingOverlay />
         <DesktopChromeBar />
         <DesktopUpdateBanner />

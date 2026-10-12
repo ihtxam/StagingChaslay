@@ -23,7 +23,7 @@ function formatStamp(dateStr: string) {
 function kindLabel(kind: string, t: (key: string) => string) {
   if (kind === 'incident') return t('platformIncident');
   if (kind === 'whats_new') return t('platformWhatsNew');
-  if (kind === SUPPORT_TICKET_ALERT_KIND) return t('platformSupportReply');
+  if (kind === SUPPORT_TICKET_ALERT_KIND || kind === 'support_reply') return t('platformSupportReply');
   return t('platformAnnouncement');
 }
 

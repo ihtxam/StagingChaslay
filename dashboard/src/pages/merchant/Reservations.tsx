@@ -15,6 +15,7 @@ import {
   zurichDayStartFromYmd,
 } from '@/lib/date-format';
 import { reservationStatusBadgeClass } from '@/lib/reservation-badges';
+import { isMissingAuthorizationError } from '@/lib/reservations-auth-error';
 
 type Reservation = {
   id: string;
@@ -40,6 +41,7 @@ type Table = { id: string; label: string; capacity: number; status: string; floo
 export default function Reservations() {
   const { t, formatDate, formatDateTime, formatTime } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const [campaignsLicensed, setCampaignsLicensed] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
@@ -102,8 +104,13 @@ export default function Reservations() {
     try {
       await loadConfig();
       await loadList();
+      setUnavailable(false);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('cmsLoadFailed'));
+      if (isMissingAuthorizationError(e)) {
+        setUnavailable(true);
+      } else {
+        toast.error(e.response?.data?.error || t('cmsLoadFailed'));
+      }
     } finally {
       setLoading(false);
     }
@@ -241,6 +248,17 @@ export default function Reservations() {
 
   if (loading) {
     return <div className="p-4 text-sm muted">{t('loading')}</div>;
+  }
+
+  if (unavailable) {
+    return (
+      <div className="space-y-3 max-w-5xl">
+        <h1 className="text-xl font-semibold">{t('reservationsTitle')}</h1>
+        <p className="text-sm muted border border-dashed rounded-md p-6 text-center">
+          {t('reservationsUnlicensedHint')}
+        </p>
+      </div>
+    );
   }
 
   return (

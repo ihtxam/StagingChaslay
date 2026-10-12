@@ -32,6 +32,7 @@ import webhooksRoutes from "@/routes/webhooks.routes";
 import deliveryPlatformRoutes from "@/routes/delivery-platform.routes";
 import bexioOauthRoutes from "@/routes/bexio-oauth.routes";
 import offersRoutes from "@/routes/offers.routes";
+import pizzaTemplatesRoutes from "@/routes/pizza-templates.routes";
 import vouchersRoutes from "@/routes/vouchers.routes";
 import marketingRoutes from "@/routes/marketing.routes";
 import growthRoutes from "@/routes/growth.routes";
@@ -93,7 +94,9 @@ function isPermittedCorsOrigin(origin: string, allowed: string[]): boolean {
   if (allowed.includes(origin) || process.env.CORS_ALLOW_ALL === "true") return true;
   try {
     const host = new URL(origin).hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1") return true;
+    if (host === "localhost" || host === "127.0.0.1" || host === "tauri.localhost" || host === "asset.localhost") {
+      return true;
+    }
     if (host === "chaslay.com" || host.endsWith(".chaslay.com")) return true;
     if (host === "rebornsense.com" || host.endsWith(".rebornsense.com")) return true;
     return false;
@@ -240,6 +243,21 @@ app.get("/api/public/status", async (_req: Request, res: Response) => {
   });
 });
 
+/** Public RebornPOS splash / icon branding (no auth). Used by the desktop splash window. */
+app.get("/api/public/desktop-branding", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const branding = await PlatformSettingsService.getDesktopBranding();
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.json({ success: true, branding });
+  } catch (error) {
+    console.error("Error getting public desktop branding:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load desktop branding",
+    });
+  }
+});
+
 app.use(shopHostMiddleware);
 
 app.use("/api/auth", authRoutes);
@@ -269,6 +287,7 @@ app.use("/api/delivery-zip-rules", deliveryZipRulesRoutes);
 app.use("/api/merchant/floor-plans", floorPlansRoutes);
 app.use("/api/merchant/reservations", reservationsRoutes);
 app.use("/api/merchant/offers", offersRoutes);
+app.use("/api/merchant/pizza-templates", pizzaTemplatesRoutes);
 app.use("/api/merchant/vouchers", vouchersRoutes);
 app.use("/api/merchant/marketing", marketingRoutes);
 app.use("/api/merchant/growth", growthRoutes);

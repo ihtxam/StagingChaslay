@@ -20,6 +20,7 @@ import {
   Bar,
 } from 'recharts';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/auth';
 import { canShowWebPosQuickAction } from '@/lib/permissions';
@@ -133,7 +134,7 @@ export default function Overview() {
       const ovRes = await api.get(`/merchant/reports/overview?${queryParams}`);
       setData(ovRes.data.overview);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('ovLoadFailed'));
+      toastLoadError(error, t('ovLoadFailed'));
     } finally {
       setLoading(false);
     }

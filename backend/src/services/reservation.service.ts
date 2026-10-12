@@ -14,6 +14,10 @@ import { EmailService } from "@/services/email.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { ChaslayFloorService } from "@/services/chaslay-floor.service";
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  floorStatusForReservation,
+  shouldReleaseFloorForReservation,
+} from "@/lib/reservation-floor";
 
 const DAY_KEYS: DayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
@@ -762,6 +766,22 @@ export class ReservationService {
         /* ignore */
       }
     };
+    const releaseFloor = async (
+      tableId: string | null | undefined,
+      reservationStatus: string,
+      reservedAt: Date | string | null | undefined
+    ) => {
+      if (!shouldReleaseFloorForReservation(reservationStatus, reservedAt)) return;
+      await setFloor(tableId, "available");
+    };
+    const paintFloor = async (
+      tableId: string | null | undefined,
+      reservationStatus: string,
+      reservedAt: Date | string | null | undefined
+    ) => {
+      const paint = floorStatusForReservation(reservationStatus, reservedAt);
+      if (paint) await setFloor(tableId, paint);
+    };
 
     if (payload.internalNotes !== undefined) {
       patch.internalNotes = payload.internalNotes;
@@ -790,7 +810,7 @@ export class ReservationService {
           throw new Error("Only pending or confirmed reservations can move to the waitlist");
         }
         patch.status = "waitlist";
-        await setFloor(current.tableId, "available");
+        await releaseFloor(current.tableId, current.status, current.reservedAt);
         break;
       case "reject":
         if (!["pending", "confirmed", "waitlist"].includes(current.status)) {
@@ -800,7 +820,7 @@ export class ReservationService {
         patch.cancelledAt = new Date();
         emailKind = "rejected";
         if (current.tableId) {
-          await setFloor(current.tableId, "available");
+          await releaseFloor(current.tableId, current.status, current.reservedAt);
           patch.tableId = null;
           patch.tableLabel = null;
         }
@@ -846,14 +866,14 @@ export class ReservationService {
         patch.cancelledAt = new Date();
         emailKind = payload.sendRejectionEmail ? "rejected" : "cancelled";
         if (current.tableId) {
-          await setFloor(current.tableId, "available");
+          await releaseFloor(current.tableId, current.status, current.reservedAt);
           patch.tableId = null;
           patch.tableLabel = null;
         }
         break;
       case "no_show":
         patch.status = "no_show";
-        await setFloor(current.tableId, "available");
+        await releaseFloor(current.tableId, current.status, current.reservedAt);
         break;
       case "assign_table": {
         const tableId = payload.tableId;
@@ -865,17 +885,15 @@ export class ReservationService {
           throw new Error("Table is too small for this party");
         }
         if (current.tableId && current.tableId !== tableId) {
-          await setFloor(current.tableId, "available");
+          await releaseFloor(current.tableId, current.status, current.reservedAt);
         }
         patch.tableId = tableId;
         patch.tableLabel = table.label;
-        if (["confirmed", "pending", "seated", "waitlist"].includes(current.status)) {
-          await setFloor(tableId, current.status === "seated" ? "occupied" : "reserved");
-        }
+        await paintFloor(tableId, current.status, current.reservedAt);
         break;
       }
       case "unassign_table":
-        await setFloor(current.tableId, "available");
+        await releaseFloor(current.tableId, current.status, current.reservedAt);
         patch.tableId = null;
         patch.tableLabel = null;
         break;
@@ -933,7 +951,16 @@ export class ReservationService {
     }
 
     const settings = resolveSettings(merchant.reservationSettings);
+    const liveLink = settings.liveTableLink !== false;
     const patch: Record<string, unknown> = { updatedAt: new Date() };
+    const setFloor = async (tableId: string | null | undefined, status: "available" | "occupied" | "reserved" | "dirty") => {
+      if (!liveLink || !tableId) return;
+      try {
+        await FloorPlanService.setTableStatus(merchantId, tableId, status);
+      } catch {
+        /* ignore */
+      }
+    };
 
     if (input.guestName !== undefined) {
       const name = input.guestName.trim().slice(0, 200);
@@ -994,12 +1021,8 @@ export class ReservationService {
     if (input.tableId !== undefined) {
       const tableId = input.tableId || null;
       if (!tableId) {
-        if (current.tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
+        if (current.tableId && shouldReleaseFloorForReservation(current.status, current.reservedAt)) {
+          await setFloor(current.tableId, "available");
         }
         patch.tableId = null;
         patch.tableLabel = null;
@@ -1010,22 +1033,27 @@ export class ReservationService {
         if (Number(table.capacity) < partySize) {
           throw new Error("Table is too small for this party");
         }
-        if (current.tableId && current.tableId !== tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
+        if (
+          current.tableId &&
+          current.tableId !== tableId &&
+          shouldReleaseFloorForReservation(current.status, current.reservedAt)
+        ) {
+          await setFloor(current.tableId, "available");
         }
         patch.tableId = tableId;
         patch.tableLabel = table.label;
-        if (["confirmed", "pending"].includes(current.status)) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, tableId, "reserved");
-          } catch {
-            /* ignore */
-          }
-        }
+        const paint = floorStatusForReservation(current.status, reservedAt);
+        if (paint) await setFloor(tableId, paint);
+      }
+    } else if (patch.reservedAt && current.tableId) {
+      if (
+        shouldReleaseFloorForReservation(current.status, current.reservedAt) &&
+        !floorStatusForReservation(current.status, reservedAt)
+      ) {
+        await setFloor(current.tableId, "available");
+      } else {
+        const paint = floorStatusForReservation(current.status, reservedAt);
+        if (paint) await setFloor(current.tableId, paint);
       }
     }
 

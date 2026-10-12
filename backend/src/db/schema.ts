@@ -450,6 +450,11 @@ export const merchants = pgTable(
      */
     timeSlotPricingSettings: json("time_slot_pricing_settings").$type<Record<string, unknown> | null>(),
     /**
+     * Pizza maker templates:
+     * { templates: [{ id, name, portionType, steps, quantityLevels, freeTopping*, linkedProductIds }] }
+     */
+    pizzaBuilderSettings: json("pizza_builder_settings").$type<Record<string, unknown> | null>(),
+    /**
      * Just Eat / Uber Eats credentials + toggles:
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
      */
@@ -4264,6 +4269,27 @@ export const platformMessageDismissals = pgTable(
   })
 );
 
+/** Published software versions shown in the merchant panel sidebar. */
+export const softwareReleases = pgTable(
+  "software_releases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    version: varchar("version", { length: 40 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body").notNull().default(""),
+    product: varchar("product", { length: 30 }).notNull().default("all"),
+    isPublished: boolean("is_published").notNull().default(true),
+    publishedAt: timestamp("published_at").defaultNow().notNull(),
+    createdBySuperadminId: uuid("created_by_superadmin_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    publishedIdx: index("software_releases_published_idx").on(table.isPublished, table.publishedAt),
+    versionIdx: index("software_releases_version_idx").on(table.version),
+  })
+);
+
 // ============================================================================
 // SUPPORT TICKETS
 // ============================================================================
@@ -4276,10 +4302,10 @@ export const supportTickets = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     ticketNumber: varchar("ticket_number", { length: 20 }).notNull(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
+    merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "cascade" }),
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
+    /** merchant = store ticket; reseller = agency-owned ticket to superadmin. */
+    requesterRole: varchar("requester_role", { length: 20 }).notNull().default("merchant"),
     category: varchar("category", { length: 30 }).notNull().default("technical"),
     subcategory: varchar("subcategory", { length: 80 }),
     subject: varchar("subject", { length: 255 }).notNull(),
@@ -4320,6 +4346,27 @@ export const supportTicketMessages = pgTable(
   (table) => ({
     ticketIdx: index("support_ticket_messages_ticket_idx").on(table.ticketId),
     createdIdx: index("support_ticket_messages_created_idx").on(table.createdAt),
+  })
+);
+
+export const publishedPullRequests = pgTable(
+  "published_pull_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: integer("number").notNull(),
+    title: varchar("title", { length: 500 }).notNull(),
+    body: text("body").notNull().default(""),
+    htmlUrl: varchar("html_url", { length: 500 }).notNull().default(""),
+    author: varchar("author", { length: 120 }).notNull().default(""),
+    baseBranch: varchar("base_branch", { length: 80 }).notNull().default(""),
+    mergedAt: timestamp("merged_at").notNull(),
+    syncedAt: timestamp("synced_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    numberIdx: uniqueIndex("published_pull_requests_number_idx").on(table.number),
+    mergedIdx: index("published_pull_requests_merged_idx").on(table.mergedAt),
   })
 );
 

@@ -100,6 +100,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_checkout_settings jsonb",
   time_slot_pricing_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS time_slot_pricing_settings jsonb",
+  pizza_builder_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pizza_builder_settings jsonb",
   pos_print_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_print_settings jsonb",
   table_qr_settings:
@@ -1152,8 +1154,9 @@ const TABLE_PATCHES: string[] = [
   `CREATE TABLE IF NOT EXISTS support_tickets (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_number varchar(20) NOT NULL UNIQUE,
-    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id uuid REFERENCES merchants(id) ON DELETE CASCADE,
     reseller_id uuid REFERENCES resellers(id) ON DELETE SET NULL,
+    requester_role varchar(20) NOT NULL DEFAULT 'merchant',
     category varchar(30) NOT NULL DEFAULT 'technical',
     subcategory varchar(80),
     subject varchar(255) NOT NULL,
@@ -1183,6 +1186,8 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx ON support_ticket_messages(ticket_id)`,
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_created_idx ON support_ticket_messages(created_at)`,
   `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS merchant_visible boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE support_tickets ALTER COLUMN merchant_id DROP NOT NULL`,
+  `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS requester_role varchar(20) NOT NULL DEFAULT 'merchant'`,
   `CREATE TABLE IF NOT EXISTS email_send_log (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid REFERENCES merchants(id) ON DELETE SET NULL,
@@ -1378,6 +1383,35 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_code_uq ON reservation_growth_campaigns(merchant_id, code)`,
   `CREATE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_idx ON reservation_growth_campaigns(merchant_id, active)`,
+  `CREATE TABLE IF NOT EXISTS software_releases (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    version varchar(40) NOT NULL,
+    title varchar(255) NOT NULL,
+    body text NOT NULL DEFAULT '',
+    product varchar(30) NOT NULL DEFAULT 'all',
+    is_published boolean NOT NULL DEFAULT true,
+    published_at timestamptz NOT NULL DEFAULT now(),
+    created_by_superadmin_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS software_releases_published_idx ON software_releases(is_published, published_at)`,
+  `CREATE INDEX IF NOT EXISTS software_releases_version_idx ON software_releases(version)`,
+  `CREATE TABLE IF NOT EXISTS published_pull_requests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    number integer NOT NULL,
+    title varchar(500) NOT NULL,
+    body text NOT NULL DEFAULT '',
+    html_url varchar(500) NOT NULL DEFAULT '',
+    author varchar(120) NOT NULL DEFAULT '',
+    base_branch varchar(80) NOT NULL DEFAULT '',
+    merged_at timestamptz NOT NULL,
+    synced_at timestamptz NOT NULL DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS published_pull_requests_number_idx ON published_pull_requests(number)`,
+  `CREATE INDEX IF NOT EXISTS published_pull_requests_merged_idx ON published_pull_requests(merged_at)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */

@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react';
 import api from '@/lib/api';
+import { isMissingAuthorizationError } from '@/lib/reservations-auth-error';
 import { useI18n } from '@/lib/i18n';
 import { STORE_HOURS_DAYS } from '@/lib/store-hours';
 import {
@@ -91,6 +92,10 @@ export default function SettingsReservationsTab() {
       setSettings(res.data.config?.settings);
       if (res.data.config?.hours) setDineInHours(res.data.config.hours);
     } catch (e: any) {
+      if (isMissingAuthorizationError(e)) {
+        setLoadError(t('reservationsUnlicensedHint'));
+        return;
+      }
       const msg = e.response?.data?.error || t('cmsLoadFailed');
       setLoadError(msg);
       toast.error(msg);

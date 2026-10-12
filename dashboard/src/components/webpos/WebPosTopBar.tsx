@@ -468,7 +468,7 @@ export default function WebPosTopBar({
           <div className="relative" ref={settingsRef}>
             <button
               type="button"
-              className="relative z-[52] inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
+              className="relative z-[80] inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
               aria-expanded={settingsOpen}
               aria-label={t('webPosMoreShort')}
               onClick={() => {

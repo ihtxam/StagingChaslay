@@ -24,6 +24,7 @@ import { BARCODE_FIELD_INPUT_CLASS } from '@/lib/barcode-wedge';
 import ProductInventoryExpiryPanel from '@/components/merchant/ProductInventoryExpiryPanel';
 import { loadItems, type InvItem } from '@/pages/merchant/inventory/shared';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
 import { isCateringLicensed } from '@/lib/catering-addon';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
@@ -537,7 +538,7 @@ export default function Products() {
         /* optional */
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('failedLoadProducts'));
+      toastLoadError(error, t('failedLoadProducts'));
     } finally {
       setLoading(false);
     }

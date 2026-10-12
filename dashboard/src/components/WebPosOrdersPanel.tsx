@@ -35,6 +35,7 @@ import {
   canAdminCollectPayment,
   canCancelPosAwaitingOrder,
   canCollectPayment,
+  canEditPayment,
   canMarkReadyOrder,
   canShowAwaitingPaymentBadge,
   showsKitchenFulfillmentStages,
@@ -343,7 +344,7 @@ function canCancelOrder(o: PosOrder): boolean {
   const status = (o.status || '').toLowerCase();
   const pay = (o.paymentStatus || '').toLowerCase();
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
-  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(pay)) return false;
+  if (['cancelled', 'refunded', 'completed', 'paid', 'partially_refunded'].includes(pay)) return false;
   return true;
 }
 
@@ -364,20 +365,6 @@ function matchesChannelFilter(
       ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson })
       : o.channel || (o as { fulfillmentChannel?: string | null }).fulfillmentChannel || 'takeaway';
   return ch === filter;
-}
-
-function canEditPayment(o: PosOrder): boolean {
-  const status = (o.status || '').toLowerCase();
-  const pay = (o.paymentStatus || '').toLowerCase();
-  if (['cancelled', 'refunded'].includes(status) || ['cancelled', 'refunded'].includes(pay)) {
-    return false;
-  }
-  return (
-    status === 'completed' ||
-    status === 'partially_refunded' ||
-    pay === 'completed' ||
-    pay === 'partially_refunded'
-  );
 }
 
 /** Pay-later / awaiting_payment POS orders that still need collection at pickup. */
@@ -2419,13 +2406,29 @@ export default function WebPosOrdersPanel({
                       compact
                     />
                   </div>
-                  {selectedOrder.paymentMethod ? (
-                    <p className="mt-2 text-sm text-stone-600">
-                      {t('webPosPaymentMethod')}:{' '}
-                      <span className="font-semibold">
-                        {formatOrderPaymentDisplay(selectedOrder, t, locale)}
-                      </span>
-                    </p>
+                  {selectedOrder.paymentMethod ||
+                  (canEditPayment(selectedOrder) && !isInvoiceOrder(selectedOrder) && !isOnlineMode) ? (
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      {selectedOrder.paymentMethod ? (
+                        <p className="min-w-0 text-sm text-stone-600">
+                          {t('webPosPaymentMethod')}:{' '}
+                          <span className="font-semibold">
+                            {formatOrderPaymentDisplay(selectedOrder, t, locale)}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="min-w-0 text-sm text-stone-500">{t('webPosPaymentMethod')}</p>
+                      )}
+                      {canEditPayment(selectedOrder) && !isInvoiceOrder(selectedOrder) && !isOnlineMode ? (
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                          onClick={() => startEditPayment(selectedOrder)}
+                        >
+                          {t('webPosEditPayment')}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                   {selectedOrder.cancelReason ? (
                     <p className="mt-2 text-sm text-rose-700">

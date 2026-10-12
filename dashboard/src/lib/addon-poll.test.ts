@@ -18,6 +18,12 @@ assert.equal(
   isAddonForbiddenStatus({ response: { status: 400, data: { code: 'ODS_ADDON_REQUIRED' } } }),
   true
 );
+assert.equal(
+  isAddonForbiddenStatus({
+    response: { status: 400, data: { code: 'INVENTORY_ADDON_REQUIRED' } },
+  }),
+  true
+);
 assert.equal(isAddonForbiddenStatus({ response: { status: 500 } }), false);
 assert.equal(isAddonForbiddenStatus(new Error('network')), false);
 

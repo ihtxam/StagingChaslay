@@ -31,6 +31,10 @@ import path from "path";
 import { getDb, schema } from "@/db";
 import { publicShopDbError } from "@/lib/public-shop-error";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
+import {
+  merchantFacingBillingPayload,
+  platformPanelLocale,
+} from "@/lib/platform-adyen-credentials";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import posSessionsRoutes from "@/routes/pos-sessions.routes";
 import locationsRoutes from "@/routes/locations.routes";
@@ -1827,6 +1831,22 @@ router.get("/me", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/software-releases
+ * Published software version history for the merchant sidebar page.
+ */
+router.get("/software-releases", async (_req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const releases = await SoftwareReleaseService.listPublished();
+    res.json({ success: true, latest: releases[0] || null, releases });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load software updates",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/settings
  * Get merchant settings
  */
@@ -2021,6 +2041,14 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           }
         })(),
         entitlement,
+        pizzaTemplates: await (async () => {
+          try {
+            const { PizzaTemplatesService } = await import("@/services/pizza-templates.service");
+            return await PizzaTemplatesService.list(merchantId);
+          } catch {
+            return [];
+          }
+        })(),
       },
     });
   } catch (error) {
@@ -3797,9 +3825,9 @@ router.post("/billing/checkout", async (req: Request, res: Response) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Error starting billing checkout:", error);
-    res.status(400).json({
-      error: error instanceof Error ? error.message : "Failed to start checkout",
-    });
+    const locale = platformPanelLocale(String(req.headers["accept-language"] || ""));
+    const payload = merchantFacingBillingPayload(error, locale, "Failed to start checkout");
+    res.status(payload.code === "BILLING_UNAVAILABLE" ? 503 : 400).json(payload);
   }
 });
 
@@ -3839,9 +3867,9 @@ router.post("/billing/addon/checkout", async (req: Request, res: Response) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Error starting addon checkout:", error);
-    res.status(400).json({
-      error: error instanceof Error ? error.message : "Failed to start add-on checkout",
-    });
+    const locale = platformPanelLocale(String(req.headers["accept-language"] || ""));
+    const payload = merchantFacingBillingPayload(error, locale, "Failed to start add-on checkout");
+    res.status(payload.code === "BILLING_UNAVAILABLE" ? 503 : 400).json(payload);
   }
 });
 

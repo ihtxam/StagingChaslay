@@ -43,6 +43,7 @@ import DesktopTimingsPage from './DesktopTimingsPage';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
+import SoftwareUpdates from './SoftwareUpdates';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import Billing from './Billing';
 import OnlineShop from './OnlineShop';
@@ -156,6 +157,7 @@ import HqDashboardPage from './HqDashboard';
 import BulkPricingPage from './BulkPricingPage';
 import ScheduledMenusPage from './ScheduledMenusPage';
 import PizzaBuilderPage from './PizzaBuilderPage';
+import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
 import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
@@ -253,6 +255,7 @@ function MerchantShell() {
   const [orderCenterEnabled, setOrderCenterEnabled] = useState(true);
   const [productFlagsReady, setProductFlagsReady] = useState(false);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
+  const [latestSoftwareVersion, setLatestSoftwareVersion] = useState<string | null>(null);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -376,6 +379,7 @@ function MerchantShell() {
     let cancelled = false;
     const applySettings = (settings: {
       name?: string | null;
+      businessName?: string | null;
       shopLogoUrl?: string | null;
       posPrintSettings?: { receiptLogoUrl?: string | null } | null;
       editionFeatures?: EditionFeatureKey[] | null;
@@ -396,6 +400,7 @@ function MerchantShell() {
       cateringAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
+      latestSoftwareRelease?: { version?: string | null } | null;
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
@@ -409,13 +414,19 @@ function MerchantShell() {
       setKioskLicensed(isKioskLicensed(settings));
       setCateringLicensed(isCateringLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
-      setMerchantShopName(settings?.name?.trim() || pinGateSessionMerchantName(user) || null);
+      setMerchantShopName(
+        settings?.name?.trim() ||
+          settings?.businessName?.trim() ||
+          pinGateSessionMerchantName(user) ||
+          null
+      );
       setMerchantShopLogoUrl(
         settings?.shopLogoUrl?.trim() ||
           settings?.posPrintSettings?.receiptLogoUrl?.trim() ||
           null
       );
       setPanelNavHidden(parsePanelNavHidden(settings?.panelNavHidden));
+      setLatestSoftwareVersion(settings?.latestSoftwareRelease?.version?.trim() || null);
       setProductFlagsReady(true);
     };
     const load = () => {
@@ -1019,6 +1030,17 @@ function MerchantShell() {
     ...(allow('/merchant/support')
       ? [{ label: t('support'), path: '/merchant/support', icon: '🛟' }]
       : []),
+    ...(allow('/merchant/updates')
+      ? [
+          {
+            label: latestSoftwareVersion
+              ? `${t('softwareUpdatesNav')} · v${latestSoftwareVersion}`
+              : t('softwareUpdatesNav'),
+            path: '/merchant/updates',
+            icon: '🆕',
+          },
+        ]
+      : []),
   ]
     .filter(Boolean)
     .filter((entry) => {
@@ -1285,13 +1307,16 @@ function MerchantShell() {
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
+            storeName={merchantShopName}
             registerDisplay={registerDisplay}
             showAcceptingMenu={!isStorekeeperRoute}
           />
         )}
 
         {!hideChrome ? <PlatformStatusBannerSlot /> : null}
-        {!hideChrome && allowInventory('/merchant/inventory') ? <InventoryExpiryAlerts /> : null}
+        {!hideChrome && productFlagsReady && allowInventory('/merchant/inventory') ? (
+          <InventoryExpiryAlerts licensed={inventoryLicensed} />
+        ) : null}
 
         <main
           className={
@@ -1556,6 +1581,22 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
+            <Route
+              path="products/pizza-builder/new"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products/pizza-builder/:templateId"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
+                </PanelRouteGuard>
+              }
+            />
             <Route path="products/time-slot-pricing" element={<Navigate to={MERCHANT_SCHEDULED_MENUS_PATH} replace />} />
             <Route path="hq/time-slot-pricing" element={<Navigate to={MERCHANT_SCHEDULED_MENUS_PATH} replace />} />
             <Route path="signage" element={<Navigate to="/merchant/settings?tab=signage" replace />} />
@@ -1608,6 +1649,14 @@ function MerchantShell() {
             />
             <Route path="users" element={<LegacyUsersRedirect />} />
             <Route path="guides" element={<Navigate to="/merchant/support" replace />} />
+            <Route
+              path="updates"
+              element={
+                <PanelRouteGuard path="/merchant/updates" allow={allow}>
+                  <SoftwareUpdates />
+                </PanelRouteGuard>
+              }
+            />
             <Route
               path="support"
               element={

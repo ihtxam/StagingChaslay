@@ -1,4 +1,6 @@
+import { APP_VERSION } from '@/lib/app-version';
 import { MARKETING_ORIGIN, REBORN_MARK_R_WHITE } from '@/lib/brand';
+import { useI18n } from '@/lib/i18n';
 
 type Variant = 'panel' | 'shop' | 'login';
 
@@ -14,9 +16,11 @@ type Props = {
   className?: string;
 };
 
-/** Minimal platform attribution — entire block links to rebornsense.com. */
+/** Minimal platform attribution — version sits on the same line as the R mark. */
 export default function RebornPoweredByFooter({ variant = 'panel', className = '' }: Props) {
+  const { t } = useI18n();
   const rootClass = `${variantClass[variant]} ${className}`.trim();
+  const versionLabel = `v${APP_VERSION}`;
 
   return (
     <footer className={rootClass}>
@@ -24,10 +28,10 @@ export default function RebornPoweredByFooter({ variant = 'panel', className = '
         href={MARKETING_ORIGIN}
         target="_blank"
         rel="noopener noreferrer"
-        className="reborn-powered-by__link mx-auto flex w-fit max-w-full items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium tracking-wide sm:text-xs"
-        aria-label="Powered by Reborn — rebornsense.com"
+        className="reborn-powered-by__link mx-auto flex w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-[11px] font-medium tracking-wide sm:text-xs"
+        aria-label={`${t('poweredBy')} Reborn ${versionLabel} — rebornsense.com`}
       >
-        <span className="shrink-0">Powered by:</span>
+        <span className="shrink-0">{t('poweredBy')}</span>
         <img
           src={REBORN_MARK_R_WHITE}
           alt="Reborn"
@@ -37,6 +41,9 @@ export default function RebornPoweredByFooter({ variant = 'panel', className = '
           loading="lazy"
           decoding="async"
         />
+        <span className="reborn-powered-by__version shrink-0 tabular-nums opacity-70" title={versionLabel}>
+          {versionLabel}
+        </span>
       </a>
     </footer>
   );

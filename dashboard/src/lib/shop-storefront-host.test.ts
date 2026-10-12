@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import {
+  isMerchantPanelPath,
   isShopCustomerSurface,
   isShopStorefrontBoot,
   isShopStorefrontHost,
@@ -22,6 +23,28 @@ assert.equal(isShopStorefrontHost('app.rebornsense.com', '/merchant'), false);
 assert.equal(isShopStorefrontHost('polacafe.rebornsense.com', '/'), true);
 assert.equal(isShopCustomerSurface('/shop/polacafe', 'app.rebornsense.com'), true);
 assert.equal(isShopCustomerSurface('/merchant', 'app.rebornsense.com'), false);
+assert.equal(isMerchantPanelPath('/merchant/sales/reservations'), true);
+assert.equal(isMerchantPanelPath('/merchant/settings'), true);
+assert.equal(isMerchantPanelPath('/reservations'), false);
+assert.equal(
+  isShopCustomerSurface('/merchant/sales/reservations', 'app.rebornsense.com'),
+  false,
+  'merchant reservations must not be treated as public shop'
+);
+assert.equal(
+  isShopCustomerSurface('/merchant/settings', 'app.rebornsense.com'),
+  false,
+  'settings reservations tab must keep merchant auth'
+);
+assert.equal(
+  isShopCustomerSurface('/reservations', 'brazza.rebornsense.com'),
+  true,
+  'public shop /reservations stays a customer surface'
+);
+assert.equal(
+  isShopCustomerSurface('/shop/brazza/reservations', 'app.rebornsense.com'),
+  true
+);
 
 // Boot flag from inline index.html must win before the JS bundle loads (stale SW cache scenario).
 const prevBoot = (globalThis as typeof globalThis & { __REBORN_SHOP_STOREFRONT__?: boolean })

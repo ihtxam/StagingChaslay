@@ -8,12 +8,18 @@ const PLATFORM_SUBDOMAINS = new Set(['app', 'admin', 'api', 'order', 'shop', 'pa
 const SHOP_CUSTOMER_SEGMENTS =
   'menu|checkout|order|account|gift-cards|gift|reservations|table|register|forgot-password|pages';
 
+/** Panel routes reuse shop segment names (e.g. /merchant/sales/reservations). */
+export function isMerchantPanelPath(pathname: string): boolean {
+  return /^\/(?:merchant|superadmin|reseller|agency)(\/|$)/.test(String(pathname || ''));
+}
+
 /** True when the current URL is a customer shop surface (not merchant panel). */
 export function isShopCustomerSurface(
   pathname = typeof window !== 'undefined' ? window.location.pathname : '',
   hostname = typeof window !== 'undefined' ? window.location.hostname : ''
 ): boolean {
   const path = String(pathname || '');
+  if (isMerchantPanelPath(path)) return false;
   if (/^\/shop\/[^/]+(\/|$)/.test(path)) return true;
   if (new RegExp(`/(?:${SHOP_CUSTOMER_SEGMENTS})(?:/|$)`).test(path)) return true;
   if (new RegExp(`^/[^/]+/(?:${SHOP_CUSTOMER_SEGMENTS})(?:/|$)`).test(path)) return true;
