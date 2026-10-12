@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { adyenDropinCreateConfig, normalizeAdyenPaymentSession } from './adyen-checkout';
+import {
+  adyenDropinCreateConfig,
+  merchantBillingUserMessage,
+  normalizeAdyenPaymentSession,
+} from './adyen-checkout';
 
 describe('normalizeAdyenPaymentSession', () => {
   it('passes storePaymentMethod for logged-in shop sessions', () => {
@@ -46,5 +50,27 @@ describe('adyenDropinCreateConfig', () => {
         holderNameRequired: false,
       },
     });
+  });
+});
+
+describe('merchantBillingUserMessage', () => {
+  const fallback = 'Billing is temporarily unavailable. Please try again later.';
+
+  it('hides Superadmin Adyen recipes from merchants', () => {
+    const recipe =
+      'Adyen POST /sessions rejected the platform credentials (Unauthorized, TEST). In Superadmin → Settings → Payment (Adyen), set all three from the same TEST Adyen account.';
+    expect(merchantBillingUserMessage(new Error(recipe), fallback)).toBe(fallback);
+    expect(
+      merchantBillingUserMessage(
+        { response: { data: { code: 'BILLING_UNAVAILABLE', error: recipe } } },
+        fallback
+      )
+    ).toBe(fallback);
+  });
+
+  it('keeps unrelated billing errors', () => {
+    expect(
+      merchantBillingUserMessage(new Error('This plan is not available for purchase'), fallback)
+    ).toBe('This plan is not available for purchase');
   });
 });

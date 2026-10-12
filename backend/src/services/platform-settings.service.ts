@@ -1,6 +1,16 @@
+import axios from "axios";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { liveCheckoutApiBase } from "@/lib/adyen-checkout-env";
+import {
+  diagnosePlatformAdyenBundle,
+  formatAdyenCheckoutApiError,
+  normalizeAdyenEnvironment,
+  pickPlatformAdyenSource,
+  resolvePickedPlatformAdyen,
+  suspectedFieldFromAdyenHttp,
+  validateAdyenClientKey,
+  validatePlatformAdyenApiKey,
+} from "@/lib/platform-adyen-credentials";
 import {
   PLATFORM_LEGAL_SETTING_KEYS,
   resolvePlatformLegalUrls,
@@ -13,6 +23,12 @@ import {
   resolveDesktopBranding,
   type DesktopBranding,
 } from "@/lib/desktop-branding";
+
+export {
+  adyenDropinEnvironment,
+  formatAdyenCheckoutApiError,
+  validateAdyenClientKey,
+} from "@/lib/platform-adyen-credentials";
 
 export const PLATFORM_ADYEN_KEYS = {
   apiKey: "adyen_api_key",
@@ -62,133 +78,6 @@ function maskSecret(value?: string | null) {
   return `${value.slice(0, 4)}••••${value.slice(-4)}`;
 }
 
-function normalizeAdyenEnvironment(value?: string | null): "TEST" | "LIVE" {
-  return value?.toUpperCase() === "LIVE" ? "LIVE" : "TEST";
-}
-
-/** Client key for Drop-in (test_… / live_…), not the web service API key (AQE…). */
-export function validateAdyenClientKey(
-  clientKey: string,
-  environment?: string | null
-): string {
-  const key = clientKey.trim();
-  if (!key) {
-    throw new Error(
-      "Platform Adyen client key is missing. Set it in Superadmin → Settings → Payment (Adyen)."
-    );
-  }
-  if (key.startsWith("AQE") || key.startsWith("AQE0")) {
-    throw new Error(
-      "Invalid client key: this looks like an Adyen API key. Use the Client Key from Customer Area → Developers → Client settings (starts with test_ or live_)."
-    );
-  }
-  if (!/^(test|live)_/.test(key)) {
-    throw new Error(
-      "Invalid Adyen client key. It must start with test_ (test environment) or live_ (live environment)."
-    );
-  }
-  const env = normalizeAdyenEnvironment(environment);
-  if (env === "TEST" && !key.startsWith("test_")) {
-    throw new Error(
-      "Environment is TEST but the client key is not a test key (must start with test_)."
-    );
-  }
-  if (env === "LIVE" && !key.startsWith("live_")) {
-    throw new Error(
-      "Environment is LIVE but the client key is not a live key (must start with live_)."
-    );
-  }
-  return key;
-}
-
-export function adyenDropinEnvironment(clientKey: string): "live" | "test" {
-  return clientKey.trim().startsWith("live_") ? "live" : "test";
-}
-
-function adyenCheckoutApiBase(dropinEnv: "live" | "test"): string {
-  if (dropinEnv === "live") {
-    return liveCheckoutApiBase();
-  }
-  return (
-    process.env.PLATFORM_ADYEN_API_BASE ||
-    process.env.ADYEN_API_BASE ||
-    "https://checkout-test.adyen.com/v71"
-  );
-}
-
-/** Platform Drop-in client key — never fall back to merchant ADYEN_CLIENT_ID. */
-function resolvePlatformClientKeyFromEnv(): string {
-  return (
-    process.env.PLATFORM_ADYEN_CLIENT_KEY ||
-    process.env.ADYEN_CLIENT_KEY ||
-    ""
-  );
-}
-
-function resolvePlatformApiKeyFromEnv(): string {
-  return process.env.PLATFORM_ADYEN_API_KEY || process.env.ADYEN_API_KEY || "";
-}
-
-function resolvePlatformMerchantAccountFromEnv(): string {
-  return (
-    process.env.PLATFORM_ADYEN_MERCHANT_ACCOUNT ||
-    process.env.ADYEN_MERCHANT_ACCOUNT ||
-    ""
-  );
-}
-
-/** Map Adyen Checkout API HTTP errors to actionable Superadmin guidance. */
-export function formatAdyenCheckoutApiError(
-  error: unknown,
-  context?: { apiBase?: string; merchantAccount?: string; phase?: "sessions" }
-): string {
-  const fallback = "Failed to start Adyen checkout";
-  if (!error || typeof error !== "object") {
-    return error instanceof Error ? error.message : fallback;
-  }
-
-  const e = error as {
-    response?: { status?: number; data?: Record<string, unknown> };
-    message?: string;
-  };
-  const status = e.response?.status;
-  const data = e.response?.data || {};
-  const adyenMsg = typeof data.message === "string" ? data.message : "";
-  const errorCode = typeof data.errorCode === "string" ? data.errorCode : "";
-  const errorType = typeof data.errorType === "string" ? data.errorType : "";
-  const isUnauthorized =
-    status === 401 ||
-    errorCode === "000" ||
-    /unauthorized/i.test(adyenMsg) ||
-    /HTTP Status Response - Unauthorized/i.test(adyenMsg);
-
-  if (isUnauthorized) {
-    const envHint = context?.apiBase?.includes("live") ? "LIVE" : "TEST";
-    const keyPrefix = envHint === "LIVE" ? "live_" : "test_";
-    const phase = context?.phase === "sessions" ? "POST /sessions" : "Checkout API";
-    return (
-      `Adyen ${phase} rejected the platform credentials (Unauthorized, ${envHint}). ` +
-      `In Superadmin → Settings → Payment (Adyen), set all three from the same ${envHint} Adyen account: ` +
-      `(1) Web service API key (starts with AQE…, not ${keyPrefix}), ` +
-      `(2) merchant account "${context?.merchantAccount || "exact name from Customer Area"}", ` +
-      `(3) client key (${keyPrefix}…). ` +
-      `Do not mix merchant shop credentials (Settings → Payments) with platform subscription credentials.`
-    );
-  }
-
-  if (status === 403 || errorCode === "901" || /not allowed/i.test(adyenMsg)) {
-    return (
-      `Adyen permission denied for merchant account "${context?.merchantAccount || "?"}". ` +
-      `Ensure the API key has Checkout webservice / Create payment session permission in Adyen Customer Area.`
-    );
-  }
-
-  if (adyenMsg) return adyenMsg;
-  if (errorType && errorCode) return `${errorType} (${errorCode})`;
-  if (e.message) return e.message;
-  return fallback;
-}
-
 export class PlatformSettingsService {
   static async get(key: string): Promise<string | null> {
     const db = getDb();
@@ -232,29 +121,35 @@ export class PlatformSettingsService {
   /** Public/safe view for superadmin UI (secrets masked) */
   static async getAdyenSettingsPublic() {
     const s = await this.getAdyenSettings();
-    const hasDbAny = !!(s.apiKey || s.merchantAccount || s.clientKey);
-    const envFallback = !hasDbAny && !!resolvePlatformApiKeyFromEnv();
+    const picked = pickPlatformAdyenSource(s, process.env);
+    const health = diagnosePlatformAdyenBundle(picked);
     let configured = false;
+    let resolveError: string | null = null;
     try {
       await this.resolvePlatformAdyenCredentials();
       configured = true;
-    } catch {
+    } catch (error) {
       configured = false;
+      resolveError = error instanceof Error ? error.message : String(error);
     }
-    const displayClientKey = s.clientKey || resolvePlatformClientKeyFromEnv() || "";
-    const displayApiKey = s.apiKey || resolvePlatformApiKeyFromEnv();
+    const displayClientKey = picked.values.clientKey;
+    const displayApiKey = picked.values.apiKey;
     return {
-      merchantAccount: s.merchantAccount || resolvePlatformMerchantAccountFromEnv() || "",
+      merchantAccount: picked.values.merchantAccount,
       clientKey: displayClientKey,
-      clientKeySet: !!(s.clientKey || resolvePlatformClientKeyFromEnv()),
+      clientKeySet: !!displayClientKey,
       clientKeyMasked: maskSecret(displayClientKey),
-      environment: (s.environment || process.env.PLATFORM_ADYEN_ENVIRONMENT || "TEST").toUpperCase(),
+      environment: picked.values.environment,
       apiKeyMasked: maskSecret(displayApiKey),
-      apiKeySet: !!(s.apiKey || resolvePlatformApiKeyFromEnv()),
-      hmacKeyMasked: maskSecret(s.hmacKey || process.env.PLATFORM_ADYEN_HMAC_KEY),
-      hmacKeySet: !!(s.hmacKey || process.env.PLATFORM_ADYEN_HMAC_KEY),
-      usingEnvFallback: envFallback,
+      apiKeySet: !!displayApiKey,
+      hmacKeyMasked: maskSecret(picked.values.hmacKey),
+      hmacKeySet: !!picked.values.hmacKey,
+      usingEnvFallback: picked.source === "platform_env",
+      source: picked.source,
+      shopEnvIgnored: picked.ignoredShop,
       configured,
+      resolveError,
+      health,
     };
   }
 
@@ -289,7 +184,7 @@ export class PlatformSettingsService {
       }
     }
     if (input.apiKey !== undefined && input.apiKey.trim() && !input.apiKey.includes("••••")) {
-      await this.set(PLATFORM_ADYEN_KEYS.apiKey, input.apiKey.trim());
+      await this.set(PLATFORM_ADYEN_KEYS.apiKey, validatePlatformAdyenApiKey(input.apiKey));
     }
     if (input.hmacKey !== undefined && input.hmacKey.trim() && !input.hmacKey.includes("••••")) {
       await this.set(PLATFORM_ADYEN_KEYS.hmacKey, input.hmacKey.trim());
@@ -506,83 +401,137 @@ export class PlatformSettingsService {
 
   /**
    * Resolve platform Adyen credentials for subscription checkout.
-   * Uses a complete DB bundle or a complete env bundle — never mixes the two (causes 401 Unauthorized).
+   * Superadmin DB (complete) or PLATFORM_ADYEN_* env only — never shop ADYEN_* or merchant Settings → Payments.
    */
   static async resolvePlatformAdyenCredentials() {
     const s = await this.getAdyenSettings();
-    const hasDbApi = !!s.apiKey?.trim();
-    const hasDbMerchant = !!s.merchantAccount?.trim();
-    const hasDbClient = !!s.clientKey?.trim();
-    const hasDbAny = hasDbApi || hasDbMerchant || hasDbClient;
+    return resolvePickedPlatformAdyen(pickPlatformAdyenSource(s, process.env));
+  }
 
-    const envApiKey = resolvePlatformApiKeyFromEnv();
-    const envMerchant = resolvePlatformMerchantAccountFromEnv();
-    const envClientKey = resolvePlatformClientKeyFromEnv();
+  /**
+   * Superadmin health check: local diagnosis + a TEST/LIVE /sessions ping.
+   * Never returns raw secrets.
+   */
+  static async pingPlatformAdyenSession() {
+    const s = await this.getAdyenSettings();
+    const picked = pickPlatformAdyenSource(s, process.env);
+    const health = diagnosePlatformAdyenBundle(picked);
 
-    let apiKey: string;
-    let merchantAccount: string;
-    let clientKey: string;
-    let environment: "TEST" | "LIVE";
-
-    if (hasDbAny) {
-      if (!hasDbApi || !hasDbMerchant || !hasDbClient) {
-        const missing: string[] = [];
-        if (!hasDbApi) missing.push("API key");
-        if (!hasDbMerchant) missing.push("merchant account");
-        if (!hasDbClient) missing.push("client key");
-        throw new Error(
-          `Platform Adyen credentials are incomplete in Superadmin settings (missing: ${missing.join(", ")}). ` +
-            `Set merchant account, API key, and client key together under Superadmin → Settings → Payment (Adyen). ` +
-            `Mixed database + environment credentials cause Adyen Unauthorized errors.`
-        );
-      }
-      apiKey = s.apiKey!.trim();
-      merchantAccount = s.merchantAccount!.trim();
-      clientKey = s.clientKey!.trim();
-      environment = normalizeAdyenEnvironment(s.environment);
-    } else {
-      apiKey = envApiKey.trim();
-      merchantAccount = envMerchant.trim();
-      clientKey = envClientKey.trim();
-      environment = normalizeAdyenEnvironment(process.env.PLATFORM_ADYEN_ENVIRONMENT);
+    if (picked.missing.length || health.issues.some((issue) => issue.field !== "bundle")) {
+      return {
+        ok: false,
+        pinged: false,
+        ...health,
+        apiBaseHost: "",
+        httpStatus: null as number | null,
+      };
     }
 
-    const hmacKey = s.hmacKey || process.env.PLATFORM_ADYEN_HMAC_KEY || "";
+    let creds: Awaited<ReturnType<typeof resolvePickedPlatformAdyen>>;
+    try {
+      creds = resolvePickedPlatformAdyen(picked);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        pinged: false,
+        ...health,
+        issues: [...health.issues, { field: "bundle" as const, message }],
+        recipe: message,
+        apiBaseHost: "",
+        httpStatus: null as number | null,
+      };
+    }
 
-    if (!apiKey || !merchantAccount) {
-      throw new Error(
-        "Platform Adyen is not configured. Set it in Superadmin → Settings → Payment (Adyen)."
+    let apiBaseHost = "";
+    try {
+      apiBaseHost = new URL(creds.apiBase).host;
+    } catch {
+      apiBaseHost = creds.apiBase;
+    }
+
+    try {
+      const response = await axios.post(
+        `${creds.apiBase}/sessions`,
+        {
+          amount: { value: 100, currency: "CHF" },
+          merchantAccount: creds.merchantAccount,
+          reference: `plat-ping-${Date.now()}`,
+          returnUrl: "https://app.rebornsense.com/superadmin/settings",
+          channel: "Web",
+          countryCode: "CH",
+        },
+        {
+          headers: {
+            "x-api-key": creds.apiKey,
+            "Content-Type": "application/json",
+          },
+          timeout: 15000,
+        }
       );
+      const sessionId = typeof response.data?.id === "string" ? response.data.id : "";
+      console.info("[platform-adyen] session ping ok", {
+        environment: creds.environment,
+        merchantAccount: creds.merchantAccount,
+        apiBaseHost,
+        sessionIdPrefix: sessionId.slice(0, 8),
+      });
+      return {
+        ok: true,
+        pinged: true,
+        ...health,
+        ready: true,
+        suspectedField: null,
+        recipe: "",
+        environment: creds.environment,
+        merchantAccount: creds.merchantAccount,
+        apiBaseHost,
+        httpStatus: response.status,
+      };
+    } catch (error) {
+      const axiosError = error as {
+        response?: { status?: number };
+        message?: string;
+      };
+      const httpStatus = axiosError.response?.status ?? null;
+      const recipe = formatAdyenCheckoutApiError(error, {
+        apiBase: creds.apiBase,
+        merchantAccount: creds.merchantAccount,
+        phase: "sessions",
+      });
+      const suspectedField = suspectedFieldFromAdyenHttp(httpStatus ?? undefined);
+      console.error("[platform-adyen] session ping failed", {
+        environment: creds.environment,
+        merchantAccount: creds.merchantAccount,
+        apiBaseHost,
+        httpStatus,
+        recipe,
+      });
+      return {
+        ok: false,
+        pinged: true,
+        ...health,
+        ready: false,
+        suspectedField,
+        issues: [
+          ...health.issues,
+          {
+            field: suspectedField,
+            message:
+              suspectedField === "apiKey"
+                ? `Adyen ${creds.environment} rejected the API key (HTTP ${httpStatus || "error"}). Use the AQE… web service key from the same ${creds.environment} account as merchant account ${creds.merchantAccount}.`
+                : suspectedField === "merchantAccount"
+                  ? `Adyen denied merchant account "${creds.merchantAccount}". Confirm the exact TEST/LIVE account name for this API key.`
+                  : recipe,
+          },
+        ],
+        recipe,
+        environment: creds.environment,
+        merchantAccount: creds.merchantAccount,
+        apiBaseHost,
+        httpStatus,
+      };
     }
-
-    if (/^(test|live)_/.test(apiKey)) {
-      throw new Error(
-        "Platform Adyen API key looks like a client key (test_/live_). Use the Web service API key from Adyen Customer Area → Developers → API credentials (starts with AQE…)."
-      );
-    }
-
-    const validatedClientKey = clientKey
-      ? validateAdyenClientKey(clientKey, environment)
-      : "";
-
-    if (!validatedClientKey) {
-      throw new Error(
-        "Platform Adyen client key is missing. Set it in Superadmin → Settings → Payment (Adyen)."
-      );
-    }
-
-    const dropinEnvironment = adyenDropinEnvironment(validatedClientKey);
-    const apiBase = adyenCheckoutApiBase(dropinEnvironment);
-
-    return {
-      apiKey,
-      merchantAccount,
-      clientKey: validatedClientKey,
-      environment: dropinEnvironment === "live" ? "LIVE" : "TEST",
-      dropinEnvironment,
-      hmacKey,
-      apiBase,
-    };
   }
 
   static async getPlatformLegalUrls(): Promise<PlatformLegalUrls> {

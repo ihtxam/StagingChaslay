@@ -5,6 +5,33 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import MailcoDnsChecklist from '@/components/superadmin/MailcoDnsChecklist';
 
+type AdyenHealthIssue = {
+  field: string;
+  message: string;
+};
+
+type AdyenHealth = {
+  ready?: boolean;
+  source?: string;
+  missing?: string[];
+  issues?: AdyenHealthIssue[];
+  suspectedField?: string | null;
+  shopEnvIgnored?: boolean;
+  recipe?: string;
+  environment?: string;
+  merchantAccount?: string;
+  apiKeyLooksLikeClientKey?: boolean;
+  apiKeyLooksLikeWebService?: boolean;
+  clientKeyPrefix?: string;
+};
+
+type AdyenPing = AdyenHealth & {
+  ok: boolean;
+  pinged?: boolean;
+  apiBaseHost?: string;
+  httpStatus?: number | null;
+};
+
 type AdyenSettings = {
   merchantAccount: string;
   clientKey: string;
@@ -17,6 +44,10 @@ type AdyenSettings = {
   hmacKeySet: boolean;
   configured: boolean;
   usingEnvFallback?: boolean;
+  source?: string;
+  shopEnvIgnored?: boolean;
+  resolveError?: string | null;
+  health?: AdyenHealth;
 };
 
 type EmailSettings = {
@@ -78,6 +109,8 @@ export default function Settings() {
   const [adyen, setAdyen] = useState<AdyenSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAdyen, setSavingAdyen] = useState(false);
+  const [adyenPing, setAdyenPing] = useState<AdyenPing | null>(null);
+  const [pingingAdyen, setPingingAdyen] = useState(false);
   const [adyenForm, setAdyenForm] = useState({
     merchantAccount: '',
     clientKey: '',
@@ -242,10 +275,29 @@ export default function Settings() {
       setAdyen(res.data.adyen);
       setAdyenForm((f) => ({ ...f, apiKey: '', hmacKey: '' }));
       toast.success('Platform Swisspayout settings saved');
+      setAdyenPing(null);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to save Swisspayout settings');
     } finally {
       setSavingAdyen(false);
+    }
+  };
+
+  const pingAdyen = async () => {
+    setPingingAdyen(true);
+    try {
+      const res = await api.post('/superadmin/platform-settings/adyen/ping');
+      const ping = res.data.ping as AdyenPing;
+      setAdyenPing(ping);
+      if (ping.ok) {
+        toast.success(`Adyen ${ping.environment || ''} session ping succeeded`);
+      } else {
+        toast.error(ping.issues?.[ping.issues.length - 1]?.message || 'Adyen session ping failed');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to ping Adyen');
+    } finally {
+      setPingingAdyen(false);
     }
   };
 
@@ -560,13 +612,52 @@ export default function Settings() {
         </p>
 
         {adyen && (
-          <p className="text-sm mb-4">
-            Status:{' '}
-            <span className={adyen.configured ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
-              {adyen.configured ? 'Configured' : 'Not configured'}
-            </span>
-            {adyen.usingEnvFallback ? ' (using environment variables)' : null}
-          </p>
+          <div className="mb-4 space-y-2">
+            <p className="text-sm">
+              Status:{' '}
+              <span className={adyen.configured ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
+                {adyen.configured ? 'Configured' : 'Not configured'}
+              </span>
+              {adyen.usingEnvFallback ? ' (PLATFORM_ADYEN_* environment only)' : null}
+              {adyen.source === 'superadmin_db' ? ' · Superadmin fields' : null}
+            </p>
+            {adyen.shopEnvIgnored ? (
+              <p className="text-sm rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+                Shop <code>ADYEN_API_KEY</code> / Settings → Payments credentials are ignored for Reborn
+                package subscriptions. Use the three platform fields below from the same TEST or LIVE
+                Adyen account.
+              </p>
+            ) : null}
+            {(adyen.health?.issues || []).length > 0 ? (
+              <ul className="text-sm rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950 list-disc pl-6 space-y-1">
+                {(adyen.health?.issues || []).map((issue) => (
+                  <li key={`${issue.field}-${issue.message}`}>
+                    <strong>{issue.field}</strong>: {issue.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {adyen.resolveError && !adyen.configured ? (
+              <p className="text-xs text-stone-600 whitespace-pre-wrap">{adyen.resolveError}</p>
+            ) : null}
+            {adyenPing ? (
+              <div
+                className={`text-sm rounded border px-3 py-2 ${
+                  adyenPing.ok
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                    : 'border-rose-200 bg-rose-50 text-rose-950'
+                }`}
+              >
+                <p className="font-medium">
+                  {adyenPing.ok
+                    ? `Session ping OK (${adyenPing.environment || ''} → ${adyenPing.apiBaseHost || 'Adyen'})`
+                    : `Session ping failed${adyenPing.suspectedField ? ` — check ${adyenPing.suspectedField}` : ''}`}
+                </p>
+                {adyenPing.httpStatus ? <p>HTTP {adyenPing.httpStatus}</p> : null}
+                {adyenPing.recipe ? <p className="mt-1 text-xs whitespace-pre-wrap">{adyenPing.recipe}</p> : null}
+              </div>
+            ) : null}
+          </div>
         )}
 
         <form onSubmit={saveAdyen} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
@@ -639,9 +730,19 @@ export default function Settings() {
             <p className="text-xs text-gray-500 mb-3">
               Webhook URL: <code>/api/webhooks/adyen/subscription</code>
             </p>
-            <button type="submit" className="btn btn-primary" disabled={savingAdyen}>
-              {savingAdyen ? 'Saving…' : 'Save Swisspayout settings'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="btn btn-primary" disabled={savingAdyen}>
+                {savingAdyen ? 'Saving…' : 'Save Swisspayout settings'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={pingingAdyen}
+                onClick={() => void pingAdyen()}
+              >
+                {pingingAdyen ? 'Testing session…' : 'Test Adyen session'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -194,6 +194,22 @@ router.put("/platform-settings/adyen", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/superadmin/platform-settings/adyen/ping
+ * Local diagnosis + Checkout /sessions ping. Superadmin-only recipe, no raw secrets.
+ */
+router.post("/platform-settings/adyen/ping", async (_req: Request, res: Response) => {
+  try {
+    const ping = await PlatformSettingsService.pingPlatformAdyenSession();
+    res.json({ success: true, ping });
+  } catch (error) {
+    console.error("Error pinging platform Adyen:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to ping Adyen",
+    });
+  }
+});
+
+/**
  * GET /api/superadmin/platform-settings/brevo
  */
 router.get("/platform-settings/brevo", async (_req: Request, res: Response) => {
