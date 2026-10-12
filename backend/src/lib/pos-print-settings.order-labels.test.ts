@@ -5,6 +5,10 @@ const defaults = normalizePosPrintSettings({});
 assert.equal(defaults.orderLabelEnabled, false);
 assert.equal(defaults.autoPrintOrderLabelOnHold, true);
 assert.equal(defaults.autoPrintOrderLabelOnSend, false);
+assert.equal(defaults.autoOpenCashDrawer, true);
+
+const drawerOff = normalizePosPrintSettings({ autoOpenCashDrawer: false });
+assert.equal(drawerOff.autoOpenCashDrawer, false);
 
 const enabled = normalizePosPrintSettings({
   orderLabelEnabled: true,

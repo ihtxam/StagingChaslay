@@ -83,6 +83,7 @@ const MERCHANT_AUTOPRINT_CACHE_KEY = 'manupos_merchant_autoprint_cache';
 export type PosAutoPrintSettings = {
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  autoOpenCashDrawer?: boolean;
 };
 
 /** Merchant Settings → Receipts: master gate for customer receipt auto-print. */
@@ -107,6 +108,11 @@ export function shouldAutoPrintReceipt(printSettings?: PosAutoPrintSettings | nu
 /** Merchant Settings gate for kitchen auto-print (send / checkout). */
 export function shouldAutoPrintKitchen(printSettings?: PosAutoPrintSettings | null): boolean {
   return isMerchantAutoPrintKitchenEnabled(printSettings);
+}
+
+/** Cash sales pulse the drawer unless the merchant turns this off. */
+export function shouldAutoOpenCashDrawer(printSettings?: PosAutoPrintSettings | null): boolean {
+  return printSettings?.autoOpenCashDrawer !== false;
 }
 
 /** Cache merchant auto-print flags so relay polling matches checkout gates. */

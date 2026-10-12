@@ -319,6 +319,7 @@ interface SettingsData {
     receiptLogoWidthPx?: number;
     autoPrintReceipt?: boolean;
     autoPrintKitchen?: boolean;
+    autoOpenCashDrawer?: boolean;
     autoPrintReservations?: boolean;
     autoPrintOnlineOrdersOnArrival?: boolean;
     waiterTillBellEnabled?: boolean;
@@ -1632,6 +1633,7 @@ export default function Settings() {
         ),
         autoPrintReceipt: ps.autoPrintReceipt !== false,
         autoPrintKitchen: ps.autoPrintKitchen !== false,
+        autoOpenCashDrawer: ps.autoOpenCashDrawer !== false,
         autoPrintReservations: ps.autoPrintReservations !== false,
         autoPrintOnlineOrdersOnArrival: ps.autoPrintOnlineOrdersOnArrival === true,
         orderLabelEnabled: ps.orderLabelEnabled === true,
@@ -4739,6 +4741,7 @@ export default function Settings() {
                       ['autoPrintReceipt', t('autoPrintReceipt')],
                       ['autoPrintKitchen', t('autoPrintKitchen')],
                       ['autoPrintReservations', t('autoPrintReservations')],
+                      ['autoOpenCashDrawer', t('autoOpenCashDrawer')],
                     ] as const
                   ).map(([key, label]) => (
                     <label key={key} className="inline-flex items-center gap-2">

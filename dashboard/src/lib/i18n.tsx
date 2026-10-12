@@ -2184,6 +2184,9 @@ const en: Dict = {
   webPosGoodwillFailed: 'Goodwill compensation failed',
   autoPrintReceipt: 'Auto-print customer receipt',
   autoPrintKitchen: 'Auto-print kitchen ticket',
+  autoOpenCashDrawer: 'Open cash drawer automatically',
+  autoOpenCashDrawerHint:
+    'On cash payments, pulse the receipt printer to open the drawer. Off: use Open cash drawer when you need it.',
   autoPrintReservations: 'Auto-print reservations',
   autoPrintOnlineOrdersOnArrival: 'Print online orders on arrival',
   autoPrintOnlineOrdersOnArrivalHint:
@@ -6828,6 +6831,9 @@ const fr: Dict = {
   webPosGoodwillFailed: 'Échec du geste commercial',
   autoPrintReceipt: 'Impression auto du reçu',
   autoPrintKitchen: 'Impression auto cuisine',
+  autoOpenCashDrawer: 'Ouvrir le tiroir automatiquement',
+  autoOpenCashDrawerHint:
+    'À chaque paiement en espèces, ouvre le tiroir via l’imprimante ticket. Désactivé : utilisez Ouvrir le tiroir-caisse au besoin.',
   autoPrintReservations: 'Impression auto des réservations',
   autoPrintOnlineOrdersOnArrival: 'Imprimer les commandes en ligne à l’arrivée',
   autoPrintOnlineOrdersOnArrivalHint:
@@ -11352,6 +11358,9 @@ const de: Dict = {
   webPosGoodwillFailed: 'Kulanz fehlgeschlagen',
   autoPrintReceipt: 'Kundenbeleg automatisch drucken',
   autoPrintKitchen: 'Küchenticket automatisch drucken',
+  autoOpenCashDrawer: 'Kassenschublade automatisch öffnen',
+  autoOpenCashDrawerHint:
+    'Bei Barzahlung öffnet ein Impuls über den Bondrucker die Schublade. Aus: manuell über Kassenschublade öffnen.',
   autoPrintReservations: 'Reservationen automatisch drucken',
   autoPrintOnlineOrdersOnArrival: 'Online-Bestellungen bei Eingang drucken',
   autoPrintOnlineOrdersOnArrivalHint:
