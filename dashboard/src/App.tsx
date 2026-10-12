@@ -86,10 +86,6 @@ function AppToaster() {
     return () => window.removeEventListener(POS_TOAST_PREF_EVENT, onPref);
   }, []);
 
-  if (webPos && !showPosToasts) {
-    return null;
-  }
-
   return (
     <Toaster
       position={webPos ? 'top-center' : shopCheckout ? 'bottom-center' : 'top-right'}
@@ -136,7 +132,9 @@ function AppToaster() {
           : { cursor: 'pointer' },
       }}
     >
-      {(t) => (
+      {(t) => {
+        if (webPos && !showPosToasts && t.type !== 'error') return null;
+        return (
         <div
           role="presentation"
           className="cursor-pointer"
@@ -144,7 +142,8 @@ function AppToaster() {
         >
           <ToastBar toast={t} />
         </div>
-      )}
+        );
+      }}
     </Toaster>
   );
 }

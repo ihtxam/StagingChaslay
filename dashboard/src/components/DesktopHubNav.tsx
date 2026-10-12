@@ -46,7 +46,7 @@ export function DesktopHubGearMenu({ className = '' }: Props) {
       <button
         type="button"
         className={`desktop-chrome-btn inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-50/90 hover:bg-white/10 hover:text-white data-[active=true]:bg-white/15 data-[active=true]:text-white ${className}`}
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={t('desktopHubNavLabel')}
