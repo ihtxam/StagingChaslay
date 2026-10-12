@@ -187,10 +187,12 @@ import {
 } from '@/lib/barcode-wedge';
 import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
-import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys, dismissKdsTicket } from '@/lib/kds-push';
+import { pushCartLinesToKds, fetchKdsBoardStatus, matchBoardTickets, collectReadyLineIds, applyKdsReadyToCart, buildKdsReadyMap, collectKdsTicketKeys, dismissKdsTicket, isKdsPollingStopped } from '@/lib/kds-push';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import { playKitchenCompleteOnce } from '@/lib/order-alert';
-import { pushOrderToOds, dismissOrderFromOds } from '@/lib/ods-push';
+import { pushOrderToOds, dismissOrderFromOds, fetchOdsStatus, isOdsPollingStopped } from '@/lib/ods-push';
+import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
+import { asArray } from '@/lib/safe-iterables';
 import {
   openCustomerDisplayWindow,
   publishCustomerDisplayState,
@@ -2730,7 +2732,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           catalogError.response?.data?.error || catalogError.message || t('webPosLoadFailed')
         );
       }
-      const prods = prodRes.data.products || prodRes.data || [];
+      const prods = asArray<any>(prodRes.data.products ?? prodRes.data);
       const mappedProducts = prods.map((p: any) => ({
         ...p,
         visibility: normalizeCatalogVisibility(p.visibility),
@@ -5312,10 +5314,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const kdsCompletedRungRef = useRef(new Set<string>());
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
 
+  const kdsAddonOn = readAddonLicenseFlag(merchant?.kdsAddonEnabled, merchant?.kdsEnabled);
+  const odsAddonOn = readAddonLicenseFlag(merchant?.odsAddonEnabled, merchant?.odsEnabled);
+
   useEffect(() => {
     if (isRetail || !kitchenEnabled) return;
+    if (!shouldPollLicensedAddon(kdsAddonOn, isKdsPollingStopped())) return;
 
     let cancelled = false;
+    let timer = 0;
     const candidateKeys = () => {
       const keys = new Set<string>();
       const tab = tabOrderShout(tabNumber);
@@ -5331,8 +5338,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
 
     const syncBoard = async () => {
+      if (cancelled || isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       const board = await fetchKdsBoardStatus();
       if (cancelled) return;
+      if (isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       setKdsReadyMap(buildKdsReadyMap(board));
       if (!board.length) return;
 
@@ -5373,7 +5388,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
 
     void syncBoard();
-    const timer = window.setInterval(() => void syncBoard(), 4000);
+    timer = window.setInterval(() => void syncBoard(), 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -5381,6 +5396,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [
     isRetail,
     kitchenEnabled,
+    kdsAddonOn,
     kdsTicketKey,
     tabNumber,
     ticketDisplay,
@@ -5389,6 +5405,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     draftVersion,
     tabOrderShout,
   ]);
+
+  useEffect(() => {
+    if (isRetail) return;
+    if (!shouldPollLicensedAddon(odsAddonOn, isOdsPollingStopped())) return;
+    let cancelled = false;
+    let timer = 0;
+    const syncOds = async () => {
+      if (cancelled || isOdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
+      await fetchOdsStatus();
+      if (isOdsPollingStopped() && timer) window.clearInterval(timer);
+    };
+    void syncOds();
+    timer = window.setInterval(() => void syncOds(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isRetail, odsAddonOn]);
 
   /** Assign the kitchen/public ticket when checkout opens so AMOUNT DUE can show both. */
   useEffect(() => {
@@ -10091,7 +10128,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (code: string): Product | null => {
       const q = code.trim();
       if (!q) return null;
-      return products.find((p) => productMatchesScan(p, q)) || null;
+      return asArray<Product>(products).find((p) => productMatchesScan(p, q)) || null;
     },
     [products]
   );
@@ -11078,6 +11115,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             embedded
             open
             kitchenEnabled={kitchenEnabled}
+            kdsAddonEnabled={merchant?.kdsAddonEnabled}
             autoPrintReceipt={shouldAutoPrintReceipt(printSettings)}
             taxIncludedInPrice={vatIncludedInPrice}
             vatAfterDiscount={vatAfterDiscount}

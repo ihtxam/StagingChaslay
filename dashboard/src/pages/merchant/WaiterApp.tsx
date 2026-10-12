@@ -58,7 +58,10 @@ import {
   collectReadyLineIds,
   applyKdsReadyToCart,
   cartLineKitchenReady,
+  isKdsPollingStopped,
 } from '@/lib/kds-push';
+import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
+import { asArray } from '@/lib/safe-iterables';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
@@ -227,8 +230,8 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         const session = resolveWebPosStaffSession({ staffList: list });
         setStaff(session);
         if (session) notifyWebPosStaffSessionChanged();
-        setCategories(catRes.data?.categories || []);
-        setProducts(prodRes.data?.products || []);
+        setCategories(asArray(catRes.data?.categories));
+        setProducts(asArray(prodRes.data?.products));
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
         cacheMerchantAutoPrintSettings(
           (configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean; autoPrintReceipt?: boolean } | undefined) || null
@@ -321,25 +324,37 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const waiterKdsTicketKey = kitchenTicketKeyBase(ticketDisplay || ticketOrderNumber || '');
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
 
+  const kdsAddonOn = readAddonLicenseFlag(authUser?.kdsAddonEnabled);
+
   useEffect(() => {
     const hasSent = cart.some((l) => l.sentToKitchen);
     if (!hasSent) return;
+    if (!shouldPollLicensedAddon(kdsAddonOn, isKdsPollingStopped())) return;
     let cancelled = false;
+    let timer = 0;
     const syncReady = async () => {
+      if (cancelled || isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       const board = await fetchKdsBoardStatus();
       if (cancelled) return;
+      if (isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       setKdsReadyMap(buildKdsReadyMap(board));
       const readyIds = collectReadyLineIds(board);
       if (!readyIds.size) return;
       setCart((prev) => applyKdsReadyToCart(prev, [...readyIds]));
     };
     void syncReady();
-    const timer = window.setInterval(() => void syncReady(), 4000);
+    timer = window.setInterval(() => void syncReady(), 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [cart.filter((l) => l.sentToKitchen).length, waiterKdsTicketKey]);
+  }, [cart.filter((l) => l.sentToKitchen).length, waiterKdsTicketKey, kdsAddonOn]);
 
   /** Sync in-progress table/takeaway carts to /merchant/pos/held so main till Orders → Active lists them. */
   useEffect(() => {

@@ -1,5 +1,32 @@
 import api from '@/lib/api';
+import { createAddonPollGate } from '@/lib/addon-poll';
 import { resolveOdsPushNumber } from '@/lib/order-number';
+import { parseOdsStatusPayload, type OdsBoardStatus } from '@/lib/ods-status-parse';
+
+export { parseOdsStatusPayload, type OdsBoardStatus } from '@/lib/ods-status-parse';
+
+const odsPollGate = createAddonPollGate();
+
+export function isOdsPollingStopped(): boolean {
+  return odsPollGate.isStopped();
+}
+
+export function resetOdsPollingGate(): void {
+  odsPollGate.reset();
+}
+
+export async function fetchOdsStatus(): Promise<OdsBoardStatus> {
+  if (odsPollGate.isStopped()) {
+    return { licensed: false, preparing: [], ready: [] };
+  }
+  try {
+    const res = await api.get('/merchant/ods/status');
+    return parseOdsStatusPayload(res.data);
+  } catch (e) {
+    odsPollGate.noteError(e);
+    return { licensed: false, preparing: [], ready: [] };
+  }
+}
 
 export async function pushOrderToOds(opts: {
   orderNumber: string;
@@ -13,6 +40,7 @@ export async function pushOrderToOds(opts: {
       status: opts.status,
     });
   } catch (e) {
+    odsPollGate.noteError(e);
     console.warn('[ods] push failed', e);
   }
 }
@@ -23,6 +51,7 @@ export async function dismissOrderFromOds(orderNumber: string): Promise<void> {
   try {
     await api.post('/merchant/ods/dismiss', { orderNumber: num });
   } catch (e) {
+    odsPollGate.noteError(e);
     console.warn('[ods] dismiss failed', e);
   }
 }
