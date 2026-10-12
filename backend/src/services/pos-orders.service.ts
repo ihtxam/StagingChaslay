@@ -1,6 +1,10 @@
 import { getDb, schema } from "@/db";
 import { and, desc, eq, gte, ilike, isNull, lte, inArray, or } from "drizzle-orm";
 import {
+  openPosBoardOrdersWhere,
+  shouldFetchOpenBoardExtras,
+} from "@/lib/pos-open-board-orders";
+import {
   POS_CANCEL_REASONS,
   POS_REFUND_REASONS,
   resolvePosCancelReason,
@@ -371,7 +375,7 @@ export class PosOrdersService {
       conditions.push(searchCond);
     }
 
-    const rows = await db.query.orders.findMany({
+    const windowRows = await db.query.orders.findMany({
       where: and(...conditions),
       with: {
         items: {
@@ -382,6 +386,33 @@ export class PosOrdersService {
       orderBy: [desc(schema.orders.createdAt)],
       limit,
     });
+    const rows = [...windowRows];
+
+    // Date-window + limit drop pre-orders (WEB-… created earlier, scheduled later)
+    // and busy-day shop tickets. Incoming/Online has no day cap — All must match.
+    if ((opts.from || opts.to) && shouldFetchOpenBoardExtras(opts.status)) {
+      const seen = new Set(rows.map((row) => row.id));
+      const extra = await db.query.orders.findMany({
+        where: openPosBoardOrdersWhere(merchantId, opts.status),
+        with: {
+          items: {
+            with: { product: true },
+          },
+          customer: true,
+        },
+        orderBy: [desc(schema.orders.createdAt)],
+        limit: 200,
+      });
+      for (const row of extra) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        rows.push(row);
+      }
+      rows.sort(
+        (a, b) =>
+          new Date(b.createdAt as Date).getTime() - new Date(a.createdAt as Date).getTime()
+      );
+    }
 
     const orderIds = rows.map((o) => o.id);
     const assignedIds = [

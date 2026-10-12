@@ -4,6 +4,36 @@ import type { WebPosReservationAlert } from '@/components/webpos/WebPosNotificat
 export const WEBPOS_RESERVATION_CREATED_EVENT = 'webpos:reservation-created';
 export const WEBPOS_ORDER_COMPLETED_EVENT = 'webpos:order-completed';
 
+/** Paid POS / waiter checkouts must not appear in the online-order bell. */
+export function isPosPaymentNotification(order: {
+  orderType?: string | null;
+  paymentStatus?: string | null;
+  status?: string | null;
+}): boolean {
+  const type = String(order.orderType || '').toLowerCase();
+  if (type === 'pos' || type === 'webpos' || type === 'waiter') return true;
+  return false;
+}
+
+/** Bell tray: incoming shop / 3P only — never closed or paid-register sales. */
+export function isBellVisibleOrder(order: {
+  orderType?: string | null;
+  status?: string | null;
+  paymentStatus?: string | null;
+}): boolean {
+  if (isPosPaymentNotification(order)) return false;
+  const status = String(order.status || '')
+    .toLowerCase()
+    .trim()
+    .replace(/-/g, '_');
+  if (
+    ['cancelled', 'refunded', 'rejected', 'completed', 'partially_refunded'].includes(status)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function posSaleToNotificationOrder(params: {
   id: string;
   orderNumber?: string | null;

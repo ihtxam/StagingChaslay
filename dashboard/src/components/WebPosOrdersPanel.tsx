@@ -680,7 +680,7 @@ export default function WebPosOrdersPanel({
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
-    const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
+    const params = new URLSearchParams({ limit: '200', from: todayIso(), to: todayIso() });
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);

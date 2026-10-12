@@ -176,9 +176,12 @@ export function isTerminalOrderStatus(status?: string | null): boolean {
  */
 export function isOpenWebPosOrder(o: MerchantOrder): boolean {
   if (isCancelledOrder(o)) return false;
-  if (!isOnlineShopOrder(o) && isAwaitingPaymentOrder(o)) return true;
+  // Shop / 3P / WEB- tickets stay on All + Active until fulfillment closes.
+  // Do not treat pending-payment or scheduled pickup as a finished POS sale.
+  if (isOnlineShopOrder(o)) return !isTerminalOrderStatus(o.status);
+  if (isAwaitingPaymentOrder(o)) return true;
   if (isTerminalOrderStatus(o.status)) return false;
-  if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;
+  if (isPaidOrder(o)) return false;
   return true;
 }
 
