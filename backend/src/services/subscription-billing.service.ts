@@ -232,13 +232,17 @@ export class SubscriptionBillingService {
         .set({ status: "failed", updatedAt: new Date() })
         .where(eq(schema.subscriptionPayments.id, payment!.id));
 
-      throw new Error(
-        formatAdyenCheckoutApiError(error, {
-          apiBase: creds.apiBase,
-          merchantAccount: creds.merchantAccount,
-          phase: "sessions",
-        })
-      );
+      const recipe = formatAdyenCheckoutApiError(error, {
+        apiBase: creds.apiBase,
+        merchantAccount: creds.merchantAccount,
+        phase: "sessions",
+      });
+      console.error("[platform-adyen] subscription /sessions failed", {
+        merchantAccount: creds.merchantAccount,
+        apiBase: creds.apiBase,
+        recipe,
+      });
+      throw new Error(recipe);
     }
   }
 
@@ -611,13 +615,17 @@ export class SubscriptionBillingService {
         .update(schema.subscriptionAddonPayments)
         .set({ status: "failed", updatedAt: new Date() })
         .where(eq(schema.subscriptionAddonPayments.id, payment!.id));
-      throw new Error(
-        formatAdyenCheckoutApiError(error, {
-          apiBase: creds.apiBase,
-          merchantAccount: creds.merchantAccount,
-          phase: "sessions",
-        })
-      );
+      const recipe = formatAdyenCheckoutApiError(error, {
+        apiBase: creds.apiBase,
+        merchantAccount: creds.merchantAccount,
+        phase: "sessions",
+      });
+      console.error("[platform-adyen] addon /sessions failed", {
+        merchantAccount: creds.merchantAccount,
+        apiBase: creds.apiBase,
+        recipe,
+      });
+      throw new Error(recipe);
     }
   }
 

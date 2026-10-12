@@ -1098,7 +1098,9 @@ const en: Dict = {
   billingActivated: 'Subscription activated',
   billingFreeActivated: '{name} subscription activated',
   billingAdyenNotConfigured:
-    'Platform Adyen is not configured yet. Free subscriptions can still be activated; paid subscriptions require the platform owner to add Adyen credentials in Superadmin → Settings.',
+    'Billing is temporarily unavailable. Please try again later.',
+  billingTemporarilyUnavailable:
+    'Billing is temporarily unavailable. Please try again later.',
   billingPayFor: 'Pay for {name}',
   posVersions: 'POS versions',
   posVersion: 'POS version',
@@ -5766,7 +5768,9 @@ const fr: Dict = {
   billingActivated: 'Abonnement activé',
   billingFreeActivated: 'Abonnement {name} activé',
   billingAdyenNotConfigured:
-    'Adyen plateforme non configuré. Les abonnements gratuits peuvent être activés ; les payants nécessitent les identifiants Adyen dans Superadmin → Paramètres.',
+    'La facturation est temporairement indisponible. Veuillez réessayer plus tard.',
+  billingTemporarilyUnavailable:
+    'La facturation est temporairement indisponible. Veuillez réessayer plus tard.',
   billingPayFor: 'Payer {name}',
   posVersions: 'Versions POS',
   posVersion: 'Version POS',
@@ -10456,7 +10460,9 @@ const de: Dict = {
   billingActivated: 'Abonnement aktiviert',
   billingFreeActivated: 'Abonnement {name} aktiviert',
   billingAdyenNotConfigured:
-    'Plattform-Adyen ist noch nicht konfiguriert. Kostenlose Abonnements können aktiviert werden; bezahlte erfordern Adyen-Zugangsdaten unter Superadmin → Einstellungen.',
+    'Die Abrechnung ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.',
+  billingTemporarilyUnavailable:
+    'Die Abrechnung ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.',
   billingPayFor: 'Bezahlen für {name}',
   posVersions: 'POS-Versionen',
   posVersion: 'POS-Version',

@@ -31,6 +31,10 @@ import path from "path";
 import { getDb, schema } from "@/db";
 import { publicShopDbError } from "@/lib/public-shop-error";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
+import {
+  merchantFacingBillingPayload,
+  platformPanelLocale,
+} from "@/lib/platform-adyen-credentials";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import posSessionsRoutes from "@/routes/pos-sessions.routes";
 import locationsRoutes from "@/routes/locations.routes";
@@ -3813,9 +3817,9 @@ router.post("/billing/checkout", async (req: Request, res: Response) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Error starting billing checkout:", error);
-    res.status(400).json({
-      error: error instanceof Error ? error.message : "Failed to start checkout",
-    });
+    const locale = platformPanelLocale(String(req.headers["accept-language"] || ""));
+    const payload = merchantFacingBillingPayload(error, locale, "Failed to start checkout");
+    res.status(payload.code === "BILLING_UNAVAILABLE" ? 503 : 400).json(payload);
   }
 });
 
@@ -3855,9 +3859,9 @@ router.post("/billing/addon/checkout", async (req: Request, res: Response) => {
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Error starting addon checkout:", error);
-    res.status(400).json({
-      error: error instanceof Error ? error.message : "Failed to start add-on checkout",
-    });
+    const locale = platformPanelLocale(String(req.headers["accept-language"] || ""));
+    const payload = merchantFacingBillingPayload(error, locale, "Failed to start add-on checkout");
+    res.status(payload.code === "BILLING_UNAVAILABLE" ? 503 : 400).json(payload);
   }
 });
 
