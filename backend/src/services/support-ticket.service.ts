@@ -341,6 +341,53 @@ export class SupportTicketService {
     return this.getTicketWithMessages(ticketId, scope);
   }
 
+  /** Close without a reply. Merchant staff who can open Support may close their merchant's tickets. */
+  static async closeTicket(
+    ticketId: string,
+    input: {
+      authorRole: 'merchant' | 'reseller' | 'superadmin' | 'system';
+      authorId?: string;
+      authorName?: string;
+    },
+    scope?: { merchantId?: string; resellerId?: string }
+  ) {
+    const db = getDb();
+    const ticket = await this.getTicketWithMessages(ticketId, scope);
+    if (ticket.status === 'closed') {
+      return ticket;
+    }
+
+    const now = new Date();
+    const who =
+      input.authorName?.trim() ||
+      (input.authorRole === 'merchant'
+        ? 'the merchant'
+        : input.authorRole === 'reseller'
+          ? 'the reseller'
+          : input.authorRole === 'superadmin'
+            ? 'support'
+            : 'the system');
+
+    await db.insert(schema.supportTicketMessages).values({
+      ticketId,
+      authorRole: 'system',
+      authorId: input.authorId || null,
+      authorName: 'System',
+      body: `This ticket was closed by ${who}.`,
+    });
+
+    await db
+      .update(schema.supportTickets)
+      .set({
+        status: 'closed',
+        closedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(schema.supportTickets.id, ticketId));
+
+    return this.getTicketWithMessages(ticketId, scope);
+  }
+
   static async assignTicket(ticketId: string, superadminId: string | null) {
     const db = getDb();
     const [row] = await db

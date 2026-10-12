@@ -142,6 +142,32 @@ export default function Support() {
     }
   };
 
+  const ticketStatusLabel = (status: string) => {
+    if (status === 'closed') return t('supportFilterClosed');
+    if (status === 'answered') return t('supportFilterAnswered');
+    return t('supportFilterOpen');
+  };
+
+  const closeTicket = async () => {
+    if (!activeTicket || activeTicket.status === 'closed') return;
+    if (!window.confirm(t('supportCloseTicketConfirm'))) return;
+    setBusy(true);
+    try {
+      const res = await api.post(`/merchant/support/tickets/${activeTicket.id}/close`);
+      setActiveTicket(res.data.ticket);
+      setReply('');
+      await loadTickets();
+      toast.success(t('supportTicketClosedToast'));
+    } catch (e: unknown) {
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          t('supportCloseTicketFailed')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const article = useMemo(() => {
     if (!selectedCategory || !selectedArticle) return null;
     const cat = categories.find((c) => c.id === selectedCategory);
@@ -375,7 +401,7 @@ export default function Support() {
                   >
                     <p className="font-mono text-xs text-stone-500">{tk.ticketNumber}</p>
                     <p className="font-medium truncate">{tk.subject}</p>
-                    <p className="text-xs capitalize text-stone-500">{tk.status}</p>
+                    <p className="text-xs text-stone-500">{ticketStatusLabel(tk.status)}</p>
                   </button>
                 </li>
               ))}
@@ -387,11 +413,23 @@ export default function Support() {
           <div className="rounded-xl border border-stone-200 bg-white min-h-[360px] flex flex-col">
             {activeTicket ? (
               <>
-                <div className="border-b border-stone-100 px-4 py-3">
-                  <h3 className="font-semibold">{activeTicket.subject}</h3>
-                  <p className="text-xs text-stone-500">
-                    {activeTicket.ticketNumber} · {activeTicket.status}
-                  </p>
+                <div className="border-b border-stone-100 px-4 py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold">{activeTicket.subject}</h3>
+                    <p className="text-xs text-stone-500">
+                      {activeTicket.ticketNumber} · {ticketStatusLabel(activeTicket.status)}
+                    </p>
+                  </div>
+                  {activeTicket.status !== 'closed' ? (
+                    <button
+                      type="button"
+                      className="btn-secondary shrink-0 text-sm"
+                      disabled={busy}
+                      onClick={() => void closeTicket()}
+                    >
+                      {t('supportCloseTicket')}
+                    </button>
+                  ) : null}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   {activeTicket.messages.map((m) => (
