@@ -741,6 +741,37 @@ export function formatOrderPaymentDisplay(
     .join(' + ');
 }
 
+/** Fulfillment already on the ticket (shop/POS), not a new field. */
+export function orderAlertFulfillmentKey(o: {
+  fulfillmentChannel?: string | null;
+  channel?: string | null;
+}): 'delivery' | 'dine_in' | 'takeaway' {
+  const raw = String(o.fulfillmentChannel || o.channel || 'takeaway')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (raw === 'delivery' || raw === 'deliver' || raw.startsWith('delivery')) return 'delivery';
+  if (raw === 'dine_in' || raw === 'dinein' || raw === 'eat_in') return 'dine_in';
+  return 'takeaway';
+}
+
+export function orderAlertFulfillmentLabel(
+  o: { fulfillmentChannel?: string | null; channel?: string | null },
+  t: (k: string) => string
+): string {
+  const key = orderAlertFulfillmentKey(o);
+  if (key === 'delivery') return t('orderAlertDelivery');
+  if (key === 'dine_in') return t('orderAlertDineIn');
+  return t('orderAlertTakeaway');
+}
+
+export function orderAlertPaidLabel(
+  o: { paymentStatus?: string | null },
+  t: (k: string) => string
+): string {
+  return isPaidOrder(o) ? t('orderAlertPaid') : t('orderAlertUnpaid');
+}
+
 /** Paid/unpaid + tender for new-order alert popups (ASAP line). */
 export function formatOrderAlertPaymentLine(
   order: {
