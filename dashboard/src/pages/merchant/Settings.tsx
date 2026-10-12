@@ -59,6 +59,10 @@ import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isAccountingLicensed } from '@/lib/accounting-addon';
+import {
+  shouldShowOnlineReservationsToggle,
+  shouldShowReservationsSettings,
+} from '@/lib/pos-hub-visibility';
 import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   findPrinterHealCandidates,
@@ -845,6 +849,26 @@ export default function Settings() {
     return hasEditionFeature(settings?.editionFeatures ?? null, 'pos_courses');
   }, [isRetailMerchant, settings?.editionFeatures]);
 
+  const reservationsLicensed = useMemo(
+    () =>
+      shouldShowReservationsSettings({
+        isRetail: isRetailMerchant,
+        reservationsEnabled: settings?.reservationsEnabled,
+        editionFeatures: settings?.editionFeatures,
+      }),
+    [isRetailMerchant, settings?.editionFeatures, settings?.reservationsEnabled]
+  );
+
+  const showReservationsChannelToggle = useMemo(
+    () =>
+      shouldShowOnlineReservationsToggle({
+        isRetail: isRetailMerchant,
+        reservationsEnabled: settings?.reservationsEnabled,
+        editionFeatures: settings?.editionFeatures,
+      }),
+    [isRetailMerchant, settings?.editionFeatures, settings?.reservationsEnabled]
+  );
+
   const canOpenSettingsTab = useCallback(
     (tabId: TabId) => {
       if (
@@ -878,11 +902,11 @@ export default function Settings() {
       tabs.filter((item) => {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
-        if (item.id === 'reservations' && isRetailMerchant) return false;
+        if (item.id === 'reservations' && !reservationsLicensed) return false;
         if (item.id === 'accounting' && !isAccountingLicensed(settings)) return false;
         return true;
       }),
-    [canOpenSettingsTab, isRetailMerchant, showTablesSettings, tabs]
+    [canOpenSettingsTab, reservationsLicensed, showTablesSettings, tabs]
   );
 
   const selectTab = useCallback(
@@ -950,10 +974,20 @@ export default function Settings() {
     const redirect = nextTabForHiddenRetailSettings(tab as SettingsTabId, {
       showTablesSettings,
       isRetailMerchant,
+      reservationsLicensed,
       query: settingsQuery || normalizedQuery,
     });
     if (redirect) selectTab(redirect);
-  }, [tab, showTablesSettings, isRetailMerchant, settings, selectTab, normalizedQuery, settingsQuery]);
+  }, [
+    tab,
+    showTablesSettings,
+    isRetailMerchant,
+    reservationsLicensed,
+    settings,
+    selectTab,
+    normalizedQuery,
+    settingsQuery,
+  ]);
 
   const searchIndex = useMemo(() => buildSettingsSearchIndex(t), [t]);
 
@@ -961,10 +995,10 @@ export default function Settings() {
     (id: string) => {
       if (id === 'pos-courses') return showCoursesSettings;
       if (id === 'tables-floor' || id === 'tables-management') return showTablesSettings;
-      if (id === 'reservations-config') return !isRetailMerchant;
+      if (id === 'reservations-config') return reservationsLicensed;
       return true;
     },
-    [isRetailMerchant, showCoursesSettings, showTablesSettings]
+    [reservationsLicensed, showCoursesSettings, showTablesSettings]
   );
 
   const visibleTabIds = useMemo(
@@ -2398,29 +2432,22 @@ export default function Settings() {
                       <span className="text-[11px] muted">{t('acceptingOrdersHint')}</span>
                     </span>
                   </label>
-                  <label
-                    className={`flex items-start gap-2.5 text-sm py-1 ${
-                      !settings.reservationsEnabled ? 'opacity-50' : ''
-                    }`}
-                  >
+                  {showReservationsChannelToggle ? (
+                  <label className="flex items-start gap-2.5 text-sm py-1">
                     <input
                       type="checkbox"
                       className="mt-0.5"
                       checked={settings.acceptingReservations !== false}
-                      disabled={!settings.reservationsEnabled}
                       onChange={(e) =>
                         setSettings({ ...settings, acceptingReservations: e.target.checked })
                       }
                     />
                     <span>
                       <span className="font-medium block">{t('acceptingReservations')}</span>
-                      <span className="text-[11px] muted">
-                        {settings.reservationsEnabled
-                          ? t('acceptingReservationsHint')
-                          : t('acceptingReservationsDisabled')}
-                      </span>
+                      <span className="text-[11px] muted">{t('acceptingReservationsHint')}</span>
                     </span>
                   </label>
+                  ) : null}
                 </div>
 
                 <div className="rounded-md border border-[var(--border)] p-3 space-y-3">
@@ -2559,9 +2586,11 @@ export default function Settings() {
                     <Link to="/merchant/settings?tab=hours" className="btn-secondary text-sm">
                       {t('shopHoursNavOpening')}
                     </Link>
+                    {reservationsLicensed ? (
                     <Link to="/merchant/settings?tab=reservations" className="btn-secondary text-sm">
                       {t('shopHoursNavReservations')}
                     </Link>
+                    ) : null}
                     <Link to="/merchant/settings?tab=business#business-vacation" className="btn-secondary text-sm">
                       {t('shopHoursNavVacation')}
                     </Link>

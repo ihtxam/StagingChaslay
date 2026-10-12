@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Building2, Check, MapPin } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { shouldShowLocationSwitcher } from '@/lib/pos-hub-visibility';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 
 type Props = {
@@ -94,14 +95,21 @@ export default function LocationPickerModal({ open, onClose, onSelect, title }: 
 
 export function LocationSwitcherChip() {
   const { t } = useI18n();
-  const { location, locations, load } = useLocationStore();
+  const { location, locations, limits, load } = useLocationStore();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (locations.length <= 1) return null;
+  if (
+    !shouldShowLocationSwitcher({
+      locationCount: locations.length,
+      maxLocations: limits?.maxLocations,
+    })
+  ) {
+    return null;
+  }
 
   return (
     <>
