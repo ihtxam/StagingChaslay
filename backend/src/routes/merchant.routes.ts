@@ -2037,6 +2037,14 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
           }
         })(),
         entitlement,
+        pizzaTemplates: await (async () => {
+          try {
+            const { PizzaTemplatesService } = await import("@/services/pizza-templates.service");
+            return await PizzaTemplatesService.list(merchantId);
+          } catch {
+            return [];
+          }
+        })(),
       },
     });
   } catch (error) {

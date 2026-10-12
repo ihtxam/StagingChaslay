@@ -157,6 +157,7 @@ import HqDashboardPage from './HqDashboard';
 import BulkPricingPage from './BulkPricingPage';
 import ScheduledMenusPage from './ScheduledMenusPage';
 import PizzaBuilderPage from './PizzaBuilderPage';
+import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
 import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
@@ -1568,6 +1569,22 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
                   <PizzaBuilderPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products/pizza-builder/new"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products/pizza-builder/:templateId"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
                 </PanelRouteGuard>
               }
             />

@@ -100,6 +100,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_checkout_settings jsonb",
   time_slot_pricing_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS time_slot_pricing_settings jsonb",
+  pizza_builder_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pizza_builder_settings jsonb",
   pos_print_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_print_settings jsonb",
   table_qr_settings:
