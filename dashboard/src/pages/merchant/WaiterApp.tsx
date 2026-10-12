@@ -37,6 +37,10 @@ import {
 } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
 import {
+  pinGateMerchantName,
+  pinGateSessionMerchantName,
+} from '@/lib/webpos-pin-gate-brand';
+import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
   clearPosSessionLocal,
@@ -107,6 +111,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [printSettings, setPrintSettings] = useState<Record<string, unknown> | null>(null);
+  const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null);
+  const [merchantShopName, setMerchantShopName] = useState<string | null>(() =>
+    pinGateSessionMerchantName(authUser) || null
+  );
   const [categoryId, setCategoryId] = useState<PosCategoryId>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [channel, setChannel] = useState<PosChannel>('dine_in');
@@ -233,6 +241,16 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         setCategories(asArray(catRes.data?.categories));
         setProducts(asArray(prodRes.data?.products));
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
+        setMerchantLogoUrl(
+          String(configRes.data?.config?.shopLogoUrl || '').trim() ||
+            String(configRes.data?.config?.posPrintSettings?.receiptLogoUrl || '').trim() ||
+            null
+        );
+        setMerchantShopName(
+          String(configRes.data?.config?.name || '').trim() ||
+            pinGateSessionMerchantName(authUser) ||
+            null
+        );
         cacheMerchantAutoPrintSettings(
           (configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean; autoPrintReceipt?: boolean } | undefined) || null
         );
@@ -1047,6 +1065,11 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onPinSuccess}
+        productName={pinGateMerchantName(
+          merchantShopName,
+          pinGateSessionMerchantName(authUser)
+        )}
+        logoUrl={merchantLogoUrl}
       />
 
       {pendingProduct && (

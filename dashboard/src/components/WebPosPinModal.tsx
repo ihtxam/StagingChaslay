@@ -12,6 +12,10 @@ import { APP_NAME, REBORN_LOGO_WHITE } from '@/lib/brand';
 import { BRAND_BLUE_CHARCOAL, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n } from '@/lib/i18n';
 import {
+  merchantPinGateInitials,
+  pinGateMerchantLogoUrl,
+} from '@/lib/webpos-pin-gate-brand';
+import {
   STAFF_PIN_MAX_LENGTH,
   STAFF_PIN_MIN_LENGTH,
 } from '@/lib/staff-pin';
@@ -102,7 +106,7 @@ export default function WebPosPinModal({
   onLogout?: () => void;
   /** Bottom-left label; defaults to translated product name. */
   productName?: string | null;
-  /** Bottom-right logo; defaults to Reborn white logo. */
+  /** Merchant shop logo for the top-right header. Footer always uses the Reborn wordmark. */
   logoUrl?: string | null;
 }) {
   const { t, locale } = useI18n();
@@ -111,6 +115,7 @@ export default function WebPosPinModal({
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [merchantLogoFailed, setMerchantLogoFailed] = useState(false);
   const busyRef = useRef(false);
   const autoTimerRef = useRef<number | null>(null);
   const isGate = mode === 'gate';
@@ -130,12 +135,17 @@ export default function WebPosPinModal({
       setError('');
       setShake(false);
       setMenuOpen(false);
+      setMerchantLogoFailed(false);
       busyRef.current = false;
       setBusy(false);
     }
   }, [open]);
 
   useEffect(() => () => clearAutoTimer(), []);
+
+  useEffect(() => {
+    setMerchantLogoFailed(false);
+  }, [logoUrl]);
 
   if (!open) return null;
 
@@ -225,7 +235,10 @@ export default function WebPosPinModal({
   );
 
   const footerProductName = productName?.trim() || t('webPosPinProductName');
-  const footerLogoUrl = logoUrl?.trim() || REBORN_LOGO_WHITE;
+  const footerLogoUrl = REBORN_LOGO_WHITE;
+  const merchantLogoSrc = pinGateMerchantLogoUrl(logoUrl);
+  const merchantInitials = merchantPinGateInitials(productName);
+  const showMerchantLogo = Boolean(merchantLogoSrc) && !merchantLogoFailed;
 
   const gateKeypad = (
     <div className="webpos-pin-gate-keypad mx-auto grid w-full max-w-[min(17rem,82vw)] grid-cols-3 gap-1.5 sm:max-w-[18rem] sm:gap-2">
@@ -319,6 +332,29 @@ export default function WebPosPinModal({
           minMs={6000}
         />
 
+        {showMerchantLogo || merchantInitials ? (
+          <div
+            className="webpos-pin-gate-merchant-logo pointer-events-none absolute right-0 top-0 z-10 flex items-start justify-end p-4 pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-6"
+            aria-label={footerProductName}
+          >
+            {showMerchantLogo ? (
+              <img
+                src={merchantLogoSrc}
+                alt={footerProductName}
+                onError={() => setMerchantLogoFailed(true)}
+                className="h-11 w-11 rounded-full bg-white/10 object-contain object-center p-0.5 sm:h-12 sm:w-12 lg:h-14 lg:w-14"
+              />
+            ) : (
+              <span
+                aria-hidden
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-sm font-semibold tracking-wide text-white/90 sm:h-12 sm:w-12 sm:text-base lg:h-14 lg:w-14"
+              >
+                {merchantInitials}
+              </span>
+            )}
+          </div>
+        ) : null}
+
         {hasMenu ? (
           <div className="absolute left-0 top-0 z-10 p-4 sm:p-6">
             <button
@@ -380,7 +416,7 @@ export default function WebPosPinModal({
             shake ? 'webpos-pin-shake' : ''
           }`}
         >
-          <section className="webpos-pin-gate-clock flex shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-start min-[640px]:px-5 min-[640px]:pt-[max(0.75rem,env(safe-area-inset-top))] lg:px-6 lg:pb-4 lg:pt-8">
+          <section className="webpos-pin-gate-clock flex shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
             <div className="flex items-baseline justify-center gap-1 sm:gap-2">
               <span className="webpos-pin-gate-time text-[clamp(2.5rem,9vw,5.5rem)] font-extralight leading-none tracking-tight lg:text-[clamp(3.5rem,12vw,7rem)]">
                 {clock.hour}:{clock.minute}
@@ -396,7 +432,7 @@ export default function WebPosPinModal({
             </p>
           </section>
 
-          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overscroll-contain px-4 pb-2 pt-1 min-[640px]:px-5 min-[640px]:pb-3 lg:px-6 lg:pb-4 lg:pt-4">
+          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overscroll-contain px-4 pb-2 pt-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
             <div className="mb-3 flex w-full max-w-md flex-col items-center gap-1.5 text-center sm:mb-4 sm:gap-2">
               {busy ? (
                 <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />

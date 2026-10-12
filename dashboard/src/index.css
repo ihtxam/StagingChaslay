@@ -1930,6 +1930,17 @@ button {
       padding-bottom: 0.25rem;
     }
 
+    .webpos-pin-gate-clock,
+    .webpos-pin-gate-entry {
+      justify-content: flex-start;
+    }
+
+    .webpos-pin-gate-merchant-logo img,
+    .webpos-pin-gate-merchant-logo span {
+      height: 2rem;
+      width: 2rem;
+    }
+
     .webpos-pin-gate-entry h1 {
       font-size: 1rem;
     }
@@ -1957,6 +1968,14 @@ button {
 
     .webpos-pin-gate-footer p {
       font-size: 0.65rem;
+    }
+  }
+
+  /* Desktop / wide landscape: lower the keypad so it sits with the clock, not under the header. */
+  @media (min-width: 640px) and (min-height: 521px) {
+    .webpos-pin-gate-clock,
+    .webpos-pin-gate-entry {
+      justify-content: center;
     }
   }
 
