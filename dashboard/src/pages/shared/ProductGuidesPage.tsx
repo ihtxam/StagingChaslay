@@ -13,8 +13,8 @@ export default function ProductGuidesPage({
   embedded?: boolean;
   initialChapterId?: string;
 }) {
-  const { t } = useI18n();
-  const chapters = useMemo(() => guidesForAudience(audience), [audience]);
+  const { t, locale } = useI18n();
+  const chapters = useMemo(() => guidesForAudience(audience, locale), [audience, locale]);
   const [activeId, setActiveId] = useState(initialChapterId || chapters[0]?.id || '');
 
   useEffect(() => {

@@ -43,7 +43,6 @@ import DesktopTimingsPage from './DesktopTimingsPage';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
-import SoftwareUpdates from './SoftwareUpdates';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import Billing from './Billing';
 import OnlineShop from './OnlineShop';
@@ -255,7 +254,6 @@ function MerchantShell() {
   const [orderCenterEnabled, setOrderCenterEnabled] = useState(true);
   const [productFlagsReady, setProductFlagsReady] = useState(false);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
-  const [latestSoftwareVersion, setLatestSoftwareVersion] = useState<string | null>(null);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -400,7 +398,6 @@ function MerchantShell() {
       cateringAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
-      latestSoftwareRelease?: { version?: string | null } | null;
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
@@ -426,7 +423,6 @@ function MerchantShell() {
           null
       );
       setPanelNavHidden(parsePanelNavHidden(settings?.panelNavHidden));
-      setLatestSoftwareVersion(settings?.latestSoftwareRelease?.version?.trim() || null);
       setProductFlagsReady(true);
     };
     const load = () => {
@@ -1030,17 +1026,6 @@ function MerchantShell() {
     ...(allow('/merchant/support')
       ? [{ label: t('support'), path: '/merchant/support', icon: '🛟' }]
       : []),
-    ...(allow('/merchant/updates')
-      ? [
-          {
-            label: latestSoftwareVersion
-              ? `${t('softwareUpdatesNav')} · v${latestSoftwareVersion}`
-              : t('softwareUpdatesNav'),
-            path: '/merchant/updates',
-            icon: '🆕',
-          },
-        ]
-      : []),
   ]
     .filter(Boolean)
     .filter((entry) => {
@@ -1246,6 +1231,10 @@ function MerchantShell() {
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:
                   !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
+                guidesPath:
+                  !panelChromeRestricted && allow('/merchant/support')
+                    ? '/merchant/support?tab=help'
+                    : undefined,
               }}
               shopName={merchantShopName}
               shopPath={
@@ -1286,6 +1275,10 @@ function MerchantShell() {
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:
                   !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
+                guidesPath:
+                  !panelChromeRestricted && allow('/merchant/support')
+                    ? '/merchant/support?tab=help'
+                    : undefined,
               }}
               shopName={merchantShopName}
               shopPath={
@@ -1648,15 +1641,8 @@ function MerchantShell() {
               }
             />
             <Route path="users" element={<LegacyUsersRedirect />} />
-            <Route path="guides" element={<Navigate to="/merchant/support" replace />} />
-            <Route
-              path="updates"
-              element={
-                <PanelRouteGuard path="/merchant/updates" allow={allow}>
-                  <SoftwareUpdates />
-                </PanelRouteGuard>
-              }
-            />
+            <Route path="guides" element={<Navigate to="/merchant/support?tab=help" replace />} />
+            <Route path="updates" element={<Navigate to="/merchant/support?tab=updates" replace />} />
             <Route
               path="support"
               element={
