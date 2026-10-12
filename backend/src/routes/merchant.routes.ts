@@ -1827,6 +1827,22 @@ router.get("/me", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/software-releases
+ * Published software version history for the merchant sidebar page.
+ */
+router.get("/software-releases", async (_req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const releases = await SoftwareReleaseService.listPublished();
+    res.json({ success: true, latest: releases[0] || null, releases });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load software updates",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/settings
  * Get merchant settings
  */

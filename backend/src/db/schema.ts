@@ -4262,6 +4262,27 @@ export const platformMessageDismissals = pgTable(
   })
 );
 
+/** Published software versions shown in the merchant panel sidebar. */
+export const softwareReleases = pgTable(
+  "software_releases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    version: varchar("version", { length: 40 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body").notNull().default(""),
+    product: varchar("product", { length: 30 }).notNull().default("all"),
+    isPublished: boolean("is_published").notNull().default(true),
+    publishedAt: timestamp("published_at").defaultNow().notNull(),
+    createdBySuperadminId: uuid("created_by_superadmin_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    publishedIdx: index("software_releases_published_idx").on(table.isPublished, table.publishedAt),
+    versionIdx: index("software_releases_version_idx").on(table.version),
+  })
+);
+
 // ============================================================================
 // SUPPORT TICKETS
 // ============================================================================

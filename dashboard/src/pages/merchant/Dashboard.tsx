@@ -44,6 +44,7 @@ import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary'
 import PlatformShop from './PlatformShop';
 import Support from './Support';
 import ProductGuidesPage from '../shared/ProductGuidesPage';
+import SoftwareUpdates from './SoftwareUpdates';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import Billing from './Billing';
 import OnlineShop from './OnlineShop';
@@ -240,6 +241,7 @@ function MerchantShell() {
   const [orderCenterEnabled, setOrderCenterEnabled] = useState(true);
   const [productFlagsReady, setProductFlagsReady] = useState(false);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
+  const [latestSoftwareVersion, setLatestSoftwareVersion] = useState<string | null>(null);
   const [pinSession, setPinSession] = useState<WebPosStaffSession | null>(() =>
     loadWebPosStaffSession()
   );
@@ -379,6 +381,7 @@ function MerchantShell() {
       kioskEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
+      latestSoftwareRelease?: { version?: string | null } | null;
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
@@ -393,6 +396,7 @@ function MerchantShell() {
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
       setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
+      setLatestSoftwareVersion(settings?.latestSoftwareRelease?.version?.trim() || null);
       setProductFlagsReady(true);
     };
     const load = () => {
@@ -987,6 +991,17 @@ function MerchantShell() {
     ...(allow('/merchant/support')
       ? [{ label: t('productGuidesNav'), path: '/merchant/guides', icon: '📘' }]
       : []),
+    ...(allow('/merchant/updates')
+      ? [
+          {
+            label: latestSoftwareVersion
+              ? `${t('softwareUpdatesNav')} · v${latestSoftwareVersion}`
+              : t('softwareUpdatesNav'),
+            path: '/merchant/updates',
+            icon: '🆕',
+          },
+        ]
+      : []),
   ]
     .filter(Boolean)
     .filter((entry) => {
@@ -1576,6 +1591,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/support" allow={allow}>
                   <ProductGuidesPage audience="merchant" />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="updates"
+              element={
+                <PanelRouteGuard path="/merchant/updates" allow={allow}>
+                  <SoftwareUpdates />
                 </PanelRouteGuard>
               }
             />
