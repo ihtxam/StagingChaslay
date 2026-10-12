@@ -1154,8 +1154,9 @@ const TABLE_PATCHES: string[] = [
   `CREATE TABLE IF NOT EXISTS support_tickets (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_number varchar(20) NOT NULL UNIQUE,
-    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id uuid REFERENCES merchants(id) ON DELETE CASCADE,
     reseller_id uuid REFERENCES resellers(id) ON DELETE SET NULL,
+    requester_role varchar(20) NOT NULL DEFAULT 'merchant',
     category varchar(30) NOT NULL DEFAULT 'technical',
     subcategory varchar(80),
     subject varchar(255) NOT NULL,
@@ -1185,6 +1186,8 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx ON support_ticket_messages(ticket_id)`,
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_created_idx ON support_ticket_messages(created_at)`,
   `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS merchant_visible boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE support_tickets ALTER COLUMN merchant_id DROP NOT NULL`,
+  `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS requester_role varchar(20) NOT NULL DEFAULT 'merchant'`,
   `CREATE TABLE IF NOT EXISTS email_send_log (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid REFERENCES merchants(id) ON DELETE SET NULL,
