@@ -12,8 +12,19 @@ import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal
 import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { isAwaitingApproval, isDeliveryOrPickupShopOrder, isOnlineShopOrder, isTerminalOrderStatus } from '@/lib/order-management';
-import { readDeliveryAutoAccept, shouldAlertForOnlineOrder, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
+import { isOnlineShopOrder } from '@/lib/order-management';
+import {
+  keepIncomingOrderAlert,
+  readDeliveryAutoAccept,
+  shouldAlertForOnlineOrder,
+  shouldSeedUnactionedAlert,
+  shouldUseEtaAcceptModal,
+} from '@/lib/delivery-auto-accept';
+import {
+  persistAutoAcceptOnArrival,
+  printKitchenForAutoAcceptedOrder,
+  startAutoAcceptArrivalCue,
+} from '@/lib/auto-accept-order-arrival';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { maybePrintOnlineOrderOnArrival } from '@/lib/online-order-arrival-print';
 import { printOrderCenterTicketsOnAccept } from '@/lib/order-center-print';
@@ -151,7 +162,10 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       if (knownIdsRef.current == null) {
         knownIdsRef.current = new Set(pendingIds);
         for (const o of pending) {
-          if (!dismissedAlertIdsRef.current.has(o.id)) {
+          if (
+            !dismissedAlertIdsRef.current.has(o.id) &&
+            shouldSeedUnactionedAlert(o, autoAccept)
+          ) {
             unactionedRef.current.add(o.id);
           }
         }
@@ -166,18 +180,24 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
       if (fresh.length > 0) {
         const forAlert: OnlineOrder[] = [];
         if (autoAccept) {
+          const skipKitchen = readOrderCenterPrintPrefs().kitchenRoute === 'local';
           for (const o of fresh) {
-            if (isAwaitingApproval(o.status) && shouldAutoAcceptOrderOnArrival(o)) {
+            const updated = await persistAutoAcceptOnArrival(o, {
+              skipAutoPrintKitchen: skipKitchen,
+            });
+            forAlert.push(updated);
+            if (skipKitchen) {
               try {
-                const actionRes = await api.post(`/merchant/orders/${o.id}/action`, { action: 'accept' });
-                const updated =
-                  (actionRes.data?.order as OnlineOrder | undefined) || { ...o, status: 'preparing' };
-                forAlert.push(updated);
+                await printOrderCenterTicketsOnAccept(
+                  updated.id,
+                  updated.orderSource,
+                  updated.fulfillmentChannel
+                );
               } catch {
-                forAlert.push(o);
+                /* print optional */
               }
             } else {
-              forAlert.push(o);
+              printKitchenForAutoAcceptedOrder(updated, merchantSettings);
             }
           }
         } else {
@@ -187,9 +207,11 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         if (forAlert.length > 0) {
           for (const o of forAlert) {
             unactionedRef.current.add(o.id);
-            void maybePrintOnlineOrderOnArrival(o, merchantSettings);
-            const zip = extractZipFromAddress(o.shippingAddress);
-            speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
+            if (!autoAccept) {
+              void maybePrintOnlineOrderOnArrival(o, merchantSettings);
+              const zip = extractZipFromAddress(o.shippingAddress);
+              speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
+            }
             showBrowserNotification(
               t('panelNewOrderNotificationTitle'),
               t('panelNewOrderNotificationBody').replace(
@@ -202,8 +224,10 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
             const seen = new Set(prev.map((p) => p.id));
             return [...prev, ...forAlert.filter((o) => !seen.has(o.id))];
           });
-          playOrderAlertOnce();
-          startOrderAlertLoop(5000);
+          if (!autoAccept) {
+            playOrderAlertOnce();
+            startOrderAlertLoop(5000);
+          }
           if (document.hidden) {
             document.title = `🔔 ${t('webPosNewOrderAlert')} — Reborn`;
           }
@@ -212,26 +236,7 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
 
       for (const id of [...unactionedRef.current]) {
         const row = online.find((o) => o.id === id);
-        if (!row || dismissedAlertIdsRef.current.has(id)) {
-          unactionedRef.current.delete(id);
-          continue;
-        }
-        if (autoAccept) {
-          if (isTerminalOrderStatus(row.status)) unactionedRef.current.delete(id);
-          else if (!isAwaitingApproval(row.status)) {
-            const src = String(row.orderSource || '').toLowerCase();
-            if (src === 'online_shop' || src === 'kiosk' || src === 'qr_table') {
-              unactionedRef.current.delete(id);
-            } else if (
-              isDeliveryOrPickupShopOrder(row) &&
-              src !== 'online_shop'
-            ) {
-              /* third-party auto-accepted tickets stay until acknowledged */
-            } else {
-              unactionedRef.current.delete(id);
-            }
-          }
-        } else if (!isAwaitingApproval(row.status)) {
+        if (!row || dismissedAlertIdsRef.current.has(id) || !keepIncomingOrderAlert(row, autoAccept)) {
           unactionedRef.current.delete(id);
         }
       }
@@ -319,24 +324,19 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
     [markActioned, rejectTarget]
   );
 
-  if (!enabled) return null;
-
   const current = queue[0] ?? null;
-  const acknowledgeOnly =
-    autoAccept &&
-    !!current &&
-    !isAwaitingApproval(current.status) &&
-    (!isDeliveryOrPickupShopOrder(current) ||
-      String(current.orderSource || '').toLowerCase() === 'online_shop');
-  /**
-   * ETA / prep minutes: shop delivery + pickup awaiting approval.
-   * Not dine-in, kiosk, QR table, or auto-accept (acknowledge-only).
-   * Same rule as WebPOS new-order alerts.
-   */
-  const useEtaModal =
-    !!current &&
-    isAwaitingApproval(current.status) &&
-    isDeliveryOrPickupShopOrder(current);
+  const acknowledgeOnly = autoAccept && !!current;
+  /** ETA / prep minutes when auto-accept is off. Same rule as WebPOS new-order alerts. */
+  const useEtaModal = !!current && shouldUseEtaAcceptModal(current, autoAccept);
+
+  useEffect(() => {
+    if (!enabled || !acknowledgeOnly || !current) {
+      return;
+    }
+    startAutoAcceptArrivalCue(t, current);
+  }, [acknowledgeOnly, current?.id, enabled, t]);
+
+  if (!enabled) return null;
 
   return (
     <>
