@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Search, X } from 'lucide-react';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
 import { useModalKeyboardScroll } from '@/lib/useModalKeyboardScroll';
@@ -73,7 +74,7 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
       });
       setList(res.data.customers || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('webPosCustomersLoadFailed'));
+      toastLoadError(e, t('webPosCustomersLoadFailed'));
     } finally {
       setLoading(false);
     }

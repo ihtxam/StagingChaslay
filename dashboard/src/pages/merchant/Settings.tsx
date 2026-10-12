@@ -63,7 +63,6 @@ import {
   shouldShowOnlineReservationsToggle,
   shouldShowReservationsSettings,
 } from '@/lib/pos-hub-visibility';
-import { dashboardVersionLabel } from '@/lib/app-version';
 import {
   findPrinterHealCandidates,
   formatScaleDeviceLabel,
@@ -5603,7 +5602,6 @@ export default function Settings() {
           </div>
         </div>
       </div>
-      <p className="shrink-0 text-center text-xs text-[var(--text-muted)]">{dashboardVersionLabel}</p>
     </div>
   );
 }
