@@ -17,6 +17,7 @@ import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
 import { bulkDeleteByIds } from '@/lib/bulk-delete';
+import { isExtrasModifierGroup, isNosModifierGroup } from '@/components/shop/shop-modifier-utils';
 
 type PricingType = 'free' | 'fixed' | 'toppings_by_size';
 type SelectionType = 'optional' | 'required';
@@ -222,6 +223,20 @@ export default function Modifiers() {
     setEditorOpen(true);
   };
 
+  const openCreateTemplate = (kind: 'extras' | 'nos') => {
+    setEditingId(null);
+    setForm({
+      ...emptyForm(),
+      title: kind === 'nos' ? "No's" : 'Extras',
+      pricingType: kind === 'nos' ? 'free' : 'fixed',
+      selectionType: 'optional',
+      minSelectable: 0,
+      maxSelectable: 10,
+    });
+    setOtherOpen(true);
+    setEditorOpen(true);
+  };
+
   const uploadOptionImage = async (idx: number, file: File) => {
     setOptionUploadIdx(idx);
     try {
@@ -387,15 +402,34 @@ export default function Modifiers() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">{t('modifiersAddons')}</h1>
           <p className="text-slate-600 mt-1">{t('modifiersPageHint')}</p>
+          <p className="text-slate-600 mt-1 text-sm">{t('extrasNosPageHint')}</p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
-        >
-          <Plus size={18} />
-          {t('addNewGroup')}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => openCreateTemplate('extras')}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Plus size={16} />
+            {t('extrasNosQuickExtras')}
+          </button>
+          <button
+            type="button"
+            onClick={() => openCreateTemplate('nos')}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Plus size={16} />
+            {t('extrasNosQuickNos')}
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
+          >
+            <Plus size={18} />
+            {t('addNewGroup')}
+          </button>
+        </div>
       </div>
 
       <div className="relative">
@@ -478,7 +512,18 @@ export default function Modifiers() {
                   />
                 </label>
                 <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-slate-900">{group.title}</h3>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {group.title}
+                  {isNosModifierGroup(group.title) ? (
+                    <span className="ml-2 align-middle rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                      {t('extrasNosBadgeNos')}
+                    </span>
+                  ) : isExtrasModifierGroup(group.title) ? (
+                    <span className="ml-2 align-middle rounded-full bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700">
+                      {t('extrasNosBadgeExtras')}
+                    </span>
+                  ) : null}
+                </h3>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
                   <Badge>
                     {group.pricingType === 'free'

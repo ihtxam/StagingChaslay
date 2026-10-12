@@ -45,7 +45,7 @@ import DesktopLoadingOverlay from '@/components/DesktopLoadingOverlay';
 import DesktopUpdateBanner from '@/components/DesktopUpdateBanner';
 import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
 import { initDesktopAppDetection, shouldAutoOpenOnScreenKeyboard } from '@/lib/platform';
-import { activateWaitingServiceWorker } from '@/lib/pwa-recover';
+import { activateWaitingServiceWorker, reloadIfDeployedBuildChanged } from '@/lib/pwa-recover';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ShopLocationsPage = lazy(() => import('@/pages/shop/ShopLocationsPage'));
@@ -221,6 +221,7 @@ function App() {
     initClientErrorReporting();
     initDesktopAppDetection();
     void activateWaitingServiceWorker();
+    void reloadIfDeployedBuildChanged();
   }, [hydrate]);
 
   return (

@@ -37,6 +37,7 @@ export const RESTAURANT_MODULE_ROUTES: string[] = [
   "/merchant/reservations",
   "/merchant/sales/reservations",
   "/merchant/signage",
+  "/merchant/products/pizza-builder",
 ];
 
 /** Panel routes visible only in retail module. */

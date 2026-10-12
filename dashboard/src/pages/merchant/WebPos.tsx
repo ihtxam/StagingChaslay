@@ -361,7 +361,11 @@ import {
   type WebPosCategoryChipSize,
   type WebPosCategoryLayoutMode,
 } from '@/lib/webpos-category-layout';
-import { activateWaitingServiceWorker, isStandalonePwaSession } from '@/lib/pwa-recover';
+import {
+  activateWaitingServiceWorker,
+  isStandalonePwaSession,
+  reloadIfDeployedBuildChanged,
+} from '@/lib/pwa-recover';
 import {
   clearPersistedWebPosCarts,
   draftsMapToRecord,
@@ -785,8 +789,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (!isStandalonePwaSession()) return;
-    void activateWaitingServiceWorker();
+    if (isStandalonePwaSession()) {
+      void activateWaitingServiceWorker();
+    }
+    void reloadIfDeployedBuildChanged();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        if (isStandalonePwaSession()) void activateWaitingServiceWorker();
+        void reloadIfDeployedBuildChanged();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
   useEffect(() => {
