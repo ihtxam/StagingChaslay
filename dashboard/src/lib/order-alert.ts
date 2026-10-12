@@ -98,18 +98,87 @@ export function playKitchenOverdueOnce(): void {
   tone(ctx, 330, t0 + 0.78, 0.28, 0.26);
 }
 
+function clearOrderAlertLoopTimer(): void {
+  if (loopTimer) {
+    clearInterval(loopTimer);
+    loopTimer = null;
+  }
+}
+
 /** Repeat ringtone until stopOrderAlertLoop() — used while new orders are waiting. */
 export function startOrderAlertLoop(intervalMs = 4500): void {
   if (loopTimer) return;
+  stopAutoAcceptArrivalAlert();
   playOrderAlertOnce();
   loopTimer = setInterval(() => playOrderAlertOnce(), intervalMs);
 }
 
 export function stopOrderAlertLoop(): void {
-  if (loopTimer) {
-    clearInterval(loopTimer);
-    loopTimer = null;
+  clearOrderAlertLoopTimer();
+  stopAutoAcceptArrivalAlert();
+}
+
+const AUTO_ACCEPT_BEEP_COUNT = 6;
+const AUTO_ACCEPT_BEEP_GAP_MS = 320;
+
+let autoAcceptBeepTimer: ReturnType<typeof setTimeout> | null = null;
+let autoAcceptAnnounceTimer: ReturnType<typeof setTimeout> | null = null;
+let autoAcceptRunning = false;
+
+/** Short single beep used for the auto-accept 6-beep cue. */
+export function playShortOrderBeepOnce(): void {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    void ctx.resume().then(() => playShortOrderBeepOnce());
+    return;
   }
+  tone(ctx, 880, ctx.currentTime + 0.02, 0.16, 0.22);
+}
+
+function cancelSpeech(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Beep 6 times, then announce. Stops immediately on stopOrderAlertLoop / ack. */
+export function startAutoAcceptArrivalAlert(announce: () => void, beepCount = AUTO_ACCEPT_BEEP_COUNT): void {
+  clearOrderAlertLoopTimer();
+  stopAutoAcceptArrivalAlert();
+  autoAcceptRunning = true;
+  let i = 0;
+  const tick = () => {
+    if (!autoAcceptRunning) return;
+    playShortOrderBeepOnce();
+    i += 1;
+    if (i < beepCount) {
+      autoAcceptBeepTimer = setTimeout(tick, AUTO_ACCEPT_BEEP_GAP_MS);
+      return;
+    }
+    autoAcceptAnnounceTimer = setTimeout(() => {
+      autoAcceptAnnounceTimer = null;
+      if (!autoAcceptRunning) return;
+      announce();
+    }, AUTO_ACCEPT_BEEP_GAP_MS);
+  };
+  tick();
+}
+
+export function stopAutoAcceptArrivalAlert(): void {
+  autoAcceptRunning = false;
+  if (autoAcceptBeepTimer) {
+    clearTimeout(autoAcceptBeepTimer);
+    autoAcceptBeepTimer = null;
+  }
+  if (autoAcceptAnnounceTimer) {
+    clearTimeout(autoAcceptAnnounceTimer);
+    autoAcceptAnnounceTimer = null;
+  }
+  cancelSpeech();
 }
 
 export function isOrderAlertLooping(): boolean {

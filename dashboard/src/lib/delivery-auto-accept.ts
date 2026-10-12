@@ -1,4 +1,10 @@
-import { isDeliveryOrPickupShopOrder, isUnconfirmedCardOnlineOrder } from '@/lib/order-management';
+import {
+  isAwaitingApproval,
+  isDeliveryOrPickupShopOrder,
+  isOnlineShopOrder,
+  isTerminalOrderStatus,
+  isUnconfirmedCardOnlineOrder,
+} from '@/lib/order-management';
 
 /** Whether delivery portal / online shop auto-accept is enabled. */
 export function readDeliveryAutoAccept(settings: unknown): boolean {
@@ -37,8 +43,8 @@ export function shouldAlertForOnlineOrder(
 }
 
 /**
- * Auto-accept on arrival applies to third-party delivery platforms only.
- * Online shop delivery/pickup must use the ETA accept modal (accept/reject + prep time).
+ * Client should POST accept when the merchant auto-accept toggle is on
+ * and the ticket is still awaiting approval. Kiosk / QR table use their own settings.
  */
 export function shouldAutoAcceptOrderOnArrival(o: {
   orderSource?: string | null;
@@ -46,7 +52,45 @@ export function shouldAutoAcceptOrderOnArrival(o: {
   channel?: string | null;
   fulfillmentChannel?: string | null;
 }): boolean {
-  if (isDeliveryOrPickupShopOrder(o)) return false;
   const src = String(o.orderSource || '').toLowerCase();
-  return src === 'justeat' || src === 'ubereats';
+  if (src === 'kiosk' || src === 'qr_table') return false;
+  if (src === 'justeat' || src === 'ubereats') return true;
+  return isOnlineShopOrder(o) || isDeliveryOrPickupShopOrder(o);
+}
+
+/** ETA Accept & print modal — only when auto-accept is off. */
+export function shouldUseEtaAcceptModal(
+  o: {
+    status?: string | null;
+    orderSource?: string | null;
+    orderType?: string | null;
+    channel?: string | null;
+    fulfillmentChannel?: string | null;
+  },
+  autoAccept: boolean
+): boolean {
+  if (autoAccept) return false;
+  return isAwaitingApproval(String(o.status || '')) && isDeliveryOrPickupShopOrder(o);
+}
+
+/**
+ * Keep the incoming-order popup / beep until staff acknowledges (auto-accept)
+ * or until the ticket leaves pending (manual Accept & print / Reject).
+ */
+export function keepIncomingOrderAlert(
+  o: { status?: string | null },
+  autoAccept: boolean
+): boolean {
+  if (isTerminalOrderStatus(o.status)) return false;
+  if (autoAccept) return true;
+  return isAwaitingApproval(String(o.status || ''));
+}
+
+/** First poll after settings load — do not resurrect already-accepted tickets. */
+export function shouldSeedUnactionedAlert(
+  o: { status?: string | null },
+  autoAccept: boolean
+): boolean {
+  if (autoAccept && !isAwaitingApproval(String(o.status || ''))) return false;
+  return true;
 }

@@ -484,17 +484,25 @@ import {
 import type { TableHeldDisplay } from '@/components/webpos/WebPosTablesView';
 import {
   INVOICE_SETTLEMENT_METHOD,
-  isAwaitingApproval,
-  isDeliveryOrPickupShopOrder,
   isInvoiceOrder,
   isOnlineShopOrder,
   isPaidOrder,
-  isTerminalOrderStatus,
   orderPublicRefs,
   posSaleFulfillmentStatus,
   type MerchantOrder,
 } from '@/lib/order-management';
-import { readDeliveryAutoAccept, shouldAlertForOnlineOrder, shouldAutoAcceptOrderOnArrival } from '@/lib/delivery-auto-accept';
+import {
+  keepIncomingOrderAlert,
+  readDeliveryAutoAccept,
+  shouldAlertForOnlineOrder,
+  shouldSeedUnactionedAlert,
+  shouldUseEtaAcceptModal,
+} from '@/lib/delivery-auto-accept';
+import {
+  persistAutoAcceptOnArrival,
+  printKitchenForAutoAcceptedOrder,
+  startAutoAcceptArrivalCue,
+} from '@/lib/auto-accept-order-arrival';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM, ONLINE_ORDER_HISTORY_STATUSES_PARAM } from '@/lib/incoming-orders';
 import { isPayLaterPaymentMethod, payLaterCollectedTender } from '@/lib/receipt-labels';
 import {
@@ -3194,7 +3202,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (knownOnlineIdsRef.current == null) {
         knownOnlineIdsRef.current = new Set(newIds);
         for (const o of newOnes) {
-          if (!dismissedOrderAlertIdsRef.current.has(o.id)) {
+          if (
+            !dismissedOrderAlertIdsRef.current.has(o.id) &&
+            shouldSeedUnactionedAlert(o, deliveryAutoAccept)
+          ) {
             unactionedOrderIdsRef.current.add(o.id);
           }
         }
@@ -3214,22 +3225,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           unactionedOrderIdsRef.current.delete(id);
           continue;
         }
-        if (deliveryAutoAccept) {
-          if (isTerminalOrderStatus(row.status)) unactionedOrderIdsRef.current.delete(id);
-          else if (!isAwaitingApproval(row.status)) {
-            const src = String(row.orderSource || '').toLowerCase();
-            if (src === 'online_shop' || src === 'kiosk' || src === 'qr_table') {
-              unactionedOrderIdsRef.current.delete(id);
-            } else if (
-              isDeliveryOrPickupShopOrder(row) &&
-              src !== 'online_shop'
-            ) {
-              /* third-party auto-accepted tickets stay until acknowledged */
-            } else {
-              unactionedOrderIdsRef.current.delete(id);
-            }
-          }
-        } else if (!isAwaitingApproval(row.status)) {
+        if (!keepIncomingOrderAlert(row, deliveryAutoAccept)) {
           unactionedOrderIdsRef.current.delete(id);
         }
       }
@@ -3240,15 +3236,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (freshOrders.length > 0) {
         const queueOrders: OnlineOrder[] = [];
         for (const o of freshOrders) {
-          if (deliveryAutoAccept && isAwaitingApproval(o.status) && shouldAutoAcceptOrderOnArrival(o)) {
-            try {
-              const actionRes = await api.post(`/merchant/orders/${o.id}/action`, { action: 'accept' });
-              const updated =
-                (actionRes.data?.order as OnlineOrder | undefined) || { ...o, status: 'preparing' };
-              queueOrders.push(updated);
-            } catch {
-              queueOrders.push(o);
-            }
+          if (deliveryAutoAccept) {
+            queueOrders.push(await persistAutoAcceptOnArrival(o));
           } else {
             queueOrders.push(o);
           }
@@ -3256,9 +3245,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
         for (const o of queueOrders) {
           unactionedOrderIdsRef.current.add(o.id);
-          void maybePrintOnlineOrderOnArrival(o, merchantSettingsRef.current);
-          const zip = extractZipFromAddress(o.shippingAddress);
-          speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
+          if (deliveryAutoAccept) {
+            printKitchenForAutoAcceptedOrder(o, merchantSettingsRef.current);
+          } else {
+            void maybePrintOnlineOrderOnArrival(o, merchantSettingsRef.current);
+            const zip = extractZipFromAddress(o.shippingAddress);
+            speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
+          }
         }
         setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
         setNewOrderAlertQueue((prev) => {
@@ -3269,8 +3262,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           }
           return next;
         });
-        playOrderAlertOnce();
-        startOrderAlertLoop(5000);
+        if (!deliveryAutoAccept) {
+          playOrderAlertOnce();
+          startOrderAlertLoop(5000);
+        }
       } else {
         setUnactionedOrderCount(unactionedOrderIdsRef.current.size);
       }
@@ -3327,6 +3322,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     },
     [dismissNewOrderAlert, markOnlineOrderActioned]
   );
+
+  const autoAcceptAlertId = newOrderAlertQueue[0]?.id;
+  useEffect(() => {
+    const current = newOrderAlertQueue[0];
+    if (!deliveryAutoAccept || !current) return;
+    startAutoAcceptArrivalCue(t, current);
+  }, [deliveryAutoAccept, autoAcceptAlertId, t]);
 
   const openOnlineOrdersInTab = useCallback((orderId?: string | null, channel: 'online' | 'all' = 'online') => {
     setOrdersChannelPref(channel === 'online' ? 'online' : null);
@@ -10622,20 +10624,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const orderAlertRing = unactionedOrderCount > 0;
   const reservationAlertRing = reservationAlertUntil > Date.now();
   const currentNewOrderAlert = newOrderAlertQueue[0] ?? null;
-  const newOrderAlertAcknowledgeOnly =
-    deliveryAutoAccept &&
-    !!currentNewOrderAlert &&
-    !isAwaitingApproval(currentNewOrderAlert.status) &&
-    (!isDeliveryOrPickupShopOrder(currentNewOrderAlert) ||
-      String(currentNewOrderAlert.orderSource || '').toLowerCase() === 'online_shop');
-  /**
-   * ETA / prep minutes: shop delivery + pickup awaiting approval.
-   * Not dine-in, kiosk, QR table, or auto-accept (acknowledge-only).
-   */
+  const newOrderAlertAcknowledgeOnly = deliveryAutoAccept && !!currentNewOrderAlert;
+  /** ETA / prep minutes when auto-accept is off. */
   const newOrderAlertUseEtaModal =
-    !!currentNewOrderAlert &&
-    isAwaitingApproval(currentNewOrderAlert.status) &&
-    isDeliveryOrPickupShopOrder(currentNewOrderAlert);
+    !!currentNewOrderAlert && shouldUseEtaAcceptModal(currentNewOrderAlert, deliveryAutoAccept);
 
   const tableBadge =
     tableLabel || tabNumber

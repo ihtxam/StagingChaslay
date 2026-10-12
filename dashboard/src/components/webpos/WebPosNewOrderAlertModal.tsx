@@ -43,10 +43,10 @@ export default function WebPosNewOrderAlertModal({
   const { t, formatDateTime } = useI18n();
 
   useEffect(() => {
-    if (order) {
+    if (order && !acknowledgeOnly) {
       startOrderAlertLoop(4500);
     }
-  }, [order?.id]);
+  }, [order?.id, acknowledgeOnly]);
 
   if (!order) return null;
 
@@ -163,7 +163,7 @@ export default function WebPosNewOrderAlertModal({
           disabled={busy}
           onClick={() => onAcknowledge(order)}
         >
-          {t('webPosOrderTaken')}
+          {t(acknowledgeOnly ? 'webPosOrderNoted' : 'webPosOrderTaken')}
         </button>
 
         {showWorkflowActions ? (

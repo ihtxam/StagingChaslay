@@ -29,6 +29,17 @@ import {
   isOnlineShopOrder,
 } from '@/lib/order-management';
 import {
+  keepIncomingOrderAlert,
+  readDeliveryAutoAccept,
+  shouldAlertForOnlineOrder,
+  shouldUseEtaAcceptModal,
+} from '@/lib/delivery-auto-accept';
+import {
+  persistAutoAcceptOnArrival,
+  printKitchenForAutoAcceptedOrder,
+  startAutoAcceptArrivalCue,
+} from '@/lib/auto-accept-order-arrival';
+import {
   playOrderAlertOnce,
   startOrderAlertLoop,
   stopOrderAlertLoop,
@@ -181,6 +192,8 @@ export default function OrderCenterApp() {
   }, []);
 
   useEffect(() => {
+    const autoAcceptOn = readDeliveryAutoAccept(merchantSettings);
+    if (autoAcceptOn) return;
     if (alertQueue.length > 0) {
       startOrderAlertLoop(4500);
     } else {
@@ -188,7 +201,7 @@ export default function OrderCenterApp() {
       if (!document.hidden) document.title = 'Reborn';
     }
     return () => stopOrderAlertLoop();
-  }, [alertQueue.length]);
+  }, [alertQueue.length, merchantSettings]);
 
   const markAlertDone = useCallback(
     (orderId: string) => {
@@ -285,22 +298,45 @@ export default function OrderCenterApp() {
         return;
       }
 
-      const freshPending = filtered.filter(
-        (o) => !knownRef.has(o.id) && isAwaitingApproval(o.status)
+      const autoAccept = readDeliveryAutoAccept(merchantSettings);
+      const freshIncoming = filtered.filter(
+        (o) => !knownRef.has(o.id) && shouldAlertForOnlineOrder(o, autoAccept)
       );
       for (const o of filtered) knownRef.add(o.id);
 
-      if (freshPending.length > 0) {
-        for (const o of freshPending) {
-          unactionedAlertRef.add(o.id);
-          void printOrderCenterOnArrival(o);
-          const zip = extractZipFromAddress(o.shippingAddress);
-          speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
+      if (freshIncoming.length > 0) {
+        const queued: CenterOrder[] = [];
+        const skipKitchen = readOrderCenterPrintPrefs().kitchenRoute === 'local';
+        for (const o of freshIncoming) {
+          const next = autoAccept
+            ? await persistAutoAcceptOnArrival(o, { skipAutoPrintKitchen: skipKitchen })
+            : o;
+          queued.push(next);
+          unactionedAlertRef.add(next.id);
+          if (autoAccept) {
+            if (skipKitchen) {
+              try {
+                await printOrderCenterTicketsOnAccept(
+                  next.id,
+                  next.orderSource,
+                  next.fulfillmentChannel
+                );
+              } catch {
+                /* print optional */
+              }
+            } else {
+              printKitchenForAutoAcceptedOrder(next, merchantSettings);
+            }
+          } else {
+            void printOrderCenterOnArrival(next);
+            const zip = extractZipFromAddress(next.shippingAddress);
+            speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
+          }
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             try {
               new Notification(t('webPosNewOrderAlert'), {
-                body: `#${formatOrderNumberDisplay(o.orderNumber)} · ${Number(o.total).toFixed(2)} CHF`,
-                tag: `order-center-${o.id}`,
+                body: `#${formatOrderNumberDisplay(next.orderNumber)} · ${Number(next.total).toFixed(2)} CHF`,
+                tag: `order-center-${next.id}`,
               });
             } catch {
               /* ignore */
@@ -309,23 +345,25 @@ export default function OrderCenterApp() {
         }
         setAlertQueue((prev) => {
           const seen = new Set(prev.map((p) => p.id));
-          return [...prev, ...freshPending.filter((o) => !seen.has(o.id))];
+          return [...prev, ...queued.filter((o) => !seen.has(o.id))];
         });
-        playOrderAlertOnce();
+        if (!autoAccept) {
+          playOrderAlertOnce();
+        }
         if (document.hidden) {
           document.title = `🔔 ${t('webPosNewOrderAlert')} — Reborn`;
         }
       }
 
       setAlertQueue((prev) =>
-        prev.filter((o) => unactionedAlertRef.has(o.id) && isAwaitingApproval(o.status))
+        prev.filter((o) => unactionedAlertRef.has(o.id) && keepIncomingOrderAlert(o, autoAccept))
       );
     } catch {
       toast.error(t('orderCenterLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [knownRef, t, unactionedAlertRef, kioskLicensed]);
+  }, [knownRef, t, unactionedAlertRef, kioskLicensed, merchantSettings]);
 
   const loadEod = useCallback(async () => {
     setEodLoading(true);
@@ -458,10 +496,14 @@ export default function OrderCenterApp() {
   };
 
   const currentAlert = alertQueue[0] ?? null;
-  const useEtaAlert =
-    !!currentAlert &&
-    isAwaitingApproval(currentAlert.status) &&
-    isDeliveryOrPickupShopOrder(currentAlert);
+  const autoAccept = readDeliveryAutoAccept(merchantSettings);
+  const acknowledgeOnly = autoAccept && !!currentAlert;
+  const useEtaAlert = !!currentAlert && shouldUseEtaAcceptModal(currentAlert, autoAccept);
+
+  useEffect(() => {
+    if (!acknowledgeOnly || !currentAlert) return;
+    startAutoAcceptArrivalCue(t, currentAlert);
+  }, [acknowledgeOnly, currentAlert?.id, t]);
 
   const printOrder = async (o: CenterOrder) => {
     setBusyId(o.id);
@@ -858,22 +900,25 @@ export default function OrderCenterApp() {
           order={currentAlert as OnlineOrder | null}
           queueCount={alertQueue.length}
           busy={alertBusy || busyId === currentAlert?.id}
+          acknowledgeOnly={acknowledgeOnly}
           onAcknowledge={acknowledgeFromAlert}
           onAccept={
-            currentAlert && isAwaitingApproval(currentAlert.status)
-              ? (o) => {
-                  if (isDeliveryOrPickupShopOrder(o)) {
-                    setAcceptEtaOrder(o as CenterOrder);
-                  } else {
-                    void runAction(o.id, 'accept', {
-                      orderSource: o.orderSource,
-                      fulfillmentChannel: o.fulfillmentChannel,
-                    }).then(() => markAlertDone(o.id));
+            acknowledgeOnly
+              ? undefined
+              : currentAlert && isAwaitingApproval(currentAlert.status)
+                ? (o) => {
+                    if (isDeliveryOrPickupShopOrder(o)) {
+                      setAcceptEtaOrder(o as CenterOrder);
+                    } else {
+                      void runAction(o.id, 'accept', {
+                        orderSource: o.orderSource,
+                        fulfillmentChannel: o.fulfillmentChannel,
+                      }).then(() => markAlertDone(o.id));
+                    }
                   }
-                }
-              : undefined
+                : undefined
           }
-          onReject={(o) => rejectFromAlert(o)}
+          onReject={acknowledgeOnly ? undefined : (o) => rejectFromAlert(o)}
         />
       )}
 

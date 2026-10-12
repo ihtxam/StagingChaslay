@@ -35,6 +35,7 @@ import {
   speakDeliveryAlert,
 } from '@/lib/delivery-hub-alerts';
 import { startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
+import { startAutoAcceptArrivalCue } from '@/lib/auto-accept-order-arrival';
 import DeliveryPrintedSlipModal, {
   type DeliverySlipAckOrder,
 } from '@/components/webpos/DeliveryPrintedSlipModal';
@@ -139,6 +140,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
   const staleAlertedRef = useRef<Set<string>>(new Set());
   const ticketAckedRef = useRef<Set<string>>(new Set());
   const autoAcceptStartedRef = useRef<Set<string>>(new Set());
+  const lastAutoAcceptCueIdRef = useRef<string | null>(null);
   const [ticketAckQueue, setTicketAckQueue] = useState<DeliverySlipAckOrder[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -213,7 +215,7 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
   const activeSlipModal = ticketAckQueue[0] ?? null;
 
   useEffect(() => {
-    if (!speechOn) return;
+    if (!speechOn || autoAccept) return;
     for (const o of pendingApproval) {
       if (alertedPendingRef.current.has(o.id)) continue;
       alertedPendingRef.current.add(o.id);
@@ -225,18 +227,35 @@ export default function WebPosDeliveryHub({ merchant, printSettings, onClose, on
           : newOrderSpeechLine(t, o.orderSource, zip);
       speakDeliveryAlert(line);
     }
-  }, [pendingApproval, speechOn]);
+  }, [autoAccept, pendingApproval, speechOn, t]);
 
   const needsAlertRing = pendingApproval.length > 0 || ticketAckQueue.length > 0;
 
   useEffect(() => {
+    if (autoAccept) return;
     if (needsAlertRing) {
       startOrderAlertLoop(4500);
     } else {
       stopOrderAlertLoop();
     }
     return () => stopOrderAlertLoop();
-  }, [needsAlertRing]);
+  }, [autoAccept, needsAlertRing]);
+
+  useEffect(() => {
+    if (!autoAccept) {
+      lastAutoAcceptCueIdRef.current = null;
+      return;
+    }
+    const current = ticketAckQueue[0];
+    if (!current) {
+      lastAutoAcceptCueIdRef.current = null;
+      stopOrderAlertLoop();
+      return;
+    }
+    if (lastAutoAcceptCueIdRef.current === current.id) return;
+    lastAutoAcceptCueIdRef.current = current.id;
+    startAutoAcceptArrivalCue(t, current);
+  }, [autoAccept, ticketAckQueue, t]);
 
   useEffect(() => {
     if (!speechOn) return;
