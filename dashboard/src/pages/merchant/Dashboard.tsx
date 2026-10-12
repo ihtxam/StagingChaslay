@@ -1306,7 +1306,9 @@ function MerchantShell() {
         )}
 
         {!hideChrome ? <PlatformStatusBannerSlot /> : null}
-        {!hideChrome && allowInventory('/merchant/inventory') ? <InventoryExpiryAlerts /> : null}
+        {!hideChrome && productFlagsReady && allowInventory('/merchant/inventory') ? (
+          <InventoryExpiryAlerts licensed={inventoryLicensed} />
+        ) : null}
 
         <main
           className={
