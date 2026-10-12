@@ -9,6 +9,7 @@ import {
   MonitorSmartphone,
   Percent,
   UserCircle2,
+  Award,
   Vault,
   FileText,
   X,
@@ -59,6 +60,8 @@ type Props = {
   busy: boolean;
   customerLabel?: string | null;
   onCustomer?: () => void;
+  onComo?: () => void;
+  comoLabel?: string | null;
   onSplit?: () => void;
   onComplete: (payments: AppliedPayment[], changeDue: number, tipAmount: number) => void;
   onGiftCardRequest?: (remaining: number) => void;
@@ -108,6 +111,8 @@ export default function WebPosCheckoutView({
   busy,
   customerLabel,
   onCustomer,
+  onComo,
+  comoLabel,
   onSplit,
   onComplete,
   onGiftCardRequest,
@@ -906,6 +911,18 @@ export default function WebPosCheckoutView({
                   {customerLabel || t('webPosCustomerShort')}
                 </span>
               </button>
+              {onComo ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onComo()}
+                  className={actionBtnClass(!!comoLabel)}
+                  title={t('comoIdentifyTitle')}
+                >
+                  <Award size={18} />
+                  <span className="max-w-full truncate">{comoLabel || t('comoWebposBtn')}</span>
+                </button>
+              ) : null}
 
               {settings.splitBillsEnabled && onSplit ? (
                 <button

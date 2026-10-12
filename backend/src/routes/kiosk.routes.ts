@@ -48,6 +48,57 @@ router.get("/:token/menu", async (req: Request, res: Response) => {
   }
 });
 
+function kioskComoSession(body: Record<string, unknown>, extras?: { orderId?: string }) {
+  return {
+    identifier: body.identifier != null ? String(body.identifier) : undefined,
+    phone: body.phone != null ? String(body.phone) : undefined,
+    email: body.email != null ? String(body.email) : undefined,
+    membershipKey: body.membershipKey != null ? String(body.membershipKey) : undefined,
+    transactionId: body.transactionId != null ? String(body.transactionId) : undefined,
+    orderType: "kiosk",
+    items: Array.isArray(body.items) ? body.items : [],
+    totalMajor: body.totalMajor != null ? Number(body.totalMajor) : undefined,
+    assetKeys: Array.isArray(body.assetKeys)
+      ? (body.assetKeys as unknown[]).map((k) => String(k)).filter(Boolean)
+      : undefined,
+    channel: "kiosk" as const,
+    orderId: extras?.orderId || (body.orderId != null ? String(body.orderId) : undefined),
+  };
+}
+
+router.post("/:token/como/identify", async (req: Request, res: Response) => {
+  try {
+    const { merchant } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    const { ComoService } = await import("@/services/como.service");
+    const data = await ComoService.identify(merchant.id, kioskComoSession(req.body || {}));
+    res.json({ success: true, ...data });
+  } catch (error) {
+    handleError(res, error, "Como identify failed");
+  }
+});
+
+router.post("/:token/como/benefits", async (req: Request, res: Response) => {
+  try {
+    const { merchant } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    const { ComoService } = await import("@/services/como.service");
+    const data = await ComoService.getBenefits(merchant.id, kioskComoSession(req.body || {}));
+    res.json({ success: true, ...data });
+  } catch (error) {
+    handleError(res, error, "Como benefits failed");
+  }
+});
+
+router.post("/:token/como/submit", async (req: Request, res: Response) => {
+  try {
+    const { merchant } = await loadMerchantByTokenForDiagnostics(req.params.token);
+    const { ComoService } = await import("@/services/como.service");
+    const data = await ComoService.submitPurchase(merchant.id, kioskComoSession(req.body || {}));
+    res.json({ success: true, ...data });
+  } catch (error) {
+    handleError(res, error, "Como submit failed");
+  }
+});
+
 router.post("/:token/membership/lookup", async (req: Request, res: Response) => {
   try {
     const code = String(req.body?.code || "").trim();

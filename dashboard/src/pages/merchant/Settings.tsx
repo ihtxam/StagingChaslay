@@ -31,6 +31,7 @@ import {
   Wallet,
   Store,
   Calculator,
+  Award,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -41,6 +42,7 @@ import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import CdsSettingsPanel from '@/components/merchant/CdsSettingsPanel';
 import SettingsFiscalTab from '@/pages/merchant/settings/SettingsFiscalTab';
+import SettingsComoTab from '@/pages/merchant/settings/SettingsComoTab';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
@@ -402,6 +404,7 @@ type TabId =
   | 'customerDisplay'
   | 'fiscal'
   | 'accounting'
+  | 'como'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -425,6 +428,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'customerDisplay',
   'fiscal',
   'accounting',
+  'como',
   'signage',
   'kiosk',
   'email',
@@ -443,7 +447,7 @@ const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }>
     ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'kiosk', 'signage', 'delivery'],
   },
   { id: 'guest', labelKey: 'settingsGroupGuest', ids: ['shop', 'email', 'delivery-map'] },
-  { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting'] },
+  { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting', 'como'] },
 ];
 
 const TAX_RATE_MAX = 100;
@@ -818,6 +822,7 @@ export default function Settings() {
           navLabel: t('settingsNavAccounting'),
           icon: Calculator,
         },
+        { id: 'como' as const, label: t('settingsComo'), navLabel: t('settingsNavComo'), icon: Award },
         { id: 'signage' as const, label: t('signageTitle'), navLabel: t('settingsNavSignage'), icon: Tv },
         { id: 'kiosk' as const, label: t('kioskNav'), navLabel: t('settingsNavKiosk'), icon: TabletSmartphone },
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
@@ -5527,6 +5532,8 @@ export default function Settings() {
           )}
 
           {tab === 'accounting' && <SettingsAccountingTab />}
+
+          {tab === 'como' && <SettingsComoTab />}
 
           {tab === 'signage' && (
             <div className="space-y-5">

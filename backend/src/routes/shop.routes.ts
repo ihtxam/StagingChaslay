@@ -77,6 +77,7 @@ import {
 import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { publicShopDbError } from "@/lib/public-shop-error";
 import { resolveSettings as resolveReservationSettings } from "@/services/reservation.service";
+import { publicGoogleReviewUrl } from "@/lib/pos-print-settings";
 
 const router = Router();
 
@@ -695,6 +696,7 @@ function publicReservationGuestLinks(
     googleReserveUrl: s.googleReserveUrl,
     googleOrderUrl: s.googleOrderUrl,
     photoMenuEnabled: s.photoMenuEnabled !== false,
+    googleReviewUrl: publicGoogleReviewUrl(merchant.posPrintSettings),
   };
 }
 
@@ -2463,6 +2465,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       orderSource: requestedOrderSource,
       kioskToken,
       badgeNumber,
+      comoDiscountAmount: comoDiscountAmountRaw,
     } = req.body as {
       items: Array<{
         productId: string;
@@ -2496,6 +2499,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       orderSource?: string;
       kioskToken?: string;
       badgeNumber?: string;
+      comoDiscountAmount?: number;
     };
 
     if (scheduledFor) {
@@ -3222,8 +3226,11 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       giftCardDiscount = roundMoney2(Math.min(giftCardPreviewBalance, preGiftTotal));
     }
     const orderNumber = await generateWebOrderNumber(db, merchant.id);
+    const comoDiscount = isKioskOrder
+      ? roundMoney2(Math.max(0, Math.min(Number(comoDiscountAmountRaw) || 0, preGiftTotal)))
+      : 0;
     // Offer + voucher + points + gift card discount apply to food (+ delivery/tax for points); tip and card fee remain payable
-    const preCardTotal = Math.max(0, preGiftTotal - giftCardDiscount);
+    const preCardTotal = Math.max(0, preGiftTotal - giftCardDiscount - comoDiscount);
     const cardFeeFixed = Number(merchant.onlineCardFeeFixed || 0) || 0;
     const cardFeePercent = Number(merchant.onlineCardFeePercent || 0) || 0;
     const cardFee =
@@ -3247,6 +3254,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         giftCardDiscount > 0
           ? `[Gift card: −CHF ${giftCardDiscount.toFixed(2)}]`
           : "",
+        comoDiscount > 0 ? `[Como: −CHF ${comoDiscount.toFixed(2)}]` : "",
         roundAdj !== 0 ? `[Rounding ${roundAdj > 0 ? "+" : ""}${roundAdj.toFixed(2)}]` : "",
       ]
         .filter(Boolean)
@@ -3365,7 +3373,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         status: initialOrderStatus,
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
-        discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount + giftCardDiscount).toFixed(2),
+        discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount + giftCardDiscount + comoDiscount).toFixed(2),
         deliveryFee: deliveryFee.toFixed(2),
         tipAmount: tip.toFixed(2),
         cardFee: cardFee.toFixed(2),
@@ -3727,6 +3735,7 @@ router.get("/:slug/orders/:orderId", async (req: Request, res: Response) => {
           phone: merchant.phone,
           shopLogoUrl: merchant.shopLogoUrl || null,
           cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
+          googleReviewUrl: publicGoogleReviewUrl(merchant.posPrintSettings),
         },
       },
     });

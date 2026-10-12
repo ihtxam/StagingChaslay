@@ -262,6 +262,8 @@ export const merchants = pgTable(
     giftCardAddonEnabled: boolean("gift_card_addon_enabled").default(false).notNull(),
     /** Fiskaly SIGN DE / SIGN FR merchant credentials */
     fiskalySettings: json("fiskaly_settings").$type<Record<string, unknown> | null>(),
+    /** Como Sense loyalty — merchant API key + branch/POS ids (secrets stay server-side). */
+    comoSettings: json("como_settings").$type<Record<string, unknown> | null>(),
     /** Fixed CHF surcharge added to online card checkouts */
     onlineCardFeeFixed: decimal("online_card_fee_fixed", { precision: 10, scale: 2 }).default("0"),
     /** Percent surcharge on (subtotal+tax+delivery+tip) for online card checkouts */
@@ -1449,6 +1451,8 @@ export const orders = pgTable(
     notes: text("notes"),
     /** Fiskaly KassenSichV / NF525 signature payload for the receipt */
     fiskalySignature: json("fiskaly_signature").$type<Record<string, unknown> | null>(),
+    /** Como Sense submitPurchase mapping (transaction id / confirmation). */
+    comoLoyalty: json("como_loyalty").$type<Record<string, unknown> | null>(),
     shippingAddress: text("shipping_address"),
     /** Geocoded destination for delivery map (shop checkout / assign). */
     deliveryLatitude: decimal("delivery_latitude", { precision: 10, scale: 7 }),
