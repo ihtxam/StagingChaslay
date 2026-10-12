@@ -8,6 +8,8 @@ import { compareAgentVersion, isBridgeVersion } from '@/lib/print-agent';
 const PRINT_AGENT_SETUP_FILE = 'reborn-print-agent-setup.exe';
 const PRINT_AGENT_MANIFEST = 'reborn-print-agent.json';
 const PRINT_BRIDGE_MANIFEST = 'reborn-print-bridge.json';
+const REBORN_POS_SETUP_FILE = 'reborn-pos-setup.exe';
+const REBORN_POS_MANIFEST = 'reborn-pos-setup.json';
 
 export type DownloadManifest = {
   success?: boolean;
@@ -81,6 +83,22 @@ export function printAgentManifestUrl(): string {
   return `${api}/downloads/${PRINT_AGENT_MANIFEST}`;
 }
 
+export function rebornPosDownloadUrl(): string {
+  const api = apiOrigin();
+  if (!api || api.startsWith('/')) {
+    return `/downloads/${REBORN_POS_SETUP_FILE}`;
+  }
+  return `${api}/downloads/${REBORN_POS_SETUP_FILE}`;
+}
+
+export function rebornPosManifestUrl(): string {
+  const api = apiOrigin();
+  if (!api || api.startsWith('/')) {
+    return `/downloads/${REBORN_POS_MANIFEST}`;
+  }
+  return `${api}/downloads/${REBORN_POS_MANIFEST}`;
+}
+
 async function fetchDownloadManifest(
   url: string,
   unavailableMessage: string
@@ -124,6 +142,13 @@ export async function fetchPrintAgentManifest(): Promise<DownloadManifest> {
   return fetchDownloadManifest(
     printAgentManifestUrl(),
     'Print Agent download is not available on this server yet.'
+  );
+}
+
+export async function fetchRebornPosManifest(): Promise<DownloadManifest> {
+  return fetchDownloadManifest(
+    rebornPosManifestUrl(),
+    'RebornPOS desktop download is not available on this server yet.'
   );
 }
 

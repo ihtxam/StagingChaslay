@@ -5,7 +5,8 @@ Served by the API at `GET /downloads/<filename>` and proxied on `app.rebornsense
 Check availability without downloading the binary:
 
 - `GET /downloads/reborn-print-bridge.json` — `{ available, version, downloadUrl }`
-- `GET /downloads/reborn-print-agent.json` — Windows agent manifest
+- `GET /downloads/reborn-print-agent.json` — Windows agent manifest (legacy sidecar)
+- `GET /downloads/reborn-pos-setup.json` — RebornPOS desktop installer (primary Windows download)
 
 ## RebornPOS (Windows NSIS installer)
 

@@ -581,7 +581,16 @@ export function buildSettingsSearchIndex(
     {
       id: 'receipt-print',
       tab: 'receipt',
-      keywords: ['receipt', 'printer', 'kitchen', 'ticket', t('settingsReceipt')],
+      keywords: [
+        'receipt',
+        'printer',
+        'kitchen',
+        'ticket',
+        'desktop',
+        'rebornpos',
+        t('settingsReceipt'),
+        t('desktopAppDownload'),
+      ],
     },
     {
       id: 'barcode-labels',

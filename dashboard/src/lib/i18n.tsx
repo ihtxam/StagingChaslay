@@ -2201,9 +2201,19 @@ const en: Dict = {
     'When a kitchen ticket fails to print, Reborn retries automatically on the register PC before alerting staff.',
   kitchenPrintRetryAttempts: 'Max print attempts',
   kitchenPrintRetryIntervalSec: 'Seconds between retries',
+  desktopAppDownload: 'RebornPOS desktop app',
+  desktopAppDownloadHint:
+    'Install the Windows desktop application on the till. This is RebornPOS — not the old Print Agent sidecar. Printing and hardware are included.',
+  downloadDesktopApp: 'Download RebornPOS (Windows)',
+  downloadDesktopAppVersion: 'Download RebornPOS v{version} (Windows)',
+  desktopAppCurrentVersion: 'Current desktop build on this server: v{version}.',
+  desktopAppInstallSteps:
+    'Run the setup EXE once. RebornPOS opens fullscreen POS and can start with Windows. Print Agent is bundled — do not download the 1.10.6 sidecar unless support asks you to.',
+  desktopAppNotPublished: 'RebornPOS desktop installer is not published on this server yet.',
+  printAgentOptionalTitle: 'Print Agent (legacy sidecar)',
   printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
-    'Install Reborn Print Agent once on the till PC. It runs silently in the background (no black window) and starts with Windows. Use a thermal ESC/POS or LuckyDoor/Niimbot label printer (not OneNote/PDF).',
+    'Optional only if you still run POS in a browser without RebornPOS. Prefer the RebornPOS desktop app above — it already includes printing. The 1.10.6 file is the old sidecar, not the desktop application.',
   downloadPrintAgent: 'Download Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Download Bridge Reborn (Android)',
   installPrintBridge: 'Install Bridge Reborn',
@@ -6851,9 +6861,19 @@ const fr: Dict = {
     'Si un ticket cuisine ne s’imprime pas, Reborn réessaie automatiquement sur la caisse avant d’alerter le personnel.',
   kitchenPrintRetryAttempts: 'Nombre max. de tentatives',
   kitchenPrintRetryIntervalSec: 'Secondes entre les tentatives',
+  desktopAppDownload: 'Application bureau RebornPOS',
+  desktopAppDownloadHint:
+    'Installez l’application Windows sur le PC caisse. C’est RebornPOS — pas l’ancien Print Agent. Impression et matériel sont inclus.',
+  downloadDesktopApp: 'Télécharger RebornPOS (Windows)',
+  downloadDesktopAppVersion: 'Télécharger RebornPOS v{version} (Windows)',
+  desktopAppCurrentVersion: 'Version bureau actuelle sur ce serveur : v{version}.',
+  desktopAppInstallSteps:
+    'Exécutez le setup une fois. RebornPOS ouvre le POS en plein écran et peut démarrer avec Windows. Le Print Agent est intégré — ne téléchargez pas le fichier 1.10.6 sauf demande du support.',
+  desktopAppNotPublished: 'L’installateur RebornPOS n’est pas encore publié sur ce serveur.',
+  printAgentOptionalTitle: 'Print Agent (ancien module)',
   printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
-    'Installez Reborn Print Agent une seule fois sur le PC caisse. Il tourne en arrière-plan (pas de fenêtre noire) et démarre avec Windows. Utilisez une imprimante tickets ESC/POS ou étiquettes LuckyDoor/Niimbot (pas OneNote/PDF).',
+    'Uniquement si vous utilisez encore le POS dans un navigateur sans RebornPOS. Préférez l’application bureau ci-dessus — l’impression est déjà incluse. Le fichier 1.10.6 est l’ancien module, pas l’application bureau.',
   downloadPrintAgent: 'Télécharger Reborn Print Agent (Windows)',
   downloadPrintBridge: 'Télécharger Bridge Reborn (Android)',
   installPrintBridge: 'Installer Bridge Reborn',
@@ -11381,9 +11401,19 @@ const de: Dict = {
     'Wenn ein Küchenticket nicht druckt, versucht Reborn automatisch erneut an der Kasse, bevor das Personal benachrichtigt wird.',
   kitchenPrintRetryAttempts: 'Max. Druckversuche',
   kitchenPrintRetryIntervalSec: 'Sekunden zwischen Versuchen',
+  desktopAppDownload: 'RebornPOS Desktop-App',
+  desktopAppDownloadHint:
+    'Die Windows-Desktop-Anwendung auf dem Kassen-PC installieren. Das ist RebornPOS — nicht der alte Print Agent. Druck und Hardware sind enthalten.',
+  downloadDesktopApp: 'RebornPOS herunterladen (Windows)',
+  downloadDesktopAppVersion: 'RebornPOS v{version} herunterladen (Windows)',
+  desktopAppCurrentVersion: 'Aktueller Desktop-Build auf diesem Server: v{version}.',
+  desktopAppInstallSteps:
+    'Setup-EXE einmal ausführen. RebornPOS öffnet den POS im Vollbild und kann mit Windows starten. Print Agent ist enthalten — die Datei 1.10.6 nur herunterladen, wenn der Support es verlangt.',
+  desktopAppNotPublished: 'Der RebornPOS-Installer ist auf diesem Server noch nicht veröffentlicht.',
+  printAgentOptionalTitle: 'Print Agent (älteres Zusatzmodul)',
   printAgentDownload: 'Reborn Print Agent',
   printAgentDownloadHint:
-    'Reborn Print Agent einmal auf dem Kassen-PC installieren. Er läuft unsichtbar im Hintergrund (kein schwarzes Fenster) und startet mit Windows. ESC/POS-Bondrucker oder LuckyDoor/Niimbot-Etikettendrucker verwenden (nicht OneNote/PDF).',
+    'Nur nötig, wenn POS noch im Browser ohne RebornPOS läuft. Bevorzugen Sie die Desktop-App oben — Druck ist bereits enthalten. Die Datei 1.10.6 ist das alte Zusatzmodul, nicht die Desktop-Anwendung.',
   downloadPrintAgent: 'Reborn Print Agent herunterladen (Windows)',
   downloadPrintBridge: 'Bridge Reborn herunterladen (Android)',
   installPrintBridge: 'Bridge Reborn installieren',
