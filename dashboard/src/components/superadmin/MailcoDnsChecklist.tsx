@@ -10,6 +10,7 @@ type DnsRecord = {
   host: string;
   value: string;
   required: boolean;
+  zone?: string;
   notes?: string;
 };
 
@@ -20,7 +21,9 @@ type DnsGuide = {
   postalSubdomain: string | null;
   isPostalFromAddress: boolean;
   postalIp: string;
+  postalIpv6?: string;
   postalSpfInclude: string;
+  returnPathHost?: string;
   records: DnsRecord[];
   recommendations: string[];
 };
@@ -30,7 +33,11 @@ type Props = {
 };
 
 function recordZone(record: DnsRecord, guide: DnsGuide): string {
-  if (record.id === 'postal-spf' || record.id === 'postal-ns') {
+  if (record.zone) return record.zone;
+  if (record.id === 'mailco-include-spf' || record.id === 'mailco-rp-spf') {
+    return 'mailco.ch';
+  }
+  if (record.id === 'postal-spf' || record.id === 'postal-ns' || record.id === 'postal-cname') {
     return guide.postalSubdomain || `psrp.${guide.apexDomain}`;
   }
   return guide.apexDomain;
@@ -101,8 +108,9 @@ export default function MailcoDnsChecklist({ fromEmail }: Props) {
         <div>
           <h3 className="text-lg font-semibold">Mailco DNS checklist</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Add these records at your domain registrar or in Mailco Postal when NS is delegated. DNS
-            is not changed by this app — copy each value and publish it where your DNS is hosted.
+            This app does not change DNS. Copy each value and publish it in Cloudflare (mailco.ch
+            for the Postal include/return-path TXT records; your brand domain for apex +{' '}
+            <code>psrp</code> CNAME). Do not put SPF TXT on <code>psrp.*</code> while it is a CNAME.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
@@ -146,7 +154,11 @@ export default function MailcoDnsChecklist({ fromEmail }: Props) {
                 <span className="text-gray-500">Postal return-path subdomain:</span>{' '}
                 <code className="text-xs bg-white px-1 rounded border">{guide.postalSubdomain}</code>
                 {' '}
-                <span className="text-gray-500">· relay IP {guide.postalIp}</span>
+                <span className="text-gray-500">
+                  · relay {guide.postalIp}
+                  {guide.postalIpv6 ? ` / ${guide.postalIpv6}` : ''}
+                  {guide.returnPathHost ? ` · SPF on ${guide.returnPathHost}` : ''}
+                </span>
               </p>
             ) : null}
           </div>
@@ -231,11 +243,11 @@ export default function MailcoDnsChecklist({ fromEmail }: Props) {
           </div>
 
           <p className="text-xs text-gray-500">
-            Root domain <strong>{guide.apexDomain}</strong> should include Mailco in SPF (
-            <code>include:{guide.postalSpfInclude}</code>) when sending from{' '}
-            <code>*@{guide.apexDomain}</code>. The Postal subdomain{' '}
-            <code>{guide.postalSubdomain}</code> needs its own SPF with the relay IP — this fixes{' '}
-            <code>SPF_NONE</code> when the envelope/return-path uses that host.
+            Gmail evaluates SPF on the envelope (<code>{guide.postalSubdomain}</code>), which
+            CNAMEs to <code>{guide.returnPathHost || 'rp.postal.mailco.ch'}</code>. Publish the
+            Mailco-zone TXT records first (ip4 + ip6). Apex{' '}
+            <code>include:{guide.postalSpfInclude}</code> only helps header-From alignment after
+            that include host exists.
           </p>
         </>
       ) : null}
