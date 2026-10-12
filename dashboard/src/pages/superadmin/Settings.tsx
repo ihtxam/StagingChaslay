@@ -95,7 +95,7 @@ export default function Settings() {
   const [mailco, setMailco] = useState<MailcoSettings | null>(null);
   const [mailcoForm, setMailcoForm] = useState({
     fromEmail: '',
-    fromName: 'Reborn',
+    fromName: 'RebornPOS',
     apiKey: '',
     apiBase: 'https://ees.mailco.ch/api/v1',
     templateSlug: 'platform-transactional',
@@ -152,7 +152,7 @@ export default function Settings() {
       setMailco(m);
       setMailcoForm({
         fromEmail: m.fromEmail || '',
-        fromName: m.fromName || 'Reborn',
+        fromName: m.fromName || 'RebornPOS',
         apiKey: '',
         apiBase: m.apiBase || 'https://ees.mailco.ch/api/v1',
         templateSlug: m.templateSlug || 'platform-transactional',
@@ -701,8 +701,10 @@ export default function Settings() {
               ees.mailco.ch
             </a>
             . The test button uses the same <code>EmailService.send</code> path as production.
-            Publish the DNS records in the checklist above (at your registrar or Mailco Postal) before
-            going live.
+            Visible From name is <strong>RebornPOS</strong> (address stays{' '}
+            <code>hello@rebornsense.com</code> unless you change it). Publish the DNS records in
+            the checklist above in Cloudflare — <strong>mailco.ch</strong> for Postal SPF, brand
+            zone for apex + <code>psrp</code> CNAME. Do not add TXT on a CNAME.
           </p>
           <label className="block">
             <span className="text-sm font-medium">Primary provider</span>
@@ -745,8 +747,13 @@ export default function Settings() {
               className="input mt-1"
               value={mailcoForm.fromName}
               onChange={(e) => setMailcoForm({ ...mailcoForm, fromName: e.target.value })}
-              placeholder="Reborn"
+              placeholder="RebornPOS"
             />
+            <span className="block text-xs text-gray-500 mt-1">
+              Inbox display name. Use <strong>RebornPOS</strong> — not the mailbox local-part
+              (hello@rebornsense.com otherwise shows as “hello”). Empty, “hello”, and the old
+              “Reborn” default are sent as RebornPOS.
+            </span>
           </label>
           <label className="block md:col-span-2">
             <span className="text-sm font-medium">API base URL</span>

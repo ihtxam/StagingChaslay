@@ -248,6 +248,7 @@ export function buildMailcoDnsGuide(fromEmail: string): MailcoDnsGuide | null {
     zone: apexDomain,
     notes:
       `Skip when ${postalSubdomain} is a CNAME to ${returnPathHost} (the live Reborn setup). ` +
+      `mail-tester often suggests this TXT on the CNAME name — ignore that. ` +
       `Use this TXT only if you publish SPF directly on the return-path host instead of CNAME.`,
   });
 
@@ -256,6 +257,11 @@ export function buildMailcoDnsGuide(fromEmail: string): MailcoDnsGuide | null {
   recommendations.push(
     `Gmail SPF NONE on receipt mail is evaluated on ${postalSubdomain} → ${returnPathHost}. ` +
       `Publish TXT ${senderSpf} on both ${returnPathHost} and ${postalSpfInclude} in the mailco.ch Cloudflare zone.`
+  );
+
+  recommendations.push(
+    `mail-tester.com advice to add TXT on ${postalSubdomain} is WRONG while that name is a CNAME to ${returnPathHost}. ` +
+      `A CNAME cannot have its own TXT. Keep the CNAME and publish SPF on ${returnPathHost} and ${postalSpfInclude} instead.`
   );
 
   if (isPostalFromAddress) {

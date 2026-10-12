@@ -76,6 +76,8 @@ assert.equal(fallback!.value, expectedSenderSpf);
 
 assert.ok(guide!.records.some((r) => r.id === "apex-spf" && r.value.includes(DEFAULT_POSTAL_SPF_INCLUDE)));
 assert.ok(guide!.recommendations.some((r) => r.includes("Gmail SPF NONE")));
+assert.ok(guide!.recommendations.some((r) => r.includes("mail-tester.com advice")));
+assert.ok(guide!.recommendations.some((r) => r.includes("WRONG")));
 
 const apexGuide = buildMailcoDnsGuide("hello@rebornsense.com");
 assert.ok(apexGuide);
@@ -83,6 +85,7 @@ assert.equal(apexGuide!.isPostalFromAddress, false);
 assert.equal(apexGuide!.postalSubdomain, "psrp.rebornsense.com");
 assert.ok(apexGuide!.records.some((r) => r.id === "mailco-rp-spf" && r.value === expectedSenderSpf));
 assert.ok(apexGuide!.recommendations.some((r) => r.includes("TTL")));
+assert.ok(apexGuide!.recommendations.some((r) => r.includes("mail-tester.com advice")));
 
 assert.equal(buildMailcoDnsGuide(""), null);
 assert.equal(buildMailcoDnsGuide("not-an-email"), null);

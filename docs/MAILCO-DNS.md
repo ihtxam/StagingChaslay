@@ -10,6 +10,8 @@ Env overrides (optional): `MAILCO_POSTAL_IP`, `MAILCO_POSTAL_IPV6`, `MAILCO_POST
 
 This repo does **not** apply Cloudflare or Postal DNS. Publish the records below in Cloudflare (or copy values from ees.mailco.ch).
 
+**From display name:** platform receipts must show **RebornPOS**, not the mailbox local-part of `hello@rebornsense.com` (inboxes otherwise display “hello”). Superadmin → Settings → mailco **From name** defaults to RebornPOS; empty / `hello` / legacy `Reborn` are sent as RebornPOS. Keep the address `hello@rebornsense.com` unless Mailco policy requires another verified sender.
+
 ---
 
 ## Where to edit DNS
@@ -30,7 +32,7 @@ Postal’s recommended pattern (`include:spf.postal.example.com` on the return-p
 
 ## 0. Mailco infra (fixes Gmail SPF NONE) — **not yet live**
 
-Checked 12 Oct 2026: `TXT rp.postal.mailco.ch` and `TXT spf.postal.mailco.ch` were empty. Envelope `m9cdwo@psrp.rebornsense.com` CNAMEs to `rp.postal.mailco.ch`, so Gmail reports **SPF NONE**.
+Re-checked 12 Oct 2026: `TXT rp.postal.mailco.ch` and `TXT spf.postal.mailco.ch` are still empty. Envelope `m9cdwo@psrp.rebornsense.com` CNAMEs to `rp.postal.mailco.ch`, so Gmail / mail-tester report **SPF NONE**. This repo cannot publish Cloudflare or Postal DNS.
 
 Publish in the **`mailco.ch` Cloudflare zone**:
 
@@ -73,6 +75,15 @@ psrp.rebornsense.com.  CNAME  rp.postal.mailco.ch.
 ```
 
 Keep that CNAME. **Do not** add `TXT` on `psrp.rebornsense.com` while the CNAME exists.
+
+### mail-tester.com advice is wrong here
+
+mail-tester may say:
+
+> You do not have a SPF record, please add the following one to your domain `psrp.rebornsense.com`:
+> `v=spf1 a mx ip4:91.98.126.226 ~all`
+
+That is **incorrect** while `psrp.rebornsense.com` is a CNAME. A CNAME name cannot also have a TXT/SPF record (`dig +short TXT psrp.rebornsense.com` only shows `rp.postal.mailco.ch.`). Publish the two TXT records in the **`mailco.ch`** zone (section 0). Do not replace the CNAME with that IPv4-only `a mx` SPF — receipts leave Postal on **IPv6** `2a01:4f8:1c1a:82d4::1`.
 
 If a merchant cannot CNAME (rare), publish this TXT **instead of** the CNAME:
 

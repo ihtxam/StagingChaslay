@@ -6,6 +6,7 @@ import {
   resolvePlatformLegalUrls,
   type PlatformLegalUrls,
 } from "@/lib/platform-legal-urls";
+import { DEFAULT_PLATFORM_FROM_NAME, resolveMailcoFromName } from "@/lib/mailco-payload";
 
 export const PLATFORM_ADYEN_KEYS = {
   apiKey: "adyen_api_key",
@@ -353,7 +354,11 @@ export class PlatformSettingsService {
   }
 
   private static envMailcoFromName() {
-    return (process.env.MAILCO_FROM_NAME || process.env.MAIL_FROM_NAME || "Reborn").trim();
+    return (
+      process.env.MAILCO_FROM_NAME ||
+      process.env.MAIL_FROM_NAME ||
+      DEFAULT_PLATFORM_FROM_NAME
+    ).trim();
   }
 
   private static envMailcoApiBase() {
@@ -396,7 +401,7 @@ export class PlatformSettingsService {
     );
     return {
       fromEmail: fromEmail || "",
-      fromName: (s.fromName || envName).trim() || "Reborn",
+      fromName: resolveMailcoFromName(s.fromName || envName, fromEmail),
       apiBase,
       templateSlug,
       emailPrimary,
@@ -451,7 +456,7 @@ export class PlatformSettingsService {
     const s = await this.getMailcoSettings();
     const apiKey = (s.apiKey || this.envMailcoApiKey()).trim();
     const fromEmail = (s.fromEmail || this.envMailcoFromEmail()).trim();
-    const fromName = (s.fromName || this.envMailcoFromName()).trim() || "Reborn";
+    const fromName = resolveMailcoFromName(s.fromName || this.envMailcoFromName(), fromEmail);
     const apiBase = (s.apiBase || this.envMailcoApiBase()).trim().replace(/\/$/, "");
     const templateSlug =
       (s.templateSlug || this.envMailcoTemplateSlug()).trim() || "platform-transactional";

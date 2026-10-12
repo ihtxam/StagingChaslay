@@ -163,11 +163,22 @@ export default function MailcoDnsChecklist({ fromEmail }: Props) {
             ) : null}
           </div>
 
+          <p className="text-sm rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
+            <strong>Ignore mail-tester’s “add TXT on {guide.postalSubdomain}” advice.</strong>{' '}
+            That host is a <code>CNAME</code> to{' '}
+            <code>{guide.returnPathHost || 'rp.postal.mailco.ch'}</code>. A CNAME cannot have its
+            own SPF TXT. Publish the two <strong>mailco.ch</strong> TXT records below (
+            <code>spf.postal</code> and <code>rp.postal</code>, ip4 + ip6). Keep{' '}
+            <code>psrp.{guide.apexDomain} CNAME {guide.returnPathHost || 'rp.postal.mailco.ch'}</code>.
+          </p>
+
           {guide.isPostalFromAddress ? (
             <p className="text-sm rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
-              <strong>Deliverability tip:</strong> mail-tester flagged SPF because the From domain is
-              the Postal subdomain. Use <code>noreply@{guide.apexDomain}</code> (or another address on{' '}
-              {guide.apexDomain}) as the platform From email once DNS below is verified.
+              <strong>Deliverability tip:</strong> mail-tester also flagged SPF because the From
+              domain is the Postal subdomain. Use <code>hello@{guide.apexDomain}</code> or{' '}
+              <code>noreply@{guide.apexDomain}</code> as the platform From email once DNS below is
+              verified. Visible From name should be <strong>RebornPOS</strong>, not the mailbox
+              local-part.
             </p>
           ) : null}
 
