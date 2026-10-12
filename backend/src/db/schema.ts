@@ -4180,7 +4180,7 @@ export const platformShopOrdersRelations = relations(platformShopOrders, ({ one 
 // ============================================================================
 
 export type PlatformLogLevel = "debug" | "info" | "warn" | "error";
-export type PlatformMessageKind = "announcement" | "incident" | "whats_new";
+export type PlatformMessageKind = "announcement" | "incident" | "whats_new" | "support_reply";
 export type PlatformMessageAudience =
   | "all_merchants"
   | "all_resellers"
@@ -4297,10 +4297,10 @@ export const supportTickets = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     ticketNumber: varchar("ticket_number", { length: 20 }).notNull(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
+    merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "cascade" }),
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
+    /** merchant = store ticket; reseller = agency-owned ticket to superadmin. */
+    requesterRole: varchar("requester_role", { length: 20 }).notNull().default("merchant"),
     category: varchar("category", { length: 30 }).notNull().default("technical"),
     subcategory: varchar("subcategory", { length: 80 }),
     subject: varchar("subject", { length: 255 }).notNull(),

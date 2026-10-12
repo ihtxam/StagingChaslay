@@ -4,6 +4,11 @@ import { randomUUID } from 'crypto';
 import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm';
 import { getDb, schema } from '@/db';
 import { ensureUploadsRoot } from '@/services/media-upload.service';
+import {
+  isResellerOwnedTicket,
+  supportAttachmentOwnerKey,
+  supportTicketStatusAfterReply,
+} from '@/lib/support-ticket-reseller';
 
 const TICKET_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -36,7 +41,9 @@ async function nextTicketNumber(): Promise<string> {
 }
 
 export async function saveSupportAttachment(opts: {
-  merchantId: string;
+  merchantId?: string;
+  resellerId?: string;
+  ownerKey?: string;
   ticketId: string;
   buffer: Buffer;
   mimeType: string;
@@ -47,13 +54,16 @@ export async function saveSupportAttachment(opts: {
   if (!opts.buffer?.length) throw new Error('Empty file');
   if (opts.buffer.length > 8 * 1024 * 1024) throw new Error('Attachment must be 8 MB or smaller');
 
+  const ownerKey =
+    opts.ownerKey ||
+    supportAttachmentOwnerKey({ merchantId: opts.merchantId, resellerId: opts.resellerId });
   const root = ensureUploadsRoot();
-  const dir = path.join(root, opts.merchantId, 'support', opts.ticketId);
+  const dir = path.join(root, ownerKey, 'support', opts.ticketId);
   fs.mkdirSync(dir, { recursive: true });
   const filename = `${randomUUID()}${ext}`;
   await fs.promises.writeFile(path.join(dir, filename), opts.buffer);
   return {
-    url: `/api/uploads/${opts.merchantId}/support/${opts.ticketId}/${filename}`,
+    url: `/api/uploads/${ownerKey}/support/${opts.ticketId}/${filename}`,
     name: opts.originalName || filename,
   };
 }
@@ -118,6 +128,7 @@ export class SupportTicketService {
         ticketNumber,
         merchantId,
         resellerId: merchant.resellerId,
+        requesterRole: 'merchant',
         category: String(input.category || 'technical').slice(0, 30),
         subcategory: input.subcategory?.slice(0, 80) || null,
         subject: input.subject.trim().slice(0, 255),
@@ -133,6 +144,58 @@ export class SupportTicketService {
       authorRole: 'merchant',
       authorId: input.authorId || merchantId,
       authorName: input.authorName || merchant.name,
+      body: input.body.trim(),
+      attachmentUrl: input.attachment?.url || null,
+      attachmentName: input.attachment?.name || null,
+    });
+
+    return ticket!;
+  }
+
+  /** Agency ticket owned by the reseller — not a merchant. Superadmin answers these. */
+  static async createResellerTicket(
+    resellerId: string,
+    input: {
+      category: string;
+      subcategory?: string;
+      subject: string;
+      body: string;
+      attachment?: { url: string; name: string } | null;
+      authorName?: string;
+      authorId?: string;
+    }
+  ) {
+    const db = getDb();
+    const reseller = await db.query.resellers.findFirst({
+      where: eq(schema.resellers.id, resellerId),
+      columns: { id: true, name: true },
+    });
+    if (!reseller) throw new Error('Reseller not found');
+
+    const now = new Date();
+    const ticketNumber = await nextTicketNumber();
+    const [ticket] = await db
+      .insert(schema.supportTickets)
+      .values({
+        ticketNumber,
+        merchantId: null,
+        resellerId,
+        requesterRole: 'reseller',
+        category: String(input.category || 'technical').slice(0, 30),
+        subcategory: input.subcategory?.slice(0, 80) || null,
+        subject: input.subject.trim().slice(0, 255),
+        status: 'open',
+        merchantVisible: true,
+        lastMessageAt: now,
+        autoCloseAt: addDays(now, 3),
+      })
+      .returning();
+
+    await db.insert(schema.supportTicketMessages).values({
+      ticketId: ticket!.id,
+      authorRole: 'reseller',
+      authorId: input.authorId || resellerId,
+      authorName: input.authorName || reseller.name,
       body: input.body.trim(),
       attachmentUrl: input.attachment?.url || null,
       attachmentName: input.attachment?.name || null,
@@ -212,6 +275,7 @@ export class SupportTicketService {
     const where = [
       eq(schema.supportTickets.merchantId, merchantId),
       eq(schema.supportTickets.merchantVisible, true),
+      eq(schema.supportTickets.requesterRole, 'merchant'),
     ];
     if (status && status !== 'all') {
       where.push(eq(schema.supportTickets.status, status));
@@ -237,7 +301,10 @@ export class SupportTicketService {
       where: and(...where),
       orderBy: [desc(schema.supportTickets.lastMessageAt)],
       limit: 200,
-      with: { merchant: { columns: { id: true, name: true, email: true } } },
+      with: {
+        merchant: { columns: { id: true, name: true, email: true } },
+        reseller: { columns: { id: true, name: true } },
+      },
     });
   }
 
@@ -286,6 +353,9 @@ export class SupportTicketService {
     if (scope?.merchantId && ticket.merchantVisible === false) {
       throw new Error('Ticket not found');
     }
+    if (scope?.merchantId && isResellerOwnedTicket(ticket)) {
+      throw new Error('Ticket not found');
+    }
     if (scope?.resellerId && ticket.resellerId !== scope.resellerId) {
       throw new Error('Ticket not found');
     }
@@ -321,11 +391,12 @@ export class SupportTicketService {
       attachmentName: input.attachment?.name || null,
     });
 
-    const newStatus = input.closeTicket
-      ? 'closed'
-      : input.authorRole === 'merchant'
-        ? 'open'
-        : 'answered';
+    const newStatus = supportTicketStatusAfterReply({
+      closeTicket: input.closeTicket,
+      authorRole: input.authorRole,
+      requesterRole: ticket.requesterRole,
+      merchantId: ticket.merchantId,
+    });
 
     await db
       .update(schema.supportTickets)
@@ -337,6 +408,24 @@ export class SupportTicketService {
         autoCloseAt: addDays(now, 3),
       })
       .where(eq(schema.supportTickets.id, ticketId));
+
+    if (
+      isResellerOwnedTicket(ticket) &&
+      ticket.resellerId &&
+      input.authorRole === 'superadmin'
+    ) {
+      try {
+        const { PlatformMessageService } = await import('@/services/platform-message.service');
+        await PlatformMessageService.upsertResellerTicketAnswered({
+          resellerId: ticket.resellerId,
+          ticketId: ticket.id,
+          subject: ticket.subject,
+          ticketNumber: ticket.ticketNumber,
+        });
+      } catch (alertErr) {
+        console.warn('[support] reseller ticket answered alert failed:', alertErr);
+      }
+    }
 
     return this.getTicketWithMessages(ticketId, scope);
   }
