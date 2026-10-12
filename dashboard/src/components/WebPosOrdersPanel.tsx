@@ -71,7 +71,6 @@ import {
   fetchKdsTicketStatus,
   lineKitchenReady,
   isKdsPollingStopped,
-  type KdsBoardTicket,
 } from '@/lib/kds-push';
 import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
 import { asArray } from '@/lib/safe-iterables';
