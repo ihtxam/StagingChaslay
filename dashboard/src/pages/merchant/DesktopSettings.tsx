@@ -83,6 +83,7 @@ type MerchantSnapshot = {
     scaleDeviceName?: string | null;
     scaleDeviceId?: string | null;
     scaleEnabled?: boolean;
+    autoOpenCashDrawer?: boolean;
   };
 };
 
@@ -141,6 +142,7 @@ export default function DesktopSettings() {
   const [hwCaps, setHwCaps] = useState<DesktopHwCapabilities | null>(null);
   const [startWithWindows, setStartWithWindows] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [autoOpenCashDrawer, setAutoOpenCashDrawer] = useState(true);
 
   const applyScaleDevice = useCallback((device: ScaleDevice) => {
     const port = formatScalePortLabel(device.port);
@@ -179,6 +181,29 @@ export default function DesktopSettings() {
       }
     },
     [merchant, applyScaleDevice, t]
+  );
+
+  const persistAutoOpenCashDrawer = useCallback(
+    async (enabled: boolean) => {
+      if (!merchant) {
+        setAutoOpenCashDrawer(enabled);
+        return;
+      }
+      const posPrintSettings = {
+        ...(merchant.posPrintSettings || {}),
+        autoOpenCashDrawer: enabled,
+      };
+      setAutoOpenCashDrawer(enabled);
+      try {
+        await api.put('/merchant/settings', { posPrintSettings });
+        setMerchant((prev) => (prev ? { ...prev, posPrintSettings } : prev));
+      } catch (e: unknown) {
+        setAutoOpenCashDrawer(!enabled);
+        const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : '';
+        toast.error(msg || t('saveFailed'));
+      }
+    },
+    [merchant, t]
   );
 
   const refreshHardware = useCallback(
@@ -241,6 +266,7 @@ export default function DesktopSettings() {
         setScaleComPort(String(snapshot.posPrintSettings?.scaleComPort || ''));
         setScaleDeviceName(String(snapshot.posPrintSettings?.scaleDeviceName || ''));
         setScaleDeviceId(String(snapshot.posPrintSettings?.scaleDeviceId || ''));
+        setAutoOpenCashDrawer(snapshot.posPrintSettings?.autoOpenCashDrawer !== false);
         if (savedReceiptPrinter) {
           try {
             localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, savedReceiptPrinter);
@@ -298,6 +324,7 @@ export default function DesktopSettings() {
         scaleDeviceName: scaleDeviceName || null,
         scaleDeviceId: scaleDeviceId || null,
         scaleEnabled: !!scaleComPort,
+        autoOpenCashDrawer,
       };
       await api.put('/merchant/settings', {
         posCheckoutSettings,
@@ -337,6 +364,7 @@ export default function DesktopSettings() {
     scaleComPort,
     scaleDeviceName,
     scaleDeviceId,
+    autoOpenCashDrawer,
     panelLanguage,
     posColorTheme,
     posTextSize,
@@ -704,6 +732,28 @@ export default function DesktopSettings() {
                     receiptPrinter || t('desktopSettingsDefaultPrinter')
                   )}
                 </p>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 px-3 py-3 dark:border-stone-700">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">
+                      {t('autoOpenCashDrawer')}
+                    </p>
+                    <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                      {t('autoOpenCashDrawerHint')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-pressed={autoOpenCashDrawer}
+                    onClick={() => void persistAutoOpenCashDrawer(!autoOpenCashDrawer)}
+                    className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
+                      autoOpenCashDrawer
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-200'
+                    }`}
+                  >
+                    {autoOpenCashDrawer ? t('webPosToggleOn') : t('webPosToggleOff')}
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"

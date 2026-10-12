@@ -298,6 +298,8 @@ export type PosPrintSettingsClient = {
   receiptLogoWidthPx?: number;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** When true (default), cash payments pulse the receipt printer to open the drawer. */
+  autoOpenCashDrawer?: boolean;
   /** Play a bell on the main till when a waiter/mobile kitchen order arrives. */
   waiterTillBellEnabled?: boolean;
   /** Auto-retry failed kitchen prints before surfacing an error. */

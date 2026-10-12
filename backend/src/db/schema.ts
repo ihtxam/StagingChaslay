@@ -431,7 +431,7 @@ export const merchants = pgTable(
      * POS / WebPOS receipt + kitchen + printer profiles:
      * { receiptHeader, receiptFooter, kitchenTicketHeader/Footer, paperWidthMm,
      *   receiptLanguage, receiptShowVatTable/StaffLine/QrCode, receiptLogoUrl,
-     *   autoPrintReceipt, autoPrintKitchen, printers: PosPrinterProfile[] }
+     *   autoPrintReceipt, autoPrintKitchen, autoOpenCashDrawer, printers: PosPrinterProfile[] }
      */
     posPrintSettings: json("pos_print_settings").$type<PosPrintSettings | null>(),
     /**

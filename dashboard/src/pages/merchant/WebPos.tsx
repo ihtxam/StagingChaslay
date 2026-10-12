@@ -127,6 +127,7 @@ import {
   resolvePrintRetryLocally,
   shouldAutoPrintKitchen,
   shouldAutoPrintReceipt,
+  shouldAutoOpenCashDrawer,
   cacheMerchantAutoPrintSettings,
 } from '@/lib/webpos-print-relay';
 import { shouldSkipAutoPrint } from '@/lib/webpos-print-targets';
@@ -2429,6 +2430,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       toast.success(t('webPosBridgeSetupConnected').replace('{name}', name));
     },
     [t]
+  );
+
+  const persistAutoOpenCashDrawer = useCallback(
+    async (enabled: boolean) => {
+      const next = { ...(printSettings || {}), autoOpenCashDrawer: enabled };
+      setPrintSettings(next);
+      cacheMerchantAutoPrintSettings(next);
+      try {
+        await api.put('/merchant/settings', { posPrintSettings: next });
+      } catch {
+        toast.error(t('saveFailed'));
+      }
+    },
+    [printSettings, t]
   );
 
   const refreshBridgeSetup = useCallback(async () => {
@@ -7457,7 +7472,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           (ctx.isInvoice || isInvoiceOrder(orderForReceipt || {})) && !invoiceCounter;
         const cashCollect = saleIncludesCashTender(payMethod, payments);
         const kickCashDrawerOnce = async () => {
-          if (!cashCollect) return;
+          if (!cashCollect || !shouldAutoOpenCashDrawer(printSettings)) return;
           try {
             await kickConfiguredCashDrawer();
           } catch (e: unknown) {
@@ -7501,7 +7516,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       } catch (e: unknown) {
         notifyPrintError(e, 'webPosPrintFailed');
       }
-      if (!drawerKickScheduled && saleIncludesCashTender(payMethod, payments)) {
+      if (
+        !drawerKickScheduled &&
+        saleIncludesCashTender(payMethod, payments) &&
+        shouldAutoOpenCashDrawer(printSettings)
+      ) {
         void kickConfiguredCashDrawer().catch((e: unknown) =>
           notifyPrintError(e, 'webPosDrawerFailed')
         );
@@ -9365,7 +9384,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const shareKitchenReceiptPrinter = receiptAndKitchenSharePrinter(printSettings, printerName);
     const cashDrawerKick = saleIncludesCashTender(method, extras?.tenders);
     const kickCashDrawerOnce = async () => {
-      if (!cashDrawerKick) return;
+      if (!cashDrawerKick || !shouldAutoOpenCashDrawer(printSettings)) return;
       try {
         await kickConfiguredCashDrawer();
       } catch (e: unknown) {
@@ -10950,6 +10969,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onOpenCustomerDisplay={
               cdsToken && cdsEnabled ? () => openCustomerDisplay() : undefined
             }
+            autoOpenCashDrawer={shouldAutoOpenCashDrawer(printSettings)}
+            onAutoOpenCashDrawerChange={(enabled) => void persistAutoOpenCashDrawer(enabled)}
             onSendLogs={() => {
               setSettingsOpen(false);
               void sendWebPosLogsToSupport({
