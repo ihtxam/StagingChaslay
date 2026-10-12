@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, CalendarClock, Loader2, X, Zap } from 'lucide-react';
+import { CalendarClock, Loader2, Zap } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
@@ -14,6 +14,7 @@ import {
 import { startOrderAlertLoop, stopOrderAlertLoop } from '@/lib/order-alert';
 import { ORDER_ACCEPT_ETA_PRESETS } from '@/lib/shop-eta';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
+import NewOrderAlertHeader from '@/components/webpos/NewOrderAlertHeader';
 
 type Props = {
   order: OnlineOrder | null;
@@ -61,11 +62,6 @@ export default function OrderAcceptWithEtaModal({
   if (!order) return null;
 
   const money = (n: string | number) => `CHF ${Number(n || 0).toFixed(2)}`;
-  const channelLabel = (ch?: string | null) => {
-    if (ch === 'delivery') return t('delivery');
-    if (ch === 'dine_in') return t('dineIn');
-    return t('takeaway');
-  };
   const items = order.items || [];
   const itemPreview = items.slice(0, 4);
   const platform = orderPlatformLabel(asMerchantOrder(order), t);
@@ -80,39 +76,16 @@ export default function OrderAcceptWithEtaModal({
       aria-modal="true"
       aria-labelledby="order-accept-eta-title"
     >
-      <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-violet-300 bg-[var(--webpos-surface,var(--bg-elevated))] p-5 shadow-2xl ring-4 ring-violet-400/50 dark:border-violet-800">
-        <div className="flex items-start gap-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
-            <Bell size={26} className="animate-pulse" aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id="order-accept-eta-title" className="text-xl font-bold text-[var(--webpos-text,var(--text))]">
-                {t('webPosNewOrderAlert')}
-              </h2>
-              <span
-                className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${platformClass}`}
-              >
-                {platform}
-              </span>
-            </div>
-            {queueCount > 1 ? (
-              <p className="mt-0.5 text-xs font-semibold text-violet-700">
-                {t('webPosNewOrderAlertQueue').replace('{n}', String(queueCount))}
-              </p>
-            ) : null}
-          </div>
-          {onDismiss ? (
-            <button
-              type="button"
-              className="rounded-lg p-2 text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
-              aria-label={t('close')}
-              onClick={() => onDismiss(order)}
-            >
-              <X className="h-5 w-5" />
-            </button>
-          ) : null}
-        </div>
+      <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border-2 border-violet-300 bg-[var(--webpos-surface,var(--bg-elevated))] p-5 shadow-2xl ring-4 ring-violet-400/50 dark:border-violet-800">
+        <NewOrderAlertHeader
+          titleId="order-accept-eta-title"
+          platform={platform}
+          platformClass={platformClass}
+          queueCount={queueCount}
+          fulfillmentChannel={order.fulfillmentChannel}
+          paymentStatus={order.paymentStatus}
+          onDismiss={onDismiss ? () => onDismiss(order) : undefined}
+        />
 
         <div className="mt-4 space-y-3 rounded-xl border border-violet-100 bg-violet-50/70 p-4">
           <div className="flex items-start justify-between gap-3">
@@ -121,7 +94,7 @@ export default function OrderAcceptWithEtaModal({
                 {formatOrderNumberDisplay(order.orderNumber) || order.id.slice(0, 8)}
               </p>
               <p className="mt-0.5 text-sm text-[var(--webpos-text-muted,var(--text-muted))]">
-                {channelLabel(order.fulfillmentChannel)} · {money(order.total)}
+                {money(order.total)}
               </p>
             </div>
             <div
