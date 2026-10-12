@@ -87,8 +87,8 @@ const en: HelpCategory[] = [
       {
         id: 'print-agent',
         title: 'Install printer software',
-        summary: 'Reborn Print Agent for receipts and kitchen tickets.',
-        body: 'On the PC connected to your receipt or kitchen printer, download and install the Reborn Print Agent from Settings → Terminals. Keep the agent running while Web POS is open. In Web POS, open the menu (⋯) → Printing, pick your thermal printer, and click Refresh printers. The status should show Print agent online.',
+        summary: 'RebornPOS desktop app for the Windows till (Print Agent is bundled).',
+        body: 'On the Windows till, open Settings → Receipts & printers and download RebornPOS (the desktop application), not the old Print Agent 1.10.6 sidecar. Install the EXE once; printing is bundled. Android tablets still use Bridge Reborn. In Web POS, open the menu (⋯) → Printing, pick your thermal printer, and click Refresh printers.',
       },
       {
         id: 'webpos-basics',

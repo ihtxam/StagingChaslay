@@ -87,12 +87,14 @@ import {
 import {
   fetchPrintBridgeManifest,
   fetchPrintAgentManifest,
+  fetchRebornPosManifest,
   isAndroidDevice,
   isBridgeAlreadyInstalled,
   openPrintBridgeApkInstall,
   printAgentDownloadUrl,
   printBridgeDownloadUrl,
   preferredPrintCompanion,
+  rebornPosDownloadUrl,
   type DownloadManifest,
 } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -760,6 +762,7 @@ export default function Settings() {
   const [installedPrintCompanionVersion, setInstalledPrintCompanionVersion] = useState<string | null>(null);
   const [printBridgeManifest, setPrintBridgeManifest] = useState<DownloadManifest | null>(null);
   const [printAgentManifest, setPrintAgentManifest] = useState<DownloadManifest | null>(null);
+  const [rebornPosManifest, setRebornPosManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [testingPrinterId, setTestingPrinterId] = useState<string | null>(null);
@@ -1217,12 +1220,15 @@ export default function Settings() {
   }, [tab, loadEmailUsage]);
 
   useEffect(() => {
-    void Promise.all([fetchPrintBridgeManifest(), fetchPrintAgentManifest()]).then(
-      ([bridge, agent]) => {
-        setPrintBridgeManifest(bridge);
-        setPrintAgentManifest(agent);
-      }
-    );
+    void Promise.all([
+      fetchPrintBridgeManifest(),
+      fetchPrintAgentManifest(),
+      fetchRebornPosManifest(),
+    ]).then(([bridge, agent, desktop]) => {
+      setPrintBridgeManifest(bridge);
+      setPrintAgentManifest(agent);
+      setRebornPosManifest(desktop);
+    });
   }, []);
 
   const refreshPrintAgentPrinters = useCallback(async () => {
@@ -4893,10 +4899,48 @@ export default function Settings() {
                 </label>
               </Section>
 
+              {!isAndroidDevice() && !isDesktopApp() ? (
+                <Section
+                  icon={Monitor}
+                  accent={settingsDash.accent}
+                  title={t('desktopAppDownload')}
+                  description={t('desktopAppDownloadHint')}
+                >
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {rebornPosManifest?.available === false ? (
+                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                          {rebornPosManifest.message || t('desktopAppNotPublished')}
+                        </p>
+                      ) : (
+                        <a
+                          className="btn-primary inline-flex"
+                          href={rebornPosManifest?.downloadUrl || rebornPosDownloadUrl()}
+                          download="reborn-pos-setup.exe"
+                        >
+                          {rebornPosManifest?.version
+                            ? t('downloadDesktopAppVersion').replace(
+                                '{version}',
+                                rebornPosManifest.version
+                              )
+                            : t('downloadDesktopApp')}
+                        </a>
+                      )}
+                    </div>
+                    {rebornPosManifest?.version ? (
+                      <p className="text-sm text-emerald-800 max-w-xl m-0">
+                        {t('desktopAppCurrentVersion').replace('{version}', rebornPosManifest.version)}
+                      </p>
+                    ) : null}
+                    <p className="text-sm text-[var(--muted)] max-w-xl m-0">{t('desktopAppInstallSteps')}</p>
+                  </div>
+                </Section>
+              ) : null}
+
               <Section
                 icon={Printer}
                 accent={settingsDash.info}
-                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentDownload')}
+                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentOptionalTitle')}
                 description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
               >
                 <div className="space-y-3">
@@ -4904,7 +4948,7 @@ export default function Settings() {
                     {preferredPrintCompanion() !== 'android-bridge' &&
                     !(isDesktopApp() && desktopBundledSidecarOk) ? (
                       <a
-                        className="btn-primary inline-flex"
+                        className="btn-secondary inline-flex"
                         href={printAgentDownloadUrl()}
                         download="reborn-print-agent-setup.exe"
                       >

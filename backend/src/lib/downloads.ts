@@ -7,6 +7,7 @@ export const PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
 /** Old installer URL — redirects to PRINT_AGENT_SETUP_FILE */
 export const LEGACY_PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
 export const PRINT_BRIDGE_APK_FILE = "reborn-print-bridge.apk";
+export const REBORN_POS_SETUP_FILE = "reborn-pos-setup.exe";
 
 export function downloadsFilePath(filename: string): string {
   const safe = path.basename(filename);
@@ -97,5 +98,32 @@ export function describePrintAgentExe(): DownloadDescriptor {
     message: valid
       ? undefined
       : "Print Agent installer is not published on this server yet.",
+  };
+}
+
+export function describeRebornPosExe(): DownloadDescriptor {
+  const filePath = downloadsFilePath(REBORN_POS_SETUP_FILE);
+  const manifest = readDownloadManifest("reborn-pos-setup");
+  const valid = fileMagicOk(filePath, "exe");
+  const stat = valid ? fs.statSync(filePath) : null;
+  const version =
+    typeof manifest?.version === "string" && manifest.version.trim()
+      ? manifest.version.trim()
+      : null;
+  const displayName =
+    typeof manifest?.displayName === "string" && manifest.displayName.trim()
+      ? manifest.displayName.trim()
+      : "RebornPOS";
+  return {
+    id: "reborn-pos",
+    name: `${displayName} (Windows)`,
+    filename: REBORN_POS_SETUP_FILE,
+    available: valid,
+    sizeBytes: stat?.size ?? 0,
+    version,
+    downloadUrl: valid ? `/downloads/${REBORN_POS_SETUP_FILE}` : null,
+    message: valid
+      ? undefined
+      : "RebornPOS desktop installer is not published on this server yet.",
   };
 }
