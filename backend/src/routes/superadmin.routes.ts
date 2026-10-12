@@ -283,6 +283,71 @@ router.put("/platform-settings/mailco", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/superadmin/platform-settings/desktop
+ */
+router.get("/platform-settings/desktop", async (_req: Request, res: Response) => {
+  try {
+    const desktop = await PlatformSettingsService.getDesktopBranding();
+    res.json({ success: true, desktop });
+  } catch (error) {
+    console.error("Error getting desktop branding:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load desktop branding",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/desktop
+ */
+router.put("/platform-settings/desktop", async (req: Request, res: Response) => {
+  try {
+    const desktop = await PlatformSettingsService.updateDesktopBranding(req.body || {});
+    res.json({ success: true, desktop });
+  } catch (error) {
+    console.error("Error updating desktop branding:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save desktop branding",
+    });
+  }
+});
+
+/**
+ * POST /api/superadmin/platform-settings/desktop/splash
+ * POST /api/superadmin/platform-settings/desktop/icon
+ */
+router.post(
+  "/platform-settings/desktop/:asset",
+  imageUpload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const asset = String(req.params.asset || "");
+      if (asset !== "splash" && asset !== "icon") {
+        return res.status(404).json({ error: "Unknown desktop asset" });
+      }
+      if (!req.file?.buffer) {
+        return res.status(400).json({ error: "Image file is required (field: file)" });
+      }
+      const { saveMerchantImage } = await import("@/services/media-upload.service");
+      const saved = await saveMerchantImage({
+        merchantId: "platform/desktop",
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+        originalName: req.file.originalname,
+      });
+      const desktop = await PlatformSettingsService.updateDesktopBranding(
+        asset === "splash" ? { splashUrl: saved.url } : { iconUrl: saved.url }
+      );
+      res.json({ success: true, desktop, image: saved });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to upload desktop image",
+      });
+    }
+  }
+);
+
+/**
  * GET /api/superadmin/platform-settings/legal
  */
 router.get("/platform-settings/legal", async (_req: Request, res: Response) => {

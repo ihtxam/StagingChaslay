@@ -7,6 +7,12 @@ import {
   type PlatformLegalUrls,
 } from "@/lib/platform-legal-urls";
 import { DEFAULT_PLATFORM_FROM_NAME, resolveMailcoFromName } from "@/lib/mailco-payload";
+import {
+  PLATFORM_DESKTOP_KEYS,
+  normalizeDesktopHexColor,
+  resolveDesktopBranding,
+  type DesktopBranding,
+} from "@/lib/desktop-branding";
 
 export const PLATFORM_ADYEN_KEYS = {
   apiKey: "adyen_api_key",
@@ -603,5 +609,51 @@ export class PlatformSettingsService {
       await this.set(PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl, input.cookiesUrl.trim() || null);
     }
     return this.getPlatformLegalUrls();
+  }
+
+  static async getDesktopBranding(): Promise<DesktopBranding> {
+    const rows = await this.getMany(Object.values(PLATFORM_DESKTOP_KEYS));
+    return resolveDesktopBranding({
+      splashUrl: rows[PLATFORM_DESKTOP_KEYS.splashUrl],
+      iconUrl: rows[PLATFORM_DESKTOP_KEYS.iconUrl],
+      appName: rows[PLATFORM_DESKTOP_KEYS.appName],
+      tagline: rows[PLATFORM_DESKTOP_KEYS.tagline],
+      backgroundColor: rows[PLATFORM_DESKTOP_KEYS.backgroundColor],
+    });
+  }
+
+  static async updateDesktopBranding(input: {
+    splashUrl?: string | null;
+    iconUrl?: string | null;
+    appName?: string | null;
+    tagline?: string | null;
+    backgroundColor?: string | null;
+    clearSplash?: boolean;
+    clearIcon?: boolean;
+  }): Promise<DesktopBranding> {
+    if (input.clearSplash) {
+      await this.set(PLATFORM_DESKTOP_KEYS.splashUrl, null);
+    } else if (input.splashUrl !== undefined) {
+      await this.set(PLATFORM_DESKTOP_KEYS.splashUrl, String(input.splashUrl || "").trim() || null);
+    }
+    if (input.clearIcon) {
+      await this.set(PLATFORM_DESKTOP_KEYS.iconUrl, null);
+    } else if (input.iconUrl !== undefined) {
+      await this.set(PLATFORM_DESKTOP_KEYS.iconUrl, String(input.iconUrl || "").trim() || null);
+    }
+    if (input.appName !== undefined) {
+      await this.set(PLATFORM_DESKTOP_KEYS.appName, String(input.appName || "").trim().slice(0, 80) || null);
+    }
+    if (input.tagline !== undefined) {
+      await this.set(PLATFORM_DESKTOP_KEYS.tagline, String(input.tagline || "").trim().slice(0, 160) || null);
+    }
+    if (input.backgroundColor !== undefined) {
+      const color = String(input.backgroundColor || "").trim();
+      await this.set(
+        PLATFORM_DESKTOP_KEYS.backgroundColor,
+        color ? normalizeDesktopHexColor(color) : null
+      );
+    }
+    return this.getDesktopBranding();
   }
 }

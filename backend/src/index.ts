@@ -93,7 +93,9 @@ function isPermittedCorsOrigin(origin: string, allowed: string[]): boolean {
   if (allowed.includes(origin) || process.env.CORS_ALLOW_ALL === "true") return true;
   try {
     const host = new URL(origin).hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1") return true;
+    if (host === "localhost" || host === "127.0.0.1" || host === "tauri.localhost" || host === "asset.localhost") {
+      return true;
+    }
     if (host === "chaslay.com" || host.endsWith(".chaslay.com")) return true;
     if (host === "rebornsense.com" || host.endsWith(".rebornsense.com")) return true;
     return false;
@@ -238,6 +240,21 @@ app.get("/api/public/status", async (_req: Request, res: Response) => {
     updatedAt: new Date().toISOString(),
     components,
   });
+});
+
+/** Public RebornPOS splash / icon branding (no auth). Used by the desktop splash window. */
+app.get("/api/public/desktop-branding", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const branding = await PlatformSettingsService.getDesktopBranding();
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.json({ success: true, branding });
+  } catch (error) {
+    console.error("Error getting public desktop branding:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load desktop branding",
+    });
+  }
 });
 
 app.use(shopHostMiddleware);

@@ -21,11 +21,11 @@ See `/docs/windows-pos-tauri-plan.md`.
 
 | Asset | Path | Notes |
 |-------|------|-------|
-| App icons (taskbar, installer) | `src-tauri/icons/` | Regenerate from a 1024×1024 source: `npx tauri icon src-tauri/icons/icon-1024.png -o src-tauri/icons` |
-| Launch splash | `dist/splash.html` + `dist/brand/reborn-logo-white.png` | Native splash window; closes when hosted WebPOS calls `desktop_app_ready` |
-| Webview loading overlay | Injected by Tauri + `DesktopLoadingOverlay` in dashboard | Uses `/brand/reborn-logo-white.png` on the hosted app |
+| Live splash / icon / tagline | Superadmin → Settings → Desktop application | Stored in platform settings; splash fetches `/api/public/desktop-branding` |
+| Default splash fallback | `dist/brand/reborn-logo-white.png` | Used if the API is unreachable |
+| App icons (taskbar, installer) | `src-tauri/icons/` | Rebuild required. Regenerate: `npx tauri icon src-tauri/icons/icon-1024.png -o src-tauri/icons` |
 
-Swap `dist/brand/reborn-logo-white.png` (and re-run `tauri icon` if the mark changes) to update branding.
+Change splash and in-app logo from Superadmin without a new installer. Taskbar/installer icons still need a published RebornPOS build.
 
 ## Develop
 
