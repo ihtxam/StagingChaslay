@@ -86,10 +86,6 @@ function AppToaster() {
     return () => window.removeEventListener(POS_TOAST_PREF_EVENT, onPref);
   }, []);
 
-  if (webPos && !showPosToasts) {
-    return null;
-  }
-
   return (
     <Toaster
       position={webPos ? 'top-center' : shopCheckout ? 'bottom-center' : 'top-right'}
@@ -136,15 +132,21 @@ function AppToaster() {
           : { cursor: 'pointer' },
       }}
     >
-      {(t) => (
-        <div
-          role="presentation"
-          className="cursor-pointer"
-          onClick={() => toast.dismiss(t.id)}
-        >
-          <ToastBar toast={t} />
-        </div>
-      )}
+      {(t) => {
+        // Payment / sale failures must still surface when POS toasts are off.
+        if (webPos && !showPosToasts && t.type !== 'error') {
+          return null;
+        }
+        return (
+          <div
+            role="presentation"
+            className="cursor-pointer"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            <ToastBar toast={t} />
+          </div>
+        );
+      }}
     </Toaster>
   );
 }
