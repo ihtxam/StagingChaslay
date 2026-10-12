@@ -1378,6 +1378,20 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_code_uq ON reservation_growth_campaigns(merchant_id, code)`,
   `CREATE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_idx ON reservation_growth_campaigns(merchant_id, active)`,
+  `CREATE TABLE IF NOT EXISTS software_releases (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    version varchar(40) NOT NULL,
+    title varchar(255) NOT NULL,
+    body text NOT NULL DEFAULT '',
+    product varchar(30) NOT NULL DEFAULT 'all',
+    is_published boolean NOT NULL DEFAULT true,
+    published_at timestamptz NOT NULL DEFAULT now(),
+    created_by_superadmin_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS software_releases_published_idx ON software_releases(is_published, published_at)`,
+  `CREATE INDEX IF NOT EXISTS software_releases_version_idx ON software_releases(version)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */

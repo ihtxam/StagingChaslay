@@ -1790,6 +1790,57 @@ router.put("/platform-messages/:messageId", async (req: Request, res: Response) 
   }
 });
 
+router.get("/software-releases", async (_req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const releases = await SoftwareReleaseService.listAll();
+    res.json({ success: true, latest: releases.find((r) => r.isPublished) || null, releases });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list software releases",
+    });
+  }
+});
+
+router.post("/software-releases", async (req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const release = await SoftwareReleaseService.create({
+      ...req.body,
+      createdBySuperadminId: req.user?.id,
+    });
+    res.status(201).json({ success: true, release });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to create software release",
+    });
+  }
+});
+
+router.put("/software-releases/:releaseId", async (req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const release = await SoftwareReleaseService.update(req.params.releaseId, req.body || {});
+    res.json({ success: true, release });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to update software release",
+    });
+  }
+});
+
+router.delete("/software-releases/:releaseId", async (req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const release = await SoftwareReleaseService.remove(req.params.releaseId);
+    res.json({ success: true, release });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to delete software release",
+    });
+  }
+});
+
 router.delete("/platform-messages/:messageId", async (req: Request, res: Response) => {
   try {
     const { PlatformMessageService } = await import("@/services/platform-message.service");

@@ -161,6 +161,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
   '/merchant/support': ['ACCESS_PANEL'],
   '/merchant/guides': ['ACCESS_PANEL'],
+  '/merchant/updates': ['ACCESS_PANEL'],
   '/merchant/notifications': [],
   '/merchant/users': ['MANAGE_STAFF'],
   '/merchant/inventory': ['MANAGE_INVENTORY'],
