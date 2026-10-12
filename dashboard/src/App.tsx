@@ -10,6 +10,7 @@ import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 import ShopRouteLayout from '@/components/shop/ShopRouteLayout';
+import ScrollToTop from '@/components/ScrollToTop';
 
 import LoginPage from '@/pages/LoginPage';
 import SetPasswordPage from '@/pages/SetPasswordPage';
@@ -224,6 +225,7 @@ function App() {
     <>
       <BrowserRouter>
         <OnScreenKeyboardProvider autoOpenOnFocus={shouldAutoOpenOnScreenKeyboard()}>
+        <ScrollToTop />
         <DesktopLoadingOverlay />
         <DesktopChromeBar />
         <DesktopUpdateBanner />
