@@ -287,6 +287,9 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   chaslay_homepage_builder_pages_last_good_editor_state:
     "ALTER TABLE chaslay_homepage_builder_pages ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   recipe_yield: "ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1",
+  reservations_extras: "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS extras jsonb",
+  merchants_menu_show_upsells:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS menu_show_upsells boolean NOT NULL DEFAULT true",
   products_barcode: "ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode varchar(255)",
   inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
   inventory_qty: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0",

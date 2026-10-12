@@ -27,6 +27,9 @@ import {
 import { computeCateringLineUnitPrice, scaleModifierPrice, resolveCateringComboPricing } from "@/lib/catering-pricing";
 import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
+import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
+import { buildGoogleReserveJsonLd, shopReservationsUrl } from "@/lib/google-reserve-jsonld";
+import { resolveShopPublicHost } from "@/lib/brand";
 import { geocodeQuery } from "@/lib/geocode";
 import { autocompleteAddress, suggestHouseNumbers } from "@/lib/location-service";
 import { OffersService } from "@/services/offers.service";
@@ -704,6 +707,19 @@ function shopPageMerchantPayload(
   seo: ReturnType<typeof shopSeoFromMerchant>
 ) {
   const reservationLinks = publicReservationGuestLinks(merchant);
+  const print = normalizePosPrintSettings(merchant.posPrintSettings);
+  const reviewUrl = String(print.receiptGoogleReviewsUrl || "").trim();
+  const shopHost = resolveShopPublicHost();
+  const shopUrl = merchant.customDomain
+    ? `https://${String(merchant.customDomain).replace(/^https?:\/\//, "")}`
+    : merchant.slug
+      ? `https://${shopHost}/${merchant.slug}`
+      : "";
+  const reserveUrl = shopReservationsUrl({
+    shopUrl,
+    explicitReserveUrl: reservationLinks.googleReserveUrl,
+    publish: resolveReservationSettings(merchant.reservationSettings).googleReservePublish !== false,
+  });
   return {
     id: merchant.id,
     name: merchant.name,
@@ -726,7 +742,21 @@ function shopPageMerchantPayload(
     acceptingReservations: merchant.acceptingReservations !== false,
     vacation: vacationPublicPayload(merchant.vacationSettings),
     language: merchant.shopLanguage || merchant.panelLanguage || "en",
-    ...reservationLinks,
+    googleReviewUrl: reviewUrl.startsWith("http") ? reviewUrl : reviewUrl ? `https://${reviewUrl}` : null,
+    googleReserveJsonLd: reserveUrl
+      ? buildGoogleReserveJsonLd({
+          name: merchant.name,
+          address: merchant.address,
+          city: merchant.city,
+          country: merchant.country,
+          phone: merchant.phone,
+          reserveUrl,
+          image: merchant.shopLogoUrl,
+        })
+      : null,
+    googleReserveUrl: reserveUrl || reservationLinks.googleReserveUrl,
+    googleOrderUrl: reservationLinks.googleOrderUrl,
+    photoMenuEnabled: reservationLinks.photoMenuEnabled,
   };
 }
 
@@ -899,6 +929,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
           return v === "popup_start" || v === "menu" || v === "checkout" ? v : "checkout";
         })(),
         menuShowProductImages: merchant.menuShowProductImages !== false,
+        menuShowUpsells: (merchant as { menuShowUpsells?: boolean }).menuShowUpsells !== false,
         menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
         cartLayout: (() => {
           const v = String(merchant.cartLayout || "")
@@ -919,7 +950,16 @@ router.get("/:slug", async (req: Request, res: Response) => {
           ShopGiftCardService.settingsFromMerchant(merchant)
         ),
         reservationsEnabled: !!merchant.reservationsEnabled,
-        ...publicReservationGuestLinks(merchant),
+        cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
+        ...(() => {
+          const page = shopPageMerchantPayload(req, merchant, shopSeoFromMerchant(req, merchant));
+          return {
+            ...publicReservationGuestLinks(merchant),
+            googleReviewUrl: page.googleReviewUrl,
+            googleReserveJsonLd: page.googleReserveJsonLd,
+            googleReserveUrl: page.googleReserveUrl,
+          };
+        })(),
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
         vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -2088,6 +2128,7 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
       source: "web",
       customerId: auth.customerId || null,
       campaignCode: req.body.campaignCode || req.body.campaign || null,
+      policyAccepted: req.body.policyAccepted === true,
     });
     res.status(201).json({
       success: true,
@@ -2099,6 +2140,7 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
         partySize: reservation.partySize,
         reservedAt: reservation.reservedAt,
         durationMinutes: reservation.durationMinutes,
+        extras: reservation.extras || null,
       },
     });
   } catch (error) {

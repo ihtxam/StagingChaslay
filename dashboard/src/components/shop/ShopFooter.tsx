@@ -23,8 +23,11 @@ type ShopFooterInfo = {
   giftCards?: { enabled?: boolean };
   language?: string;
   reservationsEnabled?: boolean;
+  cateringEnabled?: boolean;
   googleReserveUrl?: string | null;
   googleOrderUrl?: string | null;
+  googleReviewUrl?: string | null;
+  googleReserveJsonLd?: Record<string, unknown> | null;
 };
 
 function formatAddressLine(info: ShopFooterInfo): string | null {
@@ -67,8 +70,11 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
           giftCards: data.giftCards || undefined,
           language: data.language || undefined,
           reservationsEnabled: !!data.reservationsEnabled,
+          cateringEnabled: !!data.cateringEnabled,
           googleReserveUrl: data.googleReserveUrl || null,
           googleOrderUrl: data.googleOrderUrl || null,
+          googleReviewUrl: data.googleReviewUrl || null,
+          googleReserveJsonLd: data.googleReserveJsonLd || null,
         });
       } catch {
         if (!cancelled) setInfo(null);
@@ -174,10 +180,25 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
                   {t('shopFooterGoogleOrder')}
                 </a>
               ) : null}
+              {info.cateringEnabled ? (
+                <Link to={`${basePath}/menu?mode=catering`.replace(/\/+/g, '/')} className="text-stone-200 hover:text-white hover:underline">
+                  {t('cateringShopNav')}
+                </Link>
+              ) : null}
               {info.reservationsEnabled ? (
                 <Link to={reservePath} className="text-stone-200 hover:text-white hover:underline">
                   {t('shopReservations')}
                 </Link>
+              ) : null}
+              {info.googleReviewUrl ? (
+                <a
+                  href={info.googleReviewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('shopFooterRateUs')}
+                </a>
               ) : null}
               {googleReserve ? (
                 <a
@@ -215,6 +236,12 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
       </div>
 
       <ShopPlatformFooterBand />
+      {info.googleReserveJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(info.googleReserveJsonLd) }}
+        />
+      ) : null}
     </footer>
   );
 }

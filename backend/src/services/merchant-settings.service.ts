@@ -260,6 +260,7 @@ export class MerchantSettingsService {
       deliveryMode: normalizeDeliveryMode(merchant.deliveryMode),
       channelSelectMode: normalizeChannelSelectMode(merchant.channelSelectMode),
       menuShowProductImages: merchant.menuShowProductImages !== false,
+      menuShowUpsells: (merchant as { menuShowUpsells?: boolean }).menuShowUpsells !== false,
       menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
       cartLayout: normalizeCartLayout(merchant.cartLayout),
       scheduledOrdersEnabled: merchant.scheduledOrdersEnabled !== false,
@@ -448,6 +449,7 @@ export class MerchantSettingsService {
       deliveryMode?: string;
       channelSelectMode?: ChannelSelectMode | string;
       menuShowProductImages?: boolean;
+      menuShowUpsells?: boolean;
       menuShowCategoryBanners?: boolean;
       cartLayout?: ShopCartLayout | string;
       scheduledOrdersEnabled?: boolean;
@@ -575,6 +577,9 @@ export class MerchantSettingsService {
     }
     if (updates.menuShowProductImages !== undefined) {
       patch.menuShowProductImages = !!updates.menuShowProductImages;
+    }
+    if (updates.menuShowUpsells !== undefined) {
+      patch.menuShowUpsells = !!updates.menuShowUpsells;
     }
     if (updates.menuShowCategoryBanners !== undefined) {
       patch.menuShowCategoryBanners = !!updates.menuShowCategoryBanners;

@@ -113,6 +113,8 @@ export const EDITION_ROUTE_FEATURES: Record<string, EditionFeatureKey[]> = {
   '/merchant/website': ['website_cms'],
   '/merchant/chaslay-page-builder': ['website_cms'],
   '/merchant/sales/reservations': ['reservations'],
+  '/merchant/sales/host': ['reservations'],
+  '/merchant/guest/reviews': ['online_shop'],
   '/merchant/reservations': ['reservations'],
   '/merchant/reports': ['reports'],
   '/merchant/users': ['staff_roles'],

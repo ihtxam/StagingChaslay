@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import ReservationCampaignsPanel from '@/components/growth/ReservationCampaignsPanel';
@@ -268,11 +269,16 @@ export default function Reservations() {
           <h1 className="text-xl font-semibold">{t('reservationsTitle')}</h1>
           <p className="text-sm muted mt-1">{t('reservationsHint')}</p>
         </div>
-        {pendingCount > 0 ? (
-          <span className="text-sm rounded-lg bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100 px-3 py-2">
-            {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/merchant/sales/host" className="btn-secondary text-sm">
+            {t('hostStationNav')}
+          </Link>
+          {pendingCount > 0 ? (
+            <span className="text-sm rounded-lg bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100 px-3 py-2">
+              {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {campaignsLicensed ? <ReservationCampaignsPanel /> : null}

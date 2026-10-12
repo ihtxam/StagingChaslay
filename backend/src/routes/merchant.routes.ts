@@ -104,6 +104,7 @@ const ONLINE_SHOP_SETTINGS_KEYS = new Set([
   "deliveryMode",
   "channelSelectMode",
   "menuShowProductImages",
+  "menuShowUpsells",
   "menuShowCategoryBanners",
   "cartLayout",
   "scheduledOrdersEnabled",

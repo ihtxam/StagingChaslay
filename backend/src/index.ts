@@ -407,6 +407,17 @@ void (async () => {
       console.error("[report-email] scheduled job failed", error);
     }
     try {
+      const { MarketingAutomationService } = await import(
+        "@/services/marketing-automation.service"
+      );
+      const win = await MarketingAutomationService.runWinbacks(21);
+      if (win.sent > 0) {
+        console.log(`[marketing] win-back emails sent: ${win.sent}`);
+      }
+    } catch (error) {
+      console.error("[marketing] win-back job failed", error);
+    }
+    try {
       const result = await SubscriptionBillingService.processRecurringRenewals();
       if (result.charged > 0 || result.failed > 0) {
         console.log(

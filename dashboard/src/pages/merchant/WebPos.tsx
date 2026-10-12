@@ -306,10 +306,13 @@ function readStoredAppearance(): WebPosAppearance {
 
 function readStoredGridShowImages(): boolean {
   try {
-    return localStorage.getItem(WEBPOS_GRID_SHOW_IMAGES_KEY) === '1';
+    const v = localStorage.getItem(WEBPOS_GRID_SHOW_IMAGES_KEY);
+    if (v === '0') return false;
+    if (v === '1') return true;
   } catch {
-    return false;
+    /* ignore */
   }
+  return true;
 }
 
 function readStoredGridTileSize(): 'sm' | 'md' | 'lg' {
@@ -319,7 +322,7 @@ function readStoredGridTileSize(): 'sm' | 'md' | 'lg' {
   } catch {
     /* ignore */
   }
-  return 'md';
+  return 'lg';
 }
 
 function readStoredMobileGridLayout(): MobileGridLayoutStep {

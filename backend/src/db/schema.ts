@@ -173,6 +173,8 @@ export const merchants = pgTable(
     channelSelectMode: varchar("channel_select_mode", { length: 20 }).default("checkout").notNull(),
     /** Show product photos on the public menu */
     menuShowProductImages: boolean("menu_show_product_images").default(true).notNull(),
+    /** Owner.com-style “customers also add” strip at checkout */
+    menuShowUpsells: boolean("menu_show_upsells").default(true).notNull(),
     /** Show category banner images on the public menu */
     menuShowCategoryBanners: boolean("menu_show_category_banners").default(true).notNull(),
     /**
@@ -2193,6 +2195,17 @@ export type ReservationSettings = {
   googleReserveUrl?: string | null;
   /** Google Business “Order” URL for this location */
   googleOrderUrl?: string | null;
+  /** SMS waitlist + table-ready texts (uses SMS_WEBHOOK_URL / email fallback) */
+  waitlistSmsEnabled?: boolean;
+  /** Host quoted wait in minutes. Null = compute from queue + seating duration */
+  waitlistQuoteMinutes?: number | null;
+  depositEnabled?: boolean;
+  depositAmount?: number | null;
+  depositType?: "fixed" | "percent";
+  /** Free cancel if the slot is still this many hours away */
+  cancelHoursBefore?: number | null;
+  /** Publish shop /reservations as the Google Reserve destination + JSON-LD */
+  googleReservePublish?: boolean;
 };
 
 export type ReservationStatus =
@@ -2311,7 +2324,7 @@ export type MarketingSettings = {
   reorderReminderBody?: string | null;
 };
 
-export type MarketingAutomationTrigger = "order_paid" | "reservation_confirmed";
+export type MarketingAutomationTrigger = "order_paid" | "reservation_confirmed" | "winback_lapsed";
 
 export type MarketingAutomationJourney = {
   id: string;
@@ -2435,6 +2448,14 @@ export const reservations = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    extras: json("extras").$type<{
+      depositAmount?: number | null;
+      depositStatus?: "none" | "due" | "collected" | "refunded" | "forfeited";
+      quotedWaitMinutes?: number | null;
+      policyAcceptedAt?: string | null;
+      lastGuestSmsAt?: string | null;
+      lastGuestSmsKind?: string | null;
+    } | null>(),
   },
   (table) => ({
     merchantReservedIdx: index("reservations_merchant_reserved_idx").on(

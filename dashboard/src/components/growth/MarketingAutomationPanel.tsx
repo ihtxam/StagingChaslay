@@ -4,7 +4,7 @@ import api from '@/lib/api';
 
 type Journey = {
   id: string;
-  trigger: 'order_paid' | 'reservation_confirmed';
+  trigger: 'order_paid' | 'reservation_confirmed' | 'winback_lapsed';
   enabled: boolean;
   subject: string;
   bodyHtml: string;
@@ -68,7 +68,11 @@ export default function MarketingAutomationPanel() {
               checked={j.enabled}
               onChange={(e) => update(j.id, { enabled: e.target.checked })}
             />
-            {j.trigger === 'order_paid' ? 'After paid order' : 'After confirmed reservation'}
+            {j.trigger === 'order_paid'
+              ? 'After paid order'
+              : j.trigger === 'winback_lapsed'
+                ? 'Win-back (no order in 21 days)'
+                : 'After confirmed reservation'}
           </label>
           <input
             className="input w-full text-sm"

@@ -223,6 +223,9 @@ interface SettingsData {
   panelLanguage?: string | null;
   shopLanguage?: string | null;
   cartLayout?: 'hidden_slide' | 'sticky_right' | string | null;
+  menuShowProductImages?: boolean;
+  menuShowUpsells?: boolean;
+  menuShowCategoryBanners?: boolean;
   subscriptionPlan?: string | null;
   status?: string | null;
   onlineCardFeeFixed?: string | null;
@@ -1452,6 +1455,7 @@ export default function Settings() {
         acceptingReservations: settings.acceptingReservations !== false,
         cartLayout: settings.cartLayout || 'hidden_slide',
         menuShowProductImages: settings.menuShowProductImages !== false,
+        menuShowUpsells: settings.menuShowUpsells !== false,
         menuShowCategoryBanners: settings.menuShowCategoryBanners !== false,
         floorPlanEnabled: !!settings.floorPlanEnabled,
         paxOrderingEnabled: !!settings.paxOrderingEnabled,
@@ -2647,6 +2651,20 @@ export default function Settings() {
                       }
                     />
                     <span className="font-medium">{t('shopShowCategoryBanners')}</span>
+                  </label>
+                  <label className="flex items-start gap-2.5 text-sm py-1">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.menuShowUpsells !== false}
+                      onChange={(e) =>
+                        setSettings({ ...settings, menuShowUpsells: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">{t('shopCustomersAlsoAddToggle')}</span>
+                      <span className="text-[11px] muted">{t('shopCustomersAlsoAddToggleHint')}</span>
+                    </span>
                   </label>
                 </div>
 

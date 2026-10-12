@@ -47,6 +47,8 @@ import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory
 import Billing from './Billing';
 import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
+import HostStation from './HostStation';
+import ReviewsInbox from './ReviewsInbox';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
@@ -942,7 +944,10 @@ function MerchantShell() {
         { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
         ...(isRestaurantModule(businessModule)
-          ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
+          ? [
+              { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
+              { label: t('hostStationNav'), path: '/merchant/sales/host', icon: '🛎️' },
+            ]
           : []),
       ].filter((item) => allow(item.path)),
     },
@@ -1020,6 +1025,7 @@ function MerchantShell() {
       icon: '🌐',
       children: [
         { label: t('shop'), path: '/merchant/online-shop', icon: '🛒' },
+        { label: t('reviewsInboxNav'), path: '/merchant/guest/reviews', icon: '⭐' },
         { label: t('cmsWebsite'), path: '/merchant/chaslay-page-builder', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
@@ -1615,6 +1621,22 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/sales/reservations" allow={allow}>
                   <Reservations />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="sales/host"
+              element={
+                <PanelRouteGuard path="/merchant/sales/host" allow={allow}>
+                  <HostStation />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="guest/reviews"
+              element={
+                <PanelRouteGuard path="/merchant/guest/reviews" allow={allow}>
+                  <ReviewsInbox />
                 </PanelRouteGuard>
               }
             />

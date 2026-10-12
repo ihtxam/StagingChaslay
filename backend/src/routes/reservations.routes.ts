@@ -116,6 +116,61 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/reservations/host
+ * Host station: waitlist + today's book + tables.
+ */
+router.get("/host", async (req: Request, res: Response) => {
+  try {
+    const board = await ReservationService.hostBoard(req.merchantId!);
+    res.json({ success: true, ...board });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to load host board" });
+  }
+});
+
+/**
+ * POST /api/merchant/reservations/:id/notify
+ */
+router.post("/:id/notify", async (req: Request, res: Response) => {
+  try {
+    const kind = String(req.body.kind || "table_ready");
+    const allowed = ["waitlist", "table_ready", "confirmed", "reminder", "cancelled"];
+    if (!allowed.includes(kind)) {
+      return res.status(400).json({ error: "Unknown SMS kind" });
+    }
+    const result = await ReservationService.notifyGuest(
+      req.merchantId!,
+      req.params.id,
+      kind as "waitlist" | "table_ready" | "confirmed" | "reminder" | "cancelled"
+    );
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Notify failed" });
+  }
+});
+
+/**
+ * POST /api/merchant/reservations/:id/deposit
+ */
+router.post("/:id/deposit", async (req: Request, res: Response) => {
+  try {
+    const status = String(req.body.status || "collected");
+    const allowed = ["none", "due", "collected", "refunded", "forfeited"] as const;
+    if (!allowed.includes(status as (typeof allowed)[number])) {
+      return res.status(400).json({ error: "Unknown deposit status" });
+    }
+    const reservation = await ReservationService.markDeposit(
+      req.merchantId!,
+      req.params.id,
+      status as (typeof allowed)[number]
+    );
+    res.json({ success: true, reservation });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Deposit update failed" });
+  }
+});
+
+/**
  * GET /api/merchant/reservations/:id
  */
 router.get("/:id", async (req: Request, res: Response) => {

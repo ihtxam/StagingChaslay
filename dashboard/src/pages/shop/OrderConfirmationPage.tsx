@@ -142,6 +142,7 @@ export default function OrderConfirmationPage() {
   const [dropinMountKey, setDropinMountKey] = useState(0);
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
+  const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!shopKey || !orderId) return;
@@ -171,6 +172,24 @@ export default function OrderConfirmationPage() {
     const poll = window.setInterval(() => void load(), 15000);
     return () => window.clearInterval(poll);
   }, [load]);
+
+  useEffect(() => {
+    if (!shopKey) return;
+    let cancelled = false;
+    axios
+      .get(`/api/shop/${encodeURIComponent(shopKey)}`)
+      .then((res) => {
+        if (cancelled) return;
+        const url = String(res.data?.data?.googleReviewUrl || '').trim();
+        setGoogleReviewUrl(url.startsWith('http') ? url : null);
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleReviewUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shopKey]);
 
   const loadTracking = useCallback(async () => {
     if (!shopKey || !orderId || !trackToken) return;
@@ -465,6 +484,19 @@ export default function OrderConfirmationPage() {
           </div>
 
           <div className="max-w-2xl space-y-4">
+        {paid && !isCancelled && googleReviewUrl ? (
+          <section className="border border-amber-200 bg-amber-50 p-5">
+            <p className="text-sm font-bold text-amber-950">{t('shopReviewAskTitle')}</p>
+            <a
+              href={googleReviewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-sm font-semibold text-amber-900 underline"
+            >
+              {t('shopReviewAskCta')}
+            </a>
+          </section>
+        ) : null}
         <section className="bg-white border border-stone-200 p-5 space-y-3">
           <div className="flex flex-wrap gap-2">
             <StatusPill label={statusLabel} tone={statusTone(order.status)} />
