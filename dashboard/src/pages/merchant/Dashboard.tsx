@@ -133,6 +133,8 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
+import { isCateringLicensed } from '@/lib/catering-addon';
+import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import {
   desktopHubRedirectTarget,
@@ -141,7 +143,11 @@ import {
   normalizeDesktopPath,
 } from '@/lib/desktop-hub';
 import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-product-flags';
-import { isPanelNavGroupHidden, isPanelNavHidden } from '@/lib/panel-nav-hidden';
+import {
+  isPanelNavGroupHidden,
+  isPanelNavHidden,
+  parsePanelNavHidden,
+} from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
 import HqDashboardPage from './HqDashboard';
 import BulkPricingPage from './BulkPricingPage';
@@ -231,6 +237,7 @@ function MerchantShell() {
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [kioskLicensed, setKioskLicensed] = useState(false);
+  const [cateringLicensed, setCateringLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -377,6 +384,8 @@ function MerchantShell() {
       signageEnabled?: boolean;
       kioskAddonEnabled?: boolean;
       kioskEnabled?: boolean;
+      cateringEnabled?: boolean;
+      cateringAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
     } | null) => {
@@ -390,9 +399,10 @@ function MerchantShell() {
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setKioskLicensed(isKioskLicensed(settings));
+      setCateringLicensed(isCateringLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(settings?.name?.trim() || null);
-      setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
+      setPanelNavHidden(parsePanelNavHidden(settings?.panelNavHidden));
       setProductFlagsReady(true);
     };
     const load = () => {
@@ -409,6 +419,7 @@ function MerchantShell() {
           setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
           setKioskLicensed(false);
+          setCateringLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
           setProductFlagsReady(true);
         });
@@ -601,15 +612,18 @@ function MerchantShell() {
   const allowInventory = useCallback(
     (path: string) =>
       inventoryLicensed &&
+      !isPanelNavHidden(path, panelNavHidden) &&
+      !isPanelNavGroupHidden('inventory', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [inventoryLicensed, effective.permissions, effective.isOwner, businessModule]
+    [inventoryLicensed, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
 
   const allowStorekeeper = useCallback(
     (path: string) =>
       storekeeperLicensed &&
+      !isPanelNavHidden(path, panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null),
-    [storekeeperLicensed, effective.permissions, effective.isOwner]
+    [storekeeperLicensed, effective.permissions, effective.isOwner, panelNavHidden]
   );
 
   const allowSignage = useCallback(
@@ -634,8 +648,10 @@ function MerchantShell() {
   const allowHq = useCallback(
     (path: string) =>
       showHq &&
+      !isPanelNavHidden(path, panelNavHidden) &&
+      !isPanelNavGroupHidden('hq', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [showHq, effective.permissions, effective.isOwner, businessModule]
+    [showHq, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
 
   // Block direct URL access to panel pages the role may not open.
@@ -854,7 +870,9 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const moreOptionsLinks = [
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
-        { label: t('cateringGuideNav'), path: '/merchant/products/catering-guide', icon: '🍱' },
+        ...(cateringLicensed
+          ? [{ label: t('cateringGuideNav'), path: '/merchant/products/catering-guide', icon: '🍱' }]
+          : []),
         { label: t('scheduledMenusTitle'), path: MERCHANT_SCHEDULED_MENUS_PATH, icon: '🕐' },
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('pizzaBuilderTitle'), path: MERCHANT_PIZZA_BUILDER_PATH, icon: '🍕' }]
@@ -949,6 +967,7 @@ function MerchantShell() {
             .filter((item) => {
               if ('heading' in item && item.heading) return true;
               const path = 'path' in item ? item.path : '';
+              if (!path || !allowInventory(path)) return false;
               if (
                 path === '/merchant/inventory/cookbook' ||
                 path === '/merchant/inventory/consumption'
@@ -1349,9 +1368,13 @@ function MerchantShell() {
             <Route
               path="products/catering-guide"
               element={
-                <PanelRouteGuard path="/merchant/products" allow={allow}>
-                  <CateringGuidePage />
-                </PanelRouteGuard>
+                cateringLicensed ? (
+                  <PanelRouteGuard path="/merchant/products" allow={allow}>
+                    <CateringGuidePage />
+                  </PanelRouteGuard>
+                ) : (
+                  <Navigate to="/merchant/products" replace />
+                )
               }
             />
             <Route

@@ -32,7 +32,12 @@ import {
 } from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
-import { PANEL_NAV_HIDE_OPTIONS } from '@/lib/panel-nav-hidden';
+import {
+  PANEL_NAV_HIDE_OPTIONS,
+  isPanelNavOptionChecked,
+  parsePanelNavHidden,
+  togglePanelNavOption,
+} from '@/lib/panel-nav-hidden';
 import {
   handleLimitNumberInputChange,
   limitNumberInputDisplay,
@@ -1087,7 +1092,7 @@ function MerchantsPage() {
                             setPanelNavFor({
                               id: m.id,
                               name: m.name,
-                              hidden: Array.isArray(m.panelNavHidden) ? m.panelNavHidden : [],
+                              hidden: parsePanelNavHidden(m.panelNavHidden),
                             }),
                         },
                         {
@@ -1392,17 +1397,17 @@ function MerchantsPage() {
             <p className="text-xs text-stone-500">{t('panelNavManageHint')}</p>
             <div className="space-y-2">
               {PANEL_NAV_HIDE_OPTIONS.map((opt) => {
-                const checked = panelNavFor.hidden.includes(opt.key);
+                const checked = isPanelNavOptionChecked(opt.key, panelNavFor.hidden);
                 return (
                   <label key={opt.key} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...panelNavFor.hidden, opt.key]
-                          : panelNavFor.hidden.filter((k) => k !== opt.key);
-                        setPanelNavFor({ ...panelNavFor, hidden: next });
+                        setPanelNavFor({
+                          ...panelNavFor,
+                          hidden: togglePanelNavOption(panelNavFor.hidden, opt.key, e.target.checked),
+                        });
                       }}
                     />
                     {t(opt.labelKey as any)}

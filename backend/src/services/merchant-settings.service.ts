@@ -21,6 +21,7 @@ import {
   type PosCheckoutSettings,
 } from "@/lib/pos-checkout-settings";
 import { normalizeBusinessModule, posModeForModule } from "@/lib/business-module";
+import { normalizePanelNavHidden } from "@/lib/panel-nav-hidden";
 import {
   normalizeTableQrSettings,
   type TableQrSettings,
@@ -47,6 +48,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { normalizeGiftCardSettings } from "@/lib/gift-card-settings";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isGrowthAnalyticsAddonEnabled } from "@/lib/growth-analytics-addon";
 import { isGuestCrmAddonEnabled } from "@/lib/guest-crm-addon";
 import { isMarketingAutomationAddonEnabled } from "@/lib/marketing-automation-addon";
@@ -153,6 +155,9 @@ export class MerchantSettingsService {
     );
     const storekeeperOn = isStorekeeperAddonEnabled(merchant.storekeeperAddonEnabled);
     const kioskOn = isKioskAddonEnabled(merchant.kioskAddonEnabled);
+    const cateringOn = isCateringAddonEnabled(
+      (merchant as { cateringEnabled?: boolean }).cateringEnabled
+    );
     const growthAnalyticsOn = isGrowthAnalyticsAddonEnabled(
       (merchant as { growthAnalyticsAddonEnabled?: boolean }).growthAnalyticsAddonEnabled
     );
@@ -286,6 +291,8 @@ export class MerchantSettingsService {
       storekeeperAddonEnabled: storekeeperOn,
       kioskAddonEnabled: kioskOn,
       kioskEnabled: kioskOn,
+      cateringEnabled: cateringOn,
+      cateringAddonEnabled: cateringOn,
       growthAnalyticsAddonEnabled: growthAnalyticsOn,
       guestCrmAddonEnabled: guestCrmOn,
       marketingAutomationAddonEnabled: marketingAutomationOn,
@@ -386,9 +393,9 @@ export class MerchantSettingsService {
         (merchant as { businessCategory?: string | null }).businessCategory
       ),
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
-      panelNavHidden: Array.isArray((merchant as { panelNavHidden?: string[] | null }).panelNavHidden)
-        ? (merchant as { panelNavHidden?: string[] | null }).panelNavHidden
-        : [],
+      panelNavHidden: normalizePanelNavHidden(
+        (merchant as { panelNavHidden?: unknown }).panelNavHidden
+      ),
       shopCommissionPercent: Number(
         (merchant as { shopCommissionPercent?: string | number | null }).shopCommissionPercent ?? 0
       ) || 0,
