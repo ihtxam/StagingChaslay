@@ -1,6 +1,6 @@
 import { foodTruckStarter } from './openpage-starters';
 
-/** OpenPage SiteConfig stored in CMS / newsletter design JSON. */
+/** OpenPage SiteConfig stored in CMS page JSON (not used by merchant Newsletter). */
 export type OpenPageSiteConfig = {
   name: string;
   blocks: Array<{
