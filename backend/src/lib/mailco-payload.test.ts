@@ -2,7 +2,11 @@
  * mailco attachment payload — run: npx tsx backend/src/lib/mailco-payload.test.ts
  */
 import assert from "node:assert/strict";
-import { buildMailcoAttachments, buildMailcoRawMessagePayload } from "./mailco-payload";
+import {
+  buildMailcoAttachments,
+  buildMailcoRawMessagePayload,
+  resolveMailcoFromName,
+} from "./mailco-payload";
 
 const pdfBytes = Buffer.from("%PDF-1.4\n%EOF");
 const xlsxBytes = Buffer.from("PK\x03\x04");
@@ -27,8 +31,16 @@ const guessed = buildMailcoAttachments([
 assert.equal(guessed.content_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 assert.equal(guessed.content, xlsxBytes.toString("base64"));
 
+assert.equal(resolveMailcoFromName(null, "hello@rebornsense.com"), "RebornPOS");
+assert.equal(resolveMailcoFromName("", "hello@rebornsense.com"), "RebornPOS");
+assert.equal(resolveMailcoFromName("hello", "hello@rebornsense.com"), "RebornPOS");
+assert.equal(resolveMailcoFromName("Reborn", "hello@rebornsense.com"), "RebornPOS");
+assert.equal(resolveMailcoFromName("noreply", "noreply@rebornsense.com"), "RebornPOS");
+assert.equal(resolveMailcoFromName("Chaslay", "hello@rebornsense.com"), "Chaslay");
+assert.equal(resolveMailcoFromName("Pola Cafe", "hello@rebornsense.com"), "Pola Cafe");
+
 const payload = buildMailcoRawMessagePayload({
-  fromEmail: "noreply@rebornsense.com",
+  fromEmail: "hello@rebornsense.com",
   fromName: "Reborn",
   to: "customer@example.com",
   replyToEmail: "shop@example.com",
@@ -41,8 +53,9 @@ const payload = buildMailcoRawMessagePayload({
   attachments: [{ filename: "INV-1.pdf", content: pdfBytes, contentType: "application/pdf" }],
 });
 
-assert.equal(payload.from.email, "noreply@rebornsense.com");
-assert.equal(payload.from.name, "Reborn");
+assert.equal(payload.from.email, "hello@rebornsense.com");
+assert.equal(payload.from.name, "RebornPOS");
+assert.equal(payload.headers?.From, '"RebornPOS" <hello@rebornsense.com>');
 assert.equal(payload.to[0].email, "customer@example.com");
 assert.equal(payload.reply_to?.email, "shop@example.com");
 assert.equal(payload.reply_to?.name, "Shop");
@@ -60,9 +73,9 @@ const noAttach = buildMailcoRawMessagePayload({
   html: "<p>Hi</p>",
 });
 assert.equal(noAttach.attachments, undefined);
-assert.equal(noAttach.from.name, "Reborn");
+assert.equal(noAttach.from.name, "RebornPOS");
+assert.equal(noAttach.headers?.From, '"RebornPOS" <noreply@rebornsense.com>');
 assert.equal(noAttach.reply_to, undefined);
-assert.equal(noAttach.headers, undefined);
 
 const merchantOrder = buildMailcoRawMessagePayload({
   fromEmail: "hello@rebornsense.com",
@@ -76,6 +89,7 @@ const merchantOrder = buildMailcoRawMessagePayload({
   merchantId: "m-99",
 });
 assert.equal(merchantOrder.from.name, "Pola Cafe");
+assert.equal(merchantOrder.headers?.From, '"Pola Cafe" <hello@rebornsense.com>');
 assert.equal(merchantOrder.reply_to?.email, "owner@polacafe.ch");
 assert.equal(merchantOrder.reply_to?.name, "Pola Cafe");
 assert.equal(
