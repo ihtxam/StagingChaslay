@@ -6,7 +6,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { merchantPinGateInitials, pinGateMerchantLogoUrl } from './webpos-pin-gate-brand';
+import {
+  merchantPinGateInitials,
+  pinGateMerchantLogoUrl,
+  pinGateMerchantName,
+  pinGateSessionMerchantName,
+} from './webpos-pin-gate-brand';
 
 assert.equal(merchantPinGateInitials('Brazza Pizza'), 'BP');
 assert.equal(merchantPinGateInitials('  exotic  '), 'EX');
@@ -14,9 +19,19 @@ assert.equal(merchantPinGateInitials(''), '');
 assert.equal(merchantPinGateInitials(null), '');
 assert.equal(pinGateMerchantLogoUrl(' /logo.png '), '/logo.png');
 assert.equal(pinGateMerchantLogoUrl(null), '');
+assert.equal(pinGateMerchantName('Brazza', 'Session Shop'), 'Brazza');
+assert.equal(pinGateMerchantName('  ', 'Brazza'), 'Brazza');
+assert.equal(pinGateMerchantName(null, 'Brazza'), 'Brazza');
+assert.equal(pinGateMerchantName(null, null), '');
+assert.equal(pinGateSessionMerchantName({ role: 'merchant', name: 'Brazza' }), 'Brazza');
+assert.equal(pinGateSessionMerchantName({ role: 'staff', name: 'Alex' }), '');
+assert.equal(pinGateSessionMerchantName(null), '');
 
 const root = dirname(fileURLToPath(import.meta.url));
 const modal = readFileSync(join(root, '../components/WebPosPinModal.tsx'), 'utf8');
+const css = readFileSync(join(root, '../index.css'), 'utf8');
+const dashboard = readFileSync(join(root, '../pages/merchant/Dashboard.tsx'), 'utf8');
+const waiter = readFileSync(join(root, '../pages/merchant/WaiterApp.tsx'), 'utf8');
 
 assert.match(modal, /webpos-pin-gate-merchant-logo/);
 assert.match(modal, /merchantPinGateInitials/);
@@ -44,5 +59,19 @@ assert.equal(
   false,
   'clock column must not show a merchant badge under the time'
 );
+assert.match(
+  modal,
+  /webpos-pin-gate-entry[\s\S]*min-\[640px\]:justify-center/,
+  'desktop keypad column must sit centered with the clock'
+);
+assert.match(
+  css,
+  /@media \(min-width: 640px\) and \(min-height: 521px\)[\s\S]*webpos-pin-gate-entry[\s\S]*justify-content: center/,
+  'wide desktop/landscape CSS must lower/center the keypad'
+);
+assert.match(dashboard, /pinGateMerchantName/);
+assert.match(dashboard, /logoUrl=\{merchantShopLogoUrl\}/);
+assert.match(waiter, /pinGateMerchantName/);
+assert.match(waiter, /logoUrl=\{merchantLogoUrl\}/);
 
 console.log('webpos-pin-gate-brand: all assertions passed');

@@ -416,7 +416,7 @@ export default function WebPosPinModal({
             shake ? 'webpos-pin-shake' : ''
           }`}
         >
-          <section className="webpos-pin-gate-clock flex shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-start min-[640px]:px-5 min-[640px]:pt-[max(0.75rem,env(safe-area-inset-top))] lg:px-6 lg:pb-4 lg:pt-8">
+          <section className="webpos-pin-gate-clock flex shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
             <div className="flex items-baseline justify-center gap-1 sm:gap-2">
               <span className="webpos-pin-gate-time text-[clamp(2.5rem,9vw,5.5rem)] font-extralight leading-none tracking-tight lg:text-[clamp(3.5rem,12vw,7rem)]">
                 {clock.hour}:{clock.minute}
@@ -432,7 +432,7 @@ export default function WebPosPinModal({
             </p>
           </section>
 
-          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overscroll-contain px-4 pb-2 pt-1 min-[640px]:px-5 min-[640px]:pb-3 lg:px-6 lg:pb-4 lg:pt-4">
+          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overscroll-contain px-4 pb-2 pt-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
             <div className="mb-3 flex w-full max-w-md flex-col items-center gap-1.5 text-center sm:mb-4 sm:gap-2">
               {busy ? (
                 <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />

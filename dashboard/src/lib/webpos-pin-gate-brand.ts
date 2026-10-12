@@ -13,3 +13,20 @@ export function merchantPinGateInitials(name?: string | null): string {
 export function pinGateMerchantLogoUrl(url?: string | null): string {
   return String(url || '').trim();
 }
+
+/** Prefer the shop name from settings; fall back to the signed-in merchant session. */
+export function pinGateMerchantName(
+  productName?: string | null,
+  sessionName?: string | null
+): string {
+  return String(productName || '').trim() || String(sessionName || '').trim();
+}
+
+/** Owner JWT `name` is the shop; staff JWT `name` is the person — never use that as branding. */
+export function pinGateSessionMerchantName(user?: {
+  role?: string | null;
+  name?: string | null;
+} | null): string {
+  if (user?.role !== 'merchant') return '';
+  return String(user.name || '').trim();
+}
