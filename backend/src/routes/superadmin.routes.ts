@@ -1799,6 +1799,37 @@ router.get("/support/agents", async (_req: Request, res: Response) => {
   }
 });
 
+router.get("/published-prs", async (req: Request, res: Response) => {
+  try {
+    const { PublishedPrService } = await import("@/services/published-pr.service");
+    const days = Number(req.query.days);
+    const payload = await PublishedPrService.list(Number.isFinite(days) ? days : 30);
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list published PRs",
+    });
+  }
+});
+
+router.post("/published-prs/sync", async (req: Request, res: Response) => {
+  try {
+    const { PublishedPrService } = await import("@/services/published-pr.service");
+    if (req.body?.repo || req.body?.token !== undefined) {
+      await PublishedPrService.saveConfig({
+        repo: req.body?.repo,
+        token: req.body?.token,
+      });
+    }
+    const payload = await PublishedPrService.sync();
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to refresh published PRs",
+    });
+  }
+});
+
 router.patch("/support/agents/:superadminId", async (req: Request, res: Response) => {
   try {
     const { SupportTicketService } = await import("@/services/support-ticket.service");
