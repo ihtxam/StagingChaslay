@@ -4344,6 +4344,27 @@ export const supportTicketMessages = pgTable(
   })
 );
 
+export const publishedPullRequests = pgTable(
+  "published_pull_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: integer("number").notNull(),
+    title: varchar("title", { length: 500 }).notNull(),
+    body: text("body").notNull().default(""),
+    htmlUrl: varchar("html_url", { length: 500 }).notNull().default(""),
+    author: varchar("author", { length: 120 }).notNull().default(""),
+    baseBranch: varchar("base_branch", { length: 80 }).notNull().default(""),
+    mergedAt: timestamp("merged_at").notNull(),
+    syncedAt: timestamp("synced_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    numberIdx: uniqueIndex("published_pull_requests_number_idx").on(table.number),
+    mergedIdx: index("published_pull_requests_merged_idx").on(table.mergedAt),
+  })
+);
+
 export const supportTicketsRelations = relations(supportTickets, ({ one, many }) => ({
   merchant: one(merchants, { fields: [supportTickets.merchantId], references: [merchants.id] }),
   reseller: one(resellers, { fields: [supportTickets.resellerId], references: [resellers.id] }),

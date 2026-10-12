@@ -15,6 +15,7 @@ import PlatformShop from './PlatformShop';
 import SystemLogs from './SystemLogs';
 import PlatformMessagesAdmin from './PlatformMessagesAdmin';
 import SoftwareReleasesAdmin from './SoftwareReleasesAdmin';
+import PublishedPrsAdmin from './PublishedPrsAdmin';
 import SupportInbox from '../shared/SupportInbox';
 import SupportAgents from './SupportAgents';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
@@ -60,6 +61,7 @@ function SuperadminShell() {
       children: [
         { label: t('platformMessagesAdmin'), path: '/superadmin/messages', icon: '📢' },
         { label: t('softwareUpdatesAdminTitle'), path: '/superadmin/updates', icon: '🆕' },
+        { label: t('publishedPrsTitle'), path: '/superadmin/published-prs', icon: '🧾' },
         { label: t('platformSystemLogs'), path: '/superadmin/logs', icon: '📋' },
         { label: t('supportInboxTitle'), path: '/superadmin/support', icon: '🎫' },
         { label: t('supportAgentsTitle'), path: '/superadmin/support-agents', icon: '🧑‍💼' },
@@ -96,6 +98,7 @@ function SuperadminShell() {
             <Route path="platform-shop" element={<PlatformShop />} />
             <Route path="messages" element={<PlatformMessagesAdmin />} />
             <Route path="updates" element={<SoftwareReleasesAdmin />} />
+            <Route path="published-prs" element={<PublishedPrsAdmin />} />
             <Route path="logs" element={<SystemLogs />} />
             <Route path="support" element={<SupportInbox mode="superadmin" />} />
             <Route path="support-agents" element={<SupportAgents />} />

@@ -1392,6 +1392,21 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS software_releases_published_idx ON software_releases(is_published, published_at)`,
   `CREATE INDEX IF NOT EXISTS software_releases_version_idx ON software_releases(version)`,
+  `CREATE TABLE IF NOT EXISTS published_pull_requests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    number integer NOT NULL,
+    title varchar(500) NOT NULL,
+    body text NOT NULL DEFAULT '',
+    html_url varchar(500) NOT NULL DEFAULT '',
+    author varchar(120) NOT NULL DEFAULT '',
+    base_branch varchar(80) NOT NULL DEFAULT '',
+    merged_at timestamptz NOT NULL,
+    synced_at timestamptz NOT NULL DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS published_pull_requests_number_idx ON published_pull_requests(number)`,
+  `CREATE INDEX IF NOT EXISTS published_pull_requests_merged_idx ON published_pull_requests(merged_at)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
