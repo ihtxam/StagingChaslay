@@ -24,7 +24,30 @@ object NiimbotPrintClient {
 
     fun isNiimbotPrinterName(name: String?): Boolean {
         val n = name.orEmpty().lowercase()
-        return Regex("""niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b""").containsMatchIn(n)
+        return Regex("""niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b|0355:""").containsMatchIn(n)
+    }
+
+    fun isNiimbotEndpoint(endpoint: PrinterEndpoint): Boolean {
+        if (isNiimbotPrinterName(endpoint.name)) return true
+        if (isNiimbotPrinterName(endpoint.meta["productName"])) return true
+        val vidRaw = endpoint.meta["vendorId"].orEmpty().trim()
+        val vid = vidRaw.toIntOrNull()
+            ?: vidRaw.removePrefix("0x").removePrefix("0X").toIntOrNull(16)
+        return vid == 0x0355
+    }
+
+    /** Solid horizontal bars so the thermal head fires without a canvas. */
+    fun buildTestPatternBitmap(widthPx: Int, heightPx: Int): ByteArray {
+        val w = widthPx.coerceAtLeast(8)
+        val h = heightPx.coerceAtLeast(8)
+        val rowBytes = ceil(w / 8.0).toInt()
+        val out = ByteArray(rowBytes * h)
+        for (y in 0 until h) {
+            if (y % 8 < 4) {
+                java.util.Arrays.fill(out, y * rowBytes, (y + 1) * rowBytes, 0xff.toByte())
+            }
+        }
+        return out
     }
 
     fun print(
