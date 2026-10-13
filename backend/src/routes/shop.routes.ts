@@ -964,6 +964,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
             googleReviewUrl: page.googleReviewUrl,
             googleReserveJsonLd: page.googleReserveJsonLd,
             googleReserveUrl: page.googleReserveUrl,
+            phoneOrdering: page.phoneOrdering,
           };
         })(),
         acceptingOrders: merchant.acceptingOrders !== false,
