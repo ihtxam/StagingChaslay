@@ -87,6 +87,21 @@ export default function Editions() {
     }
   };
 
+  const copyVersion = async (ed: Edition) => {
+    setSaving(true);
+    try {
+      const res = await api.post(`/superadmin/editions/${ed.id}/clone`);
+      toast.success(t('posVersionCopied'));
+      await load();
+      const cloned = res.data?.edition as Edition | undefined;
+      if (cloned?.id) openEdit(cloned);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('copyFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const remove = async (ed: Edition) => {
     if (!window.confirm(t('posVersionDeleteConfirm').replace('{name}', ed.name))) return;
     try {
@@ -205,7 +220,15 @@ export default function Editions() {
                       {ed.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-right space-x-2">
+                  <td className="px-3 py-2 text-right space-x-2 whitespace-nowrap">
+                    <button
+                      type="button"
+                      className="text-stone-600 hover:underline"
+                      disabled={saving}
+                      onClick={() => void copyVersion(ed)}
+                    >
+                      {t('copy')}
+                    </button>
                     <button type="button" className="text-teal-700 hover:underline" onClick={() => openEdit(ed)}>
                       {t('edit')}
                     </button>

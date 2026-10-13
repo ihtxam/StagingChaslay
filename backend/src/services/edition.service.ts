@@ -278,6 +278,20 @@ export class EditionService {
     });
   }
 
+  /** Superadmin copy — new platform version with the same features. */
+  static async clonePlatform(sourceId: string, name?: string) {
+    const src = await this.getById(sourceId);
+    if (!src) throw new Error("Source edition not found");
+    return this.create({
+      name: name?.trim() || `${src.name} (copy)`,
+      note: src.note,
+      businessCategory: src.businessCategory,
+      features: src.features,
+      ownerType: "platform",
+      ownerId: null,
+    });
+  }
+
   /** Features for a merchant; null means legacy full access */
   static async getMerchantFeatures(merchantId: string): Promise<EditionFeatureKey[] | null> {
     const db = getDb();
