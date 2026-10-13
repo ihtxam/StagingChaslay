@@ -495,11 +495,23 @@ export default function Support() {
           <div className="flex min-h-[360px] flex-col rounded-xl border border-stone-200 bg-white">
             {activeTicket ? (
               <>
-                <div className="border-b border-stone-100 px-4 py-3">
-                  <h3 className="font-semibold">{activeTicket.subject}</h3>
-                  <p className="text-xs text-stone-500">
-                    {activeTicket.ticketNumber} · {ticketStatusLabel(activeTicket.status)}
-                  </p>
+                <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-4 py-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold">{activeTicket.subject}</h3>
+                    <p className="text-xs text-stone-500">
+                      {activeTicket.ticketNumber} · {ticketStatusLabel(activeTicket.status)}
+                    </p>
+                  </div>
+                  {activeTicket.status !== 'closed' ? (
+                    <button
+                      type="button"
+                      className="btn-secondary shrink-0 text-sm"
+                      disabled={busy}
+                      onClick={() => void closeTicket()}
+                    >
+                      {t('supportCloseTicket')}
+                    </button>
+                  ) : null}
                 </div>
                 <div className="flex-1 space-y-3 overflow-y-auto p-4">
                   {activeTicket.messages.map((m) => (
@@ -531,26 +543,16 @@ export default function Support() {
                   ))}
                 </div>
                 {activeTicket.status !== 'closed' ? (
-                  <div className="flex flex-col gap-2 border-t border-stone-100 p-3">
-                    <div className="flex gap-2">
-                      <input
-                        className="input flex-1 text-sm"
-                        placeholder={t('supportTypeReply')}
-                        value={reply}
-                        onChange={(e) => setReply(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void sendReply()}
-                      />
-                      <button type="button" className="btn-primary px-3" disabled={busy} onClick={() => void sendReply()}>
-                        <Send className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-secondary self-start text-sm"
-                      disabled={busy}
-                      onClick={() => void closeTicket()}
-                    >
-                      {t('supportCloseTicket')}
+                  <div className="flex gap-2 border-t border-stone-100 p-3">
+                    <input
+                      className="input flex-1 text-sm"
+                      placeholder={t('supportTypeReply')}
+                      value={reply}
+                      onChange={(e) => setReply(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void sendReply()}
+                    />
+                    <button type="button" className="btn-primary px-3" disabled={busy} onClick={() => void sendReply()}>
+                      <Send className="h-4 w-4" />
                     </button>
                   </div>
                 ) : (
