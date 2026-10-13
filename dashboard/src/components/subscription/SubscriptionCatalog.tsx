@@ -232,17 +232,17 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
   };
 
   const deactivatePlan = async (plan: Plan) => {
-    if (!confirm(`Deactivate package "${plan.name}"? Merchants will no longer see it.`)) return;
+    if (!confirm(`Delete package "${plan.name}"?`)) return;
     try {
       await api.delete(`/${apiPrefix}/plans/${plan.id}`);
-      toast.success('Package deactivated');
+      toast.success('Package deleted');
       await load();
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err
           ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
           : undefined;
-      toast.error(message || 'Failed to deactivate package');
+      toast.error(message || 'Failed to delete package');
     }
   };
 
@@ -406,7 +406,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
                         type="button"
                         className="p-1.5 rounded hover:bg-red-50 text-red-600"
                         onClick={() => void deactivatePlan(plan)}
-                        title="Deactivate"
+                        title="Delete"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -459,7 +459,7 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
                   type="button"
                   className="rounded-full border border-rose-100 p-2 text-rose-600 hover:bg-rose-50"
                   onClick={() => void deactivatePlan(plan)}
-                  title="Deactivate"
+                  title="Delete"
                 >
                   <Trash2 size={14} />
                 </button>

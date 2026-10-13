@@ -2019,31 +2019,6 @@ function EditionsPage() {
     setShowForm(true);
   };
 
-  /** Platform templates are read-only ? clone into an editable agency copy, then open editor. */
-  const customizePlatform = async (ed: any) => {
-    try {
-      setSaving(true);
-      const res = await api.post(`/reseller/editions/${ed.id}/clone`);
-      const cloned = res.data?.edition;
-      toast.success(t('posVersionClonedEditable'));
-      await load();
-      if (cloned?.id) {
-        openEdit(cloned);
-      } else {
-        const refreshed = await api.get('/reseller/editions', { params: { all: '1' } });
-        const list = refreshed.data.editions || [];
-        const match = list.find(
-          (e: any) => e.ownerType === 'reseller' && String(e.name || '').startsWith(ed.name)
-        );
-        if (match) openEdit(match);
-      }
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const save = async () => {
     if (!form.name.trim()) {
       toast.error(t('posVersionNameRequired'));
@@ -2076,11 +2051,11 @@ function EditionsPage() {
     }
   };
 
-  const deactivate = async (ed: any) => {
-    if (!window.confirm(t('posVersionDeactivateConfirm').replace('{name}', ed.name))) return;
+  const remove = async (ed: any) => {
+    if (!window.confirm(t('posVersionDeleteConfirm').replace('{name}', ed.name))) return;
     try {
       await api.delete(`/reseller/editions/${ed.id}`);
-      toast.success(t('posVersionDeactivated'));
+      toast.success(t('posVersionDeleted'));
       if (editingId === ed.id) {
         setShowForm(false);
         setEditingId(null);
@@ -2190,16 +2165,7 @@ function EditionsPage() {
                 ) : null}
               </div>
               <div className="mt-4 flex gap-2">
-                {isPlatform ? (
-                  <button
-                    type="button"
-                    className="rounded-full bg-[#9f1239] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
-                    disabled={saving}
-                    onClick={() => void customizePlatform(ed)}
-                  >
-                    {t('posVersionCustomize')}
-                  </button>
-                ) : (
+                {!isPlatform ? (
                   <>
                     <button
                       type="button"
@@ -2211,12 +2177,12 @@ function EditionsPage() {
                     <button
                       type="button"
                       className="rounded-full border border-rose-100 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50"
-                      onClick={() => void deactivate(ed)}
+                      onClick={() => void remove(ed)}
                     >
-                      {t('deactivate')}
+                      {t('delete')}
                     </button>
                   </>
-                )}
+                ) : null}
               </div>
             </div>
           );

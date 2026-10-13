@@ -791,7 +791,7 @@ router.put("/editions/:id", async (req: Request, res: Response) => {
  */
 router.delete("/editions/:id", async (req: Request, res: Response) => {
   try {
-    const edition = await EditionService.softDelete(req.params.id, {
+    const edition = await EditionService.remove(req.params.id, {
       requireOwnerType: "reseller",
       requireOwnerId: resellerId(req),
     });

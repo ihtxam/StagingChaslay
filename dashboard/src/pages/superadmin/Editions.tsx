@@ -87,11 +87,15 @@ export default function Editions() {
     }
   };
 
-  const deactivate = async (ed: Edition) => {
-    if (!window.confirm(`Deactivate "${ed.name}"?`)) return;
+  const remove = async (ed: Edition) => {
+    if (!window.confirm(t('posVersionDeleteConfirm').replace('{name}', ed.name))) return;
     try {
       await api.delete(`/superadmin/editions/${ed.id}`);
-      toast.success(t('posVersionDeactivated'));
+      toast.success(t('posVersionDeleted'));
+      if (editing?.id === ed.id) {
+        setCreating(false);
+        setEditing(null);
+      }
       load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed');
@@ -203,17 +207,15 @@ export default function Editions() {
                   </td>
                   <td className="px-3 py-2 text-right space-x-2">
                     <button type="button" className="text-teal-700 hover:underline" onClick={() => openEdit(ed)}>
-                      Edit
+                      {t('edit')}
                     </button>
-                    {ed.isActive && (
-                      <button
-                        type="button"
-                        className="text-red-600 hover:underline"
-                        onClick={() => deactivate(ed)}
-                      >
-                        Deactivate
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="text-red-600 hover:underline"
+                      onClick={() => void remove(ed)}
+                    >
+                      {t('delete')}
+                    </button>
                   </td>
                 </tr>
               ))}
