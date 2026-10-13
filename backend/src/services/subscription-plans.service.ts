@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PackageIncludedAddons } from "@/db/schema";
 import { queryRaw, withMerchantSchemaRetry } from "@/lib/ensure-merchant-schema";
+import { packageInUseDeleteError } from "@/lib/subscription-package-delete";
 import { PlatformResellerService } from "@/services/platform-reseller.service";
 
 /** Columns that existed on the original subscription_plans table (pre editions / addons). */
@@ -419,15 +420,29 @@ export class SubscriptionPlansService {
     return plan!;
   }
 
+  /** Hard-delete a package. Blocked when merchants or payments still reference it. */
   static async remove(id: string) {
     const db = getDb();
-    await this.getById(id);
-    const [plan] = await db
-      .update(schema.subscriptionPlans)
-      .set({ isActive: false, isPublic: false, updatedAt: new Date() })
-      .where(eq(schema.subscriptionPlans.id, id))
-      .returning();
-    return plan!;
+    const plan = await this.getById(id);
+
+    const [merchantUse] = await db
+      .select({ n: count() })
+      .from(schema.merchants)
+      .where(eq(schema.merchants.subscriptionPlan, plan.slug));
+    const [paymentUse] = await db
+      .select({ n: count() })
+      .from(schema.subscriptionPayments)
+      .where(eq(schema.subscriptionPayments.planId, id));
+
+    const blocked = packageInUseDeleteError(
+      plan.name,
+      Number(merchantUse?.n ?? 0),
+      Number(paymentUse?.n ?? 0)
+    );
+    if (blocked) throw new Error(blocked);
+
+    await db.delete(schema.subscriptionPlans).where(eq(schema.subscriptionPlans.id, id));
+    return { deleted: true, id };
   }
 
   static async ensureDefaults() {
