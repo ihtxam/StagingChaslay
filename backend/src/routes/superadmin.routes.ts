@@ -1388,6 +1388,15 @@ router.put("/editions/:editionId", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/editions/:editionId/clone", async (req: Request, res: Response) => {
+  try {
+    const edition = await EditionService.clonePlatform(req.params.editionId, req.body?.name);
+    res.status(201).json({ success: true, edition });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
 router.delete("/editions/:editionId", async (req: Request, res: Response) => {
   try {
     const edition = await EditionService.remove(req.params.editionId, {

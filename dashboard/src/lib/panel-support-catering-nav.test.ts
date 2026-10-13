@@ -23,14 +23,20 @@ assert.match(products, /cateringLicensed \?/);
 assert.match(products, /cateringGuideNav/);
 
 assert.match(editions, /posVersionDeleteConfirm/);
+assert.match(editions, /window.confirm/);
+assert.match(editions, /t\('copy'\)/);
+assert.match(editions, /t\('edit'\)/);
 assert.match(editions, /t\('delete'\)/);
+assert.match(editions, /\/superadmin\/editions\/\$\{ed.id\}\/clone/);
 assert.doesNotMatch(editions, /Deactivate/);
 assert.doesNotMatch(editions, /posVersionCustomize/);
 
 assert.doesNotMatch(reseller, /posVersionCustomize/);
-assert.doesNotMatch(reseller, /customizePlatform/);
+assert.match(reseller, /copyVersion/);
+assert.match(reseller, /t\('copy'\)/);
 assert.match(reseller, /t\('delete'\)/);
 assert.match(reseller, /t\('edit'\)/);
+assert.match(reseller, /window.confirm/);
 assert.match(reseller, /posVersionNew/);
 
 console.log('panel-support-catering-nav.test.ts OK');

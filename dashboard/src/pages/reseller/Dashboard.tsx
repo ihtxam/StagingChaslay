@@ -2019,6 +2019,21 @@ function EditionsPage() {
     setShowForm(true);
   };
 
+  const copyVersion = async (ed: any) => {
+    try {
+      setSaving(true);
+      const res = await api.post(`/reseller/editions/${ed.id}/clone`);
+      const cloned = res.data?.edition;
+      toast.success(t('posVersionCopied'));
+      await load();
+      if (cloned?.id) openEdit(cloned);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('copyFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const save = async () => {
     if (!form.name.trim()) {
       toast.error(t('posVersionNameRequired'));
@@ -2164,7 +2179,15 @@ function EditionsPage() {
                   </span>
                 ) : null}
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-full border border-stone-200 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  disabled={saving}
+                  onClick={() => void copyVersion(ed)}
+                >
+                  {t('copy')}
+                </button>
                 {!isPlatform ? (
                   <>
                     <button
