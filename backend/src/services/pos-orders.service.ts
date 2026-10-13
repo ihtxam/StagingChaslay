@@ -926,6 +926,12 @@ export class PosOrdersService {
       console.warn("Refund recorded on order but history log failed:", logErr);
     }
 
+    void import("@/services/como.service")
+      .then(({ ComoService }) => ComoService.voidForOrder(merchantId, orderId))
+      .catch((err) =>
+        console.warn("[como] void on refund failed:", err instanceof Error ? err.message : err)
+      );
+
     return {
       order: updated,
       refunded: refund,

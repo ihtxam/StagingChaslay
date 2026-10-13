@@ -158,6 +158,14 @@ import {
 } from '@/lib/pos-session';
 import { buildReceiptUrl, resolvePublishedReceiptRef, normalizeScannedPayload, parseTableQrPayload } from '@/lib/qr';
 import WebPosMembershipSellModal from '@/components/webpos/WebPosMembershipSellModal';
+import WebPosComoModal from '@/components/webpos/WebPosComoModal';
+import {
+  emptyComoSession,
+  submitComoPurchase,
+  voidComoPurchase,
+  type ComoCartItem,
+  type ComoSession,
+} from '@/lib/como-client';
 import { membershipDiscountPercent } from '@/lib/membership-plans';
 import type { MembershipPlan } from '@/lib/membership-plans';
 import {
@@ -695,6 +703,7 @@ type WebPosPaymentConfig = {
   /** null/undefined = legacy full access */
   editionFeatures?: string[] | null;
   pizzaTemplates?: PizzaBuilderTemplate[];
+  como?: { configured?: boolean; enabled?: boolean } | null;
 };
 
 type CheckoutExtras = CheckoutResult;
@@ -1154,6 +1163,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [giftCardPayDue, setGiftCardPayDue] = useState(0);
   const [giftPayInject, setGiftPayInject] = useState<AppliedPayment | null>(null);
   const [attachedMembership, setAttachedMembership] = useState<AttachedMembership | null>(null);
+  const [comoOpen, setComoOpen] = useState(false);
+  const [comoSession, setComoSession] = useState<ComoSession>(() => emptyComoSession());
+  const comoEnabled = paymentConfig?.como?.configured === true;
   const [attachedGiftCard, setAttachedGiftCard] = useState<AttachedGiftCard | null>(null);
   const [membershipBusy, setMembershipBusy] = useState(false);
   const [payWithPoints, setPayWithPoints] = useState(false);
@@ -2012,16 +2024,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     [fullTotals, posOfferDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount]
   );
 
+  const comoBillDiscount = useMemo(
+    () => ({
+      percent: billDiscount.percent,
+      amount: roundMoney2((billDiscount.amount || 0) + (comoSession.discountMajor || 0)),
+    }),
+    [billDiscount.percent, billDiscount.amount, comoSession.discountMajor]
+  );
+
   const payableFullTotals = useMemo(
     () =>
       applyBillDiscountToTotals(
         offerAdjustedTotals,
-        billDiscount,
+        comoBillDiscount,
         vatIncludedInPrice,
         roundingStep,
         vatAfterDiscount
       ),
-    [offerAdjustedTotals, billDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount]
+    [offerAdjustedTotals, comoBillDiscount, vatIncludedInPrice, roundingStep, vatAfterDiscount]
   );
 
   const activeSale = useMemo(() => {
@@ -5766,6 +5786,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setSelectedCustomer(null);
     clearAttachedMembership();
     clearAttachedGiftCard();
+    if (comoSession.transactionId && comoSession.assetKeys.length) {
+      void voidComoPurchase({
+        transactionId: comoSession.transactionId,
+        membershipKey: comoSession.membershipKey,
+        identifier: comoSession.identifier,
+      }).catch(() => {});
+    }
+    setComoSession(emptyComoSession());
     setProvisionalPrinted(false);
     savePersistedWebPosCarts({
       drafts: draftsMapToRecord(openCartDraftsRef.current),
@@ -6150,12 +6178,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const checkoutBillDiscountExtras = () => {
-    const billAmount = resolveBillDiscountAmount(offerAdjustedTotals, billDiscount, vatIncludedInPrice);
+    const billAmount = resolveBillDiscountAmount(offerAdjustedTotals, comoBillDiscount, vatIncludedInPrice);
     return {
       discountPercent: billDiscount.percent,
       discountAmount: roundMoney2(billAmount + posOfferDiscount),
     };
   };
+
+  const comoCartItems = (): ComoCartItem[] =>
+    cart.map((l) => ({
+      lineId: l.lineId,
+      productId: l.productId,
+      sku: (l as { sku?: string }).sku,
+      barcode: (l as { barcode?: string }).barcode,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+    }));
 
   const printProvisionalReceipt = async () => {
     if (!cart.length) return;
@@ -9019,6 +9057,42 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           return pick(match) || pick(first) || null;
         })();
 
+    if (
+      !queuedOffline &&
+      comoEnabled &&
+      comoSession.member &&
+      !comoSession.member.notFound &&
+      method !== 'pay_later' &&
+      method !== 'invoice'
+    ) {
+      try {
+        await submitComoPurchase({
+          identifier: comoSession.identifier,
+          phone: comoSession.phone,
+          email: comoSession.email,
+          membershipKey: comoSession.membershipKey,
+          transactionId: comoSession.transactionId,
+          orderType: effectiveChannel || 'pos',
+          items: saleLines.map((l) => ({
+            lineId: l.lineId,
+            productId: l.productId,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+          })),
+          totalMajor: sale.total,
+          assetKeys: comoSession.assetKeys,
+          orderId: backendOrderId || undefined,
+        });
+      } catch (err: unknown) {
+        const msg =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+            : null;
+        toast.error(msg || t('comoSubmitFailed'));
+      }
+      setComoSession(emptyComoSession());
+    }
+
     // Credit gift-card sell/reload lines after successful online persistence only
     let giftCardRemainingBalance: number | null = null;
     let soldGiftCards: SoldGiftCardOnReceipt[] = [];
@@ -11058,6 +11132,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             pointsRedeemed={membershipCheckout.pointsRedeemed}
             pointsDiscount={membershipCheckout.pointsDiscount}
             onCustomer={collectOrderRef ? undefined : () => setCustomerOpen(true)}
+            onComo={
+              !collectOrderRef && comoEnabled ? () => setComoOpen(true) : undefined
+            }
+            comoLabel={
+              comoSession.member && !comoSession.member.notFound
+                ? t('comoWebposBtn')
+                : null
+            }
             onOpenDrawer={canDrawer ? () => void openCashDrawer() : undefined}
             onSplit={
               !collectOrderRef && checkoutSettings.splitBillsEnabled && !splitQueue.length
@@ -11336,6 +11418,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onClearMembership={
                   attachedMembership ? clearAttachedMembership : undefined
                 }
+                comoEnabled={comoEnabled}
+                comoLabel={
+                  comoSession.member && !comoSession.member.notFound
+                    ? [comoSession.member.firstName, comoSession.member.lastName]
+                        .filter(Boolean)
+                        .join(' ') ||
+                      comoSession.member.phoneNumber ||
+                      t('comoWebposBtn')
+                    : null
+                }
+                comoDiscount={comoSession.discountMajor || 0}
+                onComo={comoEnabled ? () => setComoOpen(true) : undefined}
                 giftCardLabel={
                   attachedGiftCard
                     ? t('webPosGiftCardOnSale').replace(
@@ -12633,6 +12727,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           } as WebPosCustomer);
         }}
       />
+      <WebPosComoModal
+        open={comoOpen}
+        session={comoSession}
+        items={comoCartItems()}
+        totalMajor={payableFullTotals.total}
+        orderType={effectiveChannel || 'pos'}
+        onClose={() => setComoOpen(false)}
+        onChange={setComoSession}
+      />
+
       <WebPosMembershipSellModal
         open={membershipSellOpen}
         plans={(paymentConfig?.giftCardSettings as { membershipPlans?: MembershipPlan[] } | null)?.membershipPlans || []}

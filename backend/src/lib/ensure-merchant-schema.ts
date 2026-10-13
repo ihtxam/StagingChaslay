@@ -276,6 +276,7 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   gift_card_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_addon_enabled boolean NOT NULL DEFAULT false",
   fiskaly_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiskaly_settings jsonb",
+  como_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS como_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -317,6 +318,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_tracking_token varchar(64)",
   orders_fiskaly_signature:
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fiskaly_signature jsonb",
+  orders_como_loyalty: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS como_loyalty jsonb",
   vouchers_order_types:
     "ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'::jsonb",
   delivery_driver_pay_mode:
@@ -1412,6 +1414,20 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS published_pull_requests_number_idx ON published_pull_requests(number)`,
   `CREATE INDEX IF NOT EXISTS published_pull_requests_merged_idx ON published_pull_requests(merged_at)`,
+  `CREATE TABLE IF NOT EXISTS como_transactions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    como_transaction_id varchar(128) NOT NULL,
+    como_confirmation varchar(255),
+    membership_key varchar(255),
+    status varchar(30) NOT NULL DEFAULT 'submitted',
+    selected_assets jsonb NOT NULL DEFAULT '[]'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS como_transactions_merchant_order_uidx ON como_transactions(merchant_id, order_id)`,
+  `CREATE INDEX IF NOT EXISTS como_transactions_merchant_idx ON como_transactions(merchant_id)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1648,6 +1664,12 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
 
 export async function ensureGiftCardAddonColumn(): Promise<void> {
   await runPatch("gift_card_addon_enabled");
+}
+
+export async function ensureComoSchema(): Promise<void> {
+  await runPatch("como_settings", "merchants");
+  await runPatch("como_loyalty", "orders");
+  await ensureMerchantTables();
 }
 
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */

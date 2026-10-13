@@ -16,6 +16,7 @@ export type SettingsTabId =
   | 'customerDisplay'
   | 'fiscal'
   | 'accounting'
+  | 'como'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -627,6 +628,20 @@ export function buildSettingsSearchIndex(
         'nf525',
         'kassensichv',
         t('settingsFiscal'),
+      ],
+    },
+    {
+      id: 'como-sense',
+      tab: 'como',
+      keywords: [
+        'como',
+        'comosense',
+        'como sense',
+        'fidelity',
+        'loyalty',
+        'fidélité',
+        'treue',
+        t('settingsComo'),
       ],
     },
     {

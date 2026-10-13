@@ -45,6 +45,13 @@ import {
   type KioskMenuCategory,
   type KioskMenuItem,
 } from '@/lib/kiosk-api';
+import {
+  emptyComoSession,
+  fetchKioskComoBenefits,
+  identifyKioskComo,
+  submitKioskComo,
+  type ComoSession,
+} from '@/lib/como-client';
 import { printKioskOrder, type KioskPrintContext } from '@/lib/kiosk-print';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { setKioskAdminUnlocked } from '@/lib/kiosk-admin-session';
@@ -117,6 +124,9 @@ export default function KioskApp() {
   const [selectedTableId, setSelectedTableId] = useState('');
   const [badgeNumber, setBadgeNumber] = useState('');
   const [membership, setMembership] = useState<{ id: string; holderName?: string } | null>(null);
+  const [comoSession, setComoSession] = useState<ComoSession>(() => emptyComoSession());
+  const [comoPhone, setComoPhone] = useState('');
+  const [comoBusy, setComoBusy] = useState(false);
   const [scanningMembership, setScanningMembership] = useState(false);
   const [membershipCameraError, setMembershipCameraError] = useState<string | null>(null);
   const [scanningBarcode, setScanningBarcode] = useState(false);
@@ -252,6 +262,8 @@ export default function KioskApp() {
     setSelectedTableId('');
     setBadgeNumber('');
     setMembership(null);
+    setComoSession(emptyComoSession());
+    setComoPhone('');
     setCart([]);
     setOrderId('');
     setOrderNumber('');
@@ -412,11 +424,47 @@ export default function KioskApp() {
         setScanningMembership(false);
         setStep('menu');
         toast.success('Membership linked');
+        return;
       } catch {
-        toast.error('Membership not found');
+        /* fall through to Como if enabled */
       }
+      if (config?.como?.enabled) {
+        setComoBusy(true);
+        try {
+          const data = await identifyKioskComo(token, {
+            identifier: code,
+            orderType: 'kiosk',
+            items: cart.map((l) => ({
+              lineId: l.id,
+              productId: l.productId,
+              quantity: l.quantity,
+              unitPrice: l.price,
+            })),
+            totalMajor: cart.reduce((s, l) => s + l.price * l.quantity, 0),
+          });
+          setComoSession({
+            transactionId: data.transactionId,
+            identifier: code,
+            membershipKey: data.member.membershipKey,
+            phone: data.member.phoneNumber,
+            email: data.member.email,
+            assetKeys: [],
+            discountMajor: 0,
+            member: data.member,
+          });
+          setScanningMembership(false);
+          if (data.member.notFound) toast.error(t('comoNotFound'));
+          else toast.success(t('kioskComoFound', { name: data.member.firstName || code }));
+        } catch {
+          toast.error(t('comoNotFound'));
+        } finally {
+          setComoBusy(false);
+        }
+        return;
+      }
+      toast.error('Membership not found');
     },
-    [token]
+    [token, config?.como?.enabled, cart, t]
   );
 
   const handleProductScan = useCallback(
@@ -657,7 +705,9 @@ export default function KioskApp() {
                 ? 'Kiosk takeaway'
                 : fulfillmentChannel === 'delivery'
                   ? 'Kiosk delivery'
-                  : membership?.holderName || 'Kiosk guest',
+                  : comoSession.member?.firstName || membership?.holderName || 'Kiosk guest',
+        customerPhone: comoSession.phone || undefined,
+        comoDiscountAmount: comoSession.discountMajor || undefined,
       });
       const oid = order?.id;
       const onum = order?.orderNumber || '';
@@ -666,6 +716,29 @@ export default function KioskApp() {
       setOrderNumber(onum);
       if (paymentMethod === 'card') {
         await payKioskOrderAtTerminal(token, oid);
+      }
+      if (config.como?.enabled && comoSession.member && !comoSession.member.notFound) {
+        try {
+          await submitKioskComo(token, {
+            identifier: comoSession.identifier,
+            phone: comoSession.phone,
+            email: comoSession.email,
+            membershipKey: comoSession.membershipKey,
+            transactionId: comoSession.transactionId,
+            orderType: 'kiosk',
+            items: cart.map((l) => ({
+              lineId: l.id,
+              productId: l.productId,
+              quantity: l.quantity,
+              unitPrice: l.price,
+            })),
+            totalMajor: Math.max(0, cartTotal - (comoSession.discountMajor || 0)),
+            assetKeys: comoSession.assetKeys,
+            orderId: oid,
+          });
+        } catch {
+          toast.error(t('comoSubmitFailed'));
+        }
       }
       const printCtx: KioskPrintContext = {
         merchantName: config.merchant.name,
@@ -702,7 +775,9 @@ export default function KioskApp() {
       setStep('table-badge');
       return;
     }
-    setStep(config?.settings.membershipScanEnabled ? 'membership' : 'menu');
+    setStep(
+      config?.settings.membershipScanEnabled || config?.como?.enabled ? 'membership' : 'menu'
+    );
   };
 
   const startGrocery = () => {
@@ -981,7 +1056,11 @@ export default function KioskApp() {
                 type="button"
                 disabled={tableMode === 'table' ? !selectedTableId : !badgeNumber.trim()}
                 onClick={() =>
-                  setStep(config.settings.membershipScanEnabled ? 'membership' : 'menu')
+                  setStep(
+                    config.settings.membershipScanEnabled || config.como?.enabled
+                      ? 'membership'
+                      : 'menu'
+                  )
                 }
                 className="kiosk-btn-primary flex-[2]"
               >
@@ -994,10 +1073,96 @@ export default function KioskApp() {
         {step === 'membership' ? (
           <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto p-6">
             <QrCode className="kiosk-btn-choice-icon" />
-            <h2 className="kiosk-step-title mt-4 font-bold">Member rewards</h2>
+            <h2 className="kiosk-step-title mt-4 font-bold">
+              {config?.como?.enabled ? t('kioskComoTitle') : 'Member rewards'}
+            </h2>
             <p className="mt-2 max-w-lg text-center text-stone-600">
-              Scan your membership QR code with the camera or a handheld scanner to earn points.
+              {config?.como?.enabled ? t('kioskComoHint') : 'Scan your membership QR code with the camera or a handheld scanner to earn points.'}
             </p>
+            {config?.como?.enabled ? (
+              <form
+                className="mt-6 flex w-full max-w-md gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void applyMembershipCode(comoPhone);
+                }}
+              >
+                <input
+                  className="input flex-1 text-lg"
+                  inputMode="tel"
+                  placeholder={t('kioskComoPhone')}
+                  value={comoPhone}
+                  onChange={(e) => setComoPhone(e.target.value)}
+                />
+                <button type="submit" className="kiosk-btn-primary" disabled={comoBusy || !comoPhone.trim()}>
+                  {t('comoLookup')}
+                </button>
+              </form>
+            ) : null}
+            {comoSession.member && !comoSession.member.notFound ? (
+              <div className="mt-4 w-full max-w-md rounded-2xl border border-teal-200 bg-teal-50 p-4 text-center">
+                <p className="font-semibold text-teal-900">
+                  {t('kioskComoFound', {
+                    name: [comoSession.member.firstName, comoSession.member.lastName]
+                      .filter(Boolean)
+                      .join(' ') || comoSession.member.phoneNumber || '',
+                  })}
+                </p>
+                {comoSession.member.pointsBalance != null ? (
+                  <p className="mt-1 text-sm text-teal-800">
+                    {t('comoPoints')}: {comoSession.member.pointsBalance}
+                  </p>
+                ) : null}
+                <div className="mt-3 space-y-2 text-left">
+                  {(comoSession.member.assets || []).map((asset) => (
+                    <label key={asset.key} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        disabled={asset.redeemable === false}
+                        checked={comoSession.assetKeys.includes(asset.key)}
+                        onChange={async () => {
+                          const next = comoSession.assetKeys.includes(asset.key)
+                            ? comoSession.assetKeys.filter((k) => k !== asset.key)
+                            : [...comoSession.assetKeys, asset.key];
+                          setComoSession((prev) => ({ ...prev, assetKeys: next }));
+                          if (!token) return;
+                          try {
+                            const ben = await fetchKioskComoBenefits(token, {
+                              identifier: comoSession.identifier,
+                              phone: comoSession.phone,
+                              membershipKey: comoSession.membershipKey,
+                              transactionId: comoSession.transactionId,
+                              orderType: 'kiosk',
+                              items: cart.map((l) => ({
+                                lineId: l.id,
+                                productId: l.productId,
+                                quantity: l.quantity,
+                                unitPrice: l.price,
+                              })),
+                              totalMajor: cart.reduce((s, l) => s + l.price * l.quantity, 0),
+                              assetKeys: next,
+                            });
+                            setComoSession((prev) => ({
+                              ...prev,
+                              discountMajor: Math.round(ben.totalDiscountMinor || 0) / 100,
+                            }));
+                          } catch {
+                            /* benefits refresh is best-effort */
+                          }
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium">{asset.name || asset.key}</span>
+                        <span className="block text-xs text-stone-500">
+                          {asset.redeemable === false ? t('comoNotRedeemable') : t('kioskComoApply')}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {scanningMembership ? (
               <div className="mt-6 w-full max-w-md">
                 {membershipCameraError ? (
