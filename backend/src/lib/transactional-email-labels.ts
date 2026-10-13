@@ -270,6 +270,9 @@ export type ShopOrderEmailLabels = {
   paymentCard: string;
   paymentPayLater: string;
   paymentOnline: string;
+  reviewTitle: string;
+  reviewBody: string;
+  reviewCta: string;
 };
 
 const SHOP_ORDER_LABELS: Record<TxLocale, ShopOrderEmailLabels> = {
@@ -312,6 +315,9 @@ const SHOP_ORDER_LABELS: Record<TxLocale, ShopOrderEmailLabels> = {
     paymentCard: 'Card',
     paymentPayLater: 'Pay on pickup',
     paymentOnline: 'Online',
+    reviewTitle: 'How was your order?',
+    reviewBody: 'A Google review helps other guests find us.',
+    reviewCta: 'Leave a Google review',
   },
   fr: {
     orderConfirmedBadge: 'COMMANDE CONFIRMÉE',
@@ -354,6 +360,9 @@ const SHOP_ORDER_LABELS: Record<TxLocale, ShopOrderEmailLabels> = {
     paymentCard: 'Carte',
     paymentPayLater: 'Espèces',
     paymentOnline: 'En ligne',
+    reviewTitle: 'Comment s’est passée votre commande ?',
+    reviewBody: 'Un avis Google aide d’autres clients à nous trouver.',
+    reviewCta: 'Laisser un avis Google',
   },
   de: {
     orderConfirmedBadge: 'BESTELLUNG BESTÄTIGT',
@@ -396,6 +405,9 @@ const SHOP_ORDER_LABELS: Record<TxLocale, ShopOrderEmailLabels> = {
     paymentCard: 'Karte',
     paymentPayLater: 'Bar bei Abholung',
     paymentOnline: 'Online',
+    reviewTitle: 'Wie war Ihre Bestellung?',
+    reviewBody: 'Eine Google-Bewertung hilft anderen Gästen, uns zu finden.',
+    reviewCta: 'Google-Bewertung hinterlassen',
   },
 };
 

@@ -402,6 +402,22 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   };
 }
 
+/**
+ * Public Google review link for shop confirmation, footer, and order email.
+ * Returns a sanitized http(s) URL or null — never leaks other print settings.
+ */
+export function publicGoogleReviewUrl(raw: unknown): string | null {
+  const url = normalizePosPrintSettings(raw).receiptGoogleReviewsUrl;
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    return parsed.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
 /** One-time migration: category→destination map → per-printer linkedCategoryIds (Android-aligned). */
 export function migrateKitchenPrintRoutingToPrinters(
   printers: PosPrinterProfile[],

@@ -78,6 +78,7 @@ type OrderView = {
     phone?: string | null;
     shopLogoUrl?: string | null;
     cmsHomepageEnabled?: boolean;
+    googleReviewUrl?: string | null;
   };
 };
 
@@ -749,6 +750,21 @@ export default function OrderConfirmationPage() {
             )}
           </div>
         </section>
+
+        {paid && !isCancelled && order.store?.googleReviewUrl ? (
+          <section className="border border-stone-200 bg-white p-5">
+            <h2 className="text-base font-semibold text-stone-900">{t('shopReviewTitle')}</h2>
+            <p className="mt-1 text-sm text-stone-600">{t('shopReviewBody')}</p>
+            <a
+              href={order.store.googleReviewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-stone-900 px-4 py-3 text-sm font-semibold text-white sm:w-auto"
+            >
+              {t('shopReviewCta')}
+            </a>
+          </section>
+        ) : null}
 
           </div>
         </div>

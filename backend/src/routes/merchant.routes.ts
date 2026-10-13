@@ -1995,6 +1995,9 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
         loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
           merchant
         ),
+        como: (await import("@/lib/como-settings")).getComoPublic(
+          (merchant as { comoSettings?: Record<string, unknown> | null }).comoSettings
+        ),
         terminalReady,
         tapToPayReady,
         adyenConfigured: !!merchant.adyenApiKey && !!merchant.adyenMerchantAccount,

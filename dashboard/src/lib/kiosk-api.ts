@@ -11,6 +11,7 @@ export type KioskFulfillmentChannel = 'takeaway' | 'delivery' | 'dine_in';
 
 export type KioskConfig = {
   merchant: { id: string; name: string; slug: string };
+  como?: { enabled?: boolean };
   settings: {
     name: string;
     promoSlides: KioskPromoSlide[];
@@ -184,13 +185,16 @@ export async function createKioskOrder(
     customerName?: string;
     membershipCardId?: string;
     shippingAddress?: string;
+    comoDiscountAmount?: number;
+    customerPhone?: string;
   }
 ) {
   const res = await axios.post(`/api/shop/${slug}/orders`, {
     ...payload,
     orderSource: 'kiosk',
     guestCheckout: true,
-    customerPhone: 'KIOSK',
+    customerPhone: payload.customerPhone || 'KIOSK',
+    comoDiscountAmount: payload.comoDiscountAmount,
   });
   return res.data.order as { id: string; orderNumber?: string };
 }

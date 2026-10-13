@@ -42,6 +42,7 @@ import {
 import { isBexioAddonEnabled, isOdooAddonEnabled } from "@/lib/accounting-integration-addon";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { getFiskalyPublic, mergeFiskalySettings, type FiskalySettings } from "@/lib/fiskaly-settings";
+import { getComoPublic, mergeComoSettings, type ComoSettings } from "@/lib/como-settings";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
@@ -356,6 +357,9 @@ export class MerchantSettingsService {
       fiskalySettings: getFiskalyPublic(
         (merchant as { fiskalySettings?: FiskalySettings | null }).fiskalySettings
       ),
+      comoSettings: getComoPublic(
+        (merchant as { comoSettings?: ComoSettings | null }).comoSettings
+      ),
       webposExpressEnabled: merchant.webposExpressEnabled !== false,
       webposCashEnabled: merchant.webposCashEnabled !== false,
       webposCardEnabled: merchant.webposCardEnabled !== false,
@@ -488,6 +492,7 @@ export class MerchantSettingsService {
       adyenLiveRegion?: string;
       adyenUseLegacyEndpoint?: boolean;
       fiskalySettings?: FiskalySettings | Record<string, unknown> | null;
+      comoSettings?: ComoSettings | Record<string, unknown> | null;
       webposExpressEnabled?: boolean;
       webposCashEnabled?: boolean;
       webposCardEnabled?: boolean;
@@ -704,6 +709,17 @@ export class MerchantSettingsService {
       patch.fiskalySettings = mergeFiskalySettings(
         (current as { fiskalySettings?: FiskalySettings | null } | undefined)?.fiskalySettings,
         updates.fiskalySettings
+      );
+    }
+    if (updates.comoSettings !== undefined) {
+      const { ensureComoSchema } = await import("@/lib/ensure-merchant-schema");
+      await ensureComoSchema();
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+      });
+      patch.comoSettings = mergeComoSettings(
+        (current as { comoSettings?: ComoSettings | null } | undefined)?.comoSettings,
+        updates.comoSettings
       );
     }
     if (updates.webposExpressEnabled !== undefined) patch.webposExpressEnabled = !!updates.webposExpressEnabled;
