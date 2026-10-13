@@ -49,9 +49,13 @@ const html = buildShopOrderGuestEmailHtml({
   notes: 'TEST TEST TEST TEST',
   trackingUrl: null,
   trackLabel: 'Suivre votre commande',
+  reviewUrl: 'https://g.page/r/demo/review',
 });
 assert.match(html, /COMMANDE CONFIRMÉE|Acceptée/);
 assert.match(html, /Récapitulatif/);
 assert.match(html, /Besoin d'aide \?/);
+assert.match(html, /Laisser un avis Google/);
+assert.match(html, /g\.page\/r\/demo\/review/);
+assert.equal(shopOrderEmailLabels('en').reviewCta, 'Leave a Google review');
 
 console.log('transactional-email-labels.test.ts ok');

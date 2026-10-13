@@ -25,6 +25,7 @@ type ShopFooterInfo = {
   reservationsEnabled?: boolean;
   googleReserveUrl?: string | null;
   googleOrderUrl?: string | null;
+  googleReviewUrl?: string | null;
 };
 
 function formatAddressLine(info: ShopFooterInfo): string | null {
@@ -69,6 +70,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
           reservationsEnabled: !!data.reservationsEnabled,
           googleReserveUrl: data.googleReserveUrl || null,
           googleOrderUrl: data.googleOrderUrl || null,
+          googleReviewUrl: data.googleReviewUrl || null,
         });
       } catch {
         if (!cancelled) setInfo(null);
@@ -101,6 +103,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
   const giftCardsOn = info.giftCards?.enabled === true;
   const googleOrder = String(info.googleOrderUrl || '').trim();
   const googleReserve = String(info.googleReserveUrl || '').trim();
+  const googleReview = String(info.googleReviewUrl || '').trim();
   const reservePath = `${basePath}/reservations`.replace(/\/+/g, '/');
 
   return (
@@ -187,6 +190,16 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
                   className="text-stone-200 hover:text-white hover:underline"
                 >
                   {t('shopFooterGoogleReserve')}
+                </a>
+              ) : null}
+              {googleReview ? (
+                <a
+                  href={googleReview}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('shopFooterGoogleReview')}
                 </a>
               ) : null}
               {giftCardsOn ? (
