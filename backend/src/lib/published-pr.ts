@@ -105,3 +105,65 @@ export function resolvePublishedPrRepo(raw?: string | null): string {
   const value = String(raw || process.env.GITHUB_REPO || DEFAULT_PUBLISHED_PR_REPO).trim();
   return /^[\w.-]+\/[\w.-]+$/.test(value) ? value : DEFAULT_PUBLISHED_PR_REPO;
 }
+
+/** GitHub hides private repos as 404 when the token is missing or cannot see them. */
+export function githubRepoAccessError(
+  status: number,
+  repo: string,
+  hasToken: boolean
+): string | null {
+  if (status === 401 || status === 403) {
+    return "GitHub refused the request. Add a repo token under Superadmin → Published PRs, or set GITHUB_TOKEN.";
+  }
+  if (status === 404) {
+    return hasToken
+      ? `GitHub could not access ${repo}. Check the repo name, or use a token with access to this private repository.`
+      : `${repo} is a private repository. GitHub hides it until you add a token with pull-request read access, then click Refresh.`;
+  }
+  return null;
+}
+
+export function parseGitMergeLog(raw: string, repo = DEFAULT_PUBLISHED_PR_REPO): PublishedPrRecord[] {
+  const found: PublishedPrRecord[] = [];
+  const blocks = String(raw || "").split(/^===\s*$/m);
+  for (const block of blocks) {
+    const lines = block.replace(/^\s+/, "").split("\n");
+    if (lines.length < 3) continue;
+    const mergedAt = new Date(lines[0].trim());
+    if (Number.isNaN(mergedAt.getTime())) continue;
+    const authorRaw = lines[1].trim();
+    const subject = lines[2].trim();
+    const match = subject.match(/Merge pull request #(\d+)/i);
+    if (!match) continue;
+    const number = Number(match[1]);
+    const body = lines.slice(3).join("\n").trim();
+    const titleLine = body.split("\n").map((line) => line.trim()).find(Boolean) || subject;
+    found.push({
+      number,
+      title: titleLine.slice(0, 500),
+      body: cleanPublishedPrBody(body),
+      htmlUrl: `https://github.com/${repo}/pull/${number}`.slice(0, 500),
+      author: authorRaw && authorRaw !== "GitHub" ? authorRaw.slice(0, 120) : "",
+      baseBranch: "main",
+      mergedAt,
+    });
+  }
+  return found;
+}
+
+export function parsePublishedPrSnapshot(raw: string, repo = DEFAULT_PUBLISHED_PR_REPO): PublishedPrRecord[] {
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      const data = JSON.parse(text) as
+        | GithubPullLike[]
+        | { pulls?: GithubPullLike[]; prs?: GithubPullLike[] };
+      const rows = Array.isArray(data) ? data : data.pulls || data.prs || [];
+      return rows.map((row) => parseGithubPull(row)).filter((row): row is PublishedPrRecord => !!row);
+    } catch {
+      return [];
+    }
+  }
+  return parseGitMergeLog(text, repo);
+}
