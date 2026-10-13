@@ -513,7 +513,6 @@ import {
 } from '@/lib/delivery-auto-accept';
 import {
   persistAutoAcceptOnArrival,
-  printKitchenForAutoAcceptedOrder,
   startAutoAcceptArrivalCue,
 } from '@/lib/auto-accept-order-arrival';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM, ONLINE_ORDER_HISTORY_STATUSES_PARAM } from '@/lib/incoming-orders';
@@ -3285,9 +3284,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
         for (const o of queueOrders) {
           unactionedOrderIdsRef.current.add(o.id);
-          if (deliveryAutoAccept) {
-            printKitchenForAutoAcceptedOrder(o, merchantSettingsRef.current);
-          } else {
+          if (!deliveryAutoAccept) {
             void maybePrintOnlineOrderOnArrival(o, merchantSettingsRef.current);
             const zip = extractZipFromAddress(o.shippingAddress);
             speakDeliveryAlert(onlineShopOrderSpeechLine(t, zip));
