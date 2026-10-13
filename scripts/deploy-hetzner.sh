@@ -782,6 +782,10 @@ else
   API_URL="https://api.chaslay.com"
 fi
 echo "CADDYFILE=$CADDYFILE"
+# Private GitHub repos 404 without a token — bake merge history for Published PRs.
+if [[ -x "$REPO_DIR/scripts/export-published-prs.sh" ]]; then
+  bash "$REPO_DIR/scripts/export-published-prs.sh" || echo "WARNING: published PRs snapshot skipped"
+fi
 # migrate is a one-shot job — starting it via `up` leaves rebornsense-migrate-1 behind and blocks later deploys.
 docker ps -aq --filter "name=${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true
 docker ps -aq --filter "name=_${migrate_project}-migrate" | xargs -r docker rm -f 2>/dev/null || true

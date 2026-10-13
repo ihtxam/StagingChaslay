@@ -1,8 +1,12 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { desc, gte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
+  githubRepoAccessError,
   groupPublishedPrsByDay,
   parseGithubPull,
+  parsePublishedPrSnapshot,
   resolvePublishedPrRepo,
   type GithubPullLike,
   type PublishedPrRecord,
@@ -80,7 +84,12 @@ export class PublishedPrService {
   static async list(days = 30) {
     const { ensureMerchantTables } = await import("@/lib/ensure-merchant-schema");
     await ensureMerchantTables();
-    await this.ensureFresh();
+    let warning: string | undefined;
+    try {
+      await this.ensureFresh();
+    } catch (error) {
+      warning = error instanceof Error ? error.message : "Failed to refresh published PRs";
+    }
     const db = getDb();
     const since =
       days > 0 ? new Date(Date.now() - days * 24 * 60 * 60 * 1000) : null;
@@ -94,6 +103,7 @@ export class PublishedPrService {
       ...config,
       days,
       total: rows.length,
+      warning,
       groups: groupPublishedPrsByDay(rows.map(serialize)),
     };
   }
@@ -155,6 +165,25 @@ export class PublishedPrService {
     };
   }
 
+  static async fetchMergedPullsFallback(repo: string): Promise<PublishedPrRecord[]> {
+    const candidates = [
+      process.env.PUBLISHED_PRS_SNAPSHOT,
+      "/app/public/published-prs.snapshot",
+      "/app/public/published-prs.json",
+      path.join(process.cwd(), "public/published-prs.snapshot"),
+      path.join(process.cwd(), "public/published-prs.json"),
+    ].filter((value): value is string => !!value);
+    for (const file of candidates) {
+      try {
+        const parsed = parsePublishedPrSnapshot(await readFile(file, "utf8"), repo);
+        if (parsed.length) return parsed;
+      } catch {
+        /* try next snapshot */
+      }
+    }
+    return [];
+  }
+
   static async fetchMergedPulls(repo: string, token: string): Promise<PublishedPrRecord[]> {
     const headers: Record<string, string> = {
       Accept: "application/vnd.github+json",
@@ -168,15 +197,11 @@ export class PublishedPrService {
       const url = `https://api.github.com/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=${page}`;
       const res = await fetch(url, { headers });
       if (!res.ok) {
+        const fallback = await this.fetchMergedPullsFallback(repo);
+        if (fallback.length) return fallback;
         const detail = await res.text().catch(() => "");
-        if (res.status === 401 || res.status === 403) {
-          throw new Error(
-            "GitHub refused the request. Add a repo token under Superadmin → Published PRs, or set GITHUB_TOKEN."
-          );
-        }
-        if (res.status === 404) {
-          throw new Error(`GitHub repo not found: ${repo}`);
-        }
+        const mapped = githubRepoAccessError(res.status, repo, !!token);
+        if (mapped) throw new Error(mapped);
         throw new Error(`GitHub pull list failed (${res.status})${detail ? `: ${detail.slice(0, 180)}` : ""}`);
       }
       const payload = (await res.json()) as GithubPullLike[];

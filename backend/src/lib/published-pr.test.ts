@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 import {
   cleanPublishedPrBody,
   groupPublishedPrsByDay,
+  githubRepoAccessError,
+  parseGitMergeLog,
   parseGithubPull,
+  parsePublishedPrSnapshot,
   publishedPrDayKey,
   resolvePublishedPrRepo,
 } from "./published-pr";
@@ -53,5 +56,31 @@ Fix Superadmin create merchant crash.
   it("falls back to the Reborn repo when the override is invalid", () => {
     assert.equal(resolvePublishedPrRepo("ihtxam/rebornSense"), "ihtxam/rebornSense");
     assert.equal(resolvePublishedPrRepo("not a repo"), "ihtxam/rebornSense");
+  });
+
+  it("explains private-repo 404 when no token is configured", () => {
+    const missing = githubRepoAccessError(404, "ihtxam/rebornSense", false);
+    assert.match(String(missing), /private repository/);
+    assert.doesNotMatch(String(missing), /repo not found/);
+    const hidden = githubRepoAccessError(404, "ihtxam/rebornSense", true);
+    assert.match(String(hidden), /could not access/);
+  });
+
+  it("parses merge commits exported from git log", () => {
+    const parsed = parseGitMergeLog(
+      `
+===
+2026-10-13T13:59:36Z
+GitHub
+Merge pull request #746 from ihtxam/cursor/reseller-package-hard-delete-1b4f
+feat(reseller): hard-delete own packages instead of deactivate
+`,
+      "ihtxam/rebornSense"
+    );
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0]?.number, 746);
+    assert.equal(parsed[0]?.title, "feat(reseller): hard-delete own packages instead of deactivate");
+    assert.equal(parsed[0]?.htmlUrl, "https://github.com/ihtxam/rebornSense/pull/746");
+    assert.equal(parsePublishedPrSnapshot("===\n2026-10-13T13:59:36Z\nGitHub\nMerge pull request #1 from x/y\nTitle").length, 1);
   });
 });

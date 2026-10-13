@@ -32,6 +32,7 @@ export default function PublishedPrsAdmin() {
   const [tokenConfigured, setTokenConfigured] = useState(false);
   const [tokenMasked, setTokenMasked] = useState('');
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const [warning, setWarning] = useState('');
   const [openPr, setOpenPr] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -44,11 +45,13 @@ export default function PublishedPrsAdmin() {
       setTokenConfigured(!!res.data.tokenConfigured);
       setTokenMasked(res.data.tokenMasked || '');
       setSyncedAt(res.data.syncedAt || null);
+      setWarning(typeof res.data.warning === 'string' ? res.data.warning : '');
     } catch (e: unknown) {
-      toast.error(
+      const message =
         (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-          t('publishedPrsLoadFailed')
-      );
+        t('publishedPrsLoadFailed');
+      setWarning(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -137,6 +140,11 @@ export default function PublishedPrsAdmin() {
             : t('publishedPrsNeverSynced')}
           {` · ${total} ${t('publishedPrsCount')}`}
         </p>
+        {warning ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            {warning}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-4">
