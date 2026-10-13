@@ -606,7 +606,7 @@ export class DeliveryPlatformService {
 
     const printSettings = normalizePosPrintSettings(merchant.posPrintSettings);
     const bypass = opts?.independentOfMasterAutoPrint === true;
-    const printKitchen =
+    let printKitchen =
       opts?.printKitchen === true &&
       !isRetailPosMode(merchant.posCheckoutSettings) &&
       (bypass || printSettings.autoPrintKitchen !== false);
@@ -614,6 +614,16 @@ export class DeliveryPlatformService {
       opts?.printReceipt === true && (bypass || printSettings.autoPrintReceipt !== false);
     const printDeliveryReceipt = opts?.printDeliveryReceipt === true;
     const printNotification = opts?.printNotification === true;
+    if (printKitchen) {
+      try {
+        const { PrintJobExpandService } = await import("@/services/print-job-expand.service");
+        if (await PrintJobExpandService.hasRecentKitchenJob(merchantId, orderId)) {
+          printKitchen = false;
+        }
+      } catch {
+        /* dedup is best-effort — still print if the lookup fails */
+      }
+    }
     if (!printKitchen && !printReceipt && !printDeliveryReceipt && !printNotification) return;
 
     try {

@@ -36,7 +36,6 @@ import {
 } from '@/lib/delivery-auto-accept';
 import {
   persistAutoAcceptOnArrival,
-  printKitchenForAutoAcceptedOrder,
   startAutoAcceptArrivalCue,
 } from '@/lib/auto-accept-order-arrival';
 import {
@@ -308,13 +307,14 @@ export default function OrderCenterApp() {
         const queued: CenterOrder[] = [];
         const skipKitchen = readOrderCenterPrintPrefs().kitchenRoute === 'local';
         for (const o of freshIncoming) {
+          const stillPending = isAwaitingApproval(o.status);
           const next = autoAccept
             ? await persistAutoAcceptOnArrival(o, { skipAutoPrintKitchen: skipKitchen })
             : o;
           queued.push(next);
           unactionedAlertRef.add(next.id);
           if (autoAccept) {
-            if (skipKitchen) {
+            if (skipKitchen && stillPending) {
               try {
                 await printOrderCenterTicketsOnAccept(
                   next.id,
@@ -324,8 +324,6 @@ export default function OrderCenterApp() {
               } catch {
                 /* print optional */
               }
-            } else {
-              printKitchenForAutoAcceptedOrder(next, merchantSettings);
             }
           } else {
             void printOrderCenterOnArrival(next);

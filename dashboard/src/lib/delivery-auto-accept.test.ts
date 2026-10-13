@@ -27,6 +27,11 @@ assert.match(arrival, /maybePrintOnlineOrderOnArrival/);
 assert.match(arrival, /startAutoAcceptArrivalAlert/);
 assert.match(arrival, /speakDeliveryAlert/);
 
+const alerts = readFileSync(join(root, '../components/merchant/MerchantOrderAlerts.tsx'), 'utf8');
+assert.doesNotMatch(alerts, /printKitchenForAutoAcceptedOrder/);
+const center = readFileSync(join(root, '../pages/merchant/OrderCenterApp.tsx'), 'utf8');
+assert.doesNotMatch(center, /printKitchenForAutoAcceptedOrder/);
+
 const alert = readFileSync(join(root, 'order-alert.ts'), 'utf8');
 assert.match(alert, /const AUTO_ACCEPT_BEEP_COUNT = 6/);
 assert.match(alert, /export function startAutoAcceptArrivalAlert/);

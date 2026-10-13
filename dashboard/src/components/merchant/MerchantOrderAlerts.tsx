@@ -12,7 +12,7 @@ import OrderAcceptWithEtaModal from '@/components/webpos/OrderAcceptWithEtaModal
 import WebPosRejectOrderModal from '@/components/webpos/WebPosRejectOrderModal';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { isOnlineShopOrder } from '@/lib/order-management';
+import { isAwaitingApproval, isOnlineShopOrder } from '@/lib/order-management';
 import {
   keepIncomingOrderAlert,
   readDeliveryAutoAccept,
@@ -22,7 +22,6 @@ import {
 } from '@/lib/delivery-auto-accept';
 import {
   persistAutoAcceptOnArrival,
-  printKitchenForAutoAcceptedOrder,
   startAutoAcceptArrivalCue,
 } from '@/lib/auto-accept-order-arrival';
 import { INCOMING_ONLINE_ORDER_STATUSES_PARAM } from '@/lib/incoming-orders';
@@ -182,11 +181,12 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
         if (autoAccept) {
           const skipKitchen = readOrderCenterPrintPrefs().kitchenRoute === 'local';
           for (const o of fresh) {
+            const stillPending = isAwaitingApproval(o.status);
             const updated = await persistAutoAcceptOnArrival(o, {
               skipAutoPrintKitchen: skipKitchen,
             });
             forAlert.push(updated);
-            if (skipKitchen) {
+            if (skipKitchen && stillPending) {
               try {
                 await printOrderCenterTicketsOnAccept(
                   updated.id,
@@ -196,8 +196,6 @@ export default function MerchantOrderAlerts({ enabled }: Props) {
               } catch {
                 /* print optional */
               }
-            } else {
-              printKitchenForAutoAcceptedOrder(updated, merchantSettings);
             }
           }
         } else {

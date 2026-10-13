@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { normalizePosPrintSettings, type PosPrinterProfile } from "@/lib/pos-print-settings";
 import {
@@ -65,6 +65,31 @@ function itemExtras(raw: unknown): string[] {
 }
 
 export class PrintJobExpandService {
+  /** One kitchen ticket per order — skip a second accept/arrival enqueue. */
+  static async hasRecentKitchenJob(
+    merchantId: string,
+    orderId: string,
+    withinMs = 15 * 60 * 1000
+  ): Promise<boolean> {
+    const db = getDb();
+    const since = new Date(Date.now() - Math.max(60_000, withinMs));
+    const rows = await db.query.chaslayFloorPrintJobs.findMany({
+      where: and(
+        eq(schema.chaslayFloorPrintJobs.merchantId, merchantId),
+        eq(schema.chaslayFloorPrintJobs.orderId, orderId),
+        gte(schema.chaslayFloorPrintJobs.createdAt, since)
+      ),
+      columns: { jobType: true, payload: true },
+      limit: 30,
+    });
+    return rows.some((row) => {
+      const payload = (row.payload || {}) as Record<string, unknown>;
+      if (payload.printKitchen === false) return false;
+      if (payload.jobKind === "kitchen" || payload.printKitchen === true) return true;
+      return String(row.jobType || "").toUpperCase() === "KITCHEN";
+    });
+  }
+
   static async enqueueReservationPrint(merchantId: string, reservationId: string) {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
@@ -132,7 +157,7 @@ export class PrintJobExpandService {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),
-      columns: { posPrintSettings: true, name: true },
+      columns: { posPrintSettings: true, name: true, panelLanguage: true },
     });
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, orderId), eq(schema.orders.merchantId, merchantId)),
@@ -144,6 +169,12 @@ export class PrintJobExpandService {
     const paper = printSettings.paperWidthMm === 58 ? 58 : 80;
     const source = String(opts.orderSource || order.orderSource || "online_shop");
     const bypass = opts.independentOfMasterAutoPrint === true;
+    const language =
+      printSettings.receiptLanguage === "en" ||
+      printSettings.receiptLanguage === "fr" ||
+      printSettings.receiptLanguage === "de"
+        ? printSettings.receiptLanguage
+        : merchant.panelLanguage;
     const items = (order.items || []).map((i) => ({
       name: String(i.productName || "Item"),
       quantity: Number(i.quantity) || 1,
@@ -171,6 +202,8 @@ export class PrintJobExpandService {
             items,
             paperWidthMm: printer.paperWidthMm,
             kitchenPrepOnly: opts.kitchenPrepOnly === true,
+            language,
+            orderedAt: order.createdAt,
           }),
         });
       }
@@ -285,7 +318,7 @@ export class PrintJobExpandService {
         const db = getDb();
         const merchant = await db.query.merchants.findFirst({
           where: eq(schema.merchants.id, merchantId),
-          columns: { posPrintSettings: true, name: true },
+          columns: { posPrintSettings: true, name: true, panelLanguage: true },
         });
         const order = await db.query.orders.findFirst({
           where: and(
@@ -303,6 +336,12 @@ export class PrintJobExpandService {
           extras: itemExtras(i.selectedExtras),
         }));
         const source = String(payload.orderSource || order.orderSource || "online_shop");
+        const language =
+          printSettings.receiptLanguage === "en" ||
+          printSettings.receiptLanguage === "fr" ||
+          printSettings.receiptLanguage === "de"
+            ? printSettings.receiptLanguage
+            : merchant.panelLanguage;
         if (payload.printKitchen === true) {
           const printer = printersForRole(printSettings.printers, "kitchen", paper)[0];
           const bytes = kitchenTicketEscPos({
@@ -317,6 +356,8 @@ export class PrintJobExpandService {
             items,
             paperWidthMm: printer.paperWidthMm,
             kitchenPrepOnly: payload.kitchenPrepOnly === true,
+            language,
+            orderedAt: order.createdAt,
           });
           return {
             kind: "escpos",

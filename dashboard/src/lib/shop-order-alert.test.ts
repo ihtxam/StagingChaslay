@@ -46,6 +46,8 @@ const webpos = readFileSync(join(root, '../pages/merchant/WebPos.tsx'), 'utf8');
 assert.match(webpos, /persistAutoAcceptOnArrival/);
 assert.match(webpos, /newOrderAlertAcknowledgeOnly = deliveryAutoAccept && !!currentNewOrderAlert/);
 assert.match(webpos, /shouldUseEtaAcceptModal/);
+assert.doesNotMatch(webpos, /printKitchenForAutoAcceptedOrder/);
+assert.match(alertsFlow, /skipKitchen && stillPending/);
 
 const cue = readFileSync(join(root, 'order-alert.ts'), 'utf8');
 assert.match(cue, /startAutoAcceptArrivalAlert/);
