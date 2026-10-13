@@ -1390,7 +1390,7 @@ router.put("/editions/:editionId", async (req: Request, res: Response) => {
 
 router.delete("/editions/:editionId", async (req: Request, res: Response) => {
   try {
-    const edition = await EditionService.softDelete(req.params.editionId, {
+    const edition = await EditionService.remove(req.params.editionId, {
       requireOwnerType: "platform",
     });
     res.json({ success: true, edition });

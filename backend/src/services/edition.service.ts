@@ -246,6 +246,25 @@ export class EditionService {
     return this.update(id, { isActive: false }, opts);
   }
 
+  static async remove(
+    id: string,
+    opts?: { requireOwnerType?: "platform" | "reseller"; requireOwnerId?: string }
+  ) {
+    const db = getDb();
+    const existing = await db.query.editions.findFirst({
+      where: eq(schema.editions.id, id),
+    });
+    if (!existing) throw new Error("Edition not found");
+    if (opts?.requireOwnerType && existing.ownerType !== opts.requireOwnerType) {
+      throw new Error("Edition not found");
+    }
+    if (opts?.requireOwnerId && existing.ownerId !== opts.requireOwnerId) {
+      throw new Error("Edition not found");
+    }
+    await db.delete(schema.editions).where(eq(schema.editions.id, id));
+    return { deleted: true, id };
+  }
+
   static async cloneForReseller(sourceId: string, resellerId: string, name?: string) {
     const src = await this.getById(sourceId);
     if (!src) throw new Error("Source edition not found");

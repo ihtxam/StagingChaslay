@@ -893,9 +893,6 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const moreOptionsLinks = [
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
-        ...(cateringLicensed
-          ? [{ label: t('cateringGuideNav'), path: '/merchant/products/catering-guide', icon: '🍱' }]
-          : []),
         { label: t('scheduledMenusTitle'), path: MERCHANT_SCHEDULED_MENUS_PATH, icon: '🕐' },
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('pizzaBuilderTitle'), path: MERCHANT_PIZZA_BUILDER_PATH, icon: '🍕' }]
@@ -1031,9 +1028,6 @@ function MerchantShell() {
         { label: t('cmsWebsite'), path: '/merchant/chaslay-page-builder', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
-    ...(allow('/merchant/support')
-      ? [{ label: t('support'), path: '/merchant/support', icon: '🛟' }]
-      : []),
   ]
     .filter(Boolean)
     .filter((entry) => {
