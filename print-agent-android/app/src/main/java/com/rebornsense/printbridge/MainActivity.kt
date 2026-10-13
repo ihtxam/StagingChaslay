@@ -29,6 +29,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.rebornsense.printbridge.print.DriverRegistry
+import com.rebornsense.printbridge.print.NiimbotPrintClient
 import com.rebornsense.printbridge.print.PrinterEndpoint
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.BridgeHealthChecker
@@ -871,6 +872,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performTestPrint(endpoint: PrinterEndpoint) {
+        if (NiimbotPrintClient.isNiimbotEndpoint(endpoint)) {
+            performNiimbotTestPrint(endpoint)
+            return
+        }
         val driver = registry.driverFor(endpoint) ?: run {
             Toast.makeText(this, R.string.test_print_failed, Toast.LENGTH_SHORT).show()
             return
@@ -879,6 +884,38 @@ class MainActivity : AppCompatActivity() {
         testRowBtnEnabled(false)
         Thread {
             val result = driver.print(applicationContext, endpoint, sample)
+            runOnUiThread {
+                testRowBtnEnabled(true)
+                if (result.isSuccess) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.test_print_ok, PrinterDisplay.title(endpoint)),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    val message = friendlyPrintError(result.exceptionOrNull())
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    /** ESC/POS test tickets feed a Niimbot and print nothing — use the label protocol. */
+    private fun performNiimbotTestPrint(endpoint: PrinterEndpoint) {
+        val widthPx = 320
+        val heightPx = 160
+        val bitmap = NiimbotPrintClient.buildTestPatternBitmap(widthPx, heightPx)
+        testRowBtnEnabled(false)
+        Thread {
+            val result = NiimbotPrintClient.print(
+                applicationContext,
+                endpoint,
+                registry,
+                bitmap,
+                widthPx,
+                heightPx,
+                3,
+            )
             runOnUiThread {
                 testRowBtnEnabled(true)
                 if (result.isSuccess) {

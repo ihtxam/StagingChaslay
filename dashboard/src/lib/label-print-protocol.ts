@@ -3,7 +3,7 @@ import { isTsplLabelPrinterName } from './tspl-label-core';
 export type LabelPrintProtocol = 'niimbot' | 'tspl' | 'escpos';
 
 function isNiimbotName(name?: string | null): boolean {
-  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b/.test(String(name || '').toLowerCase());
+  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b|0355:/.test(String(name || '').toLowerCase());
 }
 
 type LabelPrinterRow = {

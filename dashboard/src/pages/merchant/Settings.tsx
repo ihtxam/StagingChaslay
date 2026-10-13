@@ -58,6 +58,7 @@ import {
 import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
 import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
 import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
+import { niimbotTestPatternBase64 } from '@/lib/niimbot-label';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
@@ -1343,12 +1344,14 @@ export default function Settings() {
         if (protocol === 'niimbot') {
           const widthMm = parseLabelWidthMm(settings?.posPrintSettings?.labelWidthMm);
           const heightMm = parseLabelHeightMm(settings?.posPrintSettings?.labelHeightMm);
+          const widthPx = Math.max(8, Math.round(widthMm * 8));
+          const heightPx = Math.max(8, Math.round(heightMm * 8));
           await printNiimbotLabelViaAgent({
             printerName: name,
             portName: (settings?.posPrintSettings?.printers || []).find((p) => p.name === name)?.portName || null,
-            bitmapBase64: '',
-            widthPx: Math.max(8, Math.round(widthMm * 8)),
-            heightPx: Math.max(8, Math.round(heightMm * 8)),
+            bitmapBase64: niimbotTestPatternBase64(widthPx, heightPx),
+            widthPx,
+            heightPx,
             testPattern: true,
           });
         } else if (protocol === 'tspl') {

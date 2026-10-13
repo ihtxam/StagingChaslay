@@ -3,7 +3,7 @@
  * feed a few mm and print nothing when they receive ESC/POS init+cut.
  */
 
-const NIIMBOT_RE = /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b/;
+const NIIMBOT_RE = /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b|0355:/;
 const TSPL_LABEL_RE =
   /eml-?\d|emlabel|luckydoor|lucky\s*door|\btspl\b|gprinter|\btsc[-\s]|zd\d{3}|4inch|4-inch|4 inch|lp-80[hn]|lp-400|xp-?3[5-9]\d|xp-?4[0-2]\d|hprt|godex|argox|\blabel\b|\bsticker\b|barcode\s*printer/;
 
