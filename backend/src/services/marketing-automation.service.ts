@@ -171,14 +171,28 @@ export class MarketingAutomationService {
       if (!(await merchantHasMarketingAutomationLicense(m.id))) continue;
       const customers = await db.query.customers.findMany({
         where: eq(schema.customers.merchantId, m.id),
-        columns: { email: true, firstName: true, lastName: true, lastOrderAt: true },
+        columns: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          lastOrderAt: true,
+          lastReorderReminderAt: true,
+          marketingOptIn: true,
+        },
       });
       for (const c of customers) {
         if (!c.lastOrderAt || !c.email) continue;
+        if (c.marketingOptIn === false) continue;
         const last = new Date(c.lastOrderAt);
         if (last > cutoff || last < tooOld) continue;
+        if (c.lastReorderReminderAt && new Date(c.lastReorderReminderAt) >= last) continue;
         const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || null;
         await this.trigger(m.id, "winback_lapsed", { email: c.email, name });
+        await db
+          .update(schema.customers)
+          .set({ lastReorderReminderAt: new Date(), updatedAt: new Date() })
+          .where(eq(schema.customers.id, c.id));
         sent += 1;
       }
     }

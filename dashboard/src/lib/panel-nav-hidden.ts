@@ -22,6 +22,7 @@ export const PANEL_NAV_GROUP_PATHS: Record<string, string[]> = {
     '/merchant/order-hub',
     '/merchant/sales/reservations',
     '/merchant/sales/host',
+    '/merchant/sales/phone',
     '/merchant/reports',
   ],
   catalog: [

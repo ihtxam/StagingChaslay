@@ -1378,6 +1378,7 @@ router.get("/orders", async (req: Request, res: Response) => {
     const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
     const scopeRaw = String(req.query.scope || "").toLowerCase();
     const scope = scopeRaw === "online" || scopeRaw === "incoming" ? "online" : "all";
+    const orderSource = String(req.query.orderSource || "").trim() || undefined;
 
     if (!merchantId) {
       return res.status(400).json({ error: "Merchant ID is required" });
@@ -1390,7 +1391,8 @@ router.get("/orders", async (req: Request, res: Response) => {
       status,
       startDate,
       endDate,
-      scope
+      scope,
+      orderSource
     );
 
     res.json({
@@ -1471,25 +1473,52 @@ router.get("/orders/:orderId", async (req: Request, res: Response) => {
 router.post("/orders", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
-    const { items, customerId, orderType, paymentMethod, discountAmount, notes } = req.body;
+    const {
+      items,
+      customerId,
+      orderType,
+      paymentMethod,
+      discountAmount,
+      notes,
+      orderSource,
+      customerName,
+      customerPhone,
+      customerEmail,
+      fulfillmentChannel,
+      markPaid,
+      sendToKitchen,
+    } = req.body;
 
     if (!merchantId) {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    if (!items || items.length === 0) {
+    const source = String(orderSource || "").trim().toLowerCase();
+    const phoneTicket = source === "phone";
+    if ((!items || items.length === 0) && !phoneTicket) {
       return res.status(400).json({ error: "Order items are required" });
     }
 
+    const paid = markPaid === true;
+    const kitchen = sendToKitchen === true || (!paid && phoneTicket);
     const order = await OrderService.createOrder(
       merchantId,
-      items,
+      items || [],
       customerId,
       orderType || "pos",
       paymentMethod,
       discountAmount || 0,
       notes,
-      req.locationId || req.body?.locationId
+      req.locationId || req.body?.locationId,
+      {
+        orderSource: source || undefined,
+        customerName,
+        customerPhone,
+        customerEmail,
+        fulfillmentChannel,
+        status: paid ? "completed" : kitchen ? "accepted" : undefined,
+        paymentStatus: paid ? "completed" : undefined,
+      }
     );
 
     res.status(201).json({

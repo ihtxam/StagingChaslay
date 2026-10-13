@@ -117,6 +117,16 @@
           document.documentElement.classList.add('webpos-lock');
           var pm = document.querySelector('link[rel="manifest"]');
           if (pm) pm.setAttribute('href', '/pos.webmanifest');
+          if (/^\/host(\/|$)/.test(p)) {
+            var hm = document.querySelector('link[rel="manifest"]');
+            if (hm) hm.setAttribute('href', '/host.webmanifest');
+            var htc = document.querySelector('meta[name="theme-color"]');
+            if (htc) htc.setAttribute('content', '#800020');
+            var han = document.querySelector('meta[name="application-name"]');
+            if (han) han.setAttribute('content', 'Reborn Host');
+            var hat = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (hat) hat.setAttribute('content', 'Host');
+          }
           if (/^\/kiosk(\/|$)/.test(p)) {
             document.documentElement.classList.add('kiosk-lock');
             var km = document.querySelector('link[rel="manifest"]');

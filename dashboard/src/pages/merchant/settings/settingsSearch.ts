@@ -17,6 +17,7 @@ export type SettingsTabId =
   | 'fiscal'
   | 'accounting'
   | 'como'
+  | 'phone'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -642,6 +643,19 @@ export function buildSettingsSearchIndex(
         'fidélité',
         'treue',
         t('settingsComo'),
+      ],
+    },
+    {
+      id: 'phone-ordering',
+      tab: 'phone',
+      keywords: [
+        'phone',
+        'telephone',
+        'twilio',
+        'sms',
+        'voice',
+        'call',
+        t('settingsPhoneOrdering'),
       ],
     },
     {

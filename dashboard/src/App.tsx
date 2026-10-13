@@ -16,6 +16,7 @@ import ShopRouteLayout from '@/components/shop/ShopRouteLayout';
 import ScrollToTop from '@/components/ScrollToTop';
 
 import LoginPage from '@/pages/LoginPage';
+import HostApp from '@/pages/HostApp';
 import SetPasswordPage from '@/pages/SetPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SuperadminDashboard from '@/pages/superadmin/Dashboard';
@@ -313,6 +314,16 @@ function App() {
             />
           )}
           {!shopMode && !statusMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
+          {!shopMode && !statusMode && (
+            <Route
+              path="/host"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <HostApp />
+                </I18nProvider>
+              }
+            />
+          )}
           <Route
             path="/receipt/:saleId"
             element={

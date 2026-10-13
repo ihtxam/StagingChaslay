@@ -266,6 +266,8 @@ export const merchants = pgTable(
     fiskalySettings: json("fiskaly_settings").$type<Record<string, unknown> | null>(),
     /** Como Sense loyalty — merchant API key + branch/POS ids (secrets stay server-side). */
     comoSettings: json("como_settings").$type<Record<string, unknown> | null>(),
+    /** Phone ordering — public number, hours, Twilio/generic webhook secret. */
+    phoneOrderingSettings: json("phone_ordering_settings").$type<Record<string, unknown> | null>(),
     /** Fixed CHF surcharge added to online card checkouts */
     onlineCardFeeFixed: decimal("online_card_fee_fixed", { precision: 10, scale: 2 }).default("0"),
     /** Percent surcharge on (subtotal+tax+delivery+tip) for online card checkouts */

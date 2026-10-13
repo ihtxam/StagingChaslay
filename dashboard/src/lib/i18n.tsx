@@ -15,6 +15,7 @@ import {
 import { onboardingDe, onboardingEn, onboardingFr } from '@/lib/onboarding-i18n';
 import { shopDe, shopEn, shopFr } from '@/lib/shop-i18n';
 import { comoDe, comoEn, comoFr } from '@/lib/como-i18n';
+import { phoneHostDe, phoneHostEn, phoneHostFr } from '@/lib/phone-host-i18n';
 
 export type Locale = 'en' | 'fr' | 'de';
 
@@ -5058,6 +5059,7 @@ const en: Dict = {
   ...onboardingEn,
   ...shopEn,
   ...comoEn,
+  ...phoneHostEn,
 };
 
 const fr: Dict = {
@@ -9883,6 +9885,7 @@ const fr: Dict = {
   ...onboardingFr,
   ...shopFr,
   ...comoFr,
+  ...phoneHostFr,
 };
 
 const de: Dict = {
@@ -14680,6 +14683,7 @@ const de: Dict = {
   ...onboardingDe,
   ...shopDe,
   ...comoDe,
+  ...phoneHostDe,
 };
 
 const dictionaries: Record<Locale, Dict> = { en, fr, de };

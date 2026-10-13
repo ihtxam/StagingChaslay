@@ -28,6 +28,11 @@ type ShopFooterInfo = {
   googleOrderUrl?: string | null;
   googleReviewUrl?: string | null;
   googleReserveJsonLd?: Record<string, unknown> | null;
+  phoneOrdering?: {
+    enabled?: boolean;
+    phoneNumber?: string | null;
+    hours?: string | null;
+  } | null;
 };
 
 function formatAddressLine(info: ShopFooterInfo): string | null {
@@ -75,6 +80,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
           googleOrderUrl: data.googleOrderUrl || null,
           googleReviewUrl: data.googleReviewUrl || null,
           googleReserveJsonLd: data.googleReserveJsonLd || null,
+          phoneOrdering: data.phoneOrdering || null,
         });
       } catch {
         if (!cancelled) setInfo(null);
@@ -89,6 +95,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
   const menuPath = `${basePath}/menu`.replace(/\/+/g, '/');
   const giftPath = `${merchantWide}/gift-cards`.replace(/\/+/g, '/');
   const locationsPath = `${merchantWide}/locations`.replace(/\/+/g, '/');
+  const registerPath = `${merchantWide}/register`.replace(/\/+/g, '/');
   const homePath = merchantWide || basePath || '/';
 
   const hoursLocale = info?.language || locale || 'en';
@@ -191,6 +198,18 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
                   {t('shopReservations')}
                 </Link>
               ) : null}
+              {info.phoneOrdering?.enabled && (info.phoneOrdering.phoneNumber || info.phone) ? (
+                <a
+                  href={`tel:${String(info.phoneOrdering.phoneNumber || info.phone || '').replace(/\s+/g, '')}`}
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('phoneOrderingShopCta')}
+                  {info.phoneOrdering.hours ? ` · ${info.phoneOrdering.hours}` : ''}
+                </a>
+              ) : null}
+              <Link to={registerPath} className="text-stone-200 hover:text-white hover:underline">
+                {t('shopFooterJoinUs')}
+              </Link>
               {info.googleReviewUrl ? (
                 <a
                   href={info.googleReviewUrl}

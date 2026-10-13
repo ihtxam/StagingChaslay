@@ -153,7 +153,8 @@ function matchesInstalledRebornWebApp(app: RelatedWebApp, origin: string): boole
     return (
       url.includes('/merchant/pos') ||
       url.includes('manifest.webmanifest') ||
-      url.includes('pos.webmanifest')
+      url.includes('pos.webmanifest') ||
+      url.includes('host.webmanifest')
     );
   }
   return url.includes('manifest.webmanifest') || url.includes('pos.webmanifest');

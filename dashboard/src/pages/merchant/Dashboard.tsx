@@ -48,6 +48,7 @@ import Billing from './Billing';
 import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
 import HostStation from './HostStation';
+import PhoneOrders from './PhoneOrders';
 import ReviewsInbox from './ReviewsInbox';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
@@ -943,6 +944,7 @@ function MerchantShell() {
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
         { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
+        { label: t('phoneOrderingDeskNav'), path: '/merchant/sales/phone', icon: '📞' },
         ...(isRestaurantModule(businessModule)
           ? [
               { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
@@ -1629,6 +1631,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/sales/host" allow={allow}>
                   <HostStation />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="sales/phone"
+              element={
+                <PanelRouteGuard path="/merchant/sales/phone" allow={allow}>
+                  <PhoneOrders />
                 </PanelRouteGuard>
               }
             />

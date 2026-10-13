@@ -26,6 +26,7 @@ import {
 } from "@/lib/catering-config";
 import { computeCateringLineUnitPrice, scaleModifierPrice, resolveCateringComboPricing } from "@/lib/catering-pricing";
 import { isCateringAddonEnabled } from "@/lib/catering-addon";
+import { getPhoneOrderingShopPublic } from "@/lib/phone-ordering-settings";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
 import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
 import { buildGoogleReserveJsonLd, shopReservationsUrl } from "@/lib/google-reserve-jsonld";
@@ -759,6 +760,9 @@ function shopPageMerchantPayload(
     googleReserveUrl: reserveUrl || reservationLinks.googleReserveUrl,
     googleOrderUrl: reservationLinks.googleOrderUrl,
     photoMenuEnabled: reservationLinks.photoMenuEnabled,
+    phoneOrdering: getPhoneOrderingShopPublic(
+      (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
+    ),
   };
 }
 

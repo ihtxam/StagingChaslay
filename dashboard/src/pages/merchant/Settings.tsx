@@ -32,6 +32,7 @@ import {
   Store,
   Calculator,
   Award,
+  Phone,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -43,6 +44,7 @@ import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import CdsSettingsPanel from '@/components/merchant/CdsSettingsPanel';
 import SettingsFiscalTab from '@/pages/merchant/settings/SettingsFiscalTab';
 import SettingsComoTab from '@/pages/merchant/settings/SettingsComoTab';
+import SettingsPhoneOrderingTab from '@/pages/merchant/settings/SettingsPhoneOrderingTab';
 import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRoutingPicker';
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
@@ -408,6 +410,7 @@ type TabId =
   | 'fiscal'
   | 'accounting'
   | 'como'
+  | 'phone'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -432,6 +435,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'fiscal',
   'accounting',
   'como',
+  'phone',
   'signage',
   'kiosk',
   'email',
@@ -447,7 +451,7 @@ const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }>
   {
     id: 'service',
     labelKey: 'settingsGroupService',
-    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'kiosk', 'signage', 'delivery'],
+    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'kiosk', 'signage', 'delivery', 'phone'],
   },
   { id: 'guest', labelKey: 'settingsGroupGuest', ids: ['shop', 'email', 'delivery-map'] },
   { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting', 'como'] },
@@ -826,6 +830,7 @@ export default function Settings() {
           icon: Calculator,
         },
         { id: 'como' as const, label: t('settingsComo'), navLabel: t('settingsNavComo'), icon: Award },
+        { id: 'phone' as const, label: t('settingsPhoneOrdering'), navLabel: t('settingsNavPhone'), icon: Phone },
         { id: 'signage' as const, label: t('signageTitle'), navLabel: t('settingsNavSignage'), icon: Tv },
         { id: 'kiosk' as const, label: t('kioskNav'), navLabel: t('settingsNavKiosk'), icon: TabletSmartphone },
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
@@ -5552,6 +5557,8 @@ export default function Settings() {
           {tab === 'accounting' && <SettingsAccountingTab />}
 
           {tab === 'como' && <SettingsComoTab />}
+
+          {tab === 'phone' && <SettingsPhoneOrderingTab />}
 
           {tab === 'signage' && (
             <div className="space-y-5">

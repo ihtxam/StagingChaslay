@@ -277,6 +277,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_addon_enabled boolean NOT NULL DEFAULT false",
   fiskaly_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiskaly_settings jsonb",
   como_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS como_settings jsonb",
+  phone_ordering_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS phone_ordering_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -1672,6 +1674,11 @@ export async function ensureGiftCardAddonColumn(): Promise<void> {
 export async function ensureComoSchema(): Promise<void> {
   await runPatch("como_settings", "merchants");
   await runPatch("como_loyalty", "orders");
+  await ensureMerchantTables();
+}
+
+export async function ensurePhoneOrderingSchema(): Promise<void> {
+  await runPatch("phone_ordering_settings", "merchants");
   await ensureMerchantTables();
 }
 

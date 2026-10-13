@@ -43,6 +43,11 @@ import { isBexioAddonEnabled, isOdooAddonEnabled } from "@/lib/accounting-integr
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { getFiskalyPublic, mergeFiskalySettings, type FiskalySettings } from "@/lib/fiskaly-settings";
 import { getComoPublic, mergeComoSettings, type ComoSettings } from "@/lib/como-settings";
+import {
+  getPhoneOrderingPublic,
+  mergePhoneOrderingSettings,
+  type PhoneOrderingSettings,
+} from "@/lib/phone-ordering-settings";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
@@ -360,6 +365,9 @@ export class MerchantSettingsService {
       comoSettings: getComoPublic(
         (merchant as { comoSettings?: ComoSettings | null }).comoSettings
       ),
+      phoneOrderingSettings: getPhoneOrderingPublic(
+        (merchant as { phoneOrderingSettings?: PhoneOrderingSettings | null }).phoneOrderingSettings
+      ),
       webposExpressEnabled: merchant.webposExpressEnabled !== false,
       webposCashEnabled: merchant.webposCashEnabled !== false,
       webposCardEnabled: merchant.webposCardEnabled !== false,
@@ -493,6 +501,7 @@ export class MerchantSettingsService {
       adyenUseLegacyEndpoint?: boolean;
       fiskalySettings?: FiskalySettings | Record<string, unknown> | null;
       comoSettings?: ComoSettings | Record<string, unknown> | null;
+      phoneOrderingSettings?: PhoneOrderingSettings | Record<string, unknown> | null;
       webposExpressEnabled?: boolean;
       webposCashEnabled?: boolean;
       webposCardEnabled?: boolean;
@@ -721,6 +730,22 @@ export class MerchantSettingsService {
         (current as { comoSettings?: ComoSettings | null } | undefined)?.comoSettings,
         updates.comoSettings
       );
+    }
+    if (updates.phoneOrderingSettings !== undefined) {
+      const { ensurePhoneOrderingSchema } = await import("@/lib/ensure-merchant-schema");
+      await ensurePhoneOrderingSchema();
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+      });
+      const nextPhone = mergePhoneOrderingSettings(
+        (current as { phoneOrderingSettings?: PhoneOrderingSettings | null } | undefined)
+          ?.phoneOrderingSettings,
+        updates.phoneOrderingSettings
+      );
+      patch.phoneOrderingSettings = nextPhone;
+      if (nextPhone.phoneNumber && !current?.phone) {
+        patch.phone = nextPhone.phoneNumber;
+      }
     }
     if (updates.webposExpressEnabled !== undefined) patch.webposExpressEnabled = !!updates.webposExpressEnabled;
     if (updates.webposCashEnabled !== undefined) patch.webposCashEnabled = !!updates.webposCashEnabled;
