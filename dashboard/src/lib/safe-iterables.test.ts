@@ -9,6 +9,12 @@ assert.deepEqual(asArray(undefined), []);
 assert.deepEqual(asArray(0), []);
 assert.deepEqual(asArray('abc'), []);
 assert.deepEqual(asArray({ tickets: [1] }), []);
+assert.deepEqual(asArray({}), []);
+// Truthy non-array objects must not be spread in poll loops (production "is not iterable").
+assert.throws(() => {
+  const orders = { broken: true } as unknown as never[];
+  void [...orders];
+});
 assert.deepEqual(asArray([1, 2]), [1, 2]);
 assert.deepEqual(asArray(new Set(['a', 'b'])), ['a', 'b']);
 

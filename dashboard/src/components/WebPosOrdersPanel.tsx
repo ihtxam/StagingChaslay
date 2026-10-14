@@ -680,21 +680,21 @@ export default function WebPosOrdersPanel({
     let nextHeld: HeldRow[] = [];
     let nextOrders: PosOrder[] = [];
     if (heldRes.status === 'fulfilled') {
-      nextHeld = heldRes.value.data.held || [];
+      nextHeld = asArray<HeldRow>(heldRes.value.data?.held);
     } else {
       toast.error(t('webPosOrdersLoadFailed'));
       console.warn('[WebPOS][orders] held list failed', heldRes.reason);
     }
     if (ordersRes.status === 'fulfilled') {
-      nextOrders = ordersRes.value.data.orders || [];
-      setReasons(ordersRes.value.data.cancelReasons || []);
-      setRefundReasons(ordersRes.value.data.refundReasons || []);
+      nextOrders = asArray<PosOrder>(ordersRes.value.data?.orders);
+      setReasons(asArray<CancelReason>(ordersRes.value.data?.cancelReasons));
+      setRefundReasons(asArray<RefundReasonOption>(ordersRes.value.data?.refundReasons));
     } else if (heldRes.status === 'fulfilled') {
       toast.error(t('webPosOrdersLoadFailed'));
       console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
     }
     if (invoiceRes.status === 'fulfilled') {
-      const extra = (invoiceRes.value.data.invoices || []) as PosOrder[];
+      const extra = asArray<PosOrder>(invoiceRes.value.data?.invoices);
       const map = new Map(nextOrders.map((o) => [o.id, o]));
       for (const o of extra) {
         if (o?.id && !map.has(o.id)) map.set(o.id, o);
