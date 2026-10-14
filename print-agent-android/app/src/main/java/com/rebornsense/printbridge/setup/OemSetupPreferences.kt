@@ -19,6 +19,10 @@ object OemSetupPreferences {
      * see setup again after installing a new APK from the panel.
      */
     fun syncInstalledVersion(context: Context) {
+        runCatching { syncInstalledVersionUnlocked(context) }
+    }
+
+    private fun syncInstalledVersionUnlocked(context: Context) {
         val versionCode = currentVersionCode(context)
         val installTime = currentFirstInstallTime(context)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

@@ -11,8 +11,10 @@ object PrinterPreferences {
      * Default is true so a fresh install (and any tablet that never toggled the switch) boots the service.
      */
     fun isAutoStartEnabled(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_AUTO_START, true)
+        return runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_AUTO_START, true)
+        }.getOrDefault(true)
     }
 
     fun setAutoStartEnabled(context: Context, enabled: Boolean) {
@@ -23,9 +25,11 @@ object PrinterPreferences {
     }
 
     fun getDefaultPrinterId(context: Context): String? {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString("default_printer_id", null)
-            ?.takeIf { it.isNotBlank() }
+        return runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString("default_printer_id", null)
+                ?.takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 
     fun setDefaultPrinterId(context: Context, id: String?) {
@@ -36,11 +40,13 @@ object PrinterPreferences {
     }
 
     fun getLanHosts(context: Context): List<String> {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getStringSet("lan_hosts", emptySet())
-            ?.filter { it.isNotBlank() }
-            ?.sorted()
-            ?: emptyList()
+        return runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getStringSet("lan_hosts", emptySet())
+                ?.filter { it.isNotBlank() }
+                ?.sorted()
+                ?: emptyList()
+        }.getOrDefault(emptyList())
     }
 
     fun normalizeLanHost(raw: String): String? {
@@ -77,11 +83,13 @@ object PrinterPreferences {
     }
 
     fun rememberedUsbDevices(context: Context): Set<String> {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getStringSet(KEY_USB_DEVICES, emptySet())
-            ?.filter { it.isNotBlank() }
-            ?.toSet()
-            ?: emptySet()
+        return runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getStringSet(KEY_USB_DEVICES, emptySet())
+                ?.filter { it.isNotBlank() }
+                ?.toSet()
+                ?: emptySet()
+        }.getOrDefault(emptySet())
     }
 
     fun rememberUsbDevice(context: Context, vidPid: String) {

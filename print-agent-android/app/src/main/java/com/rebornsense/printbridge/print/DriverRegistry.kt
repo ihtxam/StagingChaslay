@@ -45,7 +45,7 @@ class DriverRegistry(
             runCatching { driver.discover(app) }.getOrElse { emptyList() }
         }
         val found = usbFound + others
-        val previousDefault = PrinterPreferences.getDefaultPrinterId(context)
+        val previousDefault = runCatching { PrinterPreferences.getDefaultPrinterId(context) }.getOrNull()
         val chosenDefault = StalePrinterSelection.chooseDefaultId(
             previousDefault,
             found.map { ep ->
@@ -56,7 +56,7 @@ class DriverRegistry(
             },
         )
         if (chosenDefault != null && chosenDefault != previousDefault && found.any { it.id == chosenDefault }) {
-            PrinterPreferences.setDefaultPrinterId(context, chosenDefault)
+            runCatching { PrinterPreferences.setDefaultPrinterId(context, chosenDefault) }
         }
         val defaultId = chosenDefault
         cached = found.map { ep ->
