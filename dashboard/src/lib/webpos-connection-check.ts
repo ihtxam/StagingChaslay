@@ -13,6 +13,8 @@ export type CheckStatus = 'pending' | 'checking' | 'ok' | 'warn' | 'error' | 'sk
 export type ConnectionCheckResult = {
   status: CheckStatus;
   message: string;
+  /** When set, WebPOS UI should render [message] via i18n instead of the raw string. */
+  messageKey?: string;
 };
 
 export type WebPosPaymentCheckConfig = {
@@ -41,6 +43,9 @@ export type WebPosConnectionReport = {
   /** WebPOS asked Bridge to open in the background (Chrome may switch apps briefly). */
   bridgeAutostartRequested?: boolean;
 };
+
+/** Never block the launch modal longer than this (Bridge ANR / offline reboot). */
+const ANDROID_LAUNCH_CHECK_BUDGET_MS = 12_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -155,64 +160,108 @@ function tapToPayPass(r: ConnectionCheckResult): boolean {
   return r.status === 'ok' || r.status === 'skipped' || r.status === 'warn';
 }
 
+async function probeBridgeHealthFast(androidProbe: boolean): Promise<{
+  ok: boolean;
+  version?: string;
+  platform?: string;
+}> {
+  if (!androidProbe) {
+    return getPrintAgentHealth().catch(() => ({ ok: false as const }));
+  }
+  return probePrintAgentHealth(4, { perAttemptTimeoutMs: 1_200 }).catch(() => ({
+    ok: false as const,
+  }));
+}
+
+async function runAndroidBridgeProbe(
+  onBridgeAutostart?: () => void
+): Promise<{ health: { ok: boolean; version?: string; platform?: string }; bridgeAutostartRequested: boolean }> {
+  let bridgeAutostartRequested = false;
+  let health = await probeBridgeHealthFast(true);
+  if (health.ok) {
+    return { health, bridgeAutostartRequested };
+  }
+
+  const launched = requestBridgeRebornAutostart({ bypassCooldown: true });
+  if (launched) {
+    bridgeAutostartRequested = true;
+    onBridgeAutostart?.();
+    await sleep(1_800);
+    health = await probePrintAgentHealth(3, { perAttemptTimeoutMs: 1_200 }).catch(() => ({
+      ok: false as const,
+    }));
+  }
+
+  return { health, bridgeAutostartRequested };
+}
+
 export async function runWebPosConnectionChecks(opts: {
   printSettings: PosPrintSettingsClient | null;
   androidProbe?: boolean;
   paymentConfig?: WebPosPaymentCheckConfig | null;
   onBridgeAutostart?: () => void;
 }): Promise<WebPosConnectionReport> {
-  let bridgeAutostartRequested = false;
-  let health = opts.androidProbe
-    ? await probePrintAgentHealth(12, { perAttemptTimeoutMs: 2_500 }).catch(() => ({
-        ok: false as const,
-      }))
-    : await getPrintAgentHealth().catch(() => ({ ok: false as const }));
+  const androidProbe = !!opts.androidProbe;
 
-  if (!health.ok && opts.androidProbe) {
-    const launched = requestBridgeRebornAutostart({ bypassCooldown: true });
-    if (launched) {
-      bridgeAutostartRequested = true;
-      opts.onBridgeAutostart?.();
-      await sleep(2_500);
+  const probeWork = async (): Promise<{
+    health: { ok: boolean; version?: string; platform?: string };
+    bridgeAutostartRequested: boolean;
+  }> => {
+    if (androidProbe) {
+      return runAndroidBridgeProbe(opts.onBridgeAutostart);
     }
-    health = await probePrintAgentHealth(22, { perAttemptTimeoutMs: 2_500 }).catch(() => ({
-      ok: false as const,
-    }));
-    if (!health.ok) {
-      const retry = requestBridgeRebornAutostart({ bypassCooldown: true });
-      if (retry) {
-        bridgeAutostartRequested = true;
-        opts.onBridgeAutostart?.();
-        await sleep(3_000);
-        health = await probePrintAgentHealth(16, { perAttemptTimeoutMs: 2_500 }).catch(() => ({
-          ok: false as const,
-        }));
-      }
-    }
-  }
+    const health = await getPrintAgentHealth().catch(() => ({ ok: false as const }));
+    return { health, bridgeAutostartRequested: false };
+  };
+
+  const timed =
+    androidProbe
+      ? await Promise.race([
+          probeWork(),
+          sleep(ANDROID_LAUNCH_CHECK_BUDGET_MS).then(() => ({
+            health: { ok: false as const },
+            bridgeAutostartRequested: false,
+            timedOut: true,
+          })),
+        ])
+      : await probeWork();
+
+  const health = timed.health;
+  const bridgeAutostartRequested = timed.bridgeAutostartRequested;
+  const timedOut = androidProbe && 'timedOut' in timed && timed.timedOut;
 
   let livePrinters: AgentPrinter[] = [];
   if (health.ok) {
     livePrinters = await listAgentPrinters().catch(() => []);
   }
 
-  const bridge = opts.androidProbe
-    ? await probeDeviceBridgeHealth(health.ok ? 5 : 10).catch(() => ({ ok: false as const }))
-    : { ok: health.ok };
+  const bridge =
+    timedOut
+      ? { ok: false as const }
+      : androidProbe
+        ? await probeDeviceBridgeHealth(health.ok ? 3 : 2).catch(() => ({ ok: false as const }))
+        : { ok: health.ok };
 
   const agentPlatform = health.platform ? ` (${health.platform})` : '';
   const agent: ConnectionCheckResult = health.ok
     ? {
         status: 'ok',
-        message: opts.androidProbe
+        message: androidProbe
           ? `Bridge Reborn v${health.version || '?'} running${agentPlatform}`
           : `Print Agent v${health.version || '?'} running`,
       }
     : {
         status: 'error',
-        message: opts.androidProbe
-          ? 'Bridge Reborn not running on this tablet (localhost:9101)'
+        message: androidProbe
+          ? timedOut
+            ? 'Bridge Reborn did not respond in time'
+            : 'Bridge Reborn not running on this tablet (localhost:9101)'
           : 'Print Agent not running on this device (localhost:9101)',
+        messageKey: androidProbe
+          ? timedOut
+            ? 'webPosLaunchCheckAgentTimeout'
+            : 'webPosLaunchCheckAgentOfflineAndroid'
+          : 'webPosLaunchCheckAgentOffline',
       };
 
   const receipt = checkRolePrinters('receipt', opts.printSettings, livePrinters, health.ok);

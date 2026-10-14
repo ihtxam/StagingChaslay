@@ -1155,6 +1155,11 @@ const en: Dict = {
   webPosLaunchCheckEntering: 'Entering POS in {n}s…',
   webPosLaunchCheckContinue: 'Enter POS',
   webPosLaunchCheckContinueAnyway: 'Continue anyway',
+  webPosLaunchCheckAgentTimeout:
+    'Bridge Reborn did not respond in time — tap Continue anyway or open Bridge Reborn manually',
+  webPosLaunchCheckAgentOfflineAndroid:
+    'Bridge Reborn is not running on this tablet (localhost:9101)',
+  webPosLaunchCheckAgentOffline: 'Print Agent is not running on this device (localhost:9101)',
   orderAccepted: 'Order accepted',
   orderRejected: 'Order rejected',
   download: 'Download',
@@ -5919,6 +5924,11 @@ const fr: Dict = {
   webPosLaunchCheckEntering: 'Ouverture caisse dans {n}s…',
   webPosLaunchCheckContinue: 'Ouvrir la caisse',
   webPosLaunchCheckContinueAnyway: 'Continuer quand même',
+  webPosLaunchCheckAgentTimeout:
+    'Bridge Reborn n’a pas répondu à temps — appuyez sur Continuer quand même ou ouvrez Bridge Reborn manuellement',
+  webPosLaunchCheckAgentOfflineAndroid:
+    'Bridge Reborn n’est pas démarré sur cette tablette (localhost:9101)',
+  webPosLaunchCheckAgentOffline: 'Print Agent n’est pas démarré sur cet appareil (localhost:9101)',
   orderAccepted: 'Commande acceptée',
   orderRejected: 'Commande refusée',
   download: 'Télécharger',
@@ -10765,6 +10775,11 @@ const de: Dict = {
   webPosLaunchCheckEntering: 'Kasse öffnet in {n}s…',
   webPosLaunchCheckContinue: 'Kasse öffnen',
   webPosLaunchCheckContinueAnyway: 'Trotzdem fortfahren',
+  webPosLaunchCheckAgentTimeout:
+    'Bridge Reborn hat nicht rechtzeitig geantwortet — tippen Sie auf Trotzdem fortfahren oder öffnen Sie Bridge Reborn manuell',
+  webPosLaunchCheckAgentOfflineAndroid:
+    'Bridge Reborn läuft auf diesem Tablet nicht (localhost:9101)',
+  webPosLaunchCheckAgentOffline: 'Print Agent läuft auf diesem Gerät nicht (localhost:9101)',
   orderAccepted: 'Bestellung angenommen',
   orderRejected: 'Bestellung abgelehnt',
   download: 'Herunterladen',
