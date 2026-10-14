@@ -52,34 +52,56 @@ export type DownloadDescriptor = {
   message?: string;
 };
 
-export function describePrintBridgeApk(): DownloadDescriptor {
-  const filePath = downloadsFilePath(PRINT_BRIDGE_APK_FILE);
-  const manifest = readDownloadManifest("reborn-print-bridge");
-  const valid = fileMagicOk(filePath, "apk");
-  const stat = valid ? fs.statSync(filePath) : null;
+/** Merchant + JSON manifest: prefer newest published Bridge APK (same files Superadmin lists). */
+export function describePrintBridgeApk(root: string = DOWNLOADS_ROOT): DownloadDescriptor {
+  const manifest = readDownloadManifest("reborn-print-bridge", root);
   const declaredVersion =
     typeof manifest?.version === "string" ? manifest.version.trim() || null : null;
+
+  const bridgeProduct = listAppVersionHistory(root).find((p) => p.id === "print-bridge");
+  const latestRelease =
+    bridgeProduct?.releases.find((r) => r.isLatest && r.downloadUrl) ||
+    bridgeProduct?.releases.find((r) => r.downloadUrl);
+
+  const canonicalFilename = latestRelease?.filename || PRINT_BRIDGE_APK_FILE;
+  const filePath = downloadsFilePath(canonicalFilename, root);
+  const valid = fileMagicOk(filePath, "apk");
+  const stat = valid ? fs.statSync(filePath) : null;
   const apkVersion = valid ? readApkMeta(filePath).versionName : null;
-  const version = apkVersion ?? declaredVersion;
+  const version =
+    latestRelease?.version || apkVersion || bridgeProduct?.currentVersion || declaredVersion;
+  const legacyMainPath = downloadsFilePath(PRINT_BRIDGE_APK_FILE, root);
+  const legacyMainVersion = fileMagicOk(legacyMainPath, "apk")
+    ? readApkMeta(legacyMainPath).versionName
+    : null;
   const versionMismatch =
-    !!apkVersion && !!declaredVersion && apkVersion !== declaredVersion;
-  const cacheBust = stat ? `?v=${encodeURIComponent(apkVersion || declaredVersion || String(stat.mtimeMs))}` : "";
+    !!legacyMainVersion &&
+    !!version &&
+    legacyMainVersion !== version &&
+    canonicalFilename === PRINT_BRIDGE_APK_FILE;
+
+  const cacheBust = stat
+    ? `?v=${encodeURIComponent(version || String(stat.mtimeMs))}`
+    : "";
+  const downloadPath = latestRelease?.downloadUrl
+    ? `${latestRelease.downloadUrl}${cacheBust}`
+    : valid && version
+      ? `/downloads/reborn-print-bridge-${version}.apk${cacheBust}`
+      : null;
+
   return {
     id: "print-bridge",
     name: "Reborn Print Bridge (Android)",
-    filename: PRINT_BRIDGE_APK_FILE,
-    available: valid && !versionMismatch,
+    filename: canonicalFilename,
+    available: valid && !!downloadPath,
     sizeBytes: stat?.size ?? 0,
     version,
-    declaredVersion,
+    declaredVersion: declaredVersion || bridgeProduct?.currentVersion || version,
     versionMismatch,
-    downloadUrl:
-      valid && !versionMismatch
-        ? `/downloads/reborn-print-bridge-${version || "latest"}.apk${cacheBust}`
-        : null,
+    downloadUrl: downloadPath,
     message: valid
       ? versionMismatch
-        ? `Bridge APK on this server is still v${apkVersion} (manifest lists v${declaredVersion}). Rebuild print-agent-android and redeploy the APK.`
+        ? `Legacy ${PRINT_BRIDGE_APK_FILE} is still v${legacyMainVersion}; download uses v${version} (${canonicalFilename}).`
         : undefined
       : "Print Bridge APK is not published on this server yet. Build from print-agent-android/ or contact support.",
   };

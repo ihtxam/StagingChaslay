@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { compareAppVersions, listAppVersionHistory } from "./downloads";
+import { compareAppVersions, describePrintBridgeApk, listAppVersionHistory } from "./downloads";
 
 function writeFake(filePath: string, kind: "apk" | "exe", extra = "payload"): void {
   const header = kind === "apk" ? Buffer.from([0x50, 0x4b]) : Buffer.from([0x4d, 0x5a]);
@@ -85,6 +85,13 @@ try {
   );
   assert.equal(byId["print-agent"].releases[0].filename, "reborn-print-agent-setup.exe");
   assert.equal(byId["print-agent"].releases[1].downloadUrl, "/downloads/reborn-print-agent-setup-1.10.5.exe");
+
+  writeFake(path.join(root, "reborn-print-bridge-0.4.28.apk"), "apk", "stale-main");
+  writeFake(path.join(root, "reborn-print-bridge.apk"), "apk", "stale-main");
+  const merchantBridge = describePrintBridgeApk(root);
+  assert.equal(merchantBridge.version, "0.4.29");
+  assert.equal(merchantBridge.available, true);
+  assert.equal(merchantBridge.downloadUrl?.includes("0.4.29"), true);
 
   assert.ok(compareAppVersions("0.4.29", "0.4.28") > 0);
   assert.ok(compareAppVersions("1.10.6", "1.10.5") > 0);

@@ -651,6 +651,22 @@ PY
   fi
 else
   echo "SKIP_ANDROID_BRIDGE_BUILD=1 - using existing $BRIDGE_APK (if any)"
+  VERSIONED_BRIDGE="$DOWNLOADS_DIR/reborn-print-bridge-${BRIDGE_VERSION}.apk"
+  if [[ -f "$VERSIONED_BRIDGE" ]] && head -c 2 "$VERSIONED_BRIDGE" | grep -q PK; then
+    cp -f "$VERSIONED_BRIDGE" "$BRIDGE_APK"
+    BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    printf '%s\n' \
+      "{" \
+      "  \"name\": \"reborn-print-bridge\"," \
+      "  \"displayName\": \"Bridge Reborn\"," \
+      "  \"version\": \"${BRIDGE_VERSION}\"," \
+      "  \"apkFile\": \"reborn-print-bridge.apk\"," \
+      "  \"platform\": \"android\"," \
+      "  \"builtAt\": \"${BUILT_AT}\"," \
+      "  \"signed\": true" \
+      "}" > "$DOWNLOADS_DIR/reborn-print-bridge.json"
+    echo "Promoted versioned Bridge APK to $BRIDGE_APK (v${BRIDGE_VERSION})"
+  fi
   if [[ -f "$BRIDGE_APK" ]]; then
     STALE_APK_VERSION="$(
       python3 - <<'PY' "$BRIDGE_APK" 2>/dev/null || true
