@@ -683,6 +683,51 @@ if [[ ! -f "$BRIDGE_APK" ]] || ! head -c 2 "$BRIDGE_APK" | grep -q PK; then
   echo "WARNING: $BRIDGE_APK missing or not a valid APK (expected PK zip header)"
 fi
 
+# Keep versioned copies of the current installers so Superadmin can list history.
+# Older reborn-print-bridge-*.apk / RebornPrint-*.apk / *-setup-*.exe files are left in place.
+archive_current_download() {
+  local src="$1"
+  local version="$2"
+  local dest="$3"
+  if [[ -z "$src" || -z "$version" || -z "$dest" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$src" ]]; then
+    return 0
+  fi
+  if [[ "$version" == "0.0.0" || "$version" == "current" ]]; then
+    return 0
+  fi
+  cp -f "$src" "$dest"
+  echo "Version archive: $(basename "$dest")"
+}
+
+json_download_version() {
+  local file="$1"
+  python3 - "$file" <<'PY' 2>/dev/null || true
+import json, sys
+path = sys.argv[1]
+try:
+    data = json.load(open(path, encoding="utf-8"))
+except Exception:
+    print("")
+    raise SystemExit(0)
+print(str(data.get("version") or "").strip())
+PY
+}
+
+AGENT_ARCHIVE_VER="$(json_download_version "$DOWNLOADS_DIR/reborn-print-agent.json")"
+archive_current_download "$SETUP_EXE" "$AGENT_ARCHIVE_VER" "$DOWNLOADS_DIR/reborn-print-agent-setup-${AGENT_ARCHIVE_VER}.exe"
+
+POS_ARCHIVE_VER="$(json_download_version "$DOWNLOADS_DIR/reborn-pos-setup.json")"
+archive_current_download "$DOWNLOADS_DIR/reborn-pos-setup.exe" "$POS_ARCHIVE_VER" "$DOWNLOADS_DIR/reborn-pos-setup-${POS_ARCHIVE_VER}.exe"
+
+if [[ -f "$BRIDGE_APK" ]] && head -c 2 "$BRIDGE_APK" | grep -q PK; then
+  archive_current_download "$BRIDGE_APK" "$BRIDGE_VERSION" "$DOWNLOADS_DIR/reborn-print-bridge-${BRIDGE_VERSION}.apk"
+  cp -f "$BRIDGE_APK" "$DOWNLOADS_DIR/RebornPrint.apk"
+  archive_current_download "$BRIDGE_APK" "$BRIDGE_VERSION" "$DOWNLOADS_DIR/RebornPrint-${BRIDGE_VERSION}.apk"
+fi
+
 compose_project_name() {
   local dir="${1:-$REPO_DIR}"
   if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
