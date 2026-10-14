@@ -2902,9 +2902,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           staff: staffList,
         }).catch(() => undefined);
       }
-      await refreshAgent();
       await refreshCurrentShift(shiftsOn);
       void flushOfflineOutbox();
+      // Never block catalog/PIN UI on Bridge cold start (Android reboot before autostart).
+      void refreshAgent().catch(() => undefined);
     } catch (e: any) {
       if (!cacheReady) {
         const hydrated = await applyCachedOfflineSnapshot(
