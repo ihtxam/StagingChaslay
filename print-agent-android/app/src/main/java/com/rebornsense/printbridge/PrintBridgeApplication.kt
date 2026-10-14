@@ -6,13 +6,15 @@ import com.rebornsense.printbridge.usb.UsbHostPermissions
 class PrintBridgeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        BridgeCrashLog.install(this)
-        UsbHostPermissions.recordGrantedDevices(this)
-        com.rebornsense.printbridge.setup.OemSetupPreferences.syncInstalledVersion(this)
+        runCatching { BridgeCrashLog.install(this) }
+        // Reboot often has no WiFi yet. Never throw out of Application.onCreate —
+        // that is the system "has stopped" dialog. Skip CE work until unlock.
+        if (!BridgeUserUnlock.isCredentialStorageReady(this)) return
+        runCatching { UsbHostPermissions.recordGrantedDevices(this) }
+        runCatching { com.rebornsense.printbridge.setup.OemSetupPreferences.syncInstalledVersion(this) }
         runCatching {
             val hooks = Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenApplicationHooks")
             hooks.getMethod("onCreate", Application::class.java).invoke(null, this)
         }
-        // Boot starts the service when auto-start is on. USB scans stay off this thread.
     }
 }
