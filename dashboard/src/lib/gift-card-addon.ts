@@ -8,5 +8,6 @@ export function isGiftCardsLicensed(input: {
   if (input.giftCardAddonEnabled === true) return true;
   const feats = input.editionFeatures ?? input.features;
   if (feats == null) return true;
+  if (!Array.isArray(feats)) return false;
   return feats.includes('gift_cards') || feats.includes('pos_gift_cards');
 }

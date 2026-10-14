@@ -1574,7 +1574,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const poll = async () => {
       try {
         const { sessions } = await fetchActivePosSessions();
-        const main = sessions.main || [];
+        const main = asArray(sessions.main);
         if (cancelled) return;
         setMainTillOnline(main.length > 0);
         setMainTillPrintAgentOnline(main.some((s) => s.printAgentOnline === true));
@@ -12349,7 +12349,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         open={billDiscountOpen}
         title={t('webPosBillDiscount')}
         baseAmount={merchandiseBase(fullTotals, vatIncludedInPrice)}
-        presetsPercent={(checkoutSettings.discountPresets || [])
+        presetsPercent={asArray<{ percent: number }>(checkoutSettings.discountPresets)
           .map((p) => p.percent)
           .filter((p) => p > 0)}
         allowPercent

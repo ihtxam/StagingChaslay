@@ -1,4 +1,5 @@
 import api from '@/lib/api';
+import { asArray } from '@/lib/safe-iterables';
 import { webPosDeviceId } from '@/lib/webpos-print-relay';
 import { getSelectedLocationId } from '@/store/location';
 
@@ -227,9 +228,16 @@ export async function fetchActivePosSessions(): Promise<{
   sessions: { main: ActivePosSession[]; waiter: ActivePosSession[] };
 }> {
   const res = await api.get('/merchant/pos/sessions');
+  const sessions = res.data?.sessions;
+  const main = asArray<ActivePosSession>(
+    sessions && typeof sessions === 'object' ? (sessions as { main?: unknown }).main : undefined
+  );
+  const waiter = asArray<ActivePosSession>(
+    sessions && typeof sessions === 'object' ? (sessions as { waiter?: unknown }).waiter : undefined
+  );
   return {
     limits: res.data?.limits || { maxPosPosts: 0, maxWaiterPosts: 0 },
-    sessions: res.data?.sessions || { main: [], waiter: [] },
+    sessions: { main, waiter },
   };
 }
 
