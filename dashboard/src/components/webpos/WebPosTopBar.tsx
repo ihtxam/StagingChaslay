@@ -24,6 +24,10 @@ import { useFullscreenActive } from '@/hooks/useFullscreenActive';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
 import { isStandalonePwa } from '@/lib/pwa';
+import {
+  isPwaWindowAlreadyImmersive,
+  requestImmersiveDocumentFullscreen,
+} from '@/lib/webpos-fullscreen';
 import type { PosTab, PosView } from './types';
 import { cycleWebPosTextSize } from '@/lib/webpos-appearance';
 import { shouldShowPosOptionChooser } from '@/lib/pos-hub-visibility';
@@ -68,11 +72,8 @@ export async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean })
       return;
     }
     if (!document.fullscreenElement) {
-      const el = document.documentElement;
-      if (el.requestFullscreen) {
-        await el.requestFullscreen();
-        persistFullscreenPreference(true);
-      }
+      const entered = await requestImmersiveDocumentFullscreen();
+      if (entered) persistFullscreenPreference(true);
     }
   } catch {
     // Browser may block without a user gesture or if not allowed in iframe.
@@ -81,17 +82,11 @@ export async function toggleWebPosFullscreen(opts?: { forceEnterApp?: boolean })
 
 let pwaFullscreenGestureBound = false;
 
-/** True when the OS/PWA window is already kiosk-sized (manifest display:fullscreen). */
-function isPwaDisplayFullscreen(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(display-mode: fullscreen)').matches;
-}
-
 function bindPwaFullscreenOnFirstGesture() {
   if (pwaFullscreenGestureBound || document.fullscreenElement) return;
-  // Installed PWA with manifest display:fullscreen — Fullscreen API is redundant and
-  // a persistent capture listener steals every tap when requestFullscreen keeps failing.
-  if (isPwaDisplayFullscreen()) return;
+  // Manifest display:fullscreen on Android can still show the system nav bar until
+  // the Fullscreen API runs; only skip when the window is already truly immersive.
+  if (isPwaWindowAlreadyImmersive()) return;
   pwaFullscreenGestureBound = true;
 
   const cleanup = () => {
@@ -111,27 +106,15 @@ function bindPwaFullscreenOnFirstGesture() {
   document.addEventListener('keydown', onGesture, { capture: true, once: true });
 }
 
-async function requestDocumentFullscreen(): Promise<boolean> {
-  if (document.fullscreenElement) return true;
-  const el = document.documentElement;
-  if (!el.requestFullscreen) return false;
-  try {
-    await el.requestFullscreen();
-    return !!document.fullscreenElement;
-  } catch {
-    return false;
-  }
-}
-
 /** Enter POS chrome + browser fullscreen when preference allows (kiosk / tablet / PWA). */
 export async function enterWebPosFullscreenOnLoad() {
   window.dispatchEvent(new CustomEvent('webpos:enter-app'));
   const isPwa = isStandalonePwa();
-  if (isPwa && isPwaDisplayFullscreen()) return;
+  if (isPwa && isPwaWindowAlreadyImmersive()) return;
   if (!isPwa && !readWebPosFullscreenPreference()) return;
   if (document.fullscreenElement) return;
 
-  const entered = await requestDocumentFullscreen();
+  const entered = await requestImmersiveDocumentFullscreen();
   if (entered) {
     persistFullscreenPreference(true);
     return;

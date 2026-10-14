@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isPwaWindowAlreadyImmersive } from '@/lib/webpos-fullscreen';
 
 /** Browser Fullscreen API element is active. */
 export function isDocumentFullscreen(): boolean {
@@ -13,7 +14,7 @@ export function isPwaDisplayFullscreen(): boolean {
 
 /** True when the app is in a kiosk-like fullscreen (browser FS or PWA display mode). */
 export function isKioskFullscreen(): boolean {
-  return isDocumentFullscreen() || isPwaDisplayFullscreen();
+  return isDocumentFullscreen() || isPwaWindowAlreadyImmersive();
 }
 
 export function useFullscreenActive(): boolean {
