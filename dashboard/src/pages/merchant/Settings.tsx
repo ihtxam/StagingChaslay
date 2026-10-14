@@ -923,7 +923,7 @@ export default function Settings() {
         if (item.id === 'accounting' && !isAccountingLicensed(settings)) return false;
         return true;
       }),
-    [canOpenSettingsTab, reservationsLicensed, showTablesSettings, tabs]
+    [canOpenSettingsTab, reservationsLicensed, showTablesSettings, settings, tabs]
   );
 
   const selectTab = useCallback(
