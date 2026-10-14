@@ -291,7 +291,7 @@ function resolveActiveTerminalId(
   terminals: WebPosTerminal[] | undefined,
   opts: { preferred?: string | null; defaultId?: string | null; stored?: string | null }
 ): string {
-  const active = (terminals || []).filter((t) => t.status === 'active');
+  const active = asArray<WebPosTerminal>(terminals).filter((t) => t.status === 'active');
   const valid = new Set(active.map((t) => t.terminalId));
   for (const candidate of [opts.preferred, opts.stored, opts.defaultId]) {
     const id = (candidate || '').trim();
@@ -757,7 +757,7 @@ async function fetchAllMerchantProducts(fetchOpts: { timeout: number }) {
         params: { limit: pageSize, page, posLocationCatalog: '1' },
         ...fetchOpts,
       });
-      const batch = res.data.products || res.data || [];
+      const batch = asArray<any>(res.data?.products ?? res.data);
       if (!batch.length) break;
       all.push(...batch);
       const reportedTotal = Number(res.data.pagination?.total);
@@ -1259,12 +1259,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const refreshHeldTables = async () => {
       try {
         const res = await api.get('/merchant/pos/held');
-        const rows = (res.data?.held || []) as Array<{
+        const rows = asArray<{
           cartJson?: Record<string, unknown> | null;
           staffName?: string | null;
           updatedAt?: string | null;
           createdAt?: string | null;
-        }>;
+        }>(res.data?.held);
         if (cancelled) return;
         const ids = new Set<string>();
         for (const h of rows) {
@@ -1408,11 +1408,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       platform: 'webpos',
       staffId: webposStaff?.id || null,
       staffName: webposStaff?.name || null,
-    }).then((result) => {
-      if (result.ok && result.kickedSessionIds.length > 0) {
-        toast.info(t('webPosSessionReclaimed'));
-      }
-    });
+    })
+      .then((result) => {
+        if (result.ok && result.kickedSessionIds.length > 0) {
+          toast.info(t('webPosSessionReclaimed'));
+        }
+      })
+      .catch(() => undefined);
   }, [staffPinsKnown, pinGateRequired, webposStaff?.id, webposStaff?.name, t]);
 
   useEffect(() => {
@@ -1447,7 +1449,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const refreshStaffRosterFromServer = useCallback(async () => {
     try {
       const staffRes = await api.get('/merchant/staff');
-      const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+      const staffList = asArray<StaffRosterRow>(staffRes.data?.staff);
       setStaffRoster(staffList);
       applyStaffRoster(staffList, { openPinGate: true });
     } catch {
@@ -1838,7 +1840,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const loyaltyRedeemRate = loyaltyProgram.redeemPointsPerChf;
   const loyaltyEarnRate = loyaltyProgram.earnPointsPerChf;
   const loyaltyRedeemThreshold = redeemThresholdPoints(loyaltyRedeemRate);
-  const editionFeatures = paymentConfig?.editionFeatures;
+  const editionFeatures = Array.isArray(paymentConfig?.editionFeatures)
+    ? paymentConfig!.editionFeatures
+    : null;
   const editionAllows = (key: string) =>
     editionFeatures == null || editionFeatures.includes(key);
   const scaleFeatureEnabled = showPosScaleFeature(
@@ -2726,7 +2730,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const merch = settingsRes.data.settings || settingsRes.data.merchant;
       setMerchant(merch);
       setPrintSettings(merch?.posPrintSettings || null);
-      const mappedCategories = (catRes.data.categories || catRes.data || []).map((c: any) => ({
+      const mappedCategories = asArray<any>(catRes.data?.categories ?? catRes.data).map((c: any) => ({
         ...c,
         name: repairCatalogText(c.name),
         visibility: normalizeCatalogVisibility(c.visibility),
@@ -2802,7 +2806,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const pick = first.find((m) => cfg.methods[m]);
         if (pick) setPaymentMethod(pick);
       }
-      const staffList = (staffRes.data.staff || []) as StaffRosterRow[];
+      const staffList = asArray<StaffRosterRow>(staffRes.data?.staff);
       if (!staffFailed) {
         setStaffRoster(staffList);
         applyStaffRoster(staffList, { openPinGate: !loadWebPosStaffSession() });
@@ -2812,7 +2816,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           catalogError.response?.data?.error || catalogError.message || t('webPosLoadFailed')
         );
       }
-      const prods = asArray<any>(prodRes.data.products ?? prodRes.data);
+      const prods = asArray<any>(prodRes.data?.products ?? prodRes.data);
       const mappedProducts = prods.map((p: any) => ({
         ...p,
         visibility: normalizeCatalogVisibility(p.visibility),
@@ -2828,7 +2832,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               ...e,
               name: repairCatalogText(e?.name || ''),
             }))
-          : p.extras,
+          : asArray(p.extras),
         modifierGroups: Array.isArray(p.modifierGroups)
           ? p.modifierGroups.map((g: any) => ({
               ...g,
@@ -2839,9 +2843,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     name: repairCatalogText(o?.name || ''),
                     image: o.image || o.imageUrl || null,
                   }))
-                : g?.options,
+                : asArray(g?.options),
             }))
-          : p.modifierGroups,
+          : asArray(p.modifierGroups),
         specifications: Array.isArray(p.specifications)
           ? p.specifications.map((s: any, i: number) => ({
               id: s?.id || `spec-${i + 1}`,
@@ -2851,7 +2855,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               isDefault: !!s?.isDefault,
               sortOrder: Number(s?.sortOrder) || i,
             }))
-          : p.specifications,
+          : asArray(p.specifications),
         comboSlots: Array.isArray(p.comboSlots)
           ? p.comboSlots.map((slot: any) => ({
               ...slot,
@@ -2865,7 +2869,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                           ...e,
                           name: repairCatalogText(e?.name || ''),
                         }))
-                      : sp?.extras,
+                      : asArray(sp?.extras),
                     modifierGroups: Array.isArray(sp?.modifierGroups)
                       ? sp.modifierGroups.map((g: any) => ({
                           ...g,
@@ -2876,13 +2880,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                                 name: repairCatalogText(o?.name || ''),
                                 image: o.image || o.imageUrl || null,
                               }))
-                            : g?.options,
+                            : asArray(g?.options),
                         }))
-                      : sp?.modifierGroups,
+                      : asArray(sp?.modifierGroups),
                   }))
-                : slot?.products,
+                : asArray(slot?.products),
             }))
-          : p.comboSlots,
+          : asArray(p.comboSlots),
       }));
       setProducts(mappedProducts);
       setLoadedFromOfflineCache(false);
@@ -2957,7 +2961,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [authUser?.staffId, authUser?.role, setPosLocationId]);
 
   useEffect(() => {
-    void load();
+    void load().catch(() => undefined);
   }, [load, posLocationId]);
 
   useEffect(() => {
@@ -3130,12 +3134,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (cancelled) return;
       try {
         const res = await api.get('/merchant/pos/held');
-        const held = (res.data?.held || []) as Array<{
+        const held = asArray<{
           id: string;
           status?: string;
           label?: string | null;
           staffName?: string | null;
-        }>;
+        }>(res.data?.held);
         if (knownRemoteHeldRef.current == null) {
           knownRemoteHeldRef.current = new Set(held.map((h) => h.id));
         } else {
@@ -3227,8 +3231,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ]);
       const byId = new Map<string, OnlineOrder>();
       for (const row of [
-        ...((activeRes.data.orders || []) as OnlineOrder[]),
-        ...((historyRes.data.orders || []) as OnlineOrder[]),
+        ...asArray<OnlineOrder>(activeRes.data?.orders),
+        ...asArray<OnlineOrder>(historyRes.data?.orders),
       ]) {
         if (isOnlineShopOrder(row)) byId.set(row.id, row);
       }
@@ -3434,14 +3438,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const res = await api.get('/merchant/reservations', {
         params: { from: from.toISOString(), to: to.toISOString(), status: 'all' },
       });
-      const rows = (res.data.reservations || []) as Array<{
+      const rows = asArray<{
         id: string;
         code?: string;
         guestName: string;
         partySize: number;
         reservedAt: string;
         status: string;
-      }>;
+      }>(res.data?.reservations);
       const actionable = rows.filter((r) => r.status === 'pending' || r.status === 'confirmed');
       const pending = rows.filter((r) => r.status === 'pending');
       const alertById = Object.fromEntries(
@@ -5256,7 +5260,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const res = await api.get('/merchant/pos/held');
         const held = findHeldOrderForTable(
           tableId,
-          (res.data?.held || []) as HeldOrderRow[],
+          asArray<HeldOrderRow>(res.data?.held),
           { ticketDisplay: ticketDisplay || lastKitchenTicketRef.current }
         );
         if (!held) return;
@@ -5710,7 +5714,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const res = await api.get('/merchant/pos/held');
       const held = findHeldOrderForTable(
         table.id,
-        (res.data?.held || []) as HeldOrderRow[],
+        asArray<HeldOrderRow>(res.data?.held),
         { ticketDisplay: existing?.ticketDisplay || ticketDisplay }
       );
       if (held && applyHeldOrderFromRow(held, table)) {
@@ -5870,13 +5874,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   ) => {
     try {
       const res = await api.get('/merchant/pos/held');
-      const list = (res.data?.held || []) as Array<{
+      const list = asArray<{
         id: string;
         label?: string;
         channel?: string | null;
         cartJson?: Record<string, unknown>;
         status?: string;
-      }>;
+      }>(res.data?.held);
       for (const h of list) {
         const cj = h.cartJson;
         if (!cj || typeof cj !== 'object') continue;
@@ -6096,13 +6100,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     try {
       const res = await api.get('/merchant/pos/held');
-      const list = (res.data?.held || []) as Array<{
+      const list = asArray<{
         id: string;
         label?: string;
         channel?: string | null;
         cartJson?: Record<string, unknown>;
         status?: string;
-      }>;
+      }>(res.data?.held);
       for (const h of list) {
         const cj = h.cartJson;
         if (!cj || typeof cj !== 'object' || cj.tableId !== source.id) continue;
@@ -6473,11 +6477,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (ticketKey) {
           try {
             const heldRes = await api.get('/merchant/pos/held');
-            const rows = (heldRes.data?.held || heldRes.data || []) as Array<{
+            const rows = asArray<{
               id: string;
               label?: string | null;
               cartJson?: unknown;
-            }>;
+            }>(heldRes.data?.held ?? heldRes.data);
             const match = rows.find((h) => {
               if (String(h.id).startsWith('local:')) return false;
               const meta = parseHeldCartJson(h.cartJson);
@@ -7256,7 +7260,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       const res = await api.get('/merchant/orders', { params: { limit: 120 } });
       if (splitBillActive()) return true;
-      const orders = (res.data?.orders || []) as MerchantOrder[];
+      const orders = asArray<MerchantOrder>(res.data?.orders);
       const guard = resolveCartCheckoutGuard(orders, currentCartOrderLink(), {
         requireSent: hasSent || !!resumedHeldIdRef.current,
       });
@@ -7326,7 +7330,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       try {
         const res = await api.get('/merchant/orders', { params: { limit: 120 } });
         if (cancelled || splitMasterIdRef.current) return;
-        const orders = (res.data?.orders || []) as MerchantOrder[];
+        const orders = asArray<MerchantOrder>(res.data?.orders);
         const guard = resolveCartCheckoutGuard(orders, currentCartOrderLink(), {
           requireSent: hasSent || !!resumedHeldIdRef.current,
         });
@@ -10521,7 +10525,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [visibleCategories, categoryId, giftCardsSellingOn]);
 
   const activeTerminals = useMemo(
-    () => (paymentConfig?.terminals || []).filter((t) => t.status === 'active'),
+    () => asArray(paymentConfig?.terminals).filter((t) => t.status === 'active'),
     [paymentConfig]
   );
 
@@ -10938,17 +10942,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             toast.error(t('webPosOfflineNeedNetwork'));
             return;
           }
-          void flushOfflineOutbox().then((r) => {
-            if (r.synced > 0) {
-              toast.success(
-                t('webPosSyncFlushed').replace('{n}', String(r.synced))
-              );
-            } else if (r.failed > 0) {
-              toast.error(t('webPosSyncFailed').replace('{n}', String(r.failed)));
-            } else {
-              toast.success(t('webPosSyncOk'));
-            }
-          });
+          void flushOfflineOutbox()
+            .then((r) => {
+              if (r.synced > 0) {
+                toast.success(
+                  t('webPosSyncFlushed').replace('{n}', String(r.synced))
+                );
+              } else if (r.failed > 0) {
+                toast.error(t('webPosSyncFailed').replace('{n}', String(r.failed)));
+              } else {
+                toast.success(t('webPosSyncOk'));
+              }
+            })
+            .catch(() => undefined);
         }}
         hideSettingsMenu={isDesktop}
         settingsPanel={
@@ -10997,17 +11003,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 toast.error(t('webPosOfflineNeedNetwork'));
                 return;
               }
-              void flushOfflineOutbox().then((r) => {
-                if (r.synced > 0) {
-                  toast.success(
-                    t('webPosSyncFlushed').replace('{n}', String(r.synced))
-                  );
-                } else if (r.failed > 0) {
-                  toast.error(t('webPosSyncFailed').replace('{n}', String(r.failed)));
-                } else {
-                  toast.success(t('webPosSyncOk'));
-                }
-              });
+              void flushOfflineOutbox()
+                .then((r) => {
+                  if (r.synced > 0) {
+                    toast.success(
+                      t('webPosSyncFlushed').replace('{n}', String(r.synced))
+                    );
+                  } else if (r.failed > 0) {
+                    toast.error(t('webPosSyncFailed').replace('{n}', String(r.failed)));
+                  } else {
+                    toast.success(t('webPosSyncOk'));
+                  }
+                })
+                .catch(() => undefined);
             }}
             locale={locale}
             onLanguageChange={(lang) => void changePosLanguage(lang)}
