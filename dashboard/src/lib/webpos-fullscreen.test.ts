@@ -1,59 +1,50 @@
-/**
- * Run: npx tsx dashboard/src/lib/webpos-fullscreen.test.ts
- */
-import assert from 'node:assert/strict';
-import test from 'node:test';
+// @vitest-environment happy-dom
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   androidPwaNeedsImmersiveFullscreen,
   isPwaWindowAlreadyImmersive,
-} from './webpos-fullscreen.ts';
+} from './webpos-fullscreen';
 
-function withMatchMedia(
-  matches: (query: string) => boolean,
-  ua: string,
-  fn: () => void
-) {
-  const priorWindow = globalThis.window;
-  const priorDocument = globalThis.document;
-  globalThis.window = {
-    matchMedia: (query: string) => ({
-      matches: matches(query),
+describe('webpos-fullscreen', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  beforeEach(() => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel Tablet) AppleWebKit/537.36',
+      standalone: false,
+    });
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    vi.unstubAllGlobals();
+  });
+
+  it('android standalone PWA needs immersive API even when display-mode is fullscreen', () => {
+    window.matchMedia = vi.fn((query: string) => ({
+      matches: query.includes('standalone') || query.includes('fullscreen'),
       media: query,
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
-    }),
-  } as Window;
-  globalThis.document = { fullscreenElement: null } as Document;
-  Object.defineProperty(globalThis, 'navigator', {
-    configurable: true,
-    value: { userAgent: ua, standalone: false },
+    })) as typeof window.matchMedia;
+
+    expect(androidPwaNeedsImmersiveFullscreen()).toBe(true);
+    expect(isPwaWindowAlreadyImmersive()).toBe(false);
   });
-  try {
-    fn();
-  } finally {
-    globalThis.window = priorWindow;
-    globalThis.document = priorDocument;
-  }
-}
 
-test('android standalone PWA needs immersive API even when display-mode is fullscreen', () => {
-  withMatchMedia(
-    (q) => q.includes('standalone') || q.includes('fullscreen'),
-    'Mozilla/5.0 (Linux; Android 14; Pixel Tablet)',
-    () => {
-      assert.equal(androidPwaNeedsImmersiveFullscreen(), true);
-      assert.equal(isPwaWindowAlreadyImmersive(), false);
-    }
-  );
-});
+  it('desktop browser tab does not need android immersive override', () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0)',
+      standalone: false,
+    });
+    window.matchMedia = vi.fn((query: string) => ({
+      matches: query.includes('fullscreen'),
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as typeof window.matchMedia;
 
-test('non-android fullscreen display-mode counts as immersive', () => {
-  withMatchMedia(
-    (q) => q.includes('fullscreen'),
-    'Mozilla/5.0 (Windows NT 10.0)',
-    () => {
-      assert.equal(androidPwaNeedsImmersiveFullscreen(), false);
-      assert.equal(isPwaWindowAlreadyImmersive(), true);
-    }
-  );
+    expect(androidPwaNeedsImmersiveFullscreen()).toBe(false);
+    expect(isPwaWindowAlreadyImmersive()).toBe(true);
+  });
 });

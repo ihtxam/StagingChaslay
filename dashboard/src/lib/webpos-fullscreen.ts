@@ -20,7 +20,7 @@ export function isPwaDisplayFullscreen(): boolean {
   return window.matchMedia('(display-mode: fullscreen)').matches;
 }
 
-/** Skip redundant Fullscreen API only when the window is already truly immersive. */
+/** Skip redundant Fullscreen API only when the window is truly immersive. */
 export function isPwaWindowAlreadyImmersive(): boolean {
   if (typeof document !== 'undefined' && document.fullscreenElement) return true;
   if (!isPwaDisplayFullscreen()) return false;
