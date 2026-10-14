@@ -1,6 +1,6 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Download, Save, Calculator, Link2, Unlink, Upload, type LucideIcon } from 'lucide-react';
+import { Download, Save, Calculator, Link2, Unlink, Upload } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -308,31 +308,17 @@ export default function SettingsAccountingTab() {
   );
 
   const upsell = (
-    <SettingsReportCard>
+    <SettingsReportCard
+      icon={Calculator}
+      accent={settingsDash.accent}
+      title={t('settingsAccounting')}
+    >
       <p className="text-sm text-muted-foreground">{t('accountingAddonOff')}</p>
       <p className="text-sm mt-2">
         <a href="/merchant/billing" className="text-primary underline">
           {t('accountingAddonBilling')}
         </a>
       </p>
-    </SettingsReportCard>
-  );
-
-  const Section = ({
-    title,
-    icon: Icon,
-    children,
-  }: {
-    title: string;
-    icon: LucideIcon;
-    children: React.ReactNode;
-  }) => (
-    <SettingsReportCard>
-      <div className="flex items-center gap-2 mb-4">
-        <Icon className="w-5 h-5 text-primary" />
-        <h3 className="font-semibold">{title}</h3>
-      </div>
-      {children}
     </SettingsReportCard>
   );
 
@@ -368,9 +354,13 @@ export default function SettingsAccountingTab() {
       {exportHint}
 
       {bexioLicensed && (
-        <Section title={t('accountingBexioTitle')} icon={Save}>
+        <SettingsReportCard
+          icon={Save}
+          accent={settingsDash.info}
+          title={t('accountingBexioTitle')}
+        >
           <SettingsToggleRow
-            label={t('accountingEnabled')}
+            title={t('accountingEnabled')}
             checked={bexio.enabled}
             onChange={(v) => setBexio({ ...bexio, enabled: v })}
           />
@@ -474,13 +464,17 @@ export default function SettingsAccountingTab() {
               </>
             ) : null}
           </div>
-        </Section>
+        </SettingsReportCard>
       )}
 
       {odooLicensed && (
-        <Section title={t('accountingOdooTitle')} icon={Save}>
+        <SettingsReportCard
+          icon={Save}
+          accent={settingsDash.success}
+          title={t('accountingOdooTitle')}
+        >
           <SettingsToggleRow
-            label={t('accountingEnabled')}
+            title={t('accountingEnabled')}
             checked={odoo.enabled}
             onChange={(v) => setOdoo({ ...odoo, enabled: v })}
           />
@@ -574,7 +568,7 @@ export default function SettingsAccountingTab() {
               </>
             ) : null}
           </div>
-        </Section>
+        </SettingsReportCard>
       )}
 
       <div className="flex gap-2">

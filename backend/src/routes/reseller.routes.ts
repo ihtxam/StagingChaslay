@@ -253,6 +253,8 @@ router.post("/merchants", async (req: Request, res: Response) => {
       signageScreenLimit,
       kdsAddonEnabled,
       odsAddonEnabled,
+      kioskAddonEnabled,
+      kioskEnabled,
       deliveryPlatformsAddonEnabled,
       storekeeperAddonEnabled,
       bexioAddonEnabled,
@@ -288,6 +290,12 @@ router.post("/merchants", async (req: Request, res: Response) => {
         signageScreenLimit != null ? Number(signageScreenLimit) : undefined,
       kdsAddonEnabled: kdsAddonEnabled === true,
       odsAddonEnabled: odsAddonEnabled === true,
+      kioskAddonEnabled:
+        kioskAddonEnabled != null
+          ? isKioskAddonEnabled(kioskAddonEnabled)
+          : kioskEnabled != null
+            ? isKioskAddonEnabled(kioskEnabled)
+            : false,
       deliveryPlatformsAddonEnabled: deliveryPlatformsAddonEnabled === true,
       storekeeperAddonEnabled: storekeeperAddonEnabled === true,
       bexioAddonEnabled: bexioAddonEnabled === true,

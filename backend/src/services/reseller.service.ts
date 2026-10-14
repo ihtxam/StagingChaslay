@@ -422,6 +422,7 @@ export class ResellerService {
       signageScreenLimit?: number;
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
+      kioskAddonEnabled?: boolean;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
@@ -472,6 +473,7 @@ export class ResellerService {
         signageScreenLimit: input.signageScreenLimit,
         kdsAddonEnabled: input.kdsAddonEnabled,
         odsAddonEnabled: input.odsAddonEnabled,
+        kioskAddonEnabled: input.kioskAddonEnabled,
         deliveryPlatformsAddonEnabled: input.deliveryPlatformsAddonEnabled,
         storekeeperAddonEnabled: input.storekeeperAddonEnabled,
         bexioAddonEnabled: input.bexioAddonEnabled,

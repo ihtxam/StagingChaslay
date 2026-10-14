@@ -256,6 +256,7 @@ function MerchantsPage() {
     signageScreenLimit: 2,
     kdsAddonEnabled: false,
     odsAddonEnabled: false,
+    kioskAddonEnabled: false,
     deliveryPlatformsAddonEnabled: false,
     bexioAddonEnabled: false,
     odooAddonEnabled: false,
@@ -274,6 +275,7 @@ function MerchantsPage() {
     signageScreenLimit: number;
     kdsAddonEnabled: boolean;
     odsAddonEnabled: boolean;
+    kioskAddonEnabled: boolean;
     deliveryPlatformsAddonEnabled: boolean;
     bexioAddonEnabled: boolean;
     odooAddonEnabled: boolean;
@@ -465,6 +467,7 @@ function MerchantsPage() {
         signageScreenLimit: Number(limitsFor.signageScreenLimit) || 2,
         kdsAddonEnabled: !!limitsFor.kdsAddonEnabled,
         odsAddonEnabled: !!limitsFor.odsAddonEnabled,
+        kioskAddonEnabled: !!limitsFor.kioskAddonEnabled,
         deliveryPlatformsAddonEnabled: !!limitsFor.deliveryPlatformsAddonEnabled,
         bexioAddonEnabled: !!limitsFor.bexioAddonEnabled,
         odooAddonEnabled: !!limitsFor.odooAddonEnabled,
@@ -906,6 +909,20 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!form.kioskAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, kioskAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('kioskNav')}</span>
+                <span className="text-xs text-stone-500">{t('kdsAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!form.deliveryPlatformsAddonEnabled}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, deliveryPlatformsAddonEnabled: e.target.checked }))
@@ -1073,6 +1090,8 @@ function MerchantsPage() {
                               signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
                               kdsAddonEnabled: m.kdsAddonEnabled === true,
                               odsAddonEnabled: m.odsAddonEnabled === true,
+                              kioskAddonEnabled:
+                                m.kioskAddonEnabled === true || m.kioskEnabled === true,
                               deliveryPlatformsAddonEnabled:
                                 m.deliveryPlatformsAddonEnabled === true ||
                                 m.justEatAddonEnabled === true ||
@@ -1310,6 +1329,20 @@ function MerchantsPage() {
               <span>
                 <span className="font-medium block">{t('odsSettingsTitle')}</span>
                 <span className="text-xs text-stone-500">{t('odsAddonReadOnly')}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={!!limitsFor.kioskAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, kioskAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">{t('kioskNav')}</span>
+                <span className="text-xs text-stone-500">{t('kdsAddonReadOnly')}</span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">
