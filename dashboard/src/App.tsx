@@ -1,17 +1,22 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import toast, { Toaster, ToastBar } from 'react-hot-toast';
-import { POS_TOAST_PREF_EVENT, readShowPosToasts } from '@/lib/pos-toast-pref';
+import { POS_TOAST_PREF_EVENT, readShowPosToasts, shouldShowPosToast } from '@/lib/pos-toast-pref';
 import { useAuthStore } from '@/store/auth';
 import { isPanelAppHost, isShopPathHubHost } from '@/lib/brand';
 import { I18nProvider, PANEL_LANG_KEY, SHOP_LANG_KEY, shopLangStorageKey } from '@/lib/i18n';
 import { CDS_LANG_KEY } from '@/lib/customer-display-sync';
 import { resolveShopKey } from '@/lib/shop-cart';
 import { initClientErrorReporting } from '@/lib/client-error-report';
+import { installDeployToastGuard } from '@/lib/deploy-blip';
+
+installDeployToastGuard();
 import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 import ShopRouteLayout from '@/components/shop/ShopRouteLayout';
+import ScrollToTop from '@/components/ScrollToTop';
 
 import LoginPage from '@/pages/LoginPage';
+import HostApp from '@/pages/HostApp';
 import SetPasswordPage from '@/pages/SetPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SuperadminDashboard from '@/pages/superadmin/Dashboard';
@@ -45,7 +50,7 @@ import DesktopLoadingOverlay from '@/components/DesktopLoadingOverlay';
 import DesktopUpdateBanner from '@/components/DesktopUpdateBanner';
 import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
 import { initDesktopAppDetection, shouldAutoOpenOnScreenKeyboard } from '@/lib/platform';
-import { activateWaitingServiceWorker } from '@/lib/pwa-recover';
+import { activateWaitingServiceWorker, reloadIfDeployedBuildChanged } from '@/lib/pwa-recover';
 
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ShopLocationsPage = lazy(() => import('@/pages/shop/ShopLocationsPage'));
@@ -85,10 +90,6 @@ function AppToaster() {
     window.addEventListener(POS_TOAST_PREF_EVENT, onPref);
     return () => window.removeEventListener(POS_TOAST_PREF_EVENT, onPref);
   }, []);
-
-  if (webPos && !showPosToasts) {
-    return null;
-  }
 
   return (
     <Toaster
@@ -136,7 +137,8 @@ function AppToaster() {
           : { cursor: 'pointer' },
       }}
     >
-      {(t) => (
+      {(t) =>
+        webPos && !shouldShowPosToast({ showPosToasts, toastType: t.type }) ? null : (
         <div
           role="presentation"
           className="cursor-pointer"
@@ -144,7 +146,8 @@ function AppToaster() {
         >
           <ToastBar toast={t} />
         </div>
-      )}
+        )
+      }
     </Toaster>
   );
 }
@@ -219,12 +222,14 @@ function App() {
     initClientErrorReporting();
     initDesktopAppDetection();
     void activateWaitingServiceWorker();
+    void reloadIfDeployedBuildChanged();
   }, [hydrate]);
 
   return (
     <>
       <BrowserRouter>
         <OnScreenKeyboardProvider autoOpenOnFocus={shouldAutoOpenOnScreenKeyboard()}>
+        <ScrollToTop />
         <DesktopLoadingOverlay />
         <DesktopChromeBar />
         <DesktopUpdateBanner />
@@ -309,6 +314,16 @@ function App() {
             />
           )}
           {!shopMode && !statusMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
+          {!shopMode && !statusMode && (
+            <Route
+              path="/host"
+              element={
+                <I18nProvider storageKey={PANEL_LANG_KEY}>
+                  <HostApp />
+                </I18nProvider>
+              }
+            />
+          )}
           <Route
             path="/receipt/:saleId"
             element={

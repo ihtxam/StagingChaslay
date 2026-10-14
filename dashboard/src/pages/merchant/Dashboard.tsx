@@ -43,11 +43,13 @@ import DesktopTimingsPage from './DesktopTimingsPage';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import PlatformShop from './PlatformShop';
 import Support from './Support';
-import ProductGuidesPage from '../shared/ProductGuidesPage';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import Billing from './Billing';
 import OnlineShop from './OnlineShop';
 import Reservations from './Reservations';
+import HostStation from './HostStation';
+import PhoneOrders from './PhoneOrders';
+import ReviewsInbox from './ReviewsInbox';
 import Newsletter from './Newsletter';
 import WebPos from './WebPos';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
@@ -64,6 +66,10 @@ import Reports from './Reports';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
+import {
+  pinGateMerchantName,
+  pinGateSessionMerchantName,
+} from '@/lib/webpos-pin-gate-brand';
 import PlatformMessagesProvider, {
   PlatformStatusBannerSlot,
 } from '@/components/platform/PlatformMessagesProvider';
@@ -133,6 +139,8 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
+import { isCateringLicensed } from '@/lib/catering-addon';
+import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import {
   desktopHubRedirectTarget,
@@ -141,12 +149,17 @@ import {
   normalizeDesktopPath,
 } from '@/lib/desktop-hub';
 import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-product-flags';
-import { isPanelNavGroupHidden, isPanelNavHidden } from '@/lib/panel-nav-hidden';
+import {
+  isPanelNavGroupHidden,
+  isPanelNavHidden,
+  parsePanelNavHidden,
+} from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
 import HqDashboardPage from './HqDashboard';
 import BulkPricingPage from './BulkPricingPage';
 import ScheduledMenusPage from './ScheduledMenusPage';
 import PizzaBuilderPage from './PizzaBuilderPage';
+import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
 import OrderCenterApp from './OrderCenterApp';
 import { useLocationStore } from '@/store/location';
 
@@ -225,12 +238,16 @@ function MerchantShell() {
   );
   /** When true on /merchant/pos, hide sidebar + header so WebPOS feels like its own app. */
   const [posAppMode, setPosAppMode] = useState(true);
-  const [merchantShopName, setMerchantShopName] = useState<string | null>(null);
+  const [merchantShopName, setMerchantShopName] = useState<string | null>(
+    () => pinGateSessionMerchantName(user) || null
+  );
+  const [merchantShopLogoUrl, setMerchantShopLogoUrl] = useState<string | null>(null);
   const [editionFeatures, setEditionFeatures] = useState<EditionFeatureKey[] | null>(null);
   const [inventoryLicensed, setInventoryLicensed] = useState(() => isInventoryLicensed(user));
   const [storekeeperLicensed, setStorekeeperLicensed] = useState(() => isStorekeeperLicensed(user));
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [kioskLicensed, setKioskLicensed] = useState(false);
+  const [cateringLicensed, setCateringLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -363,6 +380,9 @@ function MerchantShell() {
     let cancelled = false;
     const applySettings = (settings: {
       name?: string | null;
+      businessName?: string | null;
+      shopLogoUrl?: string | null;
+      posPrintSettings?: { receiptLogoUrl?: string | null } | null;
       editionFeatures?: EditionFeatureKey[] | null;
       businessCategory?: string | null;
       shopEnabled?: boolean;
@@ -377,6 +397,8 @@ function MerchantShell() {
       signageEnabled?: boolean;
       kioskAddonEnabled?: boolean;
       kioskEnabled?: boolean;
+      cateringEnabled?: boolean;
+      cateringAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
     } | null) => {
@@ -390,9 +412,20 @@ function MerchantShell() {
       setStorekeeperLicensed(isStorekeeperLicensed(settings) || isStorekeeperLicensed(user));
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setKioskLicensed(isKioskLicensed(settings));
+      setCateringLicensed(isCateringLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
-      setMerchantShopName(settings?.name?.trim() || null);
-      setPanelNavHidden(Array.isArray(settings?.panelNavHidden) ? settings.panelNavHidden : []);
+      setMerchantShopName(
+        settings?.name?.trim() ||
+          settings?.businessName?.trim() ||
+          pinGateSessionMerchantName(user) ||
+          null
+      );
+      setMerchantShopLogoUrl(
+        settings?.shopLogoUrl?.trim() ||
+          settings?.posPrintSettings?.receiptLogoUrl?.trim() ||
+          null
+      );
+      setPanelNavHidden(parsePanelNavHidden(settings?.panelNavHidden));
       setProductFlagsReady(true);
     };
     const load = () => {
@@ -409,6 +442,7 @@ function MerchantShell() {
           setStorekeeperLicensed(isStorekeeperLicensed(user));
           setSignageLicensed(isSignageLicensed(user));
           setKioskLicensed(false);
+          setCateringLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
           setProductFlagsReady(true);
         });
@@ -601,15 +635,18 @@ function MerchantShell() {
   const allowInventory = useCallback(
     (path: string) =>
       inventoryLicensed &&
+      !isPanelNavHidden(path, panelNavHidden) &&
+      !isPanelNavGroupHidden('inventory', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [inventoryLicensed, effective.permissions, effective.isOwner, businessModule]
+    [inventoryLicensed, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
 
   const allowStorekeeper = useCallback(
     (path: string) =>
       storekeeperLicensed &&
+      !isPanelNavHidden(path, panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null),
-    [storekeeperLicensed, effective.permissions, effective.isOwner]
+    [storekeeperLicensed, effective.permissions, effective.isOwner, panelNavHidden]
   );
 
   const allowSignage = useCallback(
@@ -634,8 +671,10 @@ function MerchantShell() {
   const allowHq = useCallback(
     (path: string) =>
       showHq &&
+      !isPanelNavHidden(path, panelNavHidden) &&
+      !isPanelNavGroupHidden('hq', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [showHq, effective.permissions, effective.isOwner, businessModule]
+    [showHq, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
 
   // Block direct URL access to panel pages the role may not open.
@@ -854,7 +893,6 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const moreOptionsLinks = [
         { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
-        { label: t('cateringGuideNav'), path: '/merchant/products/catering-guide', icon: '🍱' },
         { label: t('scheduledMenusTitle'), path: MERCHANT_SCHEDULED_MENUS_PATH, icon: '🕐' },
         ...(isRestaurantModule(businessModule)
           ? [{ label: t('pizzaBuilderTitle'), path: MERCHANT_PIZZA_BUILDER_PATH, icon: '🍕' }]
@@ -903,8 +941,12 @@ function MerchantShell() {
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
         { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
+        { label: t('phoneOrderingDeskNav'), path: '/merchant/sales/phone', icon: '📞' },
         ...(isRestaurantModule(businessModule)
-          ? [{ label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' }]
+          ? [
+              { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
+              { label: t('hostStationNav'), path: '/merchant/sales/host', icon: '🛎️' },
+            ]
           : []),
       ].filter((item) => allow(item.path)),
     },
@@ -949,6 +991,7 @@ function MerchantShell() {
             .filter((item) => {
               if ('heading' in item && item.heading) return true;
               const path = 'path' in item ? item.path : '';
+              if (!path || !allowInventory(path)) return false;
               if (
                 path === '/merchant/inventory/cookbook' ||
                 path === '/merchant/inventory/consumption'
@@ -981,12 +1024,10 @@ function MerchantShell() {
       icon: '🌐',
       children: [
         { label: t('shop'), path: '/merchant/online-shop', icon: '🛒' },
+        { label: t('reviewsInboxNav'), path: '/merchant/guest/reviews', icon: '⭐' },
         { label: t('cmsWebsite'), path: '/merchant/chaslay-page-builder', icon: '✏️' },
       ].filter((item) => allow(item.path)),
     },
-    ...(allow('/merchant/support')
-      ? [{ label: t('productGuidesNav'), path: '/merchant/guides', icon: '📘' }]
-      : []),
   ]
     .filter(Boolean)
     .filter((entry) => {
@@ -1150,7 +1191,11 @@ function MerchantShell() {
           }}
           onSuccess={onPanelPinSuccess}
           onLogout={handlePanelPinLogout}
-          productName={merchantShopName}
+          productName={pinGateMerchantName(
+            merchantShopName,
+            pinGateSessionMerchantName(user)
+          )}
+          logoUrl={merchantShopLogoUrl}
         />
       </div>
     );
@@ -1189,7 +1234,9 @@ function MerchantShell() {
                 supportPath:
                   !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
                 guidesPath:
-                  !panelChromeRestricted && allow('/merchant/support') ? '/merchant/guides' : undefined,
+                  !panelChromeRestricted && allow('/merchant/support')
+                    ? '/merchant/support?tab=help'
+                    : undefined,
               }}
               shopName={merchantShopName}
               shopPath={
@@ -1231,7 +1278,9 @@ function MerchantShell() {
                 supportPath:
                   !panelChromeRestricted && allow('/merchant/support') ? '/merchant/support' : undefined,
                 guidesPath:
-                  !panelChromeRestricted && allow('/merchant/support') ? '/merchant/guides' : undefined,
+                  !panelChromeRestricted && allow('/merchant/support')
+                    ? '/merchant/support?tab=help'
+                    : undefined,
               }}
               shopName={merchantShopName}
               shopPath={
@@ -1253,13 +1302,16 @@ function MerchantShell() {
             title={t('merchantDashboard')}
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
+            storeName={merchantShopName}
             registerDisplay={registerDisplay}
             showAcceptingMenu={!isStorekeeperRoute}
           />
         )}
 
         {!hideChrome ? <PlatformStatusBannerSlot /> : null}
-        {!hideChrome && allowInventory('/merchant/inventory') ? <InventoryExpiryAlerts /> : null}
+        {!hideChrome && productFlagsReady && allowInventory('/merchant/inventory') ? (
+          <InventoryExpiryAlerts licensed={inventoryLicensed} />
+        ) : null}
 
         <main
           className={
@@ -1349,9 +1401,13 @@ function MerchantShell() {
             <Route
               path="products/catering-guide"
               element={
-                <PanelRouteGuard path="/merchant/products" allow={allow}>
-                  <CateringGuidePage />
-                </PanelRouteGuard>
+                cateringLicensed ? (
+                  <PanelRouteGuard path="/merchant/products" allow={allow}>
+                    <CateringGuidePage />
+                  </PanelRouteGuard>
+                ) : (
+                  <Navigate to="/merchant/products" replace />
+                )
               }
             />
             <Route
@@ -1520,6 +1576,22 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             />
+            <Route
+              path="products/pizza-builder/new"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="products/pizza-builder/:templateId"
+              element={
+                <PanelRouteGuard path={MERCHANT_PIZZA_BUILDER_PATH} allow={allow}>
+                  <PizzaBuilderEditorPage />
+                </PanelRouteGuard>
+              }
+            />
             <Route path="products/time-slot-pricing" element={<Navigate to={MERCHANT_SCHEDULED_MENUS_PATH} replace />} />
             <Route path="hq/time-slot-pricing" element={<Navigate to={MERCHANT_SCHEDULED_MENUS_PATH} replace />} />
             <Route path="signage" element={<Navigate to="/merchant/settings?tab=signage" replace />} />
@@ -1549,6 +1621,30 @@ function MerchantShell() {
               }
             />
             <Route
+              path="sales/host"
+              element={
+                <PanelRouteGuard path="/merchant/sales/host" allow={allow}>
+                  <HostStation />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="sales/phone"
+              element={
+                <PanelRouteGuard path="/merchant/sales/phone" allow={allow}>
+                  <PhoneOrders />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="guest/reviews"
+              element={
+                <PanelRouteGuard path="/merchant/guest/reviews" allow={allow}>
+                  <ReviewsInbox />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
               path="reservations"
               element={
                 <LegacyReservationsRedirect />
@@ -1571,14 +1667,8 @@ function MerchantShell() {
               }
             />
             <Route path="users" element={<LegacyUsersRedirect />} />
-            <Route
-              path="guides"
-              element={
-                <PanelRouteGuard path="/merchant/support" allow={allow}>
-                  <ProductGuidesPage audience="merchant" />
-                </PanelRouteGuard>
-              }
-            />
+            <Route path="guides" element={<Navigate to="/merchant/support?tab=help" replace />} />
+            <Route path="updates" element={<Navigate to="/merchant/support?tab=updates" replace />} />
             <Route
               path="support"
               element={

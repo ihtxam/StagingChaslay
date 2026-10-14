@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { notifyStaffRosterChanged } from '@/lib/permissions';
 import { isValidStaffPin, sanitizeStaffPinInput } from '@/lib/staff-pin';
 import { useI18n } from '@/lib/i18n';
@@ -135,7 +136,7 @@ export default function StaffPage({
         return { ...f, roleId: rolesList[0].id };
       });
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('staffLoadFailed'));
+      toastLoadError(e, t('staffLoadFailed'));
     } finally {
       setLoading(false);
     }

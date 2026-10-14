@@ -140,27 +140,21 @@ export default function AcceptingMenu() {
               <span className="text-[11px] muted">{t('acceptingOrdersHint')}</span>
             </span>
           </label>
-          <label
-            className={`flex items-start gap-2.5 text-sm py-1.5 ${
-              !state.reservationsEnabled ? 'opacity-50' : ''
-            }`}
-          >
+          {state.reservationsEnabled ? (
+          <label className="flex items-start gap-2.5 text-sm py-1.5">
             <input
               type="checkbox"
               className="mt-0.5"
               checked={state.acceptingReservations}
-              disabled={saving || !state.reservationsEnabled}
+              disabled={saving}
               onChange={(e) => void patch({ acceptingReservations: e.target.checked })}
             />
             <span>
               <span className="font-medium block">{t('acceptingReservations')}</span>
-              <span className="text-[11px] muted">
-                {state.reservationsEnabled
-                  ? t('acceptingReservationsHint')
-                  : t('acceptingReservationsDisabled')}
-              </span>
+              <span className="text-[11px] muted">{t('acceptingReservationsHint')}</span>
             </span>
           </label>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react';
 import api from '@/lib/api';
+import { isMissingAuthorizationError } from '@/lib/reservations-auth-error';
 import { useI18n } from '@/lib/i18n';
 import { STORE_HOURS_DAYS } from '@/lib/store-hours';
 import {
@@ -60,6 +61,13 @@ type ResSettings = {
   photoMenuEnabled?: boolean;
   googleReserveUrl?: string | null;
   googleOrderUrl?: string | null;
+  waitlistSmsEnabled?: boolean;
+  waitlistQuoteMinutes?: number | null;
+  depositEnabled?: boolean;
+  depositAmount?: number | null;
+  depositType?: 'fixed' | 'percent';
+  cancelHoursBefore?: number | null;
+  googleReservePublish?: boolean;
 };
 
 function emptyWeek(): ChannelHours {
@@ -91,6 +99,10 @@ export default function SettingsReservationsTab() {
       setSettings(res.data.config?.settings);
       if (res.data.config?.hours) setDineInHours(res.data.config.hours);
     } catch (e: any) {
+      if (isMissingAuthorizationError(e)) {
+        setLoadError(t('reservationsUnlicensedHint'));
+        return;
+      }
       const msg = e.response?.data?.error || t('cmsLoadFailed');
       setLoadError(msg);
       toast.error(msg);
@@ -210,6 +222,35 @@ export default function SettingsReservationsTab() {
           onChange={(photoMenuEnabled) => setSettings({ ...settings, photoMenuEnabled })}
           title={t('photoMenuEnable')}
           hint={t('photoMenuHint')}
+        />
+        <SettingsToggleRow
+          checked={settings.waitlistSmsEnabled !== false}
+          onChange={(waitlistSmsEnabled) => setSettings({ ...settings, waitlistSmsEnabled })}
+          title={t('reservationsWaitlistSms')}
+          hint={t('reservationsWaitlistSmsHint')}
+        />
+        <SettingsField label={t('reservationsWaitQuote')}>
+          <input
+            type="number"
+            min={0}
+            max={180}
+            className="input"
+            placeholder="25"
+            value={settings.waitlistQuoteMinutes ?? ''}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                waitlistQuoteMinutes: e.target.value === '' ? null : Number(e.target.value),
+              })
+            }
+          />
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('reservationsWaitQuoteHint')}</p>
+        </SettingsField>
+        <SettingsToggleRow
+          checked={settings.googleReservePublish !== false}
+          onChange={(googleReservePublish) => setSettings({ ...settings, googleReservePublish })}
+          title={t('googleReservePublish')}
+          hint={t('googleReservePublishHint')}
         />
         <SettingsField label={t('googleReserveUrl')}>
           <input
@@ -569,6 +610,55 @@ export default function SettingsReservationsTab() {
         title={t('reservationsPolicies')}
         description={t('reservationsCustomHoursHint')}
       >
+        <SettingsToggleRow
+          checked={settings.depositEnabled === true}
+          onChange={(depositEnabled) => setSettings({ ...settings, depositEnabled })}
+          title={t('reservationsDepositEnable')}
+          hint={t('reservationsCancelPolicyHint')}
+        />
+        <div className="grid gap-3 md:grid-cols-3">
+          <SettingsField label={t('reservationsDepositAmount')}>
+            <input
+              type="number"
+              min={0}
+              className="input"
+              value={settings.depositAmount ?? ''}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  depositAmount: e.target.value === '' ? null : Number(e.target.value),
+                })
+              }
+            />
+          </SettingsField>
+          <SettingsField label={t('reservationsDepositTypeFixed')}>
+            <select
+              className="input"
+              value={settings.depositType || 'fixed'}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  depositType: e.target.value as 'fixed' | 'percent',
+                })
+              }
+            >
+              <option value="fixed">{t('reservationsDepositTypeFixed')}</option>
+              <option value="percent">{t('reservationsDepositTypePercent')}</option>
+            </select>
+          </SettingsField>
+          <SettingsField label={t('reservationsCancelHours')}>
+            <input
+              type="number"
+              min={0}
+              max={168}
+              className="input"
+              value={settings.cancelHoursBefore ?? 24}
+              onChange={(e) =>
+                setSettings({ ...settings, cancelHoursBefore: Number(e.target.value) || 0 })
+              }
+            />
+          </SettingsField>
+        </div>
         <SettingsField label={t('reservationsPolicies')}>
           <textarea
             className="input min-h-24"

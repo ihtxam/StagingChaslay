@@ -176,9 +176,12 @@ export function isTerminalOrderStatus(status?: string | null): boolean {
  */
 export function isOpenWebPosOrder(o: MerchantOrder): boolean {
   if (isCancelledOrder(o)) return false;
-  if (!isOnlineShopOrder(o) && isAwaitingPaymentOrder(o)) return true;
+  // Shop / 3P / WEB- tickets stay on All + Active until fulfillment closes.
+  // Do not treat pending-payment or scheduled pickup as a finished POS sale.
+  if (isOnlineShopOrder(o)) return !isTerminalOrderStatus(o.status);
+  if (isAwaitingPaymentOrder(o)) return true;
   if (isTerminalOrderStatus(o.status)) return false;
-  if (!isOnlineShopOrder(o) && isPaidOrder(o)) return false;
+  if (isPaidOrder(o)) return false;
   return true;
 }
 
@@ -451,6 +454,7 @@ export function canEditPayment(o: MerchantOrder): boolean {
     status === 'completed' ||
     status === 'partially_refunded' ||
     pay === 'completed' ||
+    pay === 'paid' ||
     pay === 'partially_refunded'
   );
 }
@@ -735,6 +739,37 @@ export function formatOrderPaymentDisplay(
   return tenders
     .map((row) => paymentMethodLabel(row.method, t))
     .join(' + ');
+}
+
+/** Fulfillment already on the ticket (shop/POS), not a new field. */
+export function orderAlertFulfillmentKey(o: {
+  fulfillmentChannel?: string | null;
+  channel?: string | null;
+}): 'delivery' | 'dine_in' | 'takeaway' {
+  const raw = String(o.fulfillmentChannel || o.channel || 'takeaway')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (raw === 'delivery' || raw === 'deliver' || raw.startsWith('delivery')) return 'delivery';
+  if (raw === 'dine_in' || raw === 'dinein' || raw === 'eat_in') return 'dine_in';
+  return 'takeaway';
+}
+
+export function orderAlertFulfillmentLabel(
+  o: { fulfillmentChannel?: string | null; channel?: string | null },
+  t: (k: string) => string
+): string {
+  const key = orderAlertFulfillmentKey(o);
+  if (key === 'delivery') return t('orderAlertDelivery');
+  if (key === 'dine_in') return t('orderAlertDineIn');
+  return t('orderAlertTakeaway');
+}
+
+export function orderAlertPaidLabel(
+  o: { paymentStatus?: string | null },
+  t: (k: string) => string
+): string {
+  return isPaidOrder(o) ? t('orderAlertPaid') : t('orderAlertUnpaid');
 }
 
 /** Paid/unpaid + tender for new-order alert popups (ASAP line). */

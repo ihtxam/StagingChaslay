@@ -32,6 +32,12 @@ router.get('/tickets/:ticketId', async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     const ticket = await SupportTicketService.getTicketWithMessages(req.params.ticketId, { merchantId });
+    try {
+      const { PlatformMessageService } = await import('@/services/platform-message.service');
+      await PlatformMessageService.acknowledgeMerchantTicketAlert(merchantId, ticket.id);
+    } catch (ackErr) {
+      console.warn('[support] ticket alert ack failed:', ackErr);
+    }
     res.json({ success: true, ticket });
   } catch (error) {
     res.status(404).json({ error: error instanceof Error ? error.message : 'Ticket not found' });
@@ -107,6 +113,25 @@ router.post('/tickets/:ticketId/reply', upload.single('attachment'), async (req:
     res.json({ success: true, ticket });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to send reply' });
+  }
+});
+
+router.post('/tickets/:ticketId/close', async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const ticket = await SupportTicketService.closeTicket(
+      req.params.ticketId,
+      {
+        authorRole: 'merchant',
+        authorId: req.user?.staffId || req.user?.id,
+        authorName: req.user?.name,
+      },
+      { merchantId }
+    );
+    res.json({ success: true, ticket });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to close ticket';
+    res.status(message === 'Ticket not found' ? 404 : 400).json({ error: message });
   }
 });
 

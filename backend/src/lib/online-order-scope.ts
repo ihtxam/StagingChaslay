@@ -23,6 +23,7 @@ export function onlineOrderScopeCondition(): SQL {
       "qr_table",
       "justeat",
       "ubereats",
+      "phone",
     ]),
     sql`lower(coalesce(${schema.orders.fulfillmentChannel}, '')) in ('web_shop', 'online')`,
     sql`lower(coalesce(${schema.orders.fulfillmentChannel}, '')) like '%uber%'`,

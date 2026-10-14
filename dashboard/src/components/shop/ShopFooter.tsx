@@ -23,8 +23,16 @@ type ShopFooterInfo = {
   giftCards?: { enabled?: boolean };
   language?: string;
   reservationsEnabled?: boolean;
+  cateringEnabled?: boolean;
   googleReserveUrl?: string | null;
   googleOrderUrl?: string | null;
+  googleReviewUrl?: string | null;
+  googleReserveJsonLd?: Record<string, unknown> | null;
+  phoneOrdering?: {
+    enabled?: boolean;
+    phoneNumber?: string | null;
+    hours?: string | null;
+  } | null;
 };
 
 function formatAddressLine(info: ShopFooterInfo): string | null {
@@ -67,8 +75,12 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
           giftCards: data.giftCards || undefined,
           language: data.language || undefined,
           reservationsEnabled: !!data.reservationsEnabled,
+          cateringEnabled: !!data.cateringEnabled,
           googleReserveUrl: data.googleReserveUrl || null,
           googleOrderUrl: data.googleOrderUrl || null,
+          googleReviewUrl: data.googleReviewUrl || null,
+          googleReserveJsonLd: data.googleReserveJsonLd || null,
+          phoneOrdering: data.phoneOrdering || null,
         });
       } catch {
         if (!cancelled) setInfo(null);
@@ -83,6 +95,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
   const menuPath = `${basePath}/menu`.replace(/\/+/g, '/');
   const giftPath = `${merchantWide}/gift-cards`.replace(/\/+/g, '/');
   const locationsPath = `${merchantWide}/locations`.replace(/\/+/g, '/');
+  const registerPath = `${merchantWide}/register`.replace(/\/+/g, '/');
   const homePath = merchantWide || basePath || '/';
 
   const hoursLocale = info?.language || locale || 'en';
@@ -101,6 +114,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
   const giftCardsOn = info.giftCards?.enabled === true;
   const googleOrder = String(info.googleOrderUrl || '').trim();
   const googleReserve = String(info.googleReserveUrl || '').trim();
+  const googleReview = String(info.googleReviewUrl || '').trim();
   const reservePath = `${basePath}/reservations`.replace(/\/+/g, '/');
 
   return (
@@ -174,10 +188,37 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
                   {t('shopFooterGoogleOrder')}
                 </a>
               ) : null}
+              {info.cateringEnabled ? (
+                <Link to={`${basePath}/menu?mode=catering`.replace(/\/+/g, '/')} className="text-stone-200 hover:text-white hover:underline">
+                  {t('cateringShopNav')}
+                </Link>
+              ) : null}
               {info.reservationsEnabled ? (
                 <Link to={reservePath} className="text-stone-200 hover:text-white hover:underline">
                   {t('shopReservations')}
                 </Link>
+              ) : null}
+              {info.phoneOrdering?.enabled && (info.phoneOrdering.phoneNumber || info.phone) ? (
+                <a
+                  href={`tel:${String(info.phoneOrdering.phoneNumber || info.phone || '').replace(/\s+/g, '')}`}
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('phoneOrderingShopCta')}
+                  {info.phoneOrdering.hours ? ` · ${info.phoneOrdering.hours}` : ''}
+                </a>
+              ) : null}
+              <Link to={registerPath} className="text-stone-200 hover:text-white hover:underline">
+                {t('shopFooterJoinUs')}
+              </Link>
+              {info.googleReviewUrl ? (
+                <a
+                  href={info.googleReviewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('shopFooterRateUs')}
+                </a>
               ) : null}
               {googleReserve ? (
                 <a
@@ -187,6 +228,16 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
                   className="text-stone-200 hover:text-white hover:underline"
                 >
                   {t('shopFooterGoogleReserve')}
+                </a>
+              ) : null}
+              {googleReview ? (
+                <a
+                  href={googleReview}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-stone-200 hover:text-white hover:underline"
+                >
+                  {t('shopFooterGoogleReview')}
                 </a>
               ) : null}
               {giftCardsOn ? (
@@ -215,6 +266,12 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
       </div>
 
       <ShopPlatformFooterBand />
+      {info.googleReserveJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(info.googleReserveJsonLd) }}
+        />
+      ) : null}
     </footer>
   );
 }

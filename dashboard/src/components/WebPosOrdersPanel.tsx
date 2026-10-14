@@ -35,6 +35,7 @@ import {
   canAdminCollectPayment,
   canCancelPosAwaitingOrder,
   canCollectPayment,
+  canEditPayment,
   canMarkReadyOrder,
   canShowAwaitingPaymentBadge,
   showsKitchenFulfillmentStages,
@@ -70,8 +71,10 @@ import {
   buildKdsReadyMap,
   fetchKdsTicketStatus,
   lineKitchenReady,
-  type KdsBoardTicket,
+  isKdsPollingStopped,
 } from '@/lib/kds-push';
+import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
+import { asArray } from '@/lib/safe-iterables';
 import {
   kitchenProgressFromLines,
   kitchenTicketKeyBase,
@@ -99,20 +102,20 @@ import {
   mergeOrdersWithOnlineForAllFilter,
   onlineOrderAsPosOrder,
 } from '@/lib/webpos-orders-merge';
+import { posBoardItemTimeMs } from '@/lib/webpos-orders-board-sort';
 
-function toMs(raw: string | number | Date | null | undefined): number {
-  if (raw == null || raw === '') return 0;
-  const n = new Date(raw as string | number | Date).getTime();
-  return Number.isFinite(n) ? n : 0;
+function orderTimeMs(
+  o: PosOrderForReceipt & {
+    completedAt?: string | number | Date | null;
+    createdAt?: string | number | Date | null;
+  },
+  nowMs = Date.now()
+) {
+  return posBoardItemTimeMs({ createdAt: o.createdAt, completedAt: o.completedAt }, nowMs);
 }
 
-/** Newest activity first — prefer the later of created/completed. */
-function orderTimeMs(o: PosOrderForReceipt & { completedAt?: string | number | Date | null; createdAt?: string | number | Date | null }) {
-  return Math.max(toMs(o.completedAt), toMs(o.createdAt));
-}
-
-function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null }) {
-  return Math.max(toMs(h.updatedAt), toMs(h.createdAt));
+function heldTimeMs(h: { updatedAt?: string | null; createdAt?: string | null }, nowMs = Date.now()) {
+  return posBoardItemTimeMs({ createdAt: h.createdAt, updatedAt: h.updatedAt }, nowMs);
 }
 
 function heldTicketKeys(h: HeldRow): string[] {
@@ -300,6 +303,8 @@ type Props = {
   canGandolaPurge?: boolean;
   /** When true, poll KDS for per-line ready state on held kitchen tickets */
   kitchenEnabled?: boolean;
+  /** Paid KDS addon — skip board polls when off */
+  kdsAddonEnabled?: boolean;
   /** Merchant Settings — auto-print receipt after collect payment */
   autoPrintReceipt?: boolean;
   /** Merchant tax mode — drives VAT breakdown in order detail */
@@ -339,7 +344,7 @@ function canCancelOrder(o: PosOrder): boolean {
   const status = (o.status || '').toLowerCase();
   const pay = (o.paymentStatus || '').toLowerCase();
   if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(status)) return false;
-  if (['cancelled', 'refunded', 'completed', 'partially_refunded'].includes(pay)) return false;
+  if (['cancelled', 'refunded', 'completed', 'paid', 'partially_refunded'].includes(pay)) return false;
   return true;
 }
 
@@ -360,20 +365,6 @@ function matchesChannelFilter(
       ? resolveHeldChannel({ channel: o.channel, cartJson: o.cartJson })
       : o.channel || (o as { fulfillmentChannel?: string | null }).fulfillmentChannel || 'takeaway';
   return ch === filter;
-}
-
-function canEditPayment(o: PosOrder): boolean {
-  const status = (o.status || '').toLowerCase();
-  const pay = (o.paymentStatus || '').toLowerCase();
-  if (['cancelled', 'refunded'].includes(status) || ['cancelled', 'refunded'].includes(pay)) {
-    return false;
-  }
-  return (
-    status === 'completed' ||
-    status === 'partially_refunded' ||
-    pay === 'completed' ||
-    pay === 'partially_refunded'
-  );
 }
 
 /** Pay-later / awaiting_payment POS orders that still need collection at pickup. */
@@ -450,8 +441,8 @@ type ListItem =
   | { kind: 'held'; held: HeldRow }
   | { kind: 'order'; order: PosOrder };
 
-function listItemTimeMs(item: ListItem): number {
-  return item.kind === 'held' ? heldTimeMs(item.held) : orderTimeMs(item.order);
+function listItemTimeMs(item: ListItem, nowMs = Date.now()): number {
+  return item.kind === 'held' ? heldTimeMs(item.held, nowMs) : orderTimeMs(item.order, nowMs);
 }
 
 const PAGE_SIZE_LIST = 10;
@@ -545,6 +536,7 @@ export default function WebPosOrdersPanel({
   onOpenDeliveryHub,
   canGandolaPurge = false,
   kitchenEnabled = true,
+  kdsAddonEnabled,
   autoPrintReceipt = true,
   taxIncludedInPrice,
   vatAfterDiscount = true,
@@ -603,21 +595,33 @@ export default function WebPosOrdersPanel({
     Record<string, { ready: number; sent: number; readyLineIds: string[] }>
   >({});
 
+  const kdsAddonOn = readAddonLicenseFlag(kdsAddonEnabled);
+
   useEffect(() => {
     if (!open || !kitchenEnabled) return;
+    if (!shouldPollLicensedAddon(kdsAddonOn, isKdsPollingStopped())) return;
     let cancelled = false;
+    let timer = 0;
     const sync = async () => {
+      if (cancelled || isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       const board = await fetchKdsBoardStatus();
       if (cancelled) return;
+      if (isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       setKdsReadyMap(buildKdsReadyMap(board));
     };
     void sync();
-    const timer = window.setInterval(() => void sync(), 4000);
+    timer = window.setInterval(() => void sync(), 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [open, refreshToken, kitchenEnabled]);
+  }, [open, refreshToken, kitchenEnabled, kdsAddonOn]);
 
   useEffect(() => {
     try {
@@ -663,7 +667,7 @@ export default function WebPosOrdersPanel({
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
-    const params = new URLSearchParams({ limit: '80', from: todayIso(), to: todayIso() });
+    const params = new URLSearchParams({ limit: '200', from: todayIso(), to: todayIso() });
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
@@ -912,13 +916,8 @@ export default function WebPosOrdersPanel({
     for (const h of heldBucket) items.push({ kind: 'held', held: h });
     for (const o of activeBucket) items.push({ kind: 'order', order: o });
     for (const o of doneBucket) items.push({ kind: 'order', order: o });
-    items.sort((a, b) => {
-      if (view === 'active') {
-        if (a.kind === 'held' && b.kind !== 'held') return -1;
-        if (b.kind === 'held' && a.kind !== 'held') return 1;
-      }
-      return listItemTimeMs(b) - listItemTimeMs(a);
-    });
+    const now = Date.now();
+    items.sort((a, b) => listItemTimeMs(b, now) - listItemTimeMs(a, now));
     return items;
   }, [held, ordersForList, statusFilter, channelFilter, search]);
 
@@ -942,12 +941,12 @@ export default function WebPosOrdersPanel({
 
   const refreshKdsHeld = useCallback(
     async (rows: HeldRow[]) => {
-      if (!kitchenEnabled) {
+      if (!kitchenEnabled || !shouldPollLicensedAddon(kdsAddonOn, isKdsPollingStopped())) {
         setKdsByTicket({});
         return;
       }
       const keys = new Set<string>();
-      for (const h of rows) {
+      for (const h of asArray<HeldRow>(rows)) {
         if (h.status !== 'sent_to_kitchen') continue;
         const meta = parseHeldCartJson(h.cartJson);
         const key = resolveKitchenTicketKey(meta);
@@ -972,7 +971,7 @@ export default function WebPosOrdersPanel({
       );
       setKdsByTicket(next);
     },
-    [kitchenEnabled]
+    [kitchenEnabled, kdsAddonOn]
   );
 
   const heldKitchenProgress = useCallback(
@@ -1763,7 +1762,7 @@ export default function WebPosOrdersPanel({
                       heldMeta.ticketDisplay ||
                       h.label ||
                       '—';
-                    const age = formatOrderAge(heldTimeMs(h) || nowMs, nowMs);
+                    const age = formatOrderAge(heldTimeMs(h, nowMs), nowMs);
                     const heldCh = resolveHeldChannel({ channel: h.channel, cartJson: h.cartJson });
                     return (
                       <button
@@ -1817,7 +1816,7 @@ export default function WebPosOrdersPanel({
                   const o = item.order;
                   const refs = orderPublicRefs(o);
                   const idLabel = orderListPrimaryLabel(o);
-                  const age = formatOrderAge(orderTimeMs(o) || nowMs, nowMs);
+                  const age = formatOrderAge(orderTimeMs(o, nowMs), nowMs);
                   const itemCount = Array.isArray(o.items) ? o.items.length : 0;
                   const purgeSelected = purgeMode && selectedPurgeIds.has(o.id);
                   return (
@@ -2407,13 +2406,29 @@ export default function WebPosOrdersPanel({
                       compact
                     />
                   </div>
-                  {selectedOrder.paymentMethod ? (
-                    <p className="mt-2 text-sm text-stone-600">
-                      {t('webPosPaymentMethod')}:{' '}
-                      <span className="font-semibold">
-                        {formatOrderPaymentDisplay(selectedOrder, t, locale)}
-                      </span>
-                    </p>
+                  {selectedOrder.paymentMethod ||
+                  (canEditPayment(selectedOrder) && !isInvoiceOrder(selectedOrder) && !isOnlineMode) ? (
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      {selectedOrder.paymentMethod ? (
+                        <p className="min-w-0 text-sm text-stone-600">
+                          {t('webPosPaymentMethod')}:{' '}
+                          <span className="font-semibold">
+                            {formatOrderPaymentDisplay(selectedOrder, t, locale)}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="min-w-0 text-sm text-stone-500">{t('webPosPaymentMethod')}</p>
+                      )}
+                      {canEditPayment(selectedOrder) && !isInvoiceOrder(selectedOrder) && !isOnlineMode ? (
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                          onClick={() => startEditPayment(selectedOrder)}
+                        >
+                          {t('webPosEditPayment')}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                   {selectedOrder.cancelReason ? (
                     <p className="mt-2 text-sm text-rose-700">

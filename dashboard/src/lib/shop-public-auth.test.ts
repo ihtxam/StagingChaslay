@@ -14,5 +14,11 @@ assert.equal(isPublicShopHost('shop.chaslay.com', '/brazza/menu'), true);
 assert.equal(isPublicShopHost('kebabvillage.com', '/menu'), true);
 assert.equal(isPublicShopHost('app.rebornsense.com', '/merchant'), false);
 assert.equal(isPublicShopHost('app.rebornsense.com', '/login'), false);
+assert.equal(
+  isPublicShopHost('app.rebornsense.com', '/merchant/sales/reservations'),
+  false,
+  'merchant reservations board must send Authorization'
+);
+assert.equal(isPublicShopHost('app.rebornsense.com', '/merchant/settings'), false);
 
 console.log('shop-public-auth.test.ts: ok');

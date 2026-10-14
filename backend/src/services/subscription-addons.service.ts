@@ -1,5 +1,6 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { addonInUseDeleteError } from "@/lib/subscription-package-delete";
 import { PlatformResellerService } from "@/services/platform-reseller.service";
 
 export type AddonInput = {
@@ -165,15 +166,29 @@ export class SubscriptionAddonsService {
     return row!;
   }
 
+  /** Hard-delete an add-on. Blocked when merchants or payments still reference it. */
   static async remove(id: string) {
     const db = getDb();
-    await this.getById(id);
-    const [row] = await db
-      .update(schema.subscriptionAddons)
-      .set({ isActive: false, isPublic: false, updatedAt: new Date() })
-      .where(eq(schema.subscriptionAddons.id, id))
-      .returning();
-    return row!;
+    const addon = await this.getById(id);
+
+    const [subscriberUse] = await db
+      .select({ n: count() })
+      .from(schema.merchantAddonSubscriptions)
+      .where(eq(schema.merchantAddonSubscriptions.addonId, id));
+    const [paymentUse] = await db
+      .select({ n: count() })
+      .from(schema.subscriptionAddonPayments)
+      .where(eq(schema.subscriptionAddonPayments.addonId, id));
+
+    const blocked = addonInUseDeleteError(
+      addon.name,
+      Number(subscriberUse?.n ?? 0),
+      Number(paymentUse?.n ?? 0)
+    );
+    if (blocked) throw new Error(blocked);
+
+    await db.delete(schema.subscriptionAddons).where(eq(schema.subscriptionAddons.id, id));
+    return { deleted: true, id };
   }
 
   static async listActiveForMerchant(merchantId: string) {

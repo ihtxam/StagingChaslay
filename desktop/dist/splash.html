@@ -9,7 +9,6 @@
         color-scheme: dark;
         --bg: #17252b;
         --text: #faf8f3;
-        --accent: #800020;
       }
       * {
         box-sizing: border-box;
@@ -40,6 +39,12 @@
         user-select: none;
         -webkit-user-drag: none;
       }
+      .icon {
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+        border-radius: 12px;
+      }
       .tagline {
         font-size: 0.95rem;
         letter-spacing: 0.02em;
@@ -62,9 +67,39 @@
   </head>
   <body>
     <div class="splash" role="status" aria-live="polite" aria-label="Starting RebornPOS">
-      <img src="brand/reborn-logo-white.png" width="220" height="202" alt="RebornPOS" />
-      <p class="tagline">Restaurant POS &amp; online ordering</p>
+      <img id="splash-logo" src="brand/reborn-logo-white.png" width="220" height="202" alt="RebornPOS" />
+      <p id="splash-tagline" class="tagline">Restaurant POS &amp; online ordering</p>
       <div class="spinner" aria-hidden="true"></div>
     </div>
+    <script>
+      (function () {
+        var fallback = "https://app.rebornsense.com";
+        var origin =
+          (window.__REBORN_POS_ORIGIN__ ||
+            new URLSearchParams(location.search).get("origin") ||
+            fallback).replace(/\/+$/, "");
+        fetch(origin + "/api/public/desktop-branding")
+          .then(function (res) {
+            if (!res.ok) throw new Error("branding");
+            return res.json();
+          })
+          .then(function (data) {
+            var b = (data && data.branding) || {};
+            var logo = document.getElementById("splash-logo");
+            var tagline = document.getElementById("splash-tagline");
+            if (b.backgroundColor) {
+              document.documentElement.style.setProperty("--bg", b.backgroundColor);
+              document.body.style.background = b.backgroundColor;
+            }
+            if (logo && b.splashUrl) {
+              logo.src = b.splashUrl;
+              logo.alt = b.appName || "RebornPOS";
+            }
+            if (tagline && b.tagline) tagline.textContent = b.tagline;
+            if (b.appName) document.title = b.appName;
+          })
+          .catch(function () {});
+      })();
+    </script>
   </body>
 </html>

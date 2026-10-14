@@ -25,7 +25,12 @@ import {
   normalizeCateringConfig,
 } from "@/lib/catering-config";
 import { computeCateringLineUnitPrice, scaleModifierPrice, resolveCateringComboPricing } from "@/lib/catering-pricing";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
+import { getPhoneOrderingShopPublic } from "@/lib/phone-ordering-settings";
 import { isVacationActive, isDateInVacationPeriods, vacationPublicPayload, VACATION_BLOCK_MESSAGE, NOT_ACCEPTING_ORDERS_MESSAGE, NOT_ACCEPTING_RESERVATIONS_MESSAGE } from "@/lib/vacation";
+import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
+import { buildGoogleReserveJsonLd, shopReservationsUrl } from "@/lib/google-reserve-jsonld";
+import { resolveShopPublicHost } from "@/lib/brand";
 import { geocodeQuery } from "@/lib/geocode";
 import { autocompleteAddress, suggestHouseNumbers } from "@/lib/location-service";
 import { OffersService } from "@/services/offers.service";
@@ -56,7 +61,7 @@ import {
   buildCategoryDeliveryPricingMap,
   resolveShopItemDeliveryMarkup,
 } from "@/lib/shop-delivery-pricing";
-import { isMerchantFulfillmentChannelEnabled } from "@/lib/merchant-channels";
+import { isFulfillmentChannelAllowedForSource } from "@/lib/merchant-channels";
 import { normalizeTableQrSettings } from "@/lib/table-qr-settings";
 import { verifyTableAccess } from "@/lib/table-qr-token";
 import { checkShopOrderRateLimit } from "@/lib/shop-rate-limit";
@@ -76,6 +81,7 @@ import {
 import { withShopCatalogSchemaRetry } from "@/lib/ensure-merchant-schema";
 import { publicShopDbError } from "@/lib/public-shop-error";
 import { resolveSettings as resolveReservationSettings } from "@/services/reservation.service";
+import { publicGoogleReviewUrl } from "@/lib/pos-print-settings";
 
 const router = Router();
 
@@ -694,6 +700,7 @@ function publicReservationGuestLinks(
     googleReserveUrl: s.googleReserveUrl,
     googleOrderUrl: s.googleOrderUrl,
     photoMenuEnabled: s.photoMenuEnabled !== false,
+    googleReviewUrl: publicGoogleReviewUrl(merchant.posPrintSettings),
   };
 }
 
@@ -703,6 +710,19 @@ function shopPageMerchantPayload(
   seo: ReturnType<typeof shopSeoFromMerchant>
 ) {
   const reservationLinks = publicReservationGuestLinks(merchant);
+  const print = normalizePosPrintSettings(merchant.posPrintSettings);
+  const reviewUrl = String(print.receiptGoogleReviewsUrl || "").trim();
+  const shopHost = resolveShopPublicHost();
+  const shopUrl = merchant.customDomain
+    ? `https://${String(merchant.customDomain).replace(/^https?:\/\//, "")}`
+    : merchant.slug
+      ? `https://${shopHost}/${merchant.slug}`
+      : "";
+  const reserveUrl = shopReservationsUrl({
+    shopUrl,
+    explicitReserveUrl: reservationLinks.googleReserveUrl,
+    publish: resolveReservationSettings(merchant.reservationSettings).googleReservePublish !== false,
+  });
   return {
     id: merchant.id,
     name: merchant.name,
@@ -719,12 +739,30 @@ function shopPageMerchantPayload(
     phone: merchant.phone,
     email: merchant.email,
     reservationsEnabled: !!merchant.reservationsEnabled,
+    cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
     giftCards: ShopGiftCardService.publicSettings(ShopGiftCardService.settingsFromMerchant(merchant)),
     acceptingOrders: merchant.acceptingOrders !== false,
     acceptingReservations: merchant.acceptingReservations !== false,
     vacation: vacationPublicPayload(merchant.vacationSettings),
     language: merchant.shopLanguage || merchant.panelLanguage || "en",
-    ...reservationLinks,
+    googleReviewUrl: reviewUrl.startsWith("http") ? reviewUrl : reviewUrl ? `https://${reviewUrl}` : null,
+    googleReserveJsonLd: reserveUrl
+      ? buildGoogleReserveJsonLd({
+          name: merchant.name,
+          address: merchant.address,
+          city: merchant.city,
+          country: merchant.country,
+          phone: merchant.phone,
+          reserveUrl,
+          image: merchant.shopLogoUrl,
+        })
+      : null,
+    googleReserveUrl: reserveUrl || reservationLinks.googleReserveUrl,
+    googleOrderUrl: reservationLinks.googleOrderUrl,
+    photoMenuEnabled: reservationLinks.photoMenuEnabled,
+    phoneOrdering: getPhoneOrderingShopPublic(
+      (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
+    ),
   };
 }
 
@@ -755,7 +793,7 @@ async function resolveShopLocationId(
 }
 
 function channelEnabled(merchant: typeof schema.merchants.$inferSelect, channel: FulfillmentChannel) {
-  return isMerchantFulfillmentChannelEnabled(merchant, channel);
+  return isFulfillmentChannelAllowedForSource(merchant, channel, "shop");
 }
 
 function mapChannelKey(channel: FulfillmentChannel): "takeaway" | "dine_in" | "delivery" {
@@ -897,6 +935,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
           return v === "popup_start" || v === "menu" || v === "checkout" ? v : "checkout";
         })(),
         menuShowProductImages: merchant.menuShowProductImages !== false,
+        menuShowUpsells: (merchant as { menuShowUpsells?: boolean }).menuShowUpsells !== false,
         menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
         cartLayout: (() => {
           const v = String(merchant.cartLayout || "")
@@ -917,7 +956,17 @@ router.get("/:slug", async (req: Request, res: Response) => {
           ShopGiftCardService.settingsFromMerchant(merchant)
         ),
         reservationsEnabled: !!merchant.reservationsEnabled,
-        ...publicReservationGuestLinks(merchant),
+        cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
+        ...(() => {
+          const page = shopPageMerchantPayload(req, merchant, shopSeoFromMerchant(req, merchant));
+          return {
+            ...publicReservationGuestLinks(merchant),
+            googleReviewUrl: page.googleReviewUrl,
+            googleReserveJsonLd: page.googleReserveJsonLd,
+            googleReserveUrl: page.googleReserveUrl,
+            phoneOrdering: page.phoneOrdering,
+          };
+        })(),
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
         vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -1205,10 +1254,15 @@ router.get("/:slug/locations", async (req: Request, res: Response) => {
         limit: 100,
       })
     );
-    const hasCatering = cateringProducts.some((p) => {
-      const c = p.cateringConfig as { enabled?: boolean } | null;
-      return c?.enabled === true;
-    });
+    const merchantCateringOn = isCateringAddonEnabled(
+      (merchant as { cateringEnabled?: boolean }).cateringEnabled
+    );
+    const hasCatering =
+      merchantCateringOn &&
+      cateringProducts.some((p) => {
+        const c = p.cateringConfig as { enabled?: boolean } | null;
+        return c?.enabled === true;
+      });
     res.json({
       success: true,
       hasCatering,
@@ -2081,6 +2135,7 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
       source: "web",
       customerId: auth.customerId || null,
       campaignCode: req.body.campaignCode || req.body.campaign || null,
+      policyAccepted: req.body.policyAccepted === true,
     });
     res.status(201).json({
       success: true,
@@ -2092,6 +2147,7 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
         partySize: reservation.partySize,
         reservedAt: reservation.reservedAt,
         durationMinutes: reservation.durationMinutes,
+        extras: reservation.extras || null,
       },
     });
   } catch (error) {
@@ -2456,6 +2512,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       orderSource: requestedOrderSource,
       kioskToken,
       badgeNumber,
+      comoDiscountAmount: comoDiscountAmountRaw,
     } = req.body as {
       items: Array<{
         productId: string;
@@ -2489,6 +2546,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       orderSource?: string;
       kioskToken?: string;
       badgeNumber?: string;
+      comoDiscountAmount?: number;
     };
 
     if (scheduledFor) {
@@ -2807,7 +2865,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 
       let comboSelections: (typeof lineItems)[number]["comboSelections"] = [];
       let comboSurcharge = 0;
-      const cateringOn = isCateringProduct(product.productType, product.cateringConfig);
+      const cateringOn =
+        isCateringAddonEnabled((merchant as { cateringEnabled?: boolean }).cateringEnabled) &&
+        isCateringProduct(product.productType, product.cateringConfig);
       const cateringCfg = normalizeCateringConfig(product.cateringConfig);
       let cateringGuests: number | null = null;
       if (cateringOn) {
@@ -3213,8 +3273,11 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       giftCardDiscount = roundMoney2(Math.min(giftCardPreviewBalance, preGiftTotal));
     }
     const orderNumber = await generateWebOrderNumber(db, merchant.id);
+    const comoDiscount = isKioskOrder
+      ? roundMoney2(Math.max(0, Math.min(Number(comoDiscountAmountRaw) || 0, preGiftTotal)))
+      : 0;
     // Offer + voucher + points + gift card discount apply to food (+ delivery/tax for points); tip and card fee remain payable
-    const preCardTotal = Math.max(0, preGiftTotal - giftCardDiscount);
+    const preCardTotal = Math.max(0, preGiftTotal - giftCardDiscount - comoDiscount);
     const cardFeeFixed = Number(merchant.onlineCardFeeFixed || 0) || 0;
     const cardFeePercent = Number(merchant.onlineCardFeePercent || 0) || 0;
     const cardFee =
@@ -3238,6 +3301,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         giftCardDiscount > 0
           ? `[Gift card: −CHF ${giftCardDiscount.toFixed(2)}]`
           : "",
+        comoDiscount > 0 ? `[Como: −CHF ${comoDiscount.toFixed(2)}]` : "",
         roundAdj !== 0 ? `[Rounding ${roundAdj > 0 ? "+" : ""}${roundAdj.toFixed(2)}]` : "",
       ]
         .filter(Boolean)
@@ -3356,7 +3420,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         status: initialOrderStatus,
         subtotal: subtotal.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
-        discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount + giftCardDiscount).toFixed(2),
+        discountAmount: roundMoney2(offerDiscount + voucherDiscount + pointsDiscount + giftCardDiscount + comoDiscount).toFixed(2),
         deliveryFee: deliveryFee.toFixed(2),
         tipAmount: tip.toFixed(2),
         cardFee: cardFee.toFixed(2),
@@ -3718,6 +3782,7 @@ router.get("/:slug/orders/:orderId", async (req: Request, res: Response) => {
           phone: merchant.phone,
           shopLogoUrl: merchant.shopLogoUrl || null,
           cmsHomepageEnabled: !!merchant.cmsHomepageEnabled,
+          googleReviewUrl: publicGoogleReviewUrl(merchant.posPrintSettings),
         },
       },
     });

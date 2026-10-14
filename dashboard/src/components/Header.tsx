@@ -2,8 +2,10 @@ import { Menu, Bell, Moon, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
+import { displaySidebarShopName } from '@/lib/brand';
 import { useTheme } from '@/lib/theme';
 import { useI18n } from '@/lib/i18n';
+import { pinGateSessionMerchantName } from '@/lib/webpos-pin-gate-brand';
 import AcceptingMenu from '@/components/AcceptingMenu';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
 import { LocationSwitcherChip } from '@/components/merchant/LocationPicker';
@@ -19,6 +21,8 @@ interface HeaderProps {
   compact?: boolean;
   /** Active register user (PIN session when clocked in, else JWT account). */
   registerDisplay?: { name: string; roleLabel: string };
+  /** Store name from settings (`name` / businessName). Shown next to the hamburger. */
+  storeName?: string | null;
 }
 
 export default function Header({
@@ -27,12 +31,15 @@ export default function Header({
   showAcceptingMenu = false,
   compact = false,
   registerDisplay,
+  storeName,
 }: HeaderProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
   const { user, impersonating, stopImpersonation } = useAuthStore();
   const { theme, toggleTheme } = useTheme();
   const platformUi = usePlatformMessagesUi();
+  const rawStoreName = (storeName || pinGateSessionMerchantName(user)).trim();
+  const storeLabel = rawStoreName ? displaySidebarShopName(rawStoreName) : '';
 
   const backToSuperadmin = () => {
     if (!stopImpersonation()) {
@@ -56,6 +63,14 @@ export default function Header({
           >
             <Menu className="w-5 h-5" />
           </button>
+          {storeLabel ? (
+            <span
+              className="min-w-0 max-w-[min(16rem,50vw)] truncate text-sm font-semibold text-[var(--text)]"
+              title={storeLabel}
+            >
+              {storeLabel}
+            </span>
+          ) : null}
           <div className="min-w-0 flex-1 flex items-center justify-end gap-1.5">
             <OnScreenKeyboardToggle className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] hover:bg-[var(--bg-muted)] data-[active=true]:border-teal-400 data-[active=true]:bg-teal-50 dark:data-[active=true]:bg-teal-950/40" />
             <MerchantCompactStatusRow
@@ -81,6 +96,11 @@ export default function Header({
             <Menu className="w-5 h-5" />
           </button>
           <div className="min-w-0">
+            {storeLabel ? (
+              <p className="text-[11px] font-semibold truncate text-[var(--text)]" title={storeLabel}>
+                {storeLabel}
+              </p>
+            ) : null}
             <h1 className="text-base sm:text-lg font-semibold truncate">{title}</h1>
             {impersonating ? (
               <p className="text-[11px] text-amber-800 dark:text-amber-200 truncate">

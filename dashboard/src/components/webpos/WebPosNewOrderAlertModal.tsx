@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, CalendarClock, Zap } from 'lucide-react';
+import { CalendarClock, Zap } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
@@ -13,6 +13,7 @@ import {
 } from '@/lib/order-management';
 import { startOrderAlertLoop } from '@/lib/order-alert';
 import type { OnlineOrder } from '@/components/WebPosOnlineOrdersPanel';
+import NewOrderAlertHeader from '@/components/webpos/NewOrderAlertHeader';
 
 type Props = {
   order: OnlineOrder | null;
@@ -43,19 +44,14 @@ export default function WebPosNewOrderAlertModal({
   const { t, formatDateTime } = useI18n();
 
   useEffect(() => {
-    if (order) {
+    if (order && !acknowledgeOnly) {
       startOrderAlertLoop(4500);
     }
-  }, [order?.id]);
+  }, [order?.id, acknowledgeOnly]);
 
   if (!order) return null;
 
   const money = (n: string | number) => `CHF ${Number(n || 0).toFixed(2)}`;
-  const channelLabel = (ch?: string | null) => {
-    if (ch === 'delivery') return t('delivery');
-    if (ch === 'dine_in') return t('dineIn');
-    return t('takeaway');
-  };
   const items = order.items || [];
   const itemPreview = items.slice(0, 4);
   const platform = orderPlatformLabel(asMerchantOrder(order), t);
@@ -72,27 +68,15 @@ export default function WebPosNewOrderAlertModal({
       aria-modal="true"
       aria-labelledby="webpos-new-order-alert-title"
     >
-      <div className="w-full max-w-lg rounded-2xl border-2 border-violet-300 bg-white p-5 shadow-2xl ring-4 ring-violet-400/50 animate-[pulse_2s_ease-in-out_3]">
-        <div className="flex items-start gap-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
-            <Bell size={26} className="animate-pulse" aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id="webpos-new-order-alert-title" className="text-xl font-bold text-stone-900">
-                {t('webPosNewOrderAlert')}
-              </h2>
-              <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${platformClass}`}>
-                {platform}
-              </span>
-            </div>
-            {queueCount > 1 ? (
-              <p className="mt-0.5 text-xs font-semibold text-violet-700">
-                {t('webPosNewOrderAlertQueue').replace('{n}', String(queueCount))}
-              </p>
-            ) : null}
-          </div>
-        </div>
+      <div className="w-full max-w-2xl rounded-2xl border-2 border-violet-300 bg-white p-5 shadow-2xl ring-4 ring-violet-400/50 animate-[pulse_2s_ease-in-out_3]">
+        <NewOrderAlertHeader
+          titleId="webpos-new-order-alert-title"
+          platform={platform}
+          platformClass={platformClass}
+          queueCount={queueCount}
+          fulfillmentChannel={order.fulfillmentChannel}
+          paymentStatus={order.paymentStatus}
+        />
 
         <div className="mt-4 space-y-3 rounded-xl border border-violet-100 bg-violet-50/70 p-4">
           <div className="flex items-start justify-between gap-3">
@@ -101,7 +85,7 @@ export default function WebPosNewOrderAlertModal({
                 {formatOrderNumberDisplay(order.orderNumber) || order.id.slice(0, 8)}
               </p>
               <p className="mt-0.5 text-sm text-stone-600">
-                {channelLabel(order.fulfillmentChannel)} · {money(order.total)}
+                {money(order.total)}
               </p>
             </div>
             <div
@@ -163,7 +147,7 @@ export default function WebPosNewOrderAlertModal({
           disabled={busy}
           onClick={() => onAcknowledge(order)}
         >
-          {t('webPosOrderTaken')}
+          {t(acknowledgeOnly ? 'webPosOrderNoted' : 'webPosOrderTaken')}
         </button>
 
         {showWorkflowActions ? (

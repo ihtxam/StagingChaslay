@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Search, X } from 'lucide-react';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import type { MembershipPlan } from '@/lib/membership-plans';
 
@@ -127,7 +128,7 @@ export default function Members() {
       const res = await api.get('/gift-cards', { params });
       setCards(res.data.cards || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('membersLoadFailed'));
+      toastLoadError(e, t('membersLoadFailed'));
     } finally {
       setLoading(false);
     }

@@ -71,12 +71,31 @@ export function isMerchantProductSurface(raw: unknown): raw is MerchantProductSu
   return typeof raw === 'string' && MERCHANT_PRODUCT_SURFACES.includes(raw as MerchantProductSurface);
 }
 
+export function getProductSurfacePreset(
+  surface: MerchantProductSurface | string | null | undefined
+): ProductSurfacePreset {
+  if (isMerchantProductSurface(surface)) {
+    const preset = PRODUCT_SURFACE_PRESETS[surface];
+    if (preset) return preset;
+  }
+  return PRODUCT_SURFACE_PRESETS.full_pos;
+}
+
+export function listProductSurfacePresets(): Array<
+  { key: MerchantProductSurface } & ProductSurfacePreset
+> {
+  return MERCHANT_PRODUCT_SURFACES.flatMap((key) => {
+    const preset = PRODUCT_SURFACE_PRESETS[key];
+    return preset ? [{ key, ...preset }] : [];
+  });
+}
+
 export function productSurfaceNeedsPosEdition(surface: MerchantProductSurface): boolean {
   return surface === 'full_pos' || surface === 'pos_only';
 }
 
 export function productSurfacePackagingEditionNames(): string[] {
-  return MERCHANT_PRODUCT_SURFACES.map((s) => PRODUCT_SURFACE_PRESETS[s].editionName);
+  return listProductSurfacePresets().map((preset) => preset.editionName);
 }
 
 export function isProductSurfacePackagingEditionName(name: string): boolean {
@@ -109,7 +128,7 @@ export function filterEditionsForProductSurface<
   if (productSurfaceNeedsPosEdition(surface)) {
     return byCategory.filter((ed) => !isProductSurfacePackagingEditionName(ed.name));
   }
-  const targetName = PRODUCT_SURFACE_PRESETS[surface].editionName;
+  const targetName = getProductSurfacePreset(surface).editionName;
   const match = byCategory.find((ed) => ed.name === targetName);
   return match ? [match] : byCategory.filter((ed) => isProductSurfacePackagingEditionName(ed.name));
 }

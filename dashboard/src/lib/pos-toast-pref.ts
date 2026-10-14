@@ -9,6 +9,15 @@ export function readShowPosToasts(): boolean {
   }
 }
 
+/** Success/info stay quiet when the POS pref is off; payment errors still show. */
+export function shouldShowPosToast(opts: {
+  showPosToasts: boolean;
+  toastType?: string | null;
+}): boolean {
+  if (opts.showPosToasts) return true;
+  return opts.toastType === 'error';
+}
+
 export function writeShowPosToasts(enabled: boolean) {
   try {
     localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0');

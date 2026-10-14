@@ -24,7 +24,9 @@ import { BARCODE_FIELD_INPUT_CLASS } from '@/lib/barcode-wedge';
 import ProductInventoryExpiryPanel from '@/components/merchant/ProductInventoryExpiryPanel';
 import { loadItems, type InvItem } from '@/pages/merchant/inventory/shared';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { isRetailModule, normalizeBusinessModule, type BusinessModule } from '@/lib/business-module';
+import { isCateringLicensed } from '@/lib/catering-addon';
 import { showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -410,6 +412,7 @@ export default function Products() {
     copies: 1,
   });
   const [inventoryOn, setInventoryOn] = useState(false);
+  const [cateringLicensed, setCateringLicensed] = useState(false);
   const [recipeLines, setRecipeLines] = useState<Array<{ itemId: string; qty: string; name?: string; unit?: string }>>([]);
   const [recipeYield, setRecipeYield] = useState('1');
   const [invItems, setInvItems] = useState<InvItem[]>([]);
@@ -517,6 +520,7 @@ export default function Products() {
       try {
         const setRes = await api.get('/merchant/settings');
         const s = setRes.data?.settings;
+        setCateringLicensed(isCateringLicensed(s));
         setStoreName(s?.name || '');
         const ps = s?.posPrintSettings || {};
         setLabelOpts((prev) => ({
@@ -534,7 +538,7 @@ export default function Products() {
         /* optional */
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('failedLoadProducts'));
+      toastLoadError(error, t('failedLoadProducts'));
     } finally {
       setLoading(false);
     }
@@ -901,7 +905,7 @@ export default function Products() {
       ...(form.isCombo
         ? {
             cateringConfig: normalizeCateringConfig({
-              enabled: form.cateringEnabled,
+              enabled: cateringLicensed && form.cateringEnabled,
               pricingMode: form.cateringPricingMode,
               packagePrice: form.cateringPackagePrice.trim()
                 ? parseMoney(form.cateringPackagePrice)
@@ -2059,6 +2063,7 @@ export default function Products() {
                       </span>
                     </div>
                   </Field>
+                  {cateringLicensed ? (
                   <div className="rounded-md border border-dashed border-[var(--border)] p-3 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -2225,6 +2230,7 @@ export default function Products() {
                       </div>
                     ) : null}
                   </div>
+                  ) : null}
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <h3 className="text-sm font-semibold">{t('comboSteps')}</h3>

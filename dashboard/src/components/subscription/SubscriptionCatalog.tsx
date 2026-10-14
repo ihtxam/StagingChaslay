@@ -231,18 +231,18 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
     }
   };
 
-  const deactivatePlan = async (plan: Plan) => {
-    if (!confirm(`Deactivate package "${plan.name}"? Merchants will no longer see it.`)) return;
+  const deletePlan = async (plan: Plan) => {
+    if (!confirm(`Delete package "${plan.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/${apiPrefix}/plans/${plan.id}`);
-      toast.success('Package deactivated');
+      toast.success('Package deleted');
       await load();
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err
           ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
           : undefined;
-      toast.error(message || 'Failed to deactivate package');
+      toast.error(message || 'Failed to delete package');
     }
   };
 
@@ -307,18 +307,18 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
     }
   };
 
-  const deactivateAddon = async (addon: SubscriptionAddon) => {
-    if (!confirm(`Deactivate add-on "${addon.name}"?`)) return;
+  const deleteAddon = async (addon: SubscriptionAddon) => {
+    if (!confirm(`Delete add-on "${addon.name}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/${apiPrefix}/addons/${addon.id}`);
-      toast.success('Add-on deactivated');
+      toast.success('Add-on deleted');
       await load();
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err
           ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
           : undefined;
-      toast.error(message || 'Failed to deactivate add-on');
+      toast.error(message || 'Failed to delete add-on');
     }
   };
 
@@ -405,8 +405,8 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
                       <button
                         type="button"
                         className="p-1.5 rounded hover:bg-red-50 text-red-600"
-                        onClick={() => void deactivatePlan(plan)}
-                        title="Deactivate"
+                        onClick={() => void deletePlan(plan)}
+                        title="Delete"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -458,8 +458,8 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
                 <button
                   type="button"
                   className="rounded-full border border-rose-100 p-2 text-rose-600 hover:bg-rose-50"
-                  onClick={() => void deactivatePlan(plan)}
-                  title="Deactivate"
+                  onClick={() => void deletePlan(plan)}
+                  title="Delete"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -527,7 +527,8 @@ export default function SubscriptionCatalog({ apiPrefix, title, description, var
                       <button
                         type="button"
                         className="p-1.5 rounded hover:bg-red-50 text-red-600"
-                        onClick={() => void deactivateAddon(addon)}
+                        onClick={() => void deleteAddon(addon)}
+                        title="Delete"
                       >
                         <Trash2 size={16} />
                       </button>

@@ -1,6 +1,27 @@
 import api from '@/lib/api';
 import type { CartLine, PosChannel } from '@/components/webpos/types';
+import { createAddonPollGate } from '@/lib/addon-poll';
 import { kitchenTicketKeyBase, kitchenTicketKeysMatch } from '@/lib/kitchen-progress';
+import {
+  buildKdsReadyMap as buildKdsReadyMapFromPayload,
+  collectReadyLineIds as collectReadyLineIdsFromPayload,
+  matchBoardTickets as matchBoardTicketsFromPayload,
+  parseKdsBoardPayload,
+  type KdsBoardTicket,
+} from '@/lib/kds-board-parse';
+import { asArray, asStringArray } from '@/lib/safe-iterables';
+
+export { parseKdsBoardPayload, type KdsBoardTicket } from '@/lib/kds-board-parse';
+
+const kdsPollGate = createAddonPollGate();
+
+export function isKdsPollingStopped(): boolean {
+  return kdsPollGate.isStopped();
+}
+
+export function resetKdsPollingGate(): void {
+  kdsPollGate.reset();
+}
 
 export type KdsTicketStatus = {
   readyLineIds: string[];
@@ -8,15 +29,6 @@ export type KdsTicketStatus = {
   total: number;
   sent: number;
   status?: string;
-};
-
-export type KdsBoardTicket = {
-  ticketKey: string;
-  status: string;
-  completedAt?: string | null;
-  readyLineIds: string[];
-  total: number;
-  ready: number;
 };
 
 export function resolveKdsTicketKey(opts: {
@@ -39,17 +51,10 @@ export async function dismissKdsTicket(ticketKey: string): Promise<void> {
   try {
     await api.post('/merchant/kds/dismiss', { ticketKey: base });
   } catch (e) {
+    kdsPollGate.noteError(e);
     console.warn('[kds] dismiss failed', e);
   }
 }
-
-export type KdsTicketStatus = {
-  readyLineIds: string[];
-  ready: number;
-  total: number;
-  sent: number;
-  status?: string;
-};
 
 export async function pushCartLinesToKds(opts: {
   ticketKey: string;
@@ -59,7 +64,7 @@ export async function pushCartLinesToKds(opts: {
   channel?: PosChannel | null;
   lines: CartLine[];
 }): Promise<void> {
-  const items = opts.lines
+  const items = asArray<CartLine>(opts.lines)
     .filter((l) => !l.giftCard && !String(l.productId || '').startsWith('__gift_card_'))
     .map((l) => ({
       lineId: l.lineId,
@@ -83,34 +88,39 @@ export async function pushCartLinesToKds(opts: {
       items,
     });
   } catch (e) {
+    kdsPollGate.noteError(e);
     console.warn('[kds] push failed', e);
   }
 }
 
+/** Live tills call /kds/board; board-status is the same handler. */
 export async function fetchKdsBoardStatus(): Promise<KdsBoardTicket[]> {
+  if (kdsPollGate.isStopped()) return [];
   try {
-    const res = await api.get('/merchant/kds/board-status');
-    return (res.data?.tickets || []) as KdsBoardTicket[];
-  } catch {
-    return null;
+    const res = await api.get('/merchant/kds/board');
+    return parseKdsBoardPayload(res.data);
+  } catch (e) {
+    kdsPollGate.noteError(e);
+    return [];
   }
 }
 
 export async function fetchKdsTicketStatus(ticketKey: string): Promise<KdsTicketStatus | null> {
   const base = kitchenTicketKeyBase(ticketKey);
-  if (!base) return null;
+  if (!base || kdsPollGate.isStopped()) return null;
   try {
     const res = await api.get('/merchant/kds/ticket-status', {
       params: { ticketKey: base },
     });
     return {
-      readyLineIds: (res.data?.readyLineIds || []) as string[],
+      readyLineIds: asStringArray(res.data?.readyLineIds),
       ready: Number(res.data?.ready) || 0,
       total: Number(res.data?.total) || 0,
       sent: Number(res.data?.sent ?? res.data?.total) || 0,
       status: res.data?.status ? String(res.data.status) : undefined,
     };
-  } catch {
+  } catch (e) {
+    kdsPollGate.noteError(e);
     return null;
   }
 }
@@ -122,52 +132,43 @@ export async function fetchKdsReadyLineIds(ticketKey: string): Promise<string[]>
 
 /** Apply KDS ready line ids onto cart lines (sets kitchenReadyAt). */
 export function applyKdsReadyToCart(lines: CartLine[], readyLineIds: string[]): CartLine[] {
-  if (!readyLineIds.length) return lines;
-  const readySet = new Set(readyLineIds);
+  const safeLines = asArray<CartLine>(lines);
+  const safeReady = asStringArray(readyLineIds);
+  if (!safeReady.length) return safeLines;
+  const readySet = new Set(safeReady);
   let changed = false;
-  const next = lines.map((l) => {
+  const next = safeLines.map((l) => {
     if (readySet.has(l.lineId) && !l.kitchenReadyAt) {
       changed = true;
       return { ...l, kitchenReadyAt: Date.now() };
     }
     return l;
   });
-  return changed ? next : lines;
+  return changed ? next : safeLines;
 }
 
 /** Match board tickets to any of the candidate POS ticket keys. */
 export function matchBoardTickets(
-  board: KdsBoardTicket[],
-  candidateKeys: Iterable<string>
+  board: KdsBoardTicket[] | null | undefined,
+  candidateKeys: Iterable<string> | null | undefined
 ): KdsBoardTicket[] {
-  const keys = [...candidateKeys].filter(Boolean);
-  if (!keys.length || !board.length) return [];
-  return board.filter((ticket) => keys.some((key) => kitchenTicketKeysMatch(ticket.ticketKey, key)));
+  return matchBoardTicketsFromPayload(board, candidateKeys);
 }
 
 /** Build map of ticket key -> ready line ids (includes normalized base keys). */
-export function buildKdsReadyMap(tickets: KdsBoardTicket[]): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>();
-  const mergeInto = (key: string, lineIds: string[]) => {
-    if (!key) return;
-    const existing = map.get(key) || new Set<string>();
-    for (const id of lineIds) existing.add(id);
-    map.set(key, existing);
-  };
-  for (const ticket of tickets) {
-    mergeInto(ticket.ticketKey, ticket.readyLineIds);
-    mergeInto(kitchenTicketKeyBase(ticket.ticketKey), ticket.readyLineIds);
-  }
-  return map;
+export function buildKdsReadyMap(
+  tickets: KdsBoardTicket[] | null | undefined
+): Map<string, Set<string>> {
+  return buildKdsReadyMapFromPayload(tickets);
 }
 
 export function lineKitchenReady(
   lineId: string,
-  ticketKeys: string[],
+  ticketKeys: string[] | null | undefined,
   readyMap: Map<string, Set<string>>
 ): boolean {
   if (!lineId || !readyMap.size) return false;
-  for (const key of ticketKeys) {
+  for (const key of asStringArray(ticketKeys)) {
     for (const [mapKey, readySet] of readyMap) {
       if (kitchenTicketKeysMatch(key, mapKey) && readySet.has(lineId)) return true;
     }
@@ -195,12 +196,8 @@ export function cartLineKitchenReady(
   return lineKitchenReady(lineId, ticketKeys, readyMap);
 }
 
-export function collectReadyLineIds(tickets: KdsBoardTicket[]): Set<string> {
-  const readyIds = new Set<string>();
-  for (const ticket of tickets) {
-    for (const lineId of ticket.readyLineIds) readyIds.add(lineId);
-  }
-  return readyIds;
+export function collectReadyLineIds(tickets: KdsBoardTicket[] | null | undefined): Set<string> {
+  return collectReadyLineIdsFromPayload(tickets);
 }
 
 export function collectKdsTicketKeys(opts: {

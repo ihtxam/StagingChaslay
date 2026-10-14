@@ -77,6 +77,8 @@ export type PosPrintSettings = {
   receiptLogoWidthPx?: number;
   autoPrintReceipt?: boolean;
   autoPrintKitchen?: boolean;
+  /** When true (default), cash payments pulse the receipt printer to open the drawer. */
+  autoOpenCashDrawer?: boolean;
   /** Print a reservation ticket on the till (auto-accept: on arrival; manual: after accept). */
   autoPrintReservations?: boolean;
   /**
@@ -174,6 +176,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptLogoWidthPx: 200,
     autoPrintReceipt: true,
     autoPrintKitchen: true,
+    autoOpenCashDrawer: true,
     autoPrintReservations: true,
     autoPrintOnlineOrdersOnArrival: false,
     waiterTillBellEnabled: true,
@@ -358,6 +361,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     ),
     autoPrintReceipt: src.autoPrintReceipt !== false,
     autoPrintKitchen: src.autoPrintKitchen !== false,
+    autoOpenCashDrawer: src.autoOpenCashDrawer !== false,
     autoPrintReservations: src.autoPrintReservations !== false,
     autoPrintOnlineOrdersOnArrival: src.autoPrintOnlineOrdersOnArrival === true,
     waiterTillBellEnabled: src.waiterTillBellEnabled !== false,
@@ -396,6 +400,22 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     autoPrintOrderLabelOnHold: src.autoPrintOrderLabelOnHold !== false,
     autoPrintOrderLabelOnSend: src.autoPrintOrderLabelOnSend === true,
   };
+}
+
+/**
+ * Public Google review link for shop confirmation, footer, and order email.
+ * Returns a sanitized http(s) URL or null — never leaks other print settings.
+ */
+export function publicGoogleReviewUrl(raw: unknown): string | null {
+  const url = normalizePosPrintSettings(raw).receiptGoogleReviewsUrl;
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    return parsed.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
 }
 
 /** One-time migration: category→destination map → per-printer linkedCategoryIds (Android-aligned). */

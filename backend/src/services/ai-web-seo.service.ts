@@ -4,6 +4,7 @@ import { getDb, schema, type AiWebSeoSettings, type AiWebSeoSuggestion } from "@
 import { ensureAiWebSeoAddonColumn } from "@/lib/ensure-merchant-schema";
 import { merchantHasAiWebSeoLicense } from "@/lib/ai-web-seo-addon";
 import { resolveShopPublicHost } from "@/lib/brand";
+import { seoFromCatalog } from "@/lib/shop-seo-from-catalog";
 
 function normalizeSettings(raw: AiWebSeoSettings | null | undefined): AiWebSeoSettings {
   const suggestions = Array.isArray(raw?.suggestions) ? raw!.suggestions : [];
@@ -64,6 +65,7 @@ export class AiWebSeoService {
       columns: {
         name: true,
         slug: true,
+        city: true,
         shopSiteSettings: true,
         cmsHomepageEnabled: true,
         aiWebSeoSettings: true,
@@ -77,6 +79,18 @@ export class AiWebSeoService {
     const shopHost = resolveShopPublicHost();
     const shopUrl = merchant.slug ? `https://${shopHost}/${merchant.slug}` : null;
     const suggestions: AiWebSeoSuggestion[] = [];
+    const products = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+      columns: { name: true },
+      limit: 40,
+    });
+    const productNames = products.map((p) => p.name).filter(Boolean);
+    const city = merchant.city || null;
+    const generated = seoFromCatalog({
+      businessName: merchant.name || "Restaurant",
+      city,
+      productNames,
+    });
 
     if (!merchant.cmsHomepageEnabled) {
       suggestions.push({
@@ -128,11 +142,8 @@ export class AiWebSeoService {
       ...settings,
       suggestions,
       lastScanAt: new Date().toISOString(),
-      metaTitle: settings.metaTitle || meta.metaTitle || `${merchant.name} — order online`,
-      metaDescription:
-        settings.metaDescription ||
-        meta.metaDescription ||
-        `Order from ${merchant.name}. Fresh food, easy pickup and delivery.`,
+      metaTitle: settings.metaTitle || meta.metaTitle || generated.title,
+      metaDescription: settings.metaDescription || meta.metaDescription || generated.description,
     };
 
     await db

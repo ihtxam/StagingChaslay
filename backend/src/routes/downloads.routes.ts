@@ -5,8 +5,10 @@ import {
   LEGACY_PRINT_AGENT_SETUP_FILE,
   PRINT_AGENT_SETUP_FILE,
   PRINT_BRIDGE_APK_FILE,
+  REBORN_POS_SETUP_FILE,
   describePrintAgentExe,
   describePrintBridgeApk,
+  describeRebornPosExe,
   downloadsFilePath,
   fileMagicOk,
   readDownloadManifest,
@@ -44,6 +46,15 @@ router.get("/reborn-print-agent.json", (_req: Request, res: Response) => {
   });
 });
 
+router.get("/reborn-pos-setup.json", (_req: Request, res: Response) => {
+  const manifest = readDownloadManifest("reborn-pos-setup");
+  res.json({
+    success: true,
+    ...describeRebornPosExe(),
+    ...(manifest || {}),
+  });
+});
+
 /** @deprecated legacy manifest filename */
 router.get("/chaslayreborn-print-agent.json", (_req: Request, res: Response) => {
   res.redirect(302, "/downloads/reborn-print-agent.json");
@@ -64,6 +75,18 @@ function sendPrintAgentExe(res: Response, downloadName: string) {
 
 router.get(`/${PRINT_AGENT_SETUP_FILE}`, (_req: Request, res: Response) => {
   sendPrintAgentExe(res, PRINT_AGENT_SETUP_FILE);
+});
+
+function sendRebornPosExe(res: Response) {
+  const filePath = downloadsFilePath(REBORN_POS_SETUP_FILE);
+  if (!fileMagicOk(filePath, "exe")) {
+    return res.status(404).type("text/plain").send("RebornPOS installer is not available on this server.");
+  }
+  sendBinary(res, filePath, REBORN_POS_SETUP_FILE, "application/octet-stream");
+}
+
+router.get(`/${REBORN_POS_SETUP_FILE}`, (_req: Request, res: Response) => {
+  sendRebornPosExe(res);
 });
 
 function sendPrintBridgeApk(res: Response) {

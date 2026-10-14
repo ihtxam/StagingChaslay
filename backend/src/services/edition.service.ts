@@ -88,6 +88,7 @@ export class EditionService {
     const db = getDb();
     for (const surface of MERCHANT_PRODUCT_SURFACES) {
       const preset = PRODUCT_SURFACE_PRESETS[surface];
+      if (!preset) continue;
       const existing = await db.query.editions.findFirst({
         where: and(
           eq(schema.editions.ownerType, "platform"),
@@ -245,6 +246,25 @@ export class EditionService {
     return this.update(id, { isActive: false }, opts);
   }
 
+  static async remove(
+    id: string,
+    opts?: { requireOwnerType?: "platform" | "reseller"; requireOwnerId?: string }
+  ) {
+    const db = getDb();
+    const existing = await db.query.editions.findFirst({
+      where: eq(schema.editions.id, id),
+    });
+    if (!existing) throw new Error("Edition not found");
+    if (opts?.requireOwnerType && existing.ownerType !== opts.requireOwnerType) {
+      throw new Error("Edition not found");
+    }
+    if (opts?.requireOwnerId && existing.ownerId !== opts.requireOwnerId) {
+      throw new Error("Edition not found");
+    }
+    await db.delete(schema.editions).where(eq(schema.editions.id, id));
+    return { deleted: true, id };
+  }
+
   static async cloneForReseller(sourceId: string, resellerId: string, name?: string) {
     const src = await this.getById(sourceId);
     if (!src) throw new Error("Source edition not found");
@@ -255,6 +275,20 @@ export class EditionService {
       features: src.features,
       ownerType: "reseller",
       ownerId: resellerId,
+    });
+  }
+
+  /** Superadmin copy — new platform version with the same features. */
+  static async clonePlatform(sourceId: string, name?: string) {
+    const src = await this.getById(sourceId);
+    if (!src) throw new Error("Source edition not found");
+    return this.create({
+      name: name?.trim() || `${src.name} (copy)`,
+      note: src.note,
+      businessCategory: src.businessCategory,
+      features: src.features,
+      ownerType: "platform",
+      ownerId: null,
     });
   }
 

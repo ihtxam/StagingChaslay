@@ -1,6 +1,14 @@
 import axios, { AxiosInstance } from 'axios';
 import { isShopPathHubHost } from '@/lib/brand';
-import { isShopCustomerSurface } from '@/lib/shop-storefront-host';
+import { isMerchantPanelPath, isShopCustomerSurface } from '@/lib/shop-storefront-host';
+import {
+  installDeployToastGuard,
+  isDeployBlip,
+  notifyDeployBlip,
+  shouldSkipDeployToastForRequest,
+} from '@/lib/deploy-blip';
+
+installDeployToastGuard();
 
 /** Prefer same-origin /api in production; Vite dev proxies /api on any port. */
 export function resolveApiBaseUrl(): string {
@@ -69,7 +77,11 @@ publicApi.interceptors.request.use((config) => {
 
 function isPublicShopHost(hostname = typeof window !== 'undefined' ? window.location.hostname : ''): boolean {
   const host = String(hostname || '').toLowerCase().split(':')[0];
-  return isShopCustomerSurface(undefined, host) || isShopPathHubHost(host);
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
+  // Never strip merchant JWT on panel routes — /merchant/sales/reservations
+  // contains a shop-like "/reservations" segment.
+  if (isMerchantPanelPath(path)) return false;
+  return isShopCustomerSurface(path, host) || isShopPathHubHost(host);
 }
 
 // Add token to requests; never force JSON Content-Type on FormData (breaks multer).
@@ -133,6 +145,13 @@ api.interceptors.response.use(
         delete cfg.headers['x-location-id'];
       }
       return api.request(cfg);
+    }
+    if (
+      isDeployBlip(error) &&
+      !shouldSkipDeployToastForRequest(error) &&
+      !isPublicShopHost()
+    ) {
+      notifyDeployBlip();
     }
     if (error.response?.status === 401) {
       const path = window.location.pathname || '';

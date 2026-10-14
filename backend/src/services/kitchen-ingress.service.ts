@@ -51,6 +51,7 @@ export async function enterKitchenFromOrder(
           printDeliveryReceipt: false,
           printReceipt: false,
           printNotification: false,
+          kitchenPrepOnly: true,
         }).catch((err) => console.warn("Kitchen ingress print enqueue failed:", err))
       )
       .catch(() => {});

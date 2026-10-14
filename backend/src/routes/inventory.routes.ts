@@ -10,6 +10,23 @@ router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
 router.use(requirePermission("MANAGE_INVENTORY"));
+
+/** Panel expiry banner polls this on every page — do not 403 restaurant / unlicensed shops. */
+router.get("/expiring-soon", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(401).json({ error: "Merchant ID is required" });
+    const data = await InventoryService.listExpiringSoon(merchantId);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    if (error instanceof InventoryLicenseError) {
+      return res.json({ success: true, lots: [], leadDays: 30 });
+    }
+    console.warn("expiring-soon failed:", error);
+    return res.json({ success: true, lots: [], leadDays: 30 });
+  }
+});
+
 router.use(requireRetailModule);
 
 function denyInventoryRecipes(_req: Request, res: Response) {
@@ -188,21 +205,6 @@ router.get("/low-stock", async (req: Request, res: Response) => {
     res.json({ success: true, items });
   } catch (error) {
     handleError(res, error, "Failed to load low stock");
-  }
-});
-
-router.get("/expiring-soon", async (req: Request, res: Response) => {
-  try {
-    const merchantId = req.merchantId;
-    if (!merchantId) return res.status(401).json({ error: "Merchant ID is required" });
-    const data = await InventoryService.listExpiringSoon(merchantId);
-    res.json({ success: true, ...data });
-  } catch (error) {
-    if (error instanceof InventoryLicenseError) {
-      return res.json({ success: true, lots: [], leadDays: 30 });
-    }
-    console.warn("expiring-soon failed:", error);
-    return res.json({ success: true, lots: [], leadDays: 30 });
   }
 });
 

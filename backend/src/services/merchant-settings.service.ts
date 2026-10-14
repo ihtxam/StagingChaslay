@@ -21,6 +21,7 @@ import {
   type PosCheckoutSettings,
 } from "@/lib/pos-checkout-settings";
 import { normalizeBusinessModule, posModeForModule } from "@/lib/business-module";
+import { normalizePanelNavHidden } from "@/lib/panel-nav-hidden";
 import {
   normalizeTableQrSettings,
   type TableQrSettings,
@@ -41,12 +42,19 @@ import {
 import { isBexioAddonEnabled, isOdooAddonEnabled } from "@/lib/accounting-integration-addon";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { getFiskalyPublic, mergeFiskalySettings, type FiskalySettings } from "@/lib/fiskaly-settings";
+import { getComoPublic, mergeComoSettings, type ComoSettings } from "@/lib/como-settings";
+import {
+  getPhoneOrderingPublic,
+  mergePhoneOrderingSettings,
+  type PhoneOrderingSettings,
+} from "@/lib/phone-ordering-settings";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isSignageAddonEnabled } from "@/lib/signage-addon";
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { normalizeGiftCardSettings } from "@/lib/gift-card-settings";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isGrowthAnalyticsAddonEnabled } from "@/lib/growth-analytics-addon";
 import { isGuestCrmAddonEnabled } from "@/lib/guest-crm-addon";
 import { isMarketingAutomationAddonEnabled } from "@/lib/marketing-automation-addon";
@@ -153,6 +161,9 @@ export class MerchantSettingsService {
     );
     const storekeeperOn = isStorekeeperAddonEnabled(merchant.storekeeperAddonEnabled);
     const kioskOn = isKioskAddonEnabled(merchant.kioskAddonEnabled);
+    const cateringOn = isCateringAddonEnabled(
+      (merchant as { cateringEnabled?: boolean }).cateringEnabled
+    );
     const growthAnalyticsOn = isGrowthAnalyticsAddonEnabled(
       (merchant as { growthAnalyticsAddonEnabled?: boolean }).growthAnalyticsAddonEnabled
     );
@@ -255,6 +266,7 @@ export class MerchantSettingsService {
       deliveryMode: normalizeDeliveryMode(merchant.deliveryMode),
       channelSelectMode: normalizeChannelSelectMode(merchant.channelSelectMode),
       menuShowProductImages: merchant.menuShowProductImages !== false,
+      menuShowUpsells: (merchant as { menuShowUpsells?: boolean }).menuShowUpsells !== false,
       menuShowCategoryBanners: merchant.menuShowCategoryBanners !== false,
       cartLayout: normalizeCartLayout(merchant.cartLayout),
       scheduledOrdersEnabled: merchant.scheduledOrdersEnabled !== false,
@@ -286,6 +298,8 @@ export class MerchantSettingsService {
       storekeeperAddonEnabled: storekeeperOn,
       kioskAddonEnabled: kioskOn,
       kioskEnabled: kioskOn,
+      cateringEnabled: cateringOn,
+      cateringAddonEnabled: cateringOn,
       growthAnalyticsAddonEnabled: growthAnalyticsOn,
       guestCrmAddonEnabled: guestCrmOn,
       marketingAutomationAddonEnabled: marketingAutomationOn,
@@ -348,6 +362,12 @@ export class MerchantSettingsService {
       fiskalySettings: getFiskalyPublic(
         (merchant as { fiskalySettings?: FiskalySettings | null }).fiskalySettings
       ),
+      comoSettings: getComoPublic(
+        (merchant as { comoSettings?: ComoSettings | null }).comoSettings
+      ),
+      phoneOrderingSettings: getPhoneOrderingPublic(
+        (merchant as { phoneOrderingSettings?: PhoneOrderingSettings | null }).phoneOrderingSettings
+      ),
       webposExpressEnabled: merchant.webposExpressEnabled !== false,
       webposCashEnabled: merchant.webposCashEnabled !== false,
       webposCardEnabled: merchant.webposCardEnabled !== false,
@@ -386,9 +406,9 @@ export class MerchantSettingsService {
         (merchant as { businessCategory?: string | null }).businessCategory
       ),
       resellerId: (merchant as { resellerId?: string | null }).resellerId || null,
-      panelNavHidden: Array.isArray((merchant as { panelNavHidden?: string[] | null }).panelNavHidden)
-        ? (merchant as { panelNavHidden?: string[] | null }).panelNavHidden
-        : [],
+      panelNavHidden: normalizePanelNavHidden(
+        (merchant as { panelNavHidden?: unknown }).panelNavHidden
+      ),
       shopCommissionPercent: Number(
         (merchant as { shopCommissionPercent?: string | number | null }).shopCommissionPercent ?? 0
       ) || 0,
@@ -400,6 +420,14 @@ export class MerchantSettingsService {
       editionFeatures,
       orderCenterEnabled,
       ...productFlags,
+      latestSoftwareRelease: await (async () => {
+        try {
+          const { SoftwareReleaseService } = await import("@/services/software-release.service");
+          return await SoftwareReleaseService.latestPublished();
+        } catch {
+          return null;
+        }
+      })(),
     };
   }
 
@@ -433,6 +461,7 @@ export class MerchantSettingsService {
       deliveryMode?: string;
       channelSelectMode?: ChannelSelectMode | string;
       menuShowProductImages?: boolean;
+      menuShowUpsells?: boolean;
       menuShowCategoryBanners?: boolean;
       cartLayout?: ShopCartLayout | string;
       scheduledOrdersEnabled?: boolean;
@@ -471,6 +500,8 @@ export class MerchantSettingsService {
       adyenLiveRegion?: string;
       adyenUseLegacyEndpoint?: boolean;
       fiskalySettings?: FiskalySettings | Record<string, unknown> | null;
+      comoSettings?: ComoSettings | Record<string, unknown> | null;
+      phoneOrderingSettings?: PhoneOrderingSettings | Record<string, unknown> | null;
       webposExpressEnabled?: boolean;
       webposCashEnabled?: boolean;
       webposCardEnabled?: boolean;
@@ -560,6 +591,9 @@ export class MerchantSettingsService {
     }
     if (updates.menuShowProductImages !== undefined) {
       patch.menuShowProductImages = !!updates.menuShowProductImages;
+    }
+    if (updates.menuShowUpsells !== undefined) {
+      patch.menuShowUpsells = !!updates.menuShowUpsells;
     }
     if (updates.menuShowCategoryBanners !== undefined) {
       patch.menuShowCategoryBanners = !!updates.menuShowCategoryBanners;
@@ -685,6 +719,33 @@ export class MerchantSettingsService {
         (current as { fiskalySettings?: FiskalySettings | null } | undefined)?.fiskalySettings,
         updates.fiskalySettings
       );
+    }
+    if (updates.comoSettings !== undefined) {
+      const { ensureComoSchema } = await import("@/lib/ensure-merchant-schema");
+      await ensureComoSchema();
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+      });
+      patch.comoSettings = mergeComoSettings(
+        (current as { comoSettings?: ComoSettings | null } | undefined)?.comoSettings,
+        updates.comoSettings
+      );
+    }
+    if (updates.phoneOrderingSettings !== undefined) {
+      const { ensurePhoneOrderingSchema } = await import("@/lib/ensure-merchant-schema");
+      await ensurePhoneOrderingSchema();
+      const current = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+      });
+      const nextPhone = mergePhoneOrderingSettings(
+        (current as { phoneOrderingSettings?: PhoneOrderingSettings | null } | undefined)
+          ?.phoneOrderingSettings,
+        updates.phoneOrderingSettings
+      );
+      patch.phoneOrderingSettings = nextPhone;
+      if (nextPhone.phoneNumber && !current?.phone) {
+        patch.phone = nextPhone.phoneNumber;
+      }
     }
     if (updates.webposExpressEnabled !== undefined) patch.webposExpressEnabled = !!updates.webposExpressEnabled;
     if (updates.webposCashEnabled !== undefined) patch.webposCashEnabled = !!updates.webposCashEnabled;

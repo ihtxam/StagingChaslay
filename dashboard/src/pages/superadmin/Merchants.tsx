@@ -6,11 +6,11 @@ import { Search, Plus, Edit2, Trash2, Eye, X, Copy, KeyRound, LogIn, Eraser } fr
 import { useAuthStore } from '@/store/auth';
 import { useI18n } from '@/lib/i18n';
 import {
-  MERCHANT_PRODUCT_SURFACES,
-  PRODUCT_SURFACE_PRESETS,
   filterEditionsForProductSurface,
+  getProductSurfacePreset,
   inferProductSurface,
   isProductSurfacePackagingEditionName,
+  listProductSurfacePresets,
   productSurfaceNeedsPosEdition,
   type MerchantProductSurface,
 } from '@/lib/merchant-product-surface';
@@ -67,6 +67,8 @@ interface Merchant {
   storekeeperAddonEnabled?: boolean;
   kioskAddonEnabled?: boolean;
   kioskEnabled?: boolean;
+  cateringEnabled?: boolean;
+  cateringAddonEnabled?: boolean;
   growthAnalyticsAddonEnabled?: boolean;
   guestCrmAddonEnabled?: boolean;
   createdAt: string;
@@ -172,6 +174,7 @@ export default function Merchants() {
     odooAddonEnabled: boolean;
     storekeeperAddonEnabled: boolean;
     kioskAddonEnabled: boolean;
+    cateringEnabled: boolean;
     growthAnalyticsAddonEnabled: boolean;
     guestCrmAddonEnabled: boolean;
   }>({
@@ -188,6 +191,7 @@ export default function Merchants() {
     odooAddonEnabled: false,
     storekeeperAddonEnabled: false,
     kioskAddonEnabled: false,
+    cateringEnabled: false,
     growthAnalyticsAddonEnabled: false,
     guestCrmAddonEnabled: false,
   });
@@ -210,7 +214,7 @@ export default function Merchants() {
   const [togglingPos, setTogglingPos] = useState(false);
 
   const applyProductSurfaceToForm = (surface: MerchantProductSurface) => {
-    const preset = PRODUCT_SURFACE_PRESETS[surface];
+    const preset = getProductSurfacePreset(surface);
     setForm((f) => {
       let editionId = f.editionId;
       if (productSurfaceNeedsPosEdition(surface)) {
@@ -303,6 +307,9 @@ export default function Merchants() {
         odooAddonEnabled: res.data.merchant?.odooAddonEnabled === true,
         storekeeperAddonEnabled: res.data.merchant?.storekeeperAddonEnabled === true,
         kioskAddonEnabled: res.data.merchant?.kioskAddonEnabled === true,
+        cateringEnabled:
+          res.data.merchant?.cateringEnabled === true ||
+          res.data.merchant?.cateringAddonEnabled === true,
         growthAnalyticsAddonEnabled: res.data.merchant?.growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: res.data.merchant?.guestCrmAddonEnabled === true,
       });
@@ -336,6 +343,7 @@ export default function Merchants() {
         odooAddonEnabled: !!posLimits.odooAddonEnabled,
         storekeeperAddonEnabled: !!posLimits.storekeeperAddonEnabled,
         kioskAddonEnabled: !!posLimits.kioskAddonEnabled,
+        cateringEnabled: !!posLimits.cateringEnabled,
         growthAnalyticsAddonEnabled: !!posLimits.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!posLimits.guestCrmAddonEnabled,
       });
@@ -346,6 +354,7 @@ export default function Merchants() {
       const odsOn = saved?.odsAddonEnabled === true || saved?.odsEnabled === true;
       const storekeeperOn = saved?.storekeeperAddonEnabled === true;
       const kioskOn = saved?.kioskAddonEnabled === true || saved?.kioskEnabled === true;
+      const cateringOn = saved?.cateringEnabled === true || saved?.cateringAddonEnabled === true;
       const growthAnalyticsOn = saved?.growthAnalyticsAddonEnabled === true;
       const guestCrmOn = saved?.guestCrmAddonEnabled === true;
       setPosLimits({
@@ -367,6 +376,7 @@ export default function Merchants() {
         odooAddonEnabled: saved?.odooAddonEnabled === true,
         storekeeperAddonEnabled: storekeeperOn,
         kioskAddonEnabled: kioskOn,
+        cateringEnabled: cateringOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
         guestCrmAddonEnabled: guestCrmOn,
       });
@@ -1062,14 +1072,13 @@ export default function Merchants() {
                     extras.
                   </p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {MERCHANT_PRODUCT_SURFACES.map((key) => {
-                      const preset = PRODUCT_SURFACE_PRESETS[key];
-                      const on = form.productSurface === key;
+                    {listProductSurfacePresets().map((preset) => {
+                      const on = form.productSurface === preset.key;
                       return (
                         <button
-                          key={key}
+                          key={preset.key}
                           type="button"
-                          onClick={() => applyProductSurfaceToForm(key)}
+                          onClick={() => applyProductSurfaceToForm(preset.key)}
                           className={`rounded-xl border px-3 py-3 text-left transition ${
                             on
                               ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-200'
@@ -1578,14 +1587,13 @@ export default function Merchants() {
                     POS only = till. Shop/Website can be added later. Change anytime.
                   </p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-3">
-                    {MERCHANT_PRODUCT_SURFACES.map((key) => {
-                      const preset = PRODUCT_SURFACE_PRESETS[key];
-                      const on = detailSurface === key;
+                    {listProductSurfacePresets().map((preset) => {
+                      const on = detailSurface === preset.key;
                       return (
                         <button
-                          key={key}
+                          key={preset.key}
                           type="button"
-                          onClick={() => setDetailSurface(key)}
+                          onClick={() => setDetailSurface(preset.key)}
                           className={`rounded-xl border px-3 py-2.5 text-left ${
                             on
                               ? 'border-teal-600 bg-teal-50 ring-2 ring-teal-200'
@@ -1891,6 +1899,31 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.kioskAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.cateringEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, cateringEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Catering</span>
+                      <span className="text-xs text-gray-500">
+                        Paid extra. Off for every merchant until you turn it on here.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.cateringEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.cateringEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

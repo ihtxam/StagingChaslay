@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import ReservationCampaignsPanel from '@/components/growth/ReservationCampaignsPanel';
@@ -15,6 +16,7 @@ import {
   zurichDayStartFromYmd,
 } from '@/lib/date-format';
 import { reservationStatusBadgeClass } from '@/lib/reservation-badges';
+import { isMissingAuthorizationError } from '@/lib/reservations-auth-error';
 
 type Reservation = {
   id: string;
@@ -40,6 +42,7 @@ type Table = { id: string; label: string; capacity: number; status: string; floo
 export default function Reservations() {
   const { t, formatDate, formatDateTime, formatTime } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const [campaignsLicensed, setCampaignsLicensed] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
@@ -102,8 +105,13 @@ export default function Reservations() {
     try {
       await loadConfig();
       await loadList();
+      setUnavailable(false);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('cmsLoadFailed'));
+      if (isMissingAuthorizationError(e)) {
+        setUnavailable(true);
+      } else {
+        toast.error(e.response?.data?.error || t('cmsLoadFailed'));
+      }
     } finally {
       setLoading(false);
     }
@@ -243,6 +251,17 @@ export default function Reservations() {
     return <div className="p-4 text-sm muted">{t('loading')}</div>;
   }
 
+  if (unavailable) {
+    return (
+      <div className="space-y-3 max-w-5xl">
+        <h1 className="text-xl font-semibold">{t('reservationsTitle')}</h1>
+        <p className="text-sm muted border border-dashed rounded-md p-6 text-center">
+          {t('reservationsUnlicensedHint')}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -250,11 +269,16 @@ export default function Reservations() {
           <h1 className="text-xl font-semibold">{t('reservationsTitle')}</h1>
           <p className="text-sm muted mt-1">{t('reservationsHint')}</p>
         </div>
-        {pendingCount > 0 ? (
-          <span className="text-sm rounded-lg bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100 px-3 py-2">
-            {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/merchant/sales/host" className="btn-secondary text-sm">
+            {t('hostStationNav')}
+          </Link>
+          {pendingCount > 0 ? (
+            <span className="text-sm rounded-lg bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100 px-3 py-2">
+              {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {campaignsLicensed ? <ReservationCampaignsPanel /> : null}

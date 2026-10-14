@@ -7,6 +7,7 @@ import { attachLicenseRelations, LicenseAdminService } from "@/services/license-
 import { ResellerBillingService } from "@/services/reseller-billing.service";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
+import { normalizePanelNavHidden } from "@/lib/panel-nav-hidden";
 
 function serializeReseller(
   row: typeof schema.resellers.$inferSelect,
@@ -392,6 +393,7 @@ export class ResellerService {
       odsAddonEnabled: r.odsAddonEnabled === true,
       deliveryPlatformsAddonEnabled:
         r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
+      panelNavHidden: normalizePanelNavHidden(r.panelNavHidden),
     }));
   }
 

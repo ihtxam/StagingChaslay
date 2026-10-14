@@ -691,6 +691,17 @@ export class OdsService {
     return filterBoardByDismissed({ preparing, ready }, dismissed);
   }
 
+  /** POS poll: 403 when the addon is off (same as KDS board). */
+  static async statusForPos(merchantId: string) {
+    await requireAddon(merchantId);
+    const live = await this.boardFromLiveOrders(merchantId);
+    return {
+      licensed: true,
+      preparing: live.preparing,
+      ready: live.ready,
+    };
+  }
+
   static async boardForToken(token: string) {
     const display = await this.displayByToken(token);
     if (!display) throw new Error("Invalid ODS link");

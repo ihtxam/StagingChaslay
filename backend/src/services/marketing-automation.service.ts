@@ -47,7 +47,8 @@ export function normalizeMarketingAutomation(
   const out = journeys
     .map((j) => {
       const trigger = j?.trigger as MarketingAutomationTrigger;
-      if (trigger !== "order_paid" && trigger !== "reservation_confirmed") return null;
+      if (trigger !== "order_paid" && trigger !== "reservation_confirmed" && trigger !== "winback_lapsed")
+        return null;
       return {
         id: String(j.id || randomUUID()).slice(0, 64),
         trigger,
@@ -74,6 +75,15 @@ export function normalizeMarketingAutomation(
       enabled: false,
       subject: DEFAULT_RES_SUBJECT,
       bodyHtml: DEFAULT_RES_BODY,
+    });
+  }
+  if (!out.some((j) => j.trigger === "winback_lapsed")) {
+    out.push({
+      id: "winback_lapsed",
+      trigger: "winback_lapsed",
+      enabled: false,
+      subject: "We miss you at {{businessName}}",
+      bodyHtml: `<p>Hi {{name}},</p><p>It's been a while — come back this week and order again.</p><p><a href="{{shopUrl}}">Order now</a></p>`,
     });
   }
   return { journeys: out };
@@ -134,10 +144,58 @@ export class MarketingAutomationService {
         to: email,
         subject,
         html: htmlWrap(body),
-        emailType: trigger === "order_paid" ? "marketing_automation_order" : "marketing_automation_reservation",
+        emailType:
+          trigger === "order_paid"
+            ? "marketing_automation_order"
+            : trigger === "winback_lapsed"
+              ? "marketing_winback"
+              : "marketing_automation_reservation",
       });
     } catch (err) {
       console.warn("Marketing automation send failed:", err);
     }
+  }
+
+  /** Owner.com-style 21-day win-back. Safe to run hourly. */
+  static async runWinbacks(days = 21) {
+    const db = getDb();
+    const merchants = await db.query.merchants.findMany({
+      columns: { id: true, marketingAutomationSettings: true },
+    });
+    let sent = 0;
+    const cutoff = new Date(Date.now() - days * 86_400_000);
+    const tooOld = new Date(Date.now() - (days + 2) * 86_400_000);
+    for (const m of merchants) {
+      const settings = normalizeMarketingAutomation(m.marketingAutomationSettings);
+      if (!settings.journeys.some((j) => j.trigger === "winback_lapsed" && j.enabled)) continue;
+      if (!(await merchantHasMarketingAutomationLicense(m.id))) continue;
+      const customers = await db.query.customers.findMany({
+        where: eq(schema.customers.merchantId, m.id),
+        columns: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          lastOrderAt: true,
+          lastReorderReminderAt: true,
+          marketingOptIn: true,
+        },
+      });
+      for (const c of customers) {
+        if (!c.lastOrderAt || !c.email) continue;
+        if (c.marketingOptIn === false) continue;
+        const last = new Date(c.lastOrderAt);
+        if (last > cutoff || last < tooOld) continue;
+        if (c.lastReorderReminderAt && new Date(c.lastReorderReminderAt) >= last) continue;
+        const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || null;
+        await this.trigger(m.id, "winback_lapsed", { email: c.email, name });
+        await db
+          .update(schema.customers)
+          .set({ lastReorderReminderAt: new Date(), updatedAt: new Date() })
+          .where(eq(schema.customers.id, c.id));
+        sent += 1;
+      }
+    }
+    return { sent };
   }
 }

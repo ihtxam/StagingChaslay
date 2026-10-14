@@ -143,14 +143,18 @@ merchantRouter.get("/ticket-status", async (req: Request, res: Response) => {
   }
 });
 
-merchantRouter.get("/board-status", async (req: Request, res: Response) => {
+async function sendBoardStatus(req: Request, res: Response) {
   try {
     const tickets = await KdsService.boardStatusForMerchant(req.merchantId!);
     res.json({ success: true, tickets });
   } catch (error) {
     handleError(res, error, "Failed");
   }
-});
+}
+
+/** Live WebPOS tills poll /board; board-status is the same payload. */
+merchantRouter.get("/board", sendBoardStatus);
+merchantRouter.get("/board-status", sendBoardStatus);
 
 export { merchantRouter as kdsMerchantRoutes };
 export default router;

@@ -551,10 +551,10 @@ router.delete("/plans/:planId", async (req: Request, res: Response) => {
     if (existing.ownerType !== "reseller" || existing.ownerId !== resellerId(req)) {
       return res.status(404).json({ error: "Package not found" });
     }
-    const plan = await SubscriptionPlansService.remove(req.params.planId);
-    res.json({ success: true, plan });
+    const result = await SubscriptionPlansService.remove(req.params.planId);
+    res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate package" });
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete package" });
   }
 });
 
@@ -564,10 +564,10 @@ router.delete("/addons/:addonId", async (req: Request, res: Response) => {
     if (existing.ownerType !== "reseller" || existing.ownerId !== resellerId(req)) {
       return res.status(404).json({ error: "Add-on not found" });
     }
-    const addon = await SubscriptionAddonsService.remove(req.params.addonId);
-    res.json({ success: true, addon });
+    const result = await SubscriptionAddonsService.remove(req.params.addonId);
+    res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate add-on" });
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete add-on" });
   }
 });
 
@@ -791,7 +791,7 @@ router.put("/editions/:id", async (req: Request, res: Response) => {
  */
 router.delete("/editions/:id", async (req: Request, res: Response) => {
   try {
-    const edition = await EditionService.softDelete(req.params.id, {
+    const edition = await EditionService.remove(req.params.id, {
       requireOwnerType: "reseller",
       requireOwnerId: resellerId(req),
     });

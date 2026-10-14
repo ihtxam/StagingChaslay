@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, FileText, Printer, RefreshCw, ShoppingBag, X } from 'lucide-react';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { isPaidOnlineEcommerceOrder } from '@/lib/online-payment';
@@ -554,7 +555,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         setCancelReasons(ordersRes.data.cancelReasons || []);
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('ordersLoadFailed'));
+      toastLoadError(error, t('ordersLoadFailed'));
     } finally {
       setLoading(false);
     }

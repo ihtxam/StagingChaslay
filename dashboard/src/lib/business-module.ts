@@ -33,7 +33,9 @@ export const RESTAURANT_MODULE_ROUTES: string[] = [
   '/merchant/tables/qr',
   '/merchant/reservations',
   '/merchant/sales/reservations',
+  '/merchant/sales/host',
   '/merchant/signage',
+  '/merchant/products/pizza-builder',
 ];
 
 export const RETAIL_MODULE_ROUTES: string[] = [

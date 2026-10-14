@@ -14,6 +14,18 @@ import { EmailService } from "@/services/email.service";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { ChaslayFloorService } from "@/services/chaslay-floor.service";
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  floorStatusForReservation,
+  shouldReleaseFloorForReservation,
+} from "@/lib/reservation-floor";
+import {
+  depositDueAmount,
+  nextDepositStatusOnCancel,
+  parseReservationExtras,
+  quoteWaitMinutes,
+  type ReservationExtras,
+} from "@/lib/reservation-policies";
+import { buildReservationSms, smsWebhookUrl, type ReservationSmsKind } from "@/lib/reservation-guest-sms";
 
 const DAY_KEYS: DayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
@@ -26,6 +38,9 @@ export const DEFAULT_RESERVATION_SETTINGS: Required<
     | "lastDailySummaryDate"
     | "googleReserveUrl"
     | "googleOrderUrl"
+    | "waitlistQuoteMinutes"
+    | "depositAmount"
+    | "cancelHoursBefore"
   >
 > & {
   maxCoversPerSlot: number | null;
@@ -34,6 +49,9 @@ export const DEFAULT_RESERVATION_SETTINGS: Required<
   lastDailySummaryDate: string | null;
   googleReserveUrl: string | null;
   googleOrderUrl: string | null;
+  waitlistQuoteMinutes: number | null;
+  depositAmount: number | null;
+  cancelHoursBefore: number | null;
 } = {
   dineInHoursMode: "same_as_takeaway",
   slotIntervalMinutes: 30,
@@ -61,6 +79,13 @@ export const DEFAULT_RESERVATION_SETTINGS: Required<
   photoMenuEnabled: true,
   googleReserveUrl: null,
   googleOrderUrl: null,
+  waitlistSmsEnabled: true,
+  waitlistQuoteMinutes: null,
+  depositEnabled: false,
+  depositAmount: null,
+  depositType: "fixed",
+  cancelHoursBefore: 24,
+  googleReservePublish: true,
 };
 
 const ACTIVE_STATUSES: ReservationStatus[] = ["pending", "confirmed", "seated"];
@@ -120,6 +145,19 @@ export function normalizeReservationSettings(
     photoMenuEnabled: s.photoMenuEnabled !== false,
     googleReserveUrl: s.googleReserveUrl?.trim() || null,
     googleOrderUrl: s.googleOrderUrl?.trim() || null,
+    waitlistSmsEnabled: s.waitlistSmsEnabled !== false,
+    waitlistQuoteMinutes:
+      s.waitlistQuoteMinutes == null || Number(s.waitlistQuoteMinutes) <= 0
+        ? null
+        : clampInt(s.waitlistQuoteMinutes, 5, 180, 25),
+    depositEnabled: s.depositEnabled === true,
+    depositAmount:
+      s.depositAmount == null || Number(s.depositAmount) <= 0
+        ? null
+        : Math.min(500, Math.round(Number(s.depositAmount) * 100) / 100),
+    depositType: s.depositType === "percent" ? "percent" : "fixed",
+    cancelHoursBefore: clampInt(s.cancelHoursBefore, 0, 168, 24),
+    googleReservePublish: s.googleReservePublish !== false,
   };
 }
 
@@ -510,6 +548,7 @@ export class ReservationService {
       status?: ReservationStatus;
       skipSlotCheck?: boolean;
       campaignCode?: string | null;
+      policyAccepted?: boolean;
     }
   ) {
     const db = getDb();
@@ -574,6 +613,31 @@ export class ReservationService {
 
     const durationMinutes = settings.seatingDurationMinutes;
     const slotDeal = matchSlotDiscount(settings, reservedAt);
+    const depositAmount = depositDueAmount(settings, partySize);
+    let quotedWaitMinutes: number | null = null;
+    if (waitlisted) {
+      const waitRows = await db.query.reservations.findMany({
+        where: and(
+          eq(schema.reservations.merchantId, merchantId),
+          eq(schema.reservations.status, "waitlist")
+        ),
+        columns: { id: true },
+      });
+      const tables = await FloorPlanService.listTablesForSync(merchantId).catch(() => []);
+      const openTables = tables.filter((t) => t.status === "available").length;
+      quotedWaitMinutes = quoteWaitMinutes({
+        position: waitRows.length,
+        quoteMinutes: settings.waitlistQuoteMinutes,
+        seatingDurationMinutes: settings.seatingDurationMinutes,
+        openTables,
+      });
+    }
+    const extras: ReservationExtras = {
+      depositAmount,
+      depositStatus: depositAmount ? "due" : "none",
+      quotedWaitMinutes,
+      policyAcceptedAt: input.policyAccepted ? new Date().toISOString() : null,
+    };
 
     let customerId = input.customerId || null;
     if (!customerId) {
@@ -610,6 +674,7 @@ export class ReservationService {
         notes: input.notes?.trim() || null,
         source: input.source || "web",
         acceptedAt: status === "confirmed" ? new Date() : null,
+        extras,
       })
       .returning();
 
@@ -629,6 +694,11 @@ export class ReservationService {
 
     if (status === "confirmed") {
       await ReservationService.enqueuePosAlert(merchantId, row.id);
+    }
+    if (status === "waitlist" && settings.waitlistSmsEnabled !== false) {
+      await ReservationService.notifyGuest(merchantId, row.id, "waitlist").catch(() => undefined);
+    } else if (status === "confirmed" && settings.waitlistSmsEnabled !== false && input.source === "web") {
+      await ReservationService.notifyGuest(merchantId, row.id, "confirmed").catch(() => undefined);
     }
 
     if (input.campaignCode) {
@@ -762,6 +832,22 @@ export class ReservationService {
         /* ignore */
       }
     };
+    const releaseFloor = async (
+      tableId: string | null | undefined,
+      reservationStatus: string,
+      reservedAt: Date | string | null | undefined
+    ) => {
+      if (!shouldReleaseFloorForReservation(reservationStatus, reservedAt)) return;
+      await setFloor(tableId, "available");
+    };
+    const paintFloor = async (
+      tableId: string | null | undefined,
+      reservationStatus: string,
+      reservedAt: Date | string | null | undefined
+    ) => {
+      const paint = floorStatusForReservation(reservationStatus, reservedAt);
+      if (paint) await setFloor(tableId, paint);
+    };
 
     if (payload.internalNotes !== undefined) {
       patch.internalNotes = payload.internalNotes;
@@ -790,7 +876,7 @@ export class ReservationService {
           throw new Error("Only pending or confirmed reservations can move to the waitlist");
         }
         patch.status = "waitlist";
-        await setFloor(current.tableId, "available");
+        await releaseFloor(current.tableId, current.status, current.reservedAt);
         break;
       case "reject":
         if (!["pending", "confirmed", "waitlist"].includes(current.status)) {
@@ -800,7 +886,7 @@ export class ReservationService {
         patch.cancelledAt = new Date();
         emailKind = "rejected";
         if (current.tableId) {
-          await setFloor(current.tableId, "available");
+          await releaseFloor(current.tableId, current.status, current.reservedAt);
           patch.tableId = null;
           patch.tableLabel = null;
         }
@@ -841,19 +927,27 @@ export class ReservationService {
         patch.status = "completed";
         await setFloor(current.tableId, "dirty");
         break;
-      case "cancel":
+      case "cancel": {
         patch.status = "cancelled";
         patch.cancelledAt = new Date();
         emailKind = payload.sendRejectionEmail ? "rejected" : "cancelled";
+        const extras = parseReservationExtras(current.extras);
+        extras.depositStatus = nextDepositStatusOnCancel(
+          extras.depositStatus,
+          current.reservedAt,
+          resolveSettings(merchant.reservationSettings).cancelHoursBefore
+        );
+        patch.extras = extras;
         if (current.tableId) {
-          await setFloor(current.tableId, "available");
+          await releaseFloor(current.tableId, current.status, current.reservedAt);
           patch.tableId = null;
           patch.tableLabel = null;
         }
         break;
+      }
       case "no_show":
         patch.status = "no_show";
-        await setFloor(current.tableId, "available");
+        await releaseFloor(current.tableId, current.status, current.reservedAt);
         break;
       case "assign_table": {
         const tableId = payload.tableId;
@@ -865,17 +959,15 @@ export class ReservationService {
           throw new Error("Table is too small for this party");
         }
         if (current.tableId && current.tableId !== tableId) {
-          await setFloor(current.tableId, "available");
+          await releaseFloor(current.tableId, current.status, current.reservedAt);
         }
         patch.tableId = tableId;
         patch.tableLabel = table.label;
-        if (["confirmed", "pending", "seated", "waitlist"].includes(current.status)) {
-          await setFloor(tableId, current.status === "seated" ? "occupied" : "reserved");
-        }
+        await paintFloor(tableId, current.status, current.reservedAt);
         break;
       }
       case "unassign_table":
-        await setFloor(current.tableId, "available");
+        await releaseFloor(current.tableId, current.status, current.reservedAt);
         patch.tableId = null;
         patch.tableLabel = null;
         break;
@@ -905,6 +997,19 @@ export class ReservationService {
     if (action === "accept" && updated.status === "confirmed") {
       await ReservationService.enqueuePosAlert(merchantId, updated.id);
     }
+    if (settings.waitlistSmsEnabled !== false) {
+      const smsKind: ReservationSmsKind | null =
+        action === "promote_waitlist"
+          ? "table_ready"
+          : action === "accept"
+            ? "confirmed"
+            : action === "cancel" || action === "reject"
+              ? "cancelled"
+              : null;
+      if (smsKind) {
+        await ReservationService.notifyGuest(merchantId, updated.id, smsKind).catch(() => undefined);
+      }
+    }
 
     return updated;
   }
@@ -933,7 +1038,16 @@ export class ReservationService {
     }
 
     const settings = resolveSettings(merchant.reservationSettings);
+    const liveLink = settings.liveTableLink !== false;
     const patch: Record<string, unknown> = { updatedAt: new Date() };
+    const setFloor = async (tableId: string | null | undefined, status: "available" | "occupied" | "reserved" | "dirty") => {
+      if (!liveLink || !tableId) return;
+      try {
+        await FloorPlanService.setTableStatus(merchantId, tableId, status);
+      } catch {
+        /* ignore */
+      }
+    };
 
     if (input.guestName !== undefined) {
       const name = input.guestName.trim().slice(0, 200);
@@ -994,12 +1108,8 @@ export class ReservationService {
     if (input.tableId !== undefined) {
       const tableId = input.tableId || null;
       if (!tableId) {
-        if (current.tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
+        if (current.tableId && shouldReleaseFloorForReservation(current.status, current.reservedAt)) {
+          await setFloor(current.tableId, "available");
         }
         patch.tableId = null;
         patch.tableLabel = null;
@@ -1010,22 +1120,27 @@ export class ReservationService {
         if (Number(table.capacity) < partySize) {
           throw new Error("Table is too small for this party");
         }
-        if (current.tableId && current.tableId !== tableId) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, current.tableId, "available");
-          } catch {
-            /* ignore */
-          }
+        if (
+          current.tableId &&
+          current.tableId !== tableId &&
+          shouldReleaseFloorForReservation(current.status, current.reservedAt)
+        ) {
+          await setFloor(current.tableId, "available");
         }
         patch.tableId = tableId;
         patch.tableLabel = table.label;
-        if (["confirmed", "pending"].includes(current.status)) {
-          try {
-            await FloorPlanService.setTableStatus(merchantId, tableId, "reserved");
-          } catch {
-            /* ignore */
-          }
-        }
+        const paint = floorStatusForReservation(current.status, reservedAt);
+        if (paint) await setFloor(tableId, paint);
+      }
+    } else if (patch.reservedAt && current.tableId) {
+      if (
+        shouldReleaseFloorForReservation(current.status, current.reservedAt) &&
+        !floorStatusForReservation(current.status, reservedAt)
+      ) {
+        await setFloor(current.tableId, "available");
+      } else {
+        const paint = floorStatusForReservation(current.status, reservedAt);
+        if (paint) await setFloor(current.tableId, paint);
       }
     }
 
@@ -1379,5 +1494,126 @@ export class ReservationService {
       }
     }
     return { sent };
+  }
+
+  static async notifyGuest(merchantId: string, id: string, kind: ReservationSmsKind) {
+    const merchant = await getMerchant(merchantId);
+    const row = await this.get(merchantId, id);
+    const settings = resolveSettings(merchant.reservationSettings);
+    if (settings.waitlistSmsEnabled === false) return { sent: false, reason: "disabled" };
+    const extras = parseReservationExtras(row.extras);
+    const locale = resolveTxLocale({
+      guestLocale: (row as { guestLocale?: string | null }).guestLocale,
+      shopLanguage: merchant.shopLanguage,
+      panelLanguage: merchant.panelLanguage,
+    });
+    const sms = buildReservationSms({
+      kind,
+      locale,
+      shopName: merchant.name || "Restaurant",
+      guestName: row.guestName,
+      when: formatDateTimeDDMMYYYY(row.reservedAt),
+      partySize: row.partySize,
+      quotedWaitMinutes: extras.quotedWaitMinutes,
+      phone: merchant.phone,
+    });
+
+    const webhook = smsWebhookUrl();
+    if (webhook && row.guestPhone) {
+      try {
+        await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: row.guestPhone,
+            body: sms.body,
+            merchantId,
+            reservationId: row.id,
+            kind,
+          }),
+        });
+      } catch (err) {
+        console.warn("[reservations] SMS webhook failed", err);
+      }
+    }
+
+    if (row.guestEmail && (await EmailService.isConfigured(merchant.id))) {
+      try {
+        await EmailService.send({
+          to: row.guestEmail,
+          subject: sms.body.slice(0, 80),
+          html: `<p style="font-family:system-ui,sans-serif">${sms.body}</p>`,
+          text: sms.body,
+          merchantId: merchant.id,
+          emailType: "reservation_status",
+        });
+      } catch (err) {
+        console.warn("[reservations] SMS email fallback failed", err);
+      }
+    }
+
+    extras.lastGuestSmsAt = new Date().toISOString();
+    extras.lastGuestSmsKind = kind;
+    const db = getDb();
+    await db
+      .update(schema.reservations)
+      .set({ extras, updatedAt: new Date() })
+      .where(and(eq(schema.reservations.id, id), eq(schema.reservations.merchantId, merchantId)));
+    return { sent: true, body: sms.body, via: webhook ? "sms+email" : "email" };
+  }
+
+  static async markDeposit(
+    merchantId: string,
+    id: string,
+    status: NonNullable<ReservationExtras["depositStatus"]>
+  ) {
+    const row = await this.get(merchantId, id);
+    const extras = parseReservationExtras(row.extras);
+    extras.depositStatus = status;
+    const db = getDb();
+    const [updated] = await db
+      .update(schema.reservations)
+      .set({ extras, updatedAt: new Date() })
+      .where(and(eq(schema.reservations.id, id), eq(schema.reservations.merchantId, merchantId)))
+      .returning();
+    return updated;
+  }
+
+  static async hostBoard(merchantId: string) {
+    const merchant = await getMerchant(merchantId);
+    const settings = resolveSettings(merchant.reservationSettings);
+    const now = new Date();
+    const from = new Date(now.getTime() - 4 * 3600_000);
+    const to = new Date(now.getTime() + 20 * 3600_000);
+    const rows = await this.list(merchantId, { from, to, limit: 300 });
+    const tables = await FloorPlanService.listTablesForSync(merchantId).catch(() => []);
+    const waitlist = rows
+      .filter((r) => r.status === "waitlist")
+      .map((r, idx) => {
+        const extras = parseReservationExtras(r.extras);
+        const quoted =
+          extras.quotedWaitMinutes ||
+          quoteWaitMinutes({
+            position: idx,
+            quoteMinutes: settings.waitlistQuoteMinutes,
+            seatingDurationMinutes: settings.seatingDurationMinutes,
+            openTables: tables.filter((t) => t.status === "available").length,
+          });
+        return { ...r, extras, quotedWaitMinutes: quoted };
+      });
+    const book = rows.filter((r) =>
+      ["pending", "confirmed", "seated"].includes(r.status)
+    );
+    return {
+      waitlist,
+      book,
+      tables,
+      settings: {
+        waitlistSmsEnabled: settings.waitlistSmsEnabled !== false,
+        depositEnabled: settings.depositEnabled === true,
+        cancelHoursBefore: settings.cancelHoursBefore,
+        googleReservePublish: settings.googleReservePublish !== false,
+      },
+    };
   }
 }

@@ -1732,7 +1732,7 @@ export default function OrderingPage() {
             })}
           </ul>
         )}
-        {cart.length > 0 ? (
+        {cart.length > 0 && merchant?.menuShowUpsells !== false ? (
           <ShopCartSimilarProducts
             products={cartSimilarProducts}
             showImages={showProductImages}

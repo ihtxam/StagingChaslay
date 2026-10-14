@@ -173,6 +173,8 @@ export const merchants = pgTable(
     channelSelectMode: varchar("channel_select_mode", { length: 20 }).default("checkout").notNull(),
     /** Show product photos on the public menu */
     menuShowProductImages: boolean("menu_show_product_images").default(true).notNull(),
+    /** Owner.com-style “customers also add” strip at checkout */
+    menuShowUpsells: boolean("menu_show_upsells").default(true).notNull(),
     /** Show category banner images on the public menu */
     menuShowCategoryBanners: boolean("menu_show_category_banners").default(true).notNull(),
     /**
@@ -262,6 +264,10 @@ export const merchants = pgTable(
     giftCardAddonEnabled: boolean("gift_card_addon_enabled").default(false).notNull(),
     /** Fiskaly SIGN DE / SIGN FR merchant credentials */
     fiskalySettings: json("fiskaly_settings").$type<Record<string, unknown> | null>(),
+    /** Como Sense loyalty — merchant API key + branch/POS ids (secrets stay server-side). */
+    comoSettings: json("como_settings").$type<Record<string, unknown> | null>(),
+    /** Phone ordering — public number, hours, Twilio/generic webhook secret. */
+    phoneOrderingSettings: json("phone_ordering_settings").$type<Record<string, unknown> | null>(),
     /** Fixed CHF surcharge added to online card checkouts */
     onlineCardFeeFixed: decimal("online_card_fee_fixed", { precision: 10, scale: 2 }).default("0"),
     /** Percent surcharge on (subtotal+tax+delivery+tip) for online card checkouts */
@@ -344,6 +350,8 @@ export const merchants = pgTable(
     odsAddonEnabled: boolean("ods_addon_enabled").default(false).notNull(),
     /** Paid self-order kiosk addon. Superadmin/reseller only. */
     kioskAddonEnabled: boolean("kiosk_addon_enabled").default(false).notNull(),
+    /** Paid catering module. Superadmin/reseller only — off for every merchant by default. */
+    cateringEnabled: boolean("catering_enabled").default(false).notNull(),
     /**
      * Self-order kiosk configuration:
      * { accessToken, promoSlides, enabledLanguages, terminalId, tableMode, ... }
@@ -429,7 +437,7 @@ export const merchants = pgTable(
      * POS / WebPOS receipt + kitchen + printer profiles:
      * { receiptHeader, receiptFooter, kitchenTicketHeader/Footer, paperWidthMm,
      *   receiptLanguage, receiptShowVatTable/StaffLine/QrCode, receiptLogoUrl,
-     *   autoPrintReceipt, autoPrintKitchen, printers: PosPrinterProfile[] }
+     *   autoPrintReceipt, autoPrintKitchen, autoOpenCashDrawer, printers: PosPrinterProfile[] }
      */
     posPrintSettings: json("pos_print_settings").$type<PosPrintSettings | null>(),
     /**
@@ -447,6 +455,11 @@ export const merchants = pgTable(
      * { enabled, slots: [{ id, start, end, label? }] }
      */
     timeSlotPricingSettings: json("time_slot_pricing_settings").$type<Record<string, unknown> | null>(),
+    /**
+     * Pizza maker templates:
+     * { templates: [{ id, name, portionType, steps, quantityLevels, freeTopping*, linkedProductIds }] }
+     */
+    pizzaBuilderSettings: json("pizza_builder_settings").$type<Record<string, unknown> | null>(),
     /**
      * Just Eat / Uber Eats credentials + toggles:
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
@@ -1442,6 +1455,8 @@ export const orders = pgTable(
     notes: text("notes"),
     /** Fiskaly KassenSichV / NF525 signature payload for the receipt */
     fiskalySignature: json("fiskaly_signature").$type<Record<string, unknown> | null>(),
+    /** Como Sense submitPurchase mapping (transaction id / confirmation). */
+    comoLoyalty: json("como_loyalty").$type<Record<string, unknown> | null>(),
     shippingAddress: text("shipping_address"),
     /** Geocoded destination for delivery map (shop checkout / assign). */
     deliveryLatitude: decimal("delivery_latitude", { precision: 10, scale: 7 }),
@@ -2186,6 +2201,17 @@ export type ReservationSettings = {
   googleReserveUrl?: string | null;
   /** Google Business “Order” URL for this location */
   googleOrderUrl?: string | null;
+  /** SMS waitlist + table-ready texts (uses SMS_WEBHOOK_URL / email fallback) */
+  waitlistSmsEnabled?: boolean;
+  /** Host quoted wait in minutes. Null = compute from queue + seating duration */
+  waitlistQuoteMinutes?: number | null;
+  depositEnabled?: boolean;
+  depositAmount?: number | null;
+  depositType?: "fixed" | "percent";
+  /** Free cancel if the slot is still this many hours away */
+  cancelHoursBefore?: number | null;
+  /** Publish shop /reservations as the Google Reserve destination + JSON-LD */
+  googleReservePublish?: boolean;
 };
 
 export type ReservationStatus =
@@ -2304,7 +2330,7 @@ export type MarketingSettings = {
   reorderReminderBody?: string | null;
 };
 
-export type MarketingAutomationTrigger = "order_paid" | "reservation_confirmed";
+export type MarketingAutomationTrigger = "order_paid" | "reservation_confirmed" | "winback_lapsed";
 
 export type MarketingAutomationJourney = {
   id: string;
@@ -2428,6 +2454,14 @@ export const reservations = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    extras: json("extras").$type<{
+      depositAmount?: number | null;
+      depositStatus?: "none" | "due" | "collected" | "refunded" | "forfeited";
+      quotedWaitMinutes?: number | null;
+      policyAcceptedAt?: string | null;
+      lastGuestSmsAt?: string | null;
+      lastGuestSmsKind?: string | null;
+    } | null>(),
   },
   (table) => ({
     merchantReservedIdx: index("reservations_merchant_reserved_idx").on(
@@ -4178,7 +4212,7 @@ export const platformShopOrdersRelations = relations(platformShopOrders, ({ one 
 // ============================================================================
 
 export type PlatformLogLevel = "debug" | "info" | "warn" | "error";
-export type PlatformMessageKind = "announcement" | "incident" | "whats_new";
+export type PlatformMessageKind = "announcement" | "incident" | "whats_new" | "support_reply";
 export type PlatformMessageAudience =
   | "all_merchants"
   | "all_resellers"
@@ -4262,6 +4296,27 @@ export const platformMessageDismissals = pgTable(
   })
 );
 
+/** Published software versions shown in the merchant panel sidebar. */
+export const softwareReleases = pgTable(
+  "software_releases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    version: varchar("version", { length: 40 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body").notNull().default(""),
+    product: varchar("product", { length: 30 }).notNull().default("all"),
+    isPublished: boolean("is_published").notNull().default(true),
+    publishedAt: timestamp("published_at").defaultNow().notNull(),
+    createdBySuperadminId: uuid("created_by_superadmin_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    publishedIdx: index("software_releases_published_idx").on(table.isPublished, table.publishedAt),
+    versionIdx: index("software_releases_version_idx").on(table.version),
+  })
+);
+
 // ============================================================================
 // SUPPORT TICKETS
 // ============================================================================
@@ -4274,10 +4329,10 @@ export const supportTickets = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     ticketNumber: varchar("ticket_number", { length: 20 }).notNull(),
-    merchantId: uuid("merchant_id")
-      .notNull()
-      .references(() => merchants.id, { onDelete: "cascade" }),
+    merchantId: uuid("merchant_id").references(() => merchants.id, { onDelete: "cascade" }),
     resellerId: uuid("reseller_id").references(() => resellers.id, { onDelete: "set null" }),
+    /** merchant = store ticket; reseller = agency-owned ticket to superadmin. */
+    requesterRole: varchar("requester_role", { length: 20 }).notNull().default("merchant"),
     category: varchar("category", { length: 30 }).notNull().default("technical"),
     subcategory: varchar("subcategory", { length: 80 }),
     subject: varchar("subject", { length: 255 }).notNull(),
@@ -4318,6 +4373,27 @@ export const supportTicketMessages = pgTable(
   (table) => ({
     ticketIdx: index("support_ticket_messages_ticket_idx").on(table.ticketId),
     createdIdx: index("support_ticket_messages_created_idx").on(table.createdAt),
+  })
+);
+
+export const publishedPullRequests = pgTable(
+  "published_pull_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    number: integer("number").notNull(),
+    title: varchar("title", { length: 500 }).notNull(),
+    body: text("body").notNull().default(""),
+    htmlUrl: varchar("html_url", { length: 500 }).notNull().default(""),
+    author: varchar("author", { length: 120 }).notNull().default(""),
+    baseBranch: varchar("base_branch", { length: 80 }).notNull().default(""),
+    mergedAt: timestamp("merged_at").notNull(),
+    syncedAt: timestamp("synced_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    numberIdx: uniqueIndex("published_pull_requests_number_idx").on(table.number),
+    mergedIdx: index("published_pull_requests_merged_idx").on(table.mergedAt),
   })
 );
 

@@ -112,12 +112,12 @@ export default function PlatformStatusBanner({
                   {msg.externalUrl ? (
                     <a
                       href={msg.externalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      target={msg.externalUrl.startsWith('/') ? undefined : '_blank'}
+                      rel={msg.externalUrl.startsWith('/') ? undefined : 'noopener noreferrer'}
                       className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-stone-200 dark:border-stone-600 px-3 py-2 text-sm font-medium text-stone-800 dark:text-stone-100 hover:bg-stone-50 dark:hover:bg-stone-800"
                     >
                       {msg.externalLabel || t('platformStatusDetails')}
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      {msg.externalUrl.startsWith('/') ? null : <ExternalLink className="w-3.5 h-3.5" />}
                     </a>
                   ) : null}
                 </div>

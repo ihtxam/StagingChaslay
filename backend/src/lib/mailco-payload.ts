@@ -64,10 +64,35 @@ export type MailcoRawMessagePayload = {
   metadata: Record<string, string>;
 };
 
-const DEFAULT_FROM_NAME = "Reborn";
+/** Visible From name for platform Mailco / Postal (hello@… must not appear as “hello”). */
+export const DEFAULT_PLATFORM_FROM_NAME = "RebornPOS";
 
-function normalizeDisplayName(name?: string | null, fallback = DEFAULT_FROM_NAME): string {
-  return String(name || "").trim() || fallback;
+/** Old/empty/local-part names that inboxes treat as the mailbox user (“hello”). */
+const GENERIC_PLATFORM_FROM_NAMES = new Set(["", "reborn", "hello", "noreply", "no-reply", "mailer"]);
+
+function emailLocalPart(email?: string | null): string {
+  const trimmed = String(email || "").trim();
+  const at = trimmed.indexOf("@");
+  if (at <= 0) return "";
+  return trimmed.slice(0, at).toLowerCase();
+}
+
+/**
+ * Platform From display name. Rejects empty, the mailbox local-part (hello@… → “hello”),
+ * and the previous default “Reborn” so receipts show RebornPOS.
+ */
+export function resolveMailcoFromName(
+  name?: string | null,
+  fromEmail?: string | null,
+  fallback = DEFAULT_PLATFORM_FROM_NAME
+): string {
+  const trimmed = String(name || "").trim();
+  const local = emailLocalPart(fromEmail);
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (GENERIC_PLATFORM_FROM_NAMES.has(lower)) return fallback;
+  if (local && lower === local) return fallback;
+  return trimmed;
 }
 
 export function buildMailcoRawMessagePayload(input: {
@@ -88,11 +113,8 @@ export function buildMailcoRawMessagePayload(input: {
       .trim() ||
     input.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const replyToEmail = String(input.replyToEmail || "").trim();
-  const fromName = normalizeDisplayName(input.fromName);
-  const replyToName = normalizeDisplayName(
-    input.replyToName || input.fromName,
-    fromName
-  );
+  const fromName = resolveMailcoFromName(input.fromName, input.fromEmail);
+  const replyToName = String(input.replyToName || "").trim() || fromName;
   const attachments = buildMailcoAttachments(input.attachments);
 
   const replyTo = replyToEmail
@@ -102,20 +124,21 @@ export function buildMailcoRawMessagePayload(input: {
       }
     : undefined;
 
+  const headers: Record<string, string> = {
+    From: formatMailAddress(input.fromEmail, fromName),
+  };
+  if (replyTo) {
+    headers["Reply-To"] = formatMailAddress(replyTo.email, replyTo.name);
+  }
+
   return {
     from: {
       email: input.fromEmail,
       name: fromName,
     },
     to: [{ email: input.to }],
-    ...(replyTo
-      ? {
-          reply_to: replyTo,
-          headers: {
-            "Reply-To": formatMailAddress(replyTo.email, replyTo.name),
-          },
-        }
-      : {}),
+    ...(replyTo ? { reply_to: replyTo } : {}),
+    headers,
     subject: input.subject,
     html: input.html,
     text,

@@ -112,6 +112,31 @@ export function formatAdyenError(
   return raw;
 }
 
+/** Merchant billing UI: never surface Superadmin Adyen setup recipes. */
+export function merchantBillingUserMessage(err: unknown, fallback: string): string {
+  const data =
+    err && typeof err === 'object' && 'response' in err
+      ? (err as { response?: { data?: { code?: string; error?: string } } }).response?.data
+      : undefined;
+  if (data?.code === 'BILLING_UNAVAILABLE') return fallback;
+  let raw = data?.error || '';
+  if (!raw) {
+    if (err instanceof Error) raw = err.message;
+    else if (typeof err === 'string') raw = err;
+    else if (err && typeof err === 'object' && 'message' in err) {
+      raw = String((err as { message?: string }).message || '');
+    }
+  }
+  if (
+    /Adyen|Superadmin|Unauthorized|platform credentials|Settings → Payment|AQE|test_|live_/i.test(
+      raw
+    )
+  ) {
+    return fallback;
+  }
+  return raw || fallback;
+}
+
 export function adyenLocaleFor(locale?: string): string {
   const value = String(locale || '').toLowerCase();
   if (value.startsWith('fr')) return 'fr-CH';

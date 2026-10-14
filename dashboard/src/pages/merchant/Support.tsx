@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import {
-  BookOpen,
-  ExternalLink,
-  LifeBuoy,
-  Paperclip,
-  Search,
-  Send,
-} from 'lucide-react';
+import { BookOpen, ExternalLink, LifeBuoy, Paperclip, Search, Send } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n, type Locale } from '@/lib/i18n';
 import {
@@ -17,8 +10,13 @@ import {
   searchHelpArticles,
   SUPPORT_SUBCATEGORIES,
 } from '@/lib/help-center/chaslay-help';
+import { searchGuideChapters } from '@/lib/product-guides';
+import { parseSupportTicketIdFromPath } from '@/lib/support-ticket-alert';
+import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';
+import ProductGuidesPage from '../shared/ProductGuidesPage';
+import SoftwareUpdates from './SoftwareUpdates';
 
-type Tab = 'help' | 'new' | 'tickets';
+type Tab = 'help' | 'new' | 'tickets' | 'updates';
 
 type Ticket = {
   id: string;
@@ -43,13 +41,34 @@ type TicketMessage = {
 type TicketDetail = Ticket & { messages: TicketMessage[] };
 
 const CATEGORIES = ['technical', 'accounting', 'miscellaneous'] as const;
+const TABS: Tab[] = ['help', 'new', 'tickets', 'updates'];
+
+function parseTab(raw: string | null, ticket: string | null): Tab {
+  if (ticket) return 'tickets';
+  return raw && (TABS as string[]).includes(raw) ? (raw as Tab) : 'help';
+}
 
 export default function Support() {
   const { t, locale, setLocale } = useI18n();
-  const [tab, setTab] = useState<Tab>('help');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const platformUi = usePlatformMessagesUi();
+  const ticketFromQuery = searchParams.get('ticket');
+  const tab = parseTab(searchParams.get('tab'), ticketFromQuery);
+  const setTab = useCallback(
+    (next: Tab) => {
+      const nextParams = new URLSearchParams(searchParams);
+      if (next === 'help') nextParams.delete('tab');
+      else nextParams.set('tab', next);
+      if (next !== 'tickets') nextParams.delete('ticket');
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
+  const [guideChapterId, setGuideChapterId] = useState<string | null>(null);
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [ticketFilter, setTicketFilter] = useState('open');
@@ -68,7 +87,10 @@ export default function Support() {
     () => (search.trim() ? searchHelpArticles(locale, search) : []),
     [locale, search]
   );
-
+  const guideResults = useMemo(
+    () => (search.trim() ? searchGuideChapters('merchant', search, locale) : []),
+    [locale, search]
+  );
   const subcategories = SUPPORT_SUBCATEGORIES[formCategory]?.[locale] || [];
 
   const loadTickets = useCallback(async () => {
@@ -84,16 +106,31 @@ export default function Support() {
     if (tab === 'tickets') void loadTickets();
   }, [tab, loadTickets]);
 
-  const openTicket = async (id: string) => {
-    try {
-      const res = await api.get(`/merchant/support/tickets/${id}`);
-      setActiveTicket(res.data.ticket);
-    } catch (e: unknown) {
-      toast.error(
-        (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load ticket'
-      );
-    }
-  };
+  const refreshAlerts = platformUi?.refresh;
+  const openTicket = useCallback(
+    async (id: string) => {
+      try {
+        const res = await api.get(`/merchant/support/tickets/${id}`);
+        setActiveTicket(res.data.ticket);
+        setReply('');
+        setTab('tickets');
+        void refreshAlerts?.();
+      } catch (e: unknown) {
+        toast.error(
+          (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load ticket'
+        );
+      }
+    },
+    [refreshAlerts, setTab]
+  );
+
+  useEffect(() => {
+    const fromQuery =
+      ticketFromQuery ||
+      parseSupportTicketIdFromPath(`${window.location.pathname}${window.location.search}`);
+    if (!fromQuery) return;
+    void openTicket(fromQuery);
+  }, [ticketFromQuery, openTicket]);
 
   const submitTicket = async () => {
     if (!formSubject.trim() || !formBody.trim() || !formSub) {
@@ -113,9 +150,15 @@ export default function Support() {
       setFormSubject('');
       setFormBody('');
       setFormFile(null);
+      setTicketFilter('open');
       setTab('tickets');
       setActiveTicket(res.data.ticket);
-      await loadTickets();
+      try {
+        const list = await api.get('/merchant/support/tickets', { params: { status: 'open' } });
+        setTickets(list.data.tickets || []);
+      } catch {
+        setTickets([]);
+      }
     } catch (e: unknown) {
       toast.error(
         (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to create ticket'
@@ -142,16 +185,44 @@ export default function Support() {
     }
   };
 
+  const ticketStatusLabel = (status: string) => {
+    if (status === 'closed') return t('supportFilterClosed');
+    if (status === 'answered') return t('supportFilterAnswered');
+    return t('supportFilterOpen');
+  };
+
+  const closeTicket = async () => {
+    if (!activeTicket || activeTicket.status === 'closed') return;
+    if (!window.confirm(t('supportCloseTicketConfirm'))) return;
+    setBusy(true);
+    try {
+      const res = await api.post(`/merchant/support/tickets/${activeTicket.id}/close`);
+      setActiveTicket(res.data.ticket);
+      setReply('');
+      await loadTickets();
+      toast.success(t('supportTicketClosedToast'));
+    } catch (e: unknown) {
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+          t('supportCloseTicketFailed')
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const article = useMemo(() => {
     if (!selectedCategory || !selectedArticle) return null;
     const cat = categories.find((c) => c.id === selectedCategory);
     return cat?.articles.find((a) => a.id === selectedArticle) || null;
   }, [categories, selectedCategory, selectedArticle]);
 
+  const searching = Boolean(search.trim());
+
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="mx-auto w-full max-w-5xl space-y-4 pb-10">
       <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-2">
-        {(['help', 'new', 'tickets'] as Tab[]).map((key) => (
+        {TABS.map((key) => (
           <button
             key={key}
             type="button"
@@ -160,25 +231,24 @@ export default function Support() {
               tab === key ? 'bg-teal-600 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
             }`}
           >
-            {key === 'help' ? t('supportHelpCenter') : key === 'new' ? t('supportNewRequest') : t('supportMyTickets')}
+            {key === 'help'
+              ? t('supportHelpCenter')
+              : key === 'new'
+                ? t('supportNewRequest')
+                : key === 'tickets'
+                  ? t('supportMyTickets')
+                  : t('softwareUpdatesNav')}
           </button>
         ))}
       </div>
 
       {tab === 'help' ? (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t('supportHelpCenter')}</p>
               <h1 className="text-xl font-bold text-stone-900">{t('supportHelpHero')}</h1>
-              <p className="text-sm text-stone-600 mt-1 max-w-2xl">{t('supportHelpHeroHint')}</p>
-              <Link
-                to="/merchant/guides"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-800 underline underline-offset-2"
-              >
-                <BookOpen className="h-4 w-4" />
-                {t('productGuidesTitle')}
-              </Link>
+              <p className="mt-1 max-w-2xl text-sm text-stone-600">{t('supportHelpHeroHint')}</p>
             </div>
             <div className="flex items-center gap-1">
               {(['en', 'fr', 'de'] as Locale[]).map((lang) => (
@@ -187,21 +257,18 @@ export default function Support() {
                   type="button"
                   title={lang.toUpperCase()}
                   onClick={() => setLocale(lang)}
-                  className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center border ${
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg border text-lg ${
                     locale === lang ? 'border-teal-500 bg-teal-50' : 'border-stone-200 bg-white'
                   }`}
                 >
                   {LANG_FLAGS[lang]}
                 </button>
               ))}
-              <button type="button" className="ml-2 p-2 rounded-lg border border-stone-200" aria-label={t('search')}>
-                <Search className="w-4 h-4 text-stone-500" />
-              </button>
             </div>
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
               className="input w-full pl-10"
               placeholder={t('supportSearchPlaceholder')}
@@ -210,54 +277,97 @@ export default function Support() {
             />
           </div>
 
-          {searchResults.length ? (
-            <ul className="space-y-2">
-              {searchResults.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    className="w-full text-left rounded-xl border border-teal-200 bg-white p-4 hover:bg-teal-50/50"
-                    onClick={() => {
-                      setSelectedCategory(r.categoryId);
-                      setSelectedArticle(r.id);
-                      setSearch('');
-                    }}
-                  >
-                    <p className="text-xs text-teal-700">{r.categoryTitle}</p>
-                    <p className="font-semibold text-stone-900">{r.title}</p>
-                    <p className="text-sm text-stone-600 mt-1">{r.summary}</p>
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {searching ? (
+            <div className="space-y-4">
+              {guideResults.length ? (
+                <div className="space-y-2">
+                  <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-800">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    {t('supportGuidesHeading')}
+                  </p>
+                  <ul className="space-y-2">
+                    {guideResults.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          className="w-full rounded-xl border border-rose-200 bg-white p-4 text-left hover:bg-rose-50/50"
+                          onClick={() => {
+                            setGuideChapterId(r.id);
+                            setSelectedArticle(null);
+                            setSelectedCategory(null);
+                            setSearch('');
+                          }}
+                        >
+                          <p className="text-xs text-rose-800">{t('supportGuidesHeading')}</p>
+                          <p className="font-semibold text-stone-900">{r.title}</p>
+                          <p className="mt-1 text-sm text-stone-600">{r.summary}</p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {searchResults.length ? (
+                <ul className="space-y-2">
+                  {searchResults.map((r) => (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl border border-teal-200 bg-white p-4 text-left hover:bg-teal-50/50"
+                        onClick={() => {
+                          setSelectedCategory(r.categoryId);
+                          setSelectedArticle(r.id);
+                          setGuideChapterId(null);
+                          setSearch('');
+                        }}
+                      >
+                        <p className="text-xs text-teal-700">{r.categoryTitle}</p>
+                        <p className="font-semibold text-stone-900">{r.title}</p>
+                        <p className="mt-1 text-sm text-stone-600">{r.summary}</p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {!guideResults.length && !searchResults.length ? (
+                <p className="text-sm text-stone-500">{t('supportNoSearchResults')}</p>
+              ) : null}
+            </div>
           ) : article ? (
-            <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-3">
+            <div className="space-y-3 rounded-xl border border-stone-200 bg-white p-5">
               <button type="button" className="text-sm text-teal-600" onClick={() => setSelectedArticle(null)}>
                 ← {t('back')}
               </button>
               <h2 className="text-lg font-bold">{article.title}</h2>
-              <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{article.body}</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{article.body}</p>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className="text-left rounded-xl border border-teal-100 bg-gradient-to-br from-teal-50/80 to-white p-4 hover:border-teal-300 transition-colors"
-                  onClick={() => {
-                    setSelectedCategory(cat.id);
-                    setSelectedArticle(cat.articles[0]?.id || null);
-                  }}
-                >
-                  <h3 className="font-bold text-teal-900">{cat.title}</h3>
-                  <p className="text-sm text-stone-600 mt-2 leading-relaxed">{cat.summary}</p>
-                </button>
-              ))}
-            </div>
+            <>
+              <ProductGuidesPage
+                audience="merchant"
+                embedded
+                initialChapterId={guideChapterId || undefined}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className="rounded-xl border border-teal-100 bg-gradient-to-br from-teal-50/80 to-white p-4 text-left transition-colors hover:border-teal-300"
+                    onClick={() => {
+                      setSelectedCategory(cat.id);
+                      setSelectedArticle(cat.articles[0]?.id || null);
+                    }}
+                  >
+                    <h3 className="font-bold text-teal-900">{cat.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-stone-600">{cat.summary}</p>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
 
-          <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
             <div>
               <p className="text-xs font-semibold uppercase text-stone-500">{t('supportStatusTitle')}</p>
               <p className="text-sm text-stone-600">{t('supportStatusHint')}</p>
@@ -269,7 +379,7 @@ export default function Support() {
               className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium hover:bg-stone-100"
             >
               {t('supportCheckStatus')}
-              <ExternalLink className="w-3.5 h-3.5" />
+              <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>
         </div>
@@ -278,7 +388,7 @@ export default function Support() {
       {tab === 'new' ? (
         <div className="space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{t('supportNewRequest')}</h2>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
@@ -294,7 +404,7 @@ export default function Support() {
                 }`}
               >
                 {formCategory === cat ? (
-                  <span className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
+                  <span className="absolute -left-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
                     ✓
                   </span>
                 ) : null}
@@ -305,11 +415,7 @@ export default function Support() {
 
           <label className="block text-sm font-medium text-stone-700">
             {t('supportSubcategoryLabel')}
-            <select
-              className="input mt-1 w-full"
-              value={formSub}
-              onChange={(e) => setFormSub(e.target.value)}
-            >
+            <select className="input mt-1 w-full" value={formSub} onChange={(e) => setFormSub(e.target.value)}>
               <option value="">{t('supportChooseSubcategory')}</option>
               {subcategories.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -327,15 +433,15 @@ export default function Support() {
           />
 
           <textarea
-            className="input w-full min-h-[140px]"
+            className="input min-h-[140px] w-full"
             placeholder={t('supportDescribeIssue')}
             value={formBody}
             onChange={(e) => setFormBody(e.target.value)}
           />
 
           <div>
-            <label className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-4 py-2 text-sm cursor-pointer hover:bg-stone-100">
-              <Paperclip className="w-4 h-4" />
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-4 py-2 text-sm hover:bg-stone-100">
+              <Paperclip className="h-4 w-4" />
               {t('supportAddAttachment')}
               <input
                 type="file"
@@ -344,11 +450,11 @@ export default function Support() {
                 onChange={(e) => setFormFile(e.target.files?.[0] || null)}
               />
             </label>
-            {formFile ? <p className="text-xs text-stone-500 mt-1">{formFile.name}</p> : null}
-            <p className="text-xs text-stone-400 mt-1">.txt, .jpg, .png, .bmp, .gif, .pdf</p>
+            {formFile ? <p className="mt-1 text-xs text-stone-500">{formFile.name}</p> : null}
+            <p className="mt-1 text-xs text-stone-400">.txt, .jpg, .png, .bmp, .gif, .pdf</p>
           </div>
 
-          <button type="button" className="btn-primary w-full sm:w-auto px-8" disabled={busy} onClick={() => void submitTicket()}>
+          <button type="button" className="btn-primary w-full px-8 sm:w-auto" disabled={busy} onClick={() => void submitTicket()}>
             {t('send')}
           </button>
         </div>
@@ -363,37 +469,51 @@ export default function Support() {
               <option value="closed">{t('supportFilterClosed')}</option>
               <option value="all">{t('all')}</option>
             </select>
-            <ul className="space-y-1 max-h-[480px] overflow-y-auto">
+            <ul className="max-h-[480px] space-y-1 overflow-y-auto">
               {tickets.map((tk) => (
                 <li key={tk.id}>
                   <button
                     type="button"
                     onClick={() => void openTicket(tk.id)}
-                    className={`w-full text-left rounded-lg px-3 py-2 text-sm border ${
-                      activeTicket?.id === tk.id ? 'border-teal-500 bg-teal-50' : 'border-stone-200 bg-white hover:bg-stone-50'
+                    className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
+                      activeTicket?.id === tk.id
+                        ? 'border-teal-500 bg-teal-50'
+                        : 'border-stone-200 bg-white hover:bg-stone-50'
                     }`}
                   >
                     <p className="font-mono text-xs text-stone-500">{tk.ticketNumber}</p>
-                    <p className="font-medium truncate">{tk.subject}</p>
-                    <p className="text-xs capitalize text-stone-500">{tk.status}</p>
+                    <p className="truncate font-medium">{tk.subject}</p>
+                    <p className="text-xs capitalize text-stone-500">{ticketStatusLabel(tk.status)}</p>
                   </button>
                 </li>
               ))}
-              {!tickets.length ? <p className="text-sm text-stone-500 p-2">{t('supportNoTickets')}</p> : null}
+              {!tickets.length ? <p className="p-2 text-sm text-stone-500">{t('supportNoTickets')}</p> : null}
             </ul>
-            <p className="text-[11px] text-stone-400 px-1">{t('supportAutoCloseHint')}</p>
+            <p className="px-1 text-[11px] text-stone-400">{t('supportAutoCloseHint')}</p>
           </div>
 
-          <div className="rounded-xl border border-stone-200 bg-white min-h-[360px] flex flex-col">
+          <div className="flex min-h-[360px] flex-col rounded-xl border border-stone-200 bg-white">
             {activeTicket ? (
               <>
-                <div className="border-b border-stone-100 px-4 py-3">
-                  <h3 className="font-semibold">{activeTicket.subject}</h3>
-                  <p className="text-xs text-stone-500">
-                    {activeTicket.ticketNumber} · {activeTicket.status}
-                  </p>
+                <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-4 py-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold">{activeTicket.subject}</h3>
+                    <p className="text-xs text-stone-500">
+                      {activeTicket.ticketNumber} · {ticketStatusLabel(activeTicket.status)}
+                    </p>
+                  </div>
+                  {activeTicket.status !== 'closed' ? (
+                    <button
+                      type="button"
+                      className="btn-secondary shrink-0 text-sm"
+                      disabled={busy}
+                      onClick={() => void closeTicket()}
+                    >
+                      {t('supportCloseTicket')}
+                    </button>
+                  ) : null}
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 space-y-3 overflow-y-auto p-4">
                   {activeTicket.messages.map((m) => (
                     <div
                       key={m.id}
@@ -401,12 +521,12 @@ export default function Support() {
                         m.authorRole === 'merchant'
                           ? 'ml-auto bg-teal-600 text-white'
                           : m.authorRole === 'system'
-                            ? 'mx-auto bg-stone-100 text-stone-600 text-center text-xs'
+                            ? 'mx-auto bg-stone-100 text-center text-xs text-stone-600'
                             : 'bg-stone-100 text-stone-800'
                       }`}
                     >
                       {m.authorRole !== 'system' && m.authorName ? (
-                        <p className="text-[10px] opacity-80 mb-0.5">{m.authorName}</p>
+                        <p className="mb-0.5 text-[10px] opacity-80">{m.authorName}</p>
                       ) : null}
                       <p className="whitespace-pre-wrap">{m.body}</p>
                       {m.attachmentUrl ? (
@@ -414,7 +534,7 @@ export default function Support() {
                           href={m.attachmentUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs underline mt-1 inline-block"
+                          className="mt-1 inline-block text-xs underline"
                         >
                           {m.attachmentName || t('supportAttachment')}
                         </a>
@@ -423,7 +543,7 @@ export default function Support() {
                   ))}
                 </div>
                 {activeTicket.status !== 'closed' ? (
-                  <div className="border-t border-stone-100 p-3 flex gap-2">
+                  <div className="flex gap-2 border-t border-stone-100 p-3">
                     <input
                       className="input flex-1 text-sm"
                       placeholder={t('supportTypeReply')}
@@ -432,22 +552,24 @@ export default function Support() {
                       onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void sendReply()}
                     />
                     <button type="button" className="btn-primary px-3" disabled={busy} onClick={() => void sendReply()}>
-                      <Send className="w-4 h-4" />
+                      <Send className="h-4 w-4" />
                     </button>
                   </div>
                 ) : (
-                  <p className="text-sm text-stone-500 p-4 text-center">{t('supportTicketClosedHint')}</p>
+                  <p className="p-4 text-center text-sm text-stone-500">{t('supportTicketClosedHint')}</p>
                 )}
               </>
             ) : (
-              <div className="flex flex-1 items-center justify-center text-stone-400 p-8">
-                <LifeBuoy className="w-8 h-8 mr-2 opacity-40" />
+              <div className="flex flex-1 items-center justify-center p-8 text-stone-400">
+                <LifeBuoy className="mr-2 h-8 w-8 opacity-40" />
                 {t('supportSelectTicket')}
               </div>
             )}
           </div>
         </div>
       ) : null}
+
+      {tab === 'updates' ? <SoftwareUpdates embedded /> : null}
     </div>
   );
 }

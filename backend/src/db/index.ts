@@ -39,6 +39,7 @@ export type {
   MerchantBrevoSettings,
   MarketingSettings,
   MarketingAutomationSettings,
+  MarketingAutomationTrigger,
   SmartSegmentsSettings,
   SmartSegmentRule,
   AiCoachCache,

@@ -18,6 +18,7 @@ import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signag
 import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { listAppVersionHistory } from "@/lib/downloads";
 
@@ -88,7 +89,7 @@ router.put("/plans/:planId", async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/superadmin/plans/:planId
- * Soft-deactivate a subscription plan/package
+ * Hard-delete a subscription plan/package
  */
 router.delete("/plans/:planId", async (req: Request, res: Response) => {
   try {
@@ -97,11 +98,11 @@ router.delete("/plans/:planId", async (req: Request, res: Response) => {
     if (existing.ownerType !== "reseller" || existing.ownerId !== ownerId) {
       return res.status(404).json({ error: "Package not found" });
     }
-    const plan = await SubscriptionPlansService.remove(req.params.planId);
-    res.json({ success: true, plan });
+    const result = await SubscriptionPlansService.remove(req.params.planId);
+    res.json({ success: true, ...result });
   } catch (error) {
-    console.error("Error deactivating plan:", error);
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate plan" });
+    console.error("Error deleting plan:", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete plan" });
   }
 });
 
@@ -152,10 +153,10 @@ router.delete("/addons/:addonId", async (req: Request, res: Response) => {
     if (existing.ownerType !== "reseller" || existing.ownerId !== ownerId) {
       return res.status(404).json({ error: "Add-on not found" });
     }
-    const addon = await SubscriptionAddonsService.remove(req.params.addonId);
-    res.json({ success: true, addon });
+    const result = await SubscriptionAddonsService.remove(req.params.addonId);
+    res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to deactivate add-on" });
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete add-on" });
   }
 });
 
@@ -189,6 +190,22 @@ router.put("/platform-settings/adyen", async (req: Request, res: Response) => {
     console.error("Error updating platform Adyen settings:", error);
     res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to save Adyen settings",
+    });
+  }
+});
+
+/**
+ * POST /api/superadmin/platform-settings/adyen/ping
+ * Local diagnosis + Checkout /sessions ping. Superadmin-only recipe, no raw secrets.
+ */
+router.post("/platform-settings/adyen/ping", async (_req: Request, res: Response) => {
+  try {
+    const ping = await PlatformSettingsService.pingPlatformAdyenSession();
+    res.json({ success: true, ping });
+  } catch (error) {
+    console.error("Error pinging platform Adyen:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to ping Adyen",
     });
   }
 });
@@ -281,6 +298,71 @@ router.put("/platform-settings/mailco", async (req: Request, res: Response) => {
     });
   }
 });
+
+/**
+ * GET /api/superadmin/platform-settings/desktop
+ */
+router.get("/platform-settings/desktop", async (_req: Request, res: Response) => {
+  try {
+    const desktop = await PlatformSettingsService.getDesktopBranding();
+    res.json({ success: true, desktop });
+  } catch (error) {
+    console.error("Error getting desktop branding:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load desktop branding",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/desktop
+ */
+router.put("/platform-settings/desktop", async (req: Request, res: Response) => {
+  try {
+    const desktop = await PlatformSettingsService.updateDesktopBranding(req.body || {});
+    res.json({ success: true, desktop });
+  } catch (error) {
+    console.error("Error updating desktop branding:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save desktop branding",
+    });
+  }
+});
+
+/**
+ * POST /api/superadmin/platform-settings/desktop/splash
+ * POST /api/superadmin/platform-settings/desktop/icon
+ */
+router.post(
+  "/platform-settings/desktop/:asset",
+  imageUpload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const asset = String(req.params.asset || "");
+      if (asset !== "splash" && asset !== "icon") {
+        return res.status(404).json({ error: "Unknown desktop asset" });
+      }
+      if (!req.file?.buffer) {
+        return res.status(400).json({ error: "Image file is required (field: file)" });
+      }
+      const { saveMerchantImage } = await import("@/services/media-upload.service");
+      const saved = await saveMerchantImage({
+        merchantId: "platform/desktop",
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+        originalName: req.file.originalname,
+      });
+      const desktop = await PlatformSettingsService.updateDesktopBranding(
+        asset === "splash" ? { splashUrl: saved.url } : { iconUrl: saved.url }
+      );
+      res.json({ success: true, desktop, image: saved });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to upload desktop image",
+      });
+    }
+  }
+);
 
 /**
  * GET /api/superadmin/platform-settings/legal
@@ -626,6 +708,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.storekeeperAddonEnabled != null ||
       updates.kioskAddonEnabled != null ||
       updates.kioskEnabled != null ||
+      updates.cateringEnabled != null ||
+      updates.cateringAddonEnabled != null ||
       updates.growthAnalyticsAddonEnabled != null ||
       updates.guestCrmAddonEnabled != null ||
       updates.marketingAutomationAddonEnabled != null ||
@@ -683,6 +767,12 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : updates.kioskEnabled != null
               ? isKioskAddonEnabled(updates.kioskEnabled)
               : undefined,
+        cateringEnabled:
+          updates.cateringEnabled != null
+            ? isCateringAddonEnabled(updates.cateringEnabled)
+            : updates.cateringAddonEnabled != null
+              ? isCateringAddonEnabled(updates.cateringAddonEnabled)
+              : undefined,
         growthAnalyticsAddonEnabled:
           updates.growthAnalyticsAddonEnabled != null
             ? updates.growthAnalyticsAddonEnabled === true
@@ -724,6 +814,8 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.storekeeperAddonEnabled;
       delete updates.kioskAddonEnabled;
       delete updates.kioskEnabled;
+      delete updates.cateringEnabled;
+      delete updates.cateringAddonEnabled;
       delete updates.growthAnalyticsAddonEnabled;
       delete updates.guestCrmAddonEnabled;
       delete updates.marketingAutomationAddonEnabled;
@@ -1322,9 +1414,18 @@ router.put("/editions/:editionId", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/editions/:editionId/clone", async (req: Request, res: Response) => {
+  try {
+    const edition = await EditionService.clonePlatform(req.params.editionId, req.body?.name);
+    res.status(201).json({ success: true, edition });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
 router.delete("/editions/:editionId", async (req: Request, res: Response) => {
   try {
-    const edition = await EditionService.softDelete(req.params.editionId, {
+    const edition = await EditionService.remove(req.params.editionId, {
       requireOwnerType: "platform",
     });
     res.json({ success: true, edition });
@@ -1740,6 +1841,57 @@ router.put("/platform-messages/:messageId", async (req: Request, res: Response) 
   }
 });
 
+router.get("/software-releases", async (_req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const releases = await SoftwareReleaseService.listAll();
+    res.json({ success: true, latest: releases.find((r) => r.isPublished) || null, releases });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list software releases",
+    });
+  }
+});
+
+router.post("/software-releases", async (req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const release = await SoftwareReleaseService.create({
+      ...req.body,
+      createdBySuperadminId: req.user?.id,
+    });
+    res.status(201).json({ success: true, release });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to create software release",
+    });
+  }
+});
+
+router.put("/software-releases/:releaseId", async (req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const release = await SoftwareReleaseService.update(req.params.releaseId, req.body || {});
+    res.json({ success: true, release });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to update software release",
+    });
+  }
+});
+
+router.delete("/software-releases/:releaseId", async (req: Request, res: Response) => {
+  try {
+    const { SoftwareReleaseService } = await import("@/services/software-release.service");
+    const release = await SoftwareReleaseService.remove(req.params.releaseId);
+    res.json({ success: true, release });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to delete software release",
+    });
+  }
+});
+
 router.delete("/platform-messages/:messageId", async (req: Request, res: Response) => {
   try {
     const { PlatformMessageService } = await import("@/services/platform-message.service");
@@ -1822,6 +1974,37 @@ router.get("/support/agents", async (_req: Request, res: Response) => {
     res.json({ success: true, agents });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list agents" });
+  }
+});
+
+router.get("/published-prs", async (req: Request, res: Response) => {
+  try {
+    const { PublishedPrService } = await import("@/services/published-pr.service");
+    const days = Number(req.query.days);
+    const payload = await PublishedPrService.list(Number.isFinite(days) ? days : 30);
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to list published PRs",
+    });
+  }
+});
+
+router.post("/published-prs/sync", async (req: Request, res: Response) => {
+  try {
+    const { PublishedPrService } = await import("@/services/published-pr.service");
+    if (req.body?.repo || req.body?.token !== undefined) {
+      await PublishedPrService.saveConfig({
+        repo: req.body?.repo,
+        token: req.body?.token,
+      });
+    }
+    const payload = await PublishedPrService.sync();
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to refresh published PRs",
+    });
   }
 });
 

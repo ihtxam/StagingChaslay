@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import CartGiftTierEditorModal, {
   type CartGiftTierForm,
@@ -309,7 +310,7 @@ export default function Offers() {
       setProducts(p.data.products || []);
       setStaff(s.data.staff || []);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('offerLoadFailed'));
+      toastLoadError(e, t('offerLoadFailed'));
     } finally {
       setLoading(false);
     }

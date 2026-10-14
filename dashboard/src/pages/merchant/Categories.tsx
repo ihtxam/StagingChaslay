@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
 import { useLocationStore } from '@/store/location';
@@ -92,7 +93,7 @@ export default function Categories() {
       setCategories(response.data.categories || []);
       setCategoryPricingEnabled(!!settingsRes?.data?.settings?.categoryPricingEnabled);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('categoryToastLoadFailed'));
+      toastLoadError(error, t('categoryToastLoadFailed'));
     } finally {
       setLoading(false);
     }

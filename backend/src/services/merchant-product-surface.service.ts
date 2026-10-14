@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import {
   isMerchantProductSurface,
   isProductSurfacePackagingEditionName,
+  getProductSurfacePreset,
   PRODUCT_SURFACE_PRESETS,
   productSurfaceNeedsPosEdition,
   type MerchantProductSurface,
@@ -19,7 +20,7 @@ export class MerchantProductSurfaceService {
     if (!isMerchantProductSurface(surface)) {
       throw new Error("Invalid product surface");
     }
-    const preset = PRODUCT_SURFACE_PRESETS[surface];
+    const preset = getProductSurfacePreset(surface);
     await EditionService.ensureProductSurfaceEditions();
 
     let editionId: string;

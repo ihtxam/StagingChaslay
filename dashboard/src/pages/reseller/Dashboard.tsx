@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Ban,
   Building2,
@@ -7,7 +7,6 @@ import {
   Copy,
   KeyRound,
   LayoutDashboard,
-  BookOpen,
   LifeBuoy,
   Package,
   Plus,
@@ -32,7 +31,12 @@ import {
 } from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
-import { PANEL_NAV_HIDE_OPTIONS } from '@/lib/panel-nav-hidden';
+import {
+  PANEL_NAV_HIDE_OPTIONS,
+  isPanelNavOptionChecked,
+  parsePanelNavHidden,
+  togglePanelNavOption,
+} from '@/lib/panel-nav-hidden';
 import {
   handleLimitNumberInputChange,
   limitNumberInputDisplay,
@@ -44,7 +48,6 @@ import SupportInbox from '../shared/SupportInbox';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import ResellerPackages from './Packages';
 import ModulePriceBook from '@/components/agency/ModulePriceBook';
-import ProductGuidesPage from '../shared/ProductGuidesPage';
 
 function Overview() {
   const { t } = useI18n();
@@ -1087,7 +1090,7 @@ function MerchantsPage() {
                             setPanelNavFor({
                               id: m.id,
                               name: m.name,
-                              hidden: Array.isArray(m.panelNavHidden) ? m.panelNavHidden : [],
+                              hidden: parsePanelNavHidden(m.panelNavHidden),
                             }),
                         },
                         {
@@ -1392,17 +1395,17 @@ function MerchantsPage() {
             <p className="text-xs text-stone-500">{t('panelNavManageHint')}</p>
             <div className="space-y-2">
               {PANEL_NAV_HIDE_OPTIONS.map((opt) => {
-                const checked = panelNavFor.hidden.includes(opt.key);
+                const checked = isPanelNavOptionChecked(opt.key, panelNavFor.hidden);
                 return (
                   <label key={opt.key} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...panelNavFor.hidden, opt.key]
-                          : panelNavFor.hidden.filter((k) => k !== opt.key);
-                        setPanelNavFor({ ...panelNavFor, hidden: next });
+                        setPanelNavFor({
+                          ...panelNavFor,
+                          hidden: togglePanelNavOption(panelNavFor.hidden, opt.key, e.target.checked),
+                        });
                       }}
                     />
                     {t(opt.labelKey as any)}
@@ -2016,26 +2019,16 @@ function EditionsPage() {
     setShowForm(true);
   };
 
-  /** Platform templates are read-only ? clone into an editable agency copy, then open editor. */
-  const customizePlatform = async (ed: any) => {
+  const copyVersion = async (ed: any) => {
     try {
       setSaving(true);
       const res = await api.post(`/reseller/editions/${ed.id}/clone`);
       const cloned = res.data?.edition;
-      toast.success(t('posVersionClonedEditable'));
+      toast.success(t('posVersionCopied'));
       await load();
-      if (cloned?.id) {
-        openEdit(cloned);
-      } else {
-        const refreshed = await api.get('/reseller/editions', { params: { all: '1' } });
-        const list = refreshed.data.editions || [];
-        const match = list.find(
-          (e: any) => e.ownerType === 'reseller' && String(e.name || '').startsWith(ed.name)
-        );
-        if (match) openEdit(match);
-      }
+      if (cloned?.id) openEdit(cloned);
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('resellerSaveFailed'));
+      toast.error(e.response?.data?.error || t('copyFailed'));
     } finally {
       setSaving(false);
     }
@@ -2073,11 +2066,11 @@ function EditionsPage() {
     }
   };
 
-  const deactivate = async (ed: any) => {
-    if (!window.confirm(t('posVersionDeactivateConfirm').replace('{name}', ed.name))) return;
+  const remove = async (ed: any) => {
+    if (!window.confirm(t('posVersionDeleteConfirm').replace('{name}', ed.name))) return;
     try {
       await api.delete(`/reseller/editions/${ed.id}`);
-      toast.success(t('posVersionDeactivated'));
+      toast.success(t('posVersionDeleted'));
       if (editingId === ed.id) {
         setShowForm(false);
         setEditingId(null);
@@ -2186,17 +2179,16 @@ function EditionsPage() {
                   </span>
                 ) : null}
               </div>
-              <div className="mt-4 flex gap-2">
-                {isPlatform ? (
-                  <button
-                    type="button"
-                    className="rounded-full bg-[#9f1239] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
-                    disabled={saving}
-                    onClick={() => void customizePlatform(ed)}
-                  >
-                    {t('posVersionCustomize')}
-                  </button>
-                ) : (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-full border border-stone-200 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+                  disabled={saving}
+                  onClick={() => void copyVersion(ed)}
+                >
+                  {t('copy')}
+                </button>
+                {!isPlatform ? (
                   <>
                     <button
                       type="button"
@@ -2208,12 +2200,12 @@ function EditionsPage() {
                     <button
                       type="button"
                       className="rounded-full border border-rose-100 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50"
-                      onClick={() => void deactivate(ed)}
+                      onClick={() => void remove(ed)}
                     >
-                      {t('deactivate')}
+                      {t('delete')}
                     </button>
                   </>
-                )}
+                ) : null}
               </div>
             </div>
           );
@@ -2268,7 +2260,6 @@ function ResellerShell() {
       label: t('agencyNavSupport'),
       icon: <LifeBuoy />,
       children: [
-        { label: t('resellerGuidesNav'), path: '/reseller/guides', icon: <BookOpen /> },
         { label: t('supportInboxTitle'), path: '/reseller/support', icon: <LifeBuoy /> },
       ],
     },
@@ -2298,7 +2289,7 @@ function ResellerShell() {
             <Route path="licenses" element={<LicensesPage />} />
             <Route path="editions" element={<EditionsPage />} />
             <Route path="packages" element={<ResellerPackages />} />
-            <Route path="guides" element={<ProductGuidesPage audience="reseller" />} />
+            <Route path="guides" element={<Navigate to="/reseller/support" replace />} />
             <Route path="support" element={<SupportInbox mode="reseller" />} />
             <Route path="notifications" element={<PlatformNotificationsHistory />} />
           </Routes>

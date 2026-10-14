@@ -49,5 +49,7 @@ print-agent-android/.secrets/
 # Print agent packaged binaries (rebuild via print-agent/build-installer.ps1)
 print-agent/dist/
 backend/public/downloads/*.exe
+backend/public/published-prs.snapshot
+backend/public/published-prs.json
 desktop/src-tauri/target/
 desktop/node_modules/

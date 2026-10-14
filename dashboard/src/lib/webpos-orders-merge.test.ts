@@ -57,6 +57,18 @@ test('onlineOrderAsPosOrder maps fulfillment channel', () => {
   assert.equal(row.total, 25.5);
 });
 
+test('mergeOrdersWithOnlineForAllFilter keeps a future scheduled WEB- ticket', () => {
+  const scheduled: OnlineOrder = {
+    ...onlineOrder('cc71-11fl'),
+    orderNumber: 'WEB-CC71-11FL',
+    scheduledFor: '2026-10-20T17:00:00Z',
+    paymentStatus: 'awaiting_payment',
+    status: 'preparing',
+  };
+  const merged = mergeOrdersWithOnlineForAllFilter([posOrder('till-1')], [scheduled], 'all');
+  assert.ok(merged.some((o) => o.orderNumber === 'WEB-CC71-11FL'));
+});
+
 test('onlineOrderAsPosOrder maps delivery and card fees into charged total fields', () => {
   const row = onlineOrderAsPosOrder({
     ...onlineOrder('fee'),

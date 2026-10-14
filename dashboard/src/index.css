@@ -1930,6 +1930,17 @@ button {
       padding-bottom: 0.25rem;
     }
 
+    .webpos-pin-gate-clock,
+    .webpos-pin-gate-entry {
+      justify-content: flex-start;
+    }
+
+    .webpos-pin-gate-merchant-logo img,
+    .webpos-pin-gate-merchant-logo span {
+      height: 2rem;
+      width: 2rem;
+    }
+
     .webpos-pin-gate-entry h1 {
       font-size: 1rem;
     }
@@ -1957,6 +1968,14 @@ button {
 
     .webpos-pin-gate-footer p {
       font-size: 0.65rem;
+    }
+  }
+
+  /* Desktop / wide landscape: lower the keypad so it sits with the clock, not under the header. */
+  @media (min-width: 640px) and (min-height: 521px) {
+    .webpos-pin-gate-clock,
+    .webpos-pin-gate-entry {
+      justify-content: center;
     }
   }
 
@@ -2634,9 +2653,119 @@ html.shop-shell select:focus {
   box-sizing: border-box;
 }
 
-/* Newsletter Puck editor — full-width canvas with preview below */
+/* Newsletter visual editor — full-width canvas */
 .newsletter-puck-editor {
   width: 100%;
+}
+
+.newsletter-editor-switch {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+}
+
+.newsletter-editor-switch__btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.newsletter-editor-switch__btn[aria-selected='true'] {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(12, 10, 9, 0.08);
+}
+
+.newsletter-wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.newsletter-wizard-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 12px 6px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.newsletter-wizard-step--active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+}
+
+.newsletter-wizard-step--done {
+  color: var(--text);
+}
+
+.newsletter-wizard-step__n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  font-size: 11px;
+}
+
+.newsletter-wizard-step--active .newsletter-wizard-step__n {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.newsletter-campaign-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+}
+
+.newsletter-campaign-row:hover {
+  background: var(--bg-muted);
+}
+
+.newsletter-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+.newsletter-status--sent {
+  background: color-mix(in srgb, #0f766e 16%, white);
+  color: #115e59;
 }
 
 .newsletter-puck-editor--full {

@@ -3,7 +3,7 @@ import axios from "axios";
 import sgMail from "@sendgrid/mail";
 import { randomUUID } from "crypto";
 import type { MerchantBrevoSettings, MerchantSmtpSettings, EmailSendType } from "@/db/schema";
-import { buildMailcoRawMessagePayload } from "@/lib/mailco-payload";
+import { buildMailcoRawMessagePayload, resolveMailcoFromName } from "@/lib/mailco-payload";
 import {
   formatMailAddress,
   merchantSenderDisplayName,
@@ -112,7 +112,7 @@ export class EmailService {
     ).trim();
   }
 
-  /** Merchant emails show the shop name as sender; platform from address stays authenticated. */
+  /** Reply-To / SMTP From use the shop name; platform Mailco From stays RebornPOS. */
   private static merchantSenderName(merchantName: string | null | undefined): string {
     return merchantSenderDisplayName(merchantName);
   }
@@ -186,18 +186,19 @@ export class EmailService {
       const mailcoFromDb = !!(
         await PlatformSettingsService.getMailcoSettings()
       ).apiKey?.trim();
+      const platformFromName = resolveMailcoFromName(mailcoCreds.fromName, mailcoCreds.fromEmail);
       const platformReply =
         merchantId && merchantEmail
           ? this.merchantReplyTo(merchantName, merchantEmail, null)
-          : { replyToEmail: null, replyToName: "Shop" as string };
+          : { replyToEmail: null, replyToName: platformFromName };
 
       return {
         provider: "mailco",
         apiKey: mailcoCreds.apiKey,
         fromEmail: mailcoCreds.fromEmail,
-        fromName: merchantId ? this.merchantSenderName(merchantName) : mailcoCreds.fromName,
+        fromName: platformFromName,
         replyToEmail: merchantId ? platformReply.replyToEmail : null,
-        replyToName: merchantId ? platformReply.replyToName : mailcoCreds.fromName,
+        replyToName: merchantId ? platformReply.replyToName : platformFromName,
         source: mailcoFromDb ? "database" : "env",
         merchantId,
         mailco: {
@@ -373,13 +374,14 @@ export class EmailService {
       const source: ResolvedEmailConfig["source"] = mailcoFromDb ? "database" : "env";
       const allowBrevoFallback = isMailcoBrevoFallbackEnabled();
       const fallback = allowBrevoFallback && brevoConfigured ? buildBrevoConfig() : null;
+      const platformFromName = resolveMailcoFromName(mailcoCreds.fromName, mailcoCreds.fromEmail);
       return {
         provider: "mailco",
         apiKey: mailcoCreds.apiKey,
         fromEmail: mailcoCreds.fromEmail,
-        fromName: merchantId ? fromName : mailcoCreds.fromName,
+        fromName: platformFromName,
         replyToEmail: merchantId ? platformReply.replyToEmail : null,
-        replyToName: merchantId ? platformReply.replyToName : mailcoCreds.fromName,
+        replyToName: merchantId ? platformReply.replyToName : platformFromName,
         source,
         merchantId,
         mailco: {
@@ -437,7 +439,7 @@ export class EmailService {
         provider: "sendgrid",
         apiKey: process.env.SENDGRID_API_KEY,
         fromEmail: process.env.SENDGRID_FROM_EMAIL,
-        fromName: fromName || "Reborn",
+        fromName: fromName || "RebornPOS",
         source: brevoFromDb || mailcoFromDb ? "database" : "env",
         merchantId,
       });
@@ -948,7 +950,7 @@ export class EmailService {
     // Raw mode (subject + html + optional base64 attachments) — Brevo htmlContent parity.
     const payload = buildMailcoRawMessagePayload({
       fromEmail: cfg.fromEmail,
-      fromName: cfg.fromName || "Reborn",
+      fromName: resolveMailcoFromName(cfg.fromName, cfg.fromEmail),
       to: input.to,
       replyToEmail: cfg.replyToEmail,
       replyToName: cfg.replyToName || cfg.fromName,
@@ -1009,7 +1011,7 @@ export class EmailService {
         "https://api.brevo.com/v3/smtp/email",
         {
           sender: {
-            name: cfg.fromName || "Reborn",
+            name: cfg.fromName || "RebornPOS",
             email: cfg.fromEmail,
           },
           to: [{ email: input.to }],

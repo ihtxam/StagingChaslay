@@ -8,7 +8,26 @@ export const NIIMBOT_DPMM = 8;
 
 export function isNiimbotPrinterName(name?: string | null): boolean {
   const n = String(name || '').toLowerCase();
-  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b/.test(n);
+  return /niimbot|\bk3\b|\bb21\b|\bd11\b|\bb1\b|\bd110\b|\bb3s\b|0355:/.test(n);
+}
+
+/** Solid horizontal bars — same pattern the Windows agent uses for test print. */
+export function buildNiimbotTestPatternBitmap(widthPx: number, heightPx: number): Uint8Array {
+  const w = Math.max(8, Math.round(widthPx));
+  const h = Math.max(8, Math.round(heightPx));
+  const rowBytes = Math.ceil(w / 8);
+  const out = new Uint8Array(rowBytes * h);
+  for (let y = 0; y < h; y++) {
+    if (y % 8 < 4) out.fill(0xff, y * rowBytes, (y + 1) * rowBytes);
+  }
+  return out;
+}
+
+export function niimbotTestPatternBase64(widthPx: number, heightPx: number): string {
+  const bitmap = buildNiimbotTestPatternBitmap(widthPx, heightPx);
+  let bin = '';
+  for (let i = 0; i < bitmap.length; i++) bin += String.fromCharCode(bitmap[i]!);
+  return btoa(bin);
 }
 
 export function labelPrinterUsesNiimbot(

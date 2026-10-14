@@ -87,11 +87,30 @@ export default function Editions() {
     }
   };
 
-  const deactivate = async (ed: Edition) => {
-    if (!window.confirm(`Deactivate "${ed.name}"?`)) return;
+  const copyVersion = async (ed: Edition) => {
+    setSaving(true);
+    try {
+      const res = await api.post(`/superadmin/editions/${ed.id}/clone`);
+      toast.success(t('posVersionCopied'));
+      await load();
+      const cloned = res.data?.edition as Edition | undefined;
+      if (cloned?.id) openEdit(cloned);
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || t('copyFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (ed: Edition) => {
+    if (!window.confirm(t('posVersionDeleteConfirm').replace('{name}', ed.name))) return;
     try {
       await api.delete(`/superadmin/editions/${ed.id}`);
-      toast.success(t('posVersionDeactivated'));
+      toast.success(t('posVersionDeleted'));
+      if (editing?.id === ed.id) {
+        setCreating(false);
+        setEditing(null);
+      }
       load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed');
@@ -201,19 +220,25 @@ export default function Editions() {
                       {ed.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-right space-x-2">
-                    <button type="button" className="text-teal-700 hover:underline" onClick={() => openEdit(ed)}>
-                      Edit
+                  <td className="px-3 py-2 text-right space-x-2 whitespace-nowrap">
+                    <button
+                      type="button"
+                      className="text-stone-600 hover:underline"
+                      disabled={saving}
+                      onClick={() => void copyVersion(ed)}
+                    >
+                      {t('copy')}
                     </button>
-                    {ed.isActive && (
-                      <button
-                        type="button"
-                        className="text-red-600 hover:underline"
-                        onClick={() => deactivate(ed)}
-                      >
-                        Deactivate
-                      </button>
-                    )}
+                    <button type="button" className="text-teal-700 hover:underline" onClick={() => openEdit(ed)}>
+                      {t('edit')}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-red-600 hover:underline"
+                      onClick={() => void remove(ed)}
+                    >
+                      {t('delete')}
+                    </button>
                   </td>
                 </tr>
               ))}

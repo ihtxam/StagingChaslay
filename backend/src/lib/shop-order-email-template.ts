@@ -40,6 +40,8 @@ export type ShopOrderEmailTemplateInput = {
   notes: string | null;
   trackingUrl: string | null;
   trackLabel: string;
+  /** Public Google review URL. Shown after the order unless cancelled. */
+  reviewUrl?: string | null;
 };
 
 function esc(value: unknown): string {
@@ -294,6 +296,18 @@ export function buildShopOrderGuestEmailHtml(input: ShopOrderEmailTemplateInput)
     ? `<p style="margin:16px 0"><a href="${esc(input.trackingUrl)}" style="display:inline-block;background:#111827;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">${esc(input.trackLabel)}</a></p>`
     : '';
 
+  const reviewUrl = String(input.reviewUrl || '').trim();
+  const reviewBlock =
+    reviewUrl && input.kind !== 'cancelled'
+      ? `
+        <div style="border:1px solid #d6d3d1;background:#fafaf9;border-radius:10px;padding:14px 16px;margin:16px 0">
+          <div style="font-size:16px;font-weight:800;margin-bottom:6px">${esc(labels.reviewTitle)}</div>
+          <p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#44403c">${esc(labels.reviewBody)}</p>
+          <a href="${esc(reviewUrl)}" style="display:inline-block;background:#111827;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:700">${esc(labels.reviewCta)}</a>
+        </div>
+      `
+      : '';
+
   const confirmedBadge =
     input.kind === 'received'
       ? `<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#d6d3d1;margin-top:6px">✓ ${esc(labels.orderConfirmedBadge)}</div>`
@@ -319,6 +333,7 @@ export function buildShopOrderGuestEmailHtml(input: ShopOrderEmailTemplateInput)
           ${locationBlock}
           ${notesBlock}
           ${trackBlock}
+          ${reviewBlock}
           ${helpBlock(labels, input.merchantPhone, input.merchantEmail)}
           ${footerBlock(labels, input.shopName, addressLine)}
         </div>
@@ -359,6 +374,9 @@ export function buildShopOrderGuestEmailText(input: ShopOrderEmailTemplateInput)
   lines.push(`${labels.total}: ${money(input.total)}`);
   if (input.notes) lines.push('', `${labels.orderInstructions}: ${input.notes}`);
   if (input.trackingUrl) lines.push('', `${input.trackLabel}: ${input.trackingUrl}`);
+  if (input.reviewUrl && input.kind !== 'cancelled') {
+    lines.push('', labels.reviewTitle, labels.reviewBody, `${labels.reviewCta}: ${input.reviewUrl}`);
+  }
   if (input.merchantPhone) lines.push('', `${labels.call} ${input.merchantPhone}`);
   if (input.merchantEmail) lines.push(`${labels.email} ${input.merchantEmail}`);
   lines.push('', labels.autoMessage);

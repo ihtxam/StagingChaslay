@@ -5,6 +5,33 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import MailcoDnsChecklist from '@/components/superadmin/MailcoDnsChecklist';
 
+type AdyenHealthIssue = {
+  field: string;
+  message: string;
+};
+
+type AdyenHealth = {
+  ready?: boolean;
+  source?: string;
+  missing?: string[];
+  issues?: AdyenHealthIssue[];
+  suspectedField?: string | null;
+  shopEnvIgnored?: boolean;
+  recipe?: string;
+  environment?: string;
+  merchantAccount?: string;
+  apiKeyLooksLikeClientKey?: boolean;
+  apiKeyLooksLikeWebService?: boolean;
+  clientKeyPrefix?: string;
+};
+
+type AdyenPing = AdyenHealth & {
+  ok: boolean;
+  pinged?: boolean;
+  apiBaseHost?: string;
+  httpStatus?: number | null;
+};
+
 type AdyenSettings = {
   merchantAccount: string;
   clientKey: string;
@@ -17,6 +44,10 @@ type AdyenSettings = {
   hmacKeySet: boolean;
   configured: boolean;
   usingEnvFallback?: boolean;
+  source?: string;
+  shopEnvIgnored?: boolean;
+  resolveError?: string | null;
+  health?: AdyenHealth;
 };
 
 type EmailSettings = {
@@ -78,6 +109,8 @@ export default function Settings() {
   const [adyen, setAdyen] = useState<AdyenSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingAdyen, setSavingAdyen] = useState(false);
+  const [adyenPing, setAdyenPing] = useState<AdyenPing | null>(null);
+  const [pingingAdyen, setPingingAdyen] = useState(false);
   const [adyenForm, setAdyenForm] = useState({
     merchantAccount: '',
     clientKey: '',
@@ -95,7 +128,7 @@ export default function Settings() {
   const [mailco, setMailco] = useState<MailcoSettings | null>(null);
   const [mailcoForm, setMailcoForm] = useState({
     fromEmail: '',
-    fromName: 'Reborn',
+    fromName: 'RebornPOS',
     apiKey: '',
     apiBase: 'https://ees.mailco.ch/api/v1',
     templateSlug: 'platform-transactional',
@@ -123,14 +156,33 @@ export default function Settings() {
   const [legalForm, setLegalForm] = useState({ privacy: '', terms: '', cookies: '' });
   const [savingLegal, setSavingLegal] = useState(false);
 
+  type DesktopBrandingSettings = {
+    splashUrl: string;
+    iconUrl: string;
+    appName: string;
+    tagline: string;
+    backgroundColor: string;
+    splashCustom?: boolean;
+    iconCustom?: boolean;
+  };
+  const [desktop, setDesktop] = useState<DesktopBrandingSettings | null>(null);
+  const [desktopForm, setDesktopForm] = useState({
+    appName: 'RebornPOS',
+    tagline: 'Restaurant POS & online ordering',
+    backgroundColor: '#17252b',
+  });
+  const [savingDesktop, setSavingDesktop] = useState(false);
+  const [uploadingDesktop, setUploadingDesktop] = useState<'splash' | 'icon' | null>(null);
+
   const load = async () => {
     try {
       setLoading(true);
-      const [adyenRes, brevoRes, mailcoRes, legalRes] = await Promise.all([
+      const [adyenRes, brevoRes, mailcoRes, legalRes, desktopRes] = await Promise.all([
         api.get('/superadmin/platform-settings/adyen'),
         api.get('/superadmin/platform-settings/brevo'),
         api.get('/superadmin/platform-settings/mailco'),
         api.get('/superadmin/platform-settings/legal'),
+        api.get('/superadmin/platform-settings/desktop'),
       ]);
       const a = adyenRes.data.adyen as AdyenSettings;
       setAdyen(a);
@@ -152,7 +204,7 @@ export default function Settings() {
       setMailco(m);
       setMailcoForm({
         fromEmail: m.fromEmail || '',
-        fromName: m.fromName || 'Reborn',
+        fromName: m.fromName || 'RebornPOS',
         apiKey: '',
         apiBase: m.apiBase || 'https://ees.mailco.ch/api/v1',
         templateSlug: m.templateSlug || 'platform-transactional',
@@ -164,6 +216,13 @@ export default function Settings() {
         privacy: leg.privacy || '',
         terms: leg.terms || '',
         cookies: leg.cookies || '',
+      });
+      const desk = desktopRes.data.desktop as DesktopBrandingSettings;
+      setDesktop(desk);
+      setDesktopForm({
+        appName: desk.appName || 'RebornPOS',
+        tagline: desk.tagline || 'Restaurant POS & online ordering',
+        backgroundColor: desk.backgroundColor || '#17252b',
       });
       await refreshEmailUsage();
     } catch {
@@ -216,10 +275,29 @@ export default function Settings() {
       setAdyen(res.data.adyen);
       setAdyenForm((f) => ({ ...f, apiKey: '', hmacKey: '' }));
       toast.success('Platform Swisspayout settings saved');
+      setAdyenPing(null);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to save Swisspayout settings');
     } finally {
       setSavingAdyen(false);
+    }
+  };
+
+  const pingAdyen = async () => {
+    setPingingAdyen(true);
+    try {
+      const res = await api.post('/superadmin/platform-settings/adyen/ping');
+      const ping = res.data.ping as AdyenPing;
+      setAdyenPing(ping);
+      if (ping.ok) {
+        toast.success(`Adyen ${ping.environment || ''} session ping succeeded`);
+      } else {
+        toast.error(ping.issues?.[ping.issues.length - 1]?.message || 'Adyen session ping failed');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to ping Adyen');
+    } finally {
+      setPingingAdyen(false);
     }
   };
 
@@ -304,6 +382,59 @@ export default function Settings() {
     }
   };
 
+  const saveDesktop = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingDesktop(true);
+    try {
+      const res = await api.put('/superadmin/platform-settings/desktop', desktopForm);
+      const next = res.data.desktop as DesktopBrandingSettings;
+      setDesktop(next);
+      setDesktopForm({
+        appName: next.appName || 'RebornPOS',
+        tagline: next.tagline || 'Restaurant POS & online ordering',
+        backgroundColor: next.backgroundColor || '#17252b',
+      });
+      toast.success(t('desktopAppBrandingSaved'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('desktopAppBrandingSaveFailed'));
+    } finally {
+      setSavingDesktop(false);
+    }
+  };
+
+  const uploadDesktopAsset = async (asset: 'splash' | 'icon', file: File | undefined) => {
+    if (!file) return;
+    setUploadingDesktop(asset);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post(`/superadmin/platform-settings/desktop/${asset}`, fd);
+      const next = res.data.desktop as DesktopBrandingSettings;
+      setDesktop(next);
+      toast.success(t('desktopAppBrandingSaved'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('desktopAppBrandingUploadFailed'));
+    } finally {
+      setUploadingDesktop(null);
+    }
+  };
+
+  const clearDesktopAsset = async (asset: 'splash' | 'icon') => {
+    setUploadingDesktop(asset);
+    try {
+      const res = await api.put('/superadmin/platform-settings/desktop', {
+        clearSplash: asset === 'splash',
+        clearIcon: asset === 'icon',
+      });
+      setDesktop(res.data.desktop as DesktopBrandingSettings);
+      toast.success(t('desktopAppBrandingSaved'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || t('desktopAppBrandingSaveFailed'));
+    } finally {
+      setUploadingDesktop(null);
+    }
+  };
+
   if (loading) {
     return <div className="card">Loading platform settings…</div>;
   }
@@ -316,6 +447,114 @@ export default function Settings() {
           Platform credentials and security. Subscription packages are managed under{' '}
           <strong>Merchants → Direct sales catalog</strong>.
         </p>
+      </div>
+
+      <div className="card">
+        <h2 className="text-xl font-bold">{t('desktopAppBrandingTitle')}</h2>
+        <p className="text-gray-600 mt-1 mb-4">{t('desktopAppBrandingHint')}</p>
+        <form onSubmit={saveDesktop} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+          <label className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingName')}</span>
+            <input
+              className="input mt-1"
+              value={desktopForm.appName}
+              onChange={(e) => setDesktopForm({ ...desktopForm, appName: e.target.value })}
+              maxLength={80}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingBackground')}</span>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="color"
+                className="h-10 w-12 cursor-pointer rounded border border-stone-200 bg-white p-1"
+                value={desktopForm.backgroundColor}
+                onChange={(e) => setDesktopForm({ ...desktopForm, backgroundColor: e.target.value })}
+              />
+              <input
+                className="input flex-1"
+                value={desktopForm.backgroundColor}
+                onChange={(e) => setDesktopForm({ ...desktopForm, backgroundColor: e.target.value })}
+              />
+            </div>
+          </label>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">{t('desktopAppBrandingTagline')}</span>
+            <input
+              className="input mt-1"
+              value={desktopForm.tagline}
+              onChange={(e) => setDesktopForm({ ...desktopForm, tagline: e.target.value })}
+              maxLength={160}
+            />
+          </label>
+          <div className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingSplash')}</span>
+            <div
+              className="mt-2 flex min-h-[140px] items-center justify-center rounded-xl border border-stone-200 p-4"
+              style={{ background: desktopForm.backgroundColor }}
+            >
+              {desktop?.splashUrl ? (
+                <img src={desktop.splashUrl} alt="" className="max-h-24 w-auto object-contain" />
+              ) : null}
+            </div>
+            <input
+              className="mt-2 block w-full text-sm"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={uploadingDesktop !== null}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                void uploadDesktopAsset('splash', file);
+              }}
+            />
+            {desktop?.splashCustom ? (
+              <button
+                type="button"
+                className="btn btn-secondary mt-2 text-sm"
+                disabled={uploadingDesktop !== null}
+                onClick={() => void clearDesktopAsset('splash')}
+              >
+                {t('desktopAppBrandingClearSplash')}
+              </button>
+            ) : null}
+          </div>
+          <div className="block">
+            <span className="text-sm font-medium">{t('desktopAppBrandingIcon')}</span>
+            <div className="mt-2 flex min-h-[140px] items-center justify-center rounded-xl border border-stone-200 bg-stone-50 p-4">
+              {desktop?.iconUrl ? (
+                <img src={desktop.iconUrl} alt="" className="h-16 w-16 object-contain" />
+              ) : null}
+            </div>
+            <input
+              className="mt-2 block w-full text-sm"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={uploadingDesktop !== null}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                void uploadDesktopAsset('icon', file);
+              }}
+            />
+            {desktop?.iconCustom ? (
+              <button
+                type="button"
+                className="btn btn-secondary mt-2 text-sm"
+                disabled={uploadingDesktop !== null}
+                onClick={() => void clearDesktopAsset('icon')}
+              >
+                {t('desktopAppBrandingClearIcon')}
+              </button>
+            ) : null}
+            <p className="mt-2 text-xs text-stone-500">{t('desktopAppBrandingIconNote')}</p>
+          </div>
+          <div className="md:col-span-2">
+            <button type="submit" className="btn btn-primary" disabled={savingDesktop}>
+              {savingDesktop || uploadingDesktop ? t('saving') : t('desktopAppBrandingSave')}
+            </button>
+          </div>
+        </form>
       </div>
 
       <div className="card">
@@ -373,13 +612,52 @@ export default function Settings() {
         </p>
 
         {adyen && (
-          <p className="text-sm mb-4">
-            Status:{' '}
-            <span className={adyen.configured ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
-              {adyen.configured ? 'Configured' : 'Not configured'}
-            </span>
-            {adyen.usingEnvFallback ? ' (using environment variables)' : null}
-          </p>
+          <div className="mb-4 space-y-2">
+            <p className="text-sm">
+              Status:{' '}
+              <span className={adyen.configured ? 'text-emerald-700 font-medium' : 'text-amber-700 font-medium'}>
+                {adyen.configured ? 'Configured' : 'Not configured'}
+              </span>
+              {adyen.usingEnvFallback ? ' (PLATFORM_ADYEN_* environment only)' : null}
+              {adyen.source === 'superadmin_db' ? ' · Superadmin fields' : null}
+            </p>
+            {adyen.shopEnvIgnored ? (
+              <p className="text-sm rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+                Shop <code>ADYEN_API_KEY</code> / Settings → Payments credentials are ignored for Reborn
+                package subscriptions. Use the three platform fields below from the same TEST or LIVE
+                Adyen account.
+              </p>
+            ) : null}
+            {(adyen.health?.issues || []).length > 0 ? (
+              <ul className="text-sm rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950 list-disc pl-6 space-y-1">
+                {(adyen.health?.issues || []).map((issue) => (
+                  <li key={`${issue.field}-${issue.message}`}>
+                    <strong>{issue.field}</strong>: {issue.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {adyen.resolveError && !adyen.configured ? (
+              <p className="text-xs text-stone-600 whitespace-pre-wrap">{adyen.resolveError}</p>
+            ) : null}
+            {adyenPing ? (
+              <div
+                className={`text-sm rounded border px-3 py-2 ${
+                  adyenPing.ok
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                    : 'border-rose-200 bg-rose-50 text-rose-950'
+                }`}
+              >
+                <p className="font-medium">
+                  {adyenPing.ok
+                    ? `Session ping OK (${adyenPing.environment || ''} → ${adyenPing.apiBaseHost || 'Adyen'})`
+                    : `Session ping failed${adyenPing.suspectedField ? ` — check ${adyenPing.suspectedField}` : ''}`}
+                </p>
+                {adyenPing.httpStatus ? <p>HTTP {adyenPing.httpStatus}</p> : null}
+                {adyenPing.recipe ? <p className="mt-1 text-xs whitespace-pre-wrap">{adyenPing.recipe}</p> : null}
+              </div>
+            ) : null}
+          </div>
         )}
 
         <form onSubmit={saveAdyen} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
@@ -452,9 +730,19 @@ export default function Settings() {
             <p className="text-xs text-gray-500 mb-3">
               Webhook URL: <code>/api/webhooks/adyen/subscription</code>
             </p>
-            <button type="submit" className="btn btn-primary" disabled={savingAdyen}>
-              {savingAdyen ? 'Saving…' : 'Save Swisspayout settings'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="btn btn-primary" disabled={savingAdyen}>
+                {savingAdyen ? 'Saving…' : 'Save Swisspayout settings'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={pingingAdyen}
+                onClick={() => void pingAdyen()}
+              >
+                {pingingAdyen ? 'Testing session…' : 'Test Adyen session'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -701,8 +989,10 @@ export default function Settings() {
               ees.mailco.ch
             </a>
             . The test button uses the same <code>EmailService.send</code> path as production.
-            Publish the DNS records in the checklist above (at your registrar or Mailco Postal) before
-            going live.
+            Visible From name is <strong>RebornPOS</strong> (address stays{' '}
+            <code>hello@rebornsense.com</code> unless you change it). Publish the DNS records in
+            the checklist above in Cloudflare — <strong>mailco.ch</strong> for Postal SPF, brand
+            zone for apex + <code>psrp</code> CNAME. Do not add TXT on a CNAME.
           </p>
           <label className="block">
             <span className="text-sm font-medium">Primary provider</span>
@@ -745,8 +1035,13 @@ export default function Settings() {
               className="input mt-1"
               value={mailcoForm.fromName}
               onChange={(e) => setMailcoForm({ ...mailcoForm, fromName: e.target.value })}
-              placeholder="Reborn"
+              placeholder="RebornPOS"
             />
+            <span className="block text-xs text-gray-500 mt-1">
+              Inbox display name. Use <strong>RebornPOS</strong> — not the mailbox local-part
+              (hello@rebornsense.com otherwise shows as “hello”). Empty, “hello”, and the old
+              “Reborn” default are sent as RebornPOS.
+            </span>
           </label>
           <label className="block md:col-span-2">
             <span className="text-sm font-medium">API base URL</span>

@@ -294,7 +294,16 @@ export class OrderService {
     paymentMethod?: string,
     discountAmount: number = 0,
     notes?: string,
-    locationId?: string | null
+    locationId?: string | null,
+    extras?: {
+      orderSource?: string | null;
+      customerName?: string | null;
+      customerPhone?: string | null;
+      customerEmail?: string | null;
+      fulfillmentChannel?: string | null;
+      status?: string | null;
+      paymentStatus?: string | null;
+    }
   ) {
     const db = getDb();
 
@@ -308,11 +317,14 @@ export class OrderService {
         vatAfterDiscount: merchant?.vatAfterDiscount !== false,
       };
 
+      const orderSource = extras?.orderSource ? String(extras.orderSource).slice(0, 50) : null;
+      const allowEmptyPhoneTicket = orderSource === "phone" && (!items || items.length === 0);
+
       // Calculate totals
       let subtotal = 0;
       let taxAmount = 0;
 
-      for (const item of items) {
+      for (const item of items || []) {
         const product = await db.query.products.findFirst({
           where: eq(schema.products.id, item.productId),
         });
@@ -349,19 +361,24 @@ export class OrderService {
           orderNumber,
           customerId,
           orderType,
-          status: "pending",
+          orderSource: orderSource || undefined,
+          customerName: extras?.customerName || undefined,
+          customerPhone: extras?.customerPhone || undefined,
+          customerEmail: extras?.customerEmail || undefined,
+          fulfillmentChannel: extras?.fulfillmentChannel || undefined,
+          status: extras?.status || (allowEmptyPhoneTicket ? "pending_approval" : "pending"),
           subtotal: subtotal.toFixed(2),
           taxAmount: taxAmount.toFixed(2),
           discountAmount: discountAmount.toFixed(2),
           total: total.toFixed(2),
           paymentMethod,
-          paymentStatus: "pending",
+          paymentStatus: extras?.paymentStatus || "pending",
           notes,
         })
         .returning();
 
       // Create order items
-      for (const item of items) {
+      for (const item of items || []) {
         const itemTotal = item.unitPrice * item.quantity;
 
         const product = await db.query.products.findFirst({
@@ -407,7 +424,8 @@ export class OrderService {
     status?: string,
     startDate?: Date,
     endDate?: Date,
-    scope?: "online" | "all"
+    scope?: "online" | "all",
+    orderSource?: string
   ) {
     return withMerchantSchemaRetry(async () => {
       const db = getDb();
@@ -416,6 +434,10 @@ export class OrderService {
 
       if (scope === "online") {
         whereConditions.push(onlineOrderScopeCondition());
+      }
+
+      if (orderSource) {
+        whereConditions.push(eq(schema.orders.orderSource, orderSource.slice(0, 50)));
       }
 
       if (status) {

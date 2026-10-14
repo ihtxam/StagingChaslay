@@ -100,6 +100,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_checkout_settings jsonb",
   time_slot_pricing_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS time_slot_pricing_settings jsonb",
+  pizza_builder_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pizza_builder_settings jsonb",
   pos_print_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS pos_print_settings jsonb",
   table_qr_settings:
@@ -226,6 +228,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS ods_addon_enabled boolean NOT NULL DEFAULT false",
   kiosk_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_addon_enabled boolean NOT NULL DEFAULT false",
+  catering_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS catering_enabled boolean NOT NULL DEFAULT false",
   kiosk_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kiosk_settings jsonb",
   customer_display_settings:
@@ -272,6 +276,9 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   gift_card_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS gift_card_addon_enabled boolean NOT NULL DEFAULT false",
   fiskaly_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS fiskaly_settings jsonb",
+  como_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS como_settings jsonb",
+  phone_ordering_settings:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS phone_ordering_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
@@ -283,6 +290,9 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   chaslay_homepage_builder_pages_last_good_editor_state:
     "ALTER TABLE chaslay_homepage_builder_pages ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   recipe_yield: "ALTER TABLE products ADD COLUMN IF NOT EXISTS recipe_yield numeric(12,4) NOT NULL DEFAULT 1",
+  reservations_extras: "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS extras jsonb",
+  merchants_menu_show_upsells:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS menu_show_upsells boolean NOT NULL DEFAULT true",
   products_barcode: "ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode varchar(255)",
   inventory_item_id: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_item_id uuid",
   inventory_qty: "ALTER TABLE modifier_options ADD COLUMN IF NOT EXISTS inventory_qty numeric(14,4) NOT NULL DEFAULT 0",
@@ -313,6 +323,7 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_tracking_token varchar(64)",
   orders_fiskaly_signature:
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fiskaly_signature jsonb",
+  orders_como_loyalty: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS como_loyalty jsonb",
   vouchers_order_types:
     "ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_types jsonb NOT NULL DEFAULT '[]'::jsonb",
   delivery_driver_pay_mode:
@@ -1150,8 +1161,9 @@ const TABLE_PATCHES: string[] = [
   `CREATE TABLE IF NOT EXISTS support_tickets (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_number varchar(20) NOT NULL UNIQUE,
-    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_id uuid REFERENCES merchants(id) ON DELETE CASCADE,
     reseller_id uuid REFERENCES resellers(id) ON DELETE SET NULL,
+    requester_role varchar(20) NOT NULL DEFAULT 'merchant',
     category varchar(30) NOT NULL DEFAULT 'technical',
     subcategory varchar(80),
     subject varchar(255) NOT NULL,
@@ -1181,6 +1193,8 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_ticket_idx ON support_ticket_messages(ticket_id)`,
   `CREATE INDEX IF NOT EXISTS support_ticket_messages_created_idx ON support_ticket_messages(created_at)`,
   `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS merchant_visible boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE support_tickets ALTER COLUMN merchant_id DROP NOT NULL`,
+  `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS requester_role varchar(20) NOT NULL DEFAULT 'merchant'`,
   `CREATE TABLE IF NOT EXISTS email_send_log (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid REFERENCES merchants(id) ON DELETE SET NULL,
@@ -1376,6 +1390,49 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_code_uq ON reservation_growth_campaigns(merchant_id, code)`,
   `CREATE INDEX IF NOT EXISTS reservation_growth_campaigns_merchant_idx ON reservation_growth_campaigns(merchant_id, active)`,
+  `CREATE TABLE IF NOT EXISTS software_releases (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    version varchar(40) NOT NULL,
+    title varchar(255) NOT NULL,
+    body text NOT NULL DEFAULT '',
+    product varchar(30) NOT NULL DEFAULT 'all',
+    is_published boolean NOT NULL DEFAULT true,
+    published_at timestamptz NOT NULL DEFAULT now(),
+    created_by_superadmin_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS software_releases_published_idx ON software_releases(is_published, published_at)`,
+  `CREATE INDEX IF NOT EXISTS software_releases_version_idx ON software_releases(version)`,
+  `CREATE TABLE IF NOT EXISTS published_pull_requests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    number integer NOT NULL,
+    title varchar(500) NOT NULL,
+    body text NOT NULL DEFAULT '',
+    html_url varchar(500) NOT NULL DEFAULT '',
+    author varchar(120) NOT NULL DEFAULT '',
+    base_branch varchar(80) NOT NULL DEFAULT '',
+    merged_at timestamptz NOT NULL,
+    synced_at timestamptz NOT NULL DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS published_pull_requests_number_idx ON published_pull_requests(number)`,
+  `CREATE INDEX IF NOT EXISTS published_pull_requests_merged_idx ON published_pull_requests(merged_at)`,
+  `CREATE TABLE IF NOT EXISTS como_transactions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    como_transaction_id varchar(128) NOT NULL,
+    como_confirmation varchar(255),
+    membership_key varchar(255),
+    status varchar(30) NOT NULL DEFAULT 'submitted',
+    selected_assets jsonb NOT NULL DEFAULT '[]'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS como_transactions_merchant_order_uidx ON como_transactions(merchant_id, order_id)`,
+  `CREATE INDEX IF NOT EXISTS como_transactions_merchant_idx ON como_transactions(merchant_id)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1565,6 +1622,11 @@ export async function ensureKioskAddonColumn(): Promise<void> {
   await ensureMerchantTables();
 }
 
+export async function ensureCateringAddonColumn(): Promise<void> {
+  await runPatch("catering_enabled");
+  await ensureMerchantTables();
+}
+
 export async function ensureKioskSettingsColumn(): Promise<void> {
   await runPatch("kiosk_settings");
   await ensureMerchantTables();
@@ -1607,6 +1669,17 @@ export async function ensureStorekeeperAddonColumn(): Promise<void> {
 
 export async function ensureGiftCardAddonColumn(): Promise<void> {
   await runPatch("gift_card_addon_enabled");
+}
+
+export async function ensureComoSchema(): Promise<void> {
+  await runPatch("como_settings", "merchants");
+  await runPatch("como_loyalty", "orders");
+  await ensureMerchantTables();
+}
+
+export async function ensurePhoneOrderingSchema(): Promise<void> {
+  await runPatch("phone_ordering_settings", "merchants");
+  await ensureMerchantTables();
 }
 
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */

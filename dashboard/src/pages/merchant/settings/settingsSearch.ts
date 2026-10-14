@@ -16,6 +16,8 @@ export type SettingsTabId =
   | 'customerDisplay'
   | 'fiscal'
   | 'accounting'
+  | 'como'
+  | 'phone'
   | 'signage'
   | 'kiosk'
   | 'email'
@@ -150,12 +152,15 @@ export function nextTabForHiddenRetailSettings(
   ctx: {
     showTablesSettings: boolean;
     isRetailMerchant: boolean;
+    reservationsLicensed?: boolean;
     query?: string | null;
   }
 ): SettingsTabId | null {
   if (isSettingsSearchQueryActive(ctx.query)) return null;
   if (tab === 'tables' && !ctx.showTablesSettings) return 'pos';
-  if (tab === 'reservations' && ctx.isRetailMerchant) return 'business';
+  if (tab === 'reservations' && (ctx.isRetailMerchant || ctx.reservationsLicensed === false)) {
+    return 'business';
+  }
   return null;
 }
 
@@ -578,7 +583,16 @@ export function buildSettingsSearchIndex(
     {
       id: 'receipt-print',
       tab: 'receipt',
-      keywords: ['receipt', 'printer', 'kitchen', 'ticket', t('settingsReceipt')],
+      keywords: [
+        'receipt',
+        'printer',
+        'kitchen',
+        'ticket',
+        'desktop',
+        'rebornpos',
+        t('settingsReceipt'),
+        t('desktopAppDownload'),
+      ],
     },
     {
       id: 'barcode-labels',
@@ -615,6 +629,33 @@ export function buildSettingsSearchIndex(
         'nf525',
         'kassensichv',
         t('settingsFiscal'),
+      ],
+    },
+    {
+      id: 'como-sense',
+      tab: 'como',
+      keywords: [
+        'como',
+        'comosense',
+        'como sense',
+        'fidelity',
+        'loyalty',
+        'fidélité',
+        'treue',
+        t('settingsComo'),
+      ],
+    },
+    {
+      id: 'phone-ordering',
+      tab: 'phone',
+      keywords: [
+        'phone',
+        'telephone',
+        'twilio',
+        'sms',
+        'voice',
+        'call',
+        t('settingsPhoneOrdering'),
       ],
     },
     {

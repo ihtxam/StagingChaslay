@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildExtrasFromSelection,
   ensureNosTicketName,
+  isExtrasModifierGroup,
   isNosModifierGroup,
   modifierOptionDisplayName,
   nosOptionDisplayName,
@@ -14,6 +15,14 @@ describe('isNosModifierGroup', () => {
     expect(isNosModifierGroup('Nos')).toBe(true);
     expect(isNosModifierGroup('Removals')).toBe(true);
     expect(isNosModifierGroup('Extras')).toBe(false);
+  });
+});
+
+describe('isExtrasModifierGroup', () => {
+  it('detects extras add-on titles', () => {
+    expect(isExtrasModifierGroup('Extras')).toBe(true);
+    expect(isExtrasModifierGroup('suppléments')).toBe(true);
+    expect(isExtrasModifierGroup("No's")).toBe(false);
   });
 });
 

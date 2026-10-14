@@ -35,6 +35,8 @@ type MerchantRow = {
   dineInEnabled?: boolean;
   kiosk_settings?: unknown;
   kioskSettings?: unknown;
+  como_settings?: unknown;
+  comoSettings?: unknown;
 };
 
 function merchantChannelFlags(row: MerchantRow) {
@@ -96,12 +98,27 @@ export class KioskService {
       tables = [];
     }
 
+    let como = { enabled: false, configured: false };
+    try {
+      const { getComoPublic } = await import("@/lib/como-settings");
+      const { ensureComoSchema } = await import("@/lib/ensure-merchant-schema");
+      await ensureComoSchema();
+      const rows = await queryRaw<{ como_settings: unknown }>(
+        `SELECT como_settings FROM merchants WHERE id = $1 LIMIT 1`,
+        [merchant.id]
+      );
+      como = getComoPublic(rows[0]?.como_settings);
+    } catch {
+      como = { enabled: false, configured: false };
+    }
+
     return {
       merchant: {
         id: merchant.id,
         name: merchant.name,
         slug: merchant.slug,
       },
+      como: { enabled: como.configured },
       settings: {
         name: settings.name,
         promoSlides: settings.promoSlides || [],

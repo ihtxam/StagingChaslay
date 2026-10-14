@@ -37,6 +37,10 @@ import {
 } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
 import {
+  pinGateMerchantName,
+  pinGateSessionMerchantName,
+} from '@/lib/webpos-pin-gate-brand';
+import {
   POS_SESSION_KICKED_EVENT,
   registerPosSession,
   clearPosSessionLocal,
@@ -58,7 +62,10 @@ import {
   collectReadyLineIds,
   applyKdsReadyToCart,
   cartLineKitchenReady,
+  isKdsPollingStopped,
 } from '@/lib/kds-push';
+import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
+import { asArray } from '@/lib/safe-iterables';
 import { kitchenTicketKeyBase } from '@/lib/kitchen-progress';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
@@ -68,6 +75,8 @@ import WebPosProductModifiersModal, {
   productHasModifiers,
   type ShopProductForModifiers,
 } from '@/components/webpos/WebPosProductModifiersModal';
+import WebPosPizzaBuilderModal from '@/components/webpos/WebPosPizzaBuilderModal';
+import { findTemplateForProduct, type PizzaBuilderTemplate } from '@/lib/pizza-builder';
 import type { CartLine, Category, PosCategoryId, PosChannel, Product } from '@/components/webpos/types';
 import type { Permission } from '@/lib/permissions';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
@@ -103,7 +112,16 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const [tab, setTab] = useState<WaiterTab>('tables');
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [pizzaTemplates, setPizzaTemplates] = useState<PizzaBuilderTemplate[]>([]);
+  const [pendingPizza, setPendingPizza] = useState<{
+    product: ShopProductForModifiers;
+    template: PizzaBuilderTemplate;
+  } | null>(null);
   const [printSettings, setPrintSettings] = useState<Record<string, unknown> | null>(null);
+  const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null);
+  const [merchantShopName, setMerchantShopName] = useState<string | null>(() =>
+    pinGateSessionMerchantName(authUser) || null
+  );
   const [categoryId, setCategoryId] = useState<PosCategoryId>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [channel, setChannel] = useState<PosChannel>('dine_in');
@@ -227,9 +245,24 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         const session = resolveWebPosStaffSession({ staffList: list });
         setStaff(session);
         if (session) notifyWebPosStaffSessionChanged();
-        setCategories(catRes.data?.categories || []);
-        setProducts(prodRes.data?.products || []);
+        setCategories(asArray(catRes.data?.categories));
+        setProducts(asArray(prodRes.data?.products));
+        setPizzaTemplates(
+          Array.isArray(configRes.data?.config?.pizzaTemplates)
+            ? configRes.data.config.pizzaTemplates
+            : []
+        );
         setPrintSettings(configRes.data?.config?.posPrintSettings || null);
+        setMerchantLogoUrl(
+          String(configRes.data?.config?.shopLogoUrl || '').trim() ||
+            String(configRes.data?.config?.posPrintSettings?.receiptLogoUrl || '').trim() ||
+            null
+        );
+        setMerchantShopName(
+          String(configRes.data?.config?.name || '').trim() ||
+            pinGateSessionMerchantName(authUser) ||
+            null
+        );
         cacheMerchantAutoPrintSettings(
           (configRes.data?.config?.posPrintSettings as { autoPrintKitchen?: boolean; autoPrintReceipt?: boolean } | undefined) || null
         );
@@ -321,25 +354,37 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   const waiterKdsTicketKey = kitchenTicketKeyBase(ticketDisplay || ticketOrderNumber || '');
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
 
+  const kdsAddonOn = readAddonLicenseFlag(authUser?.kdsAddonEnabled);
+
   useEffect(() => {
     const hasSent = cart.some((l) => l.sentToKitchen);
     if (!hasSent) return;
+    if (!shouldPollLicensedAddon(kdsAddonOn, isKdsPollingStopped())) return;
     let cancelled = false;
+    let timer = 0;
     const syncReady = async () => {
+      if (cancelled || isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       const board = await fetchKdsBoardStatus();
       if (cancelled) return;
+      if (isKdsPollingStopped()) {
+        if (timer) window.clearInterval(timer);
+        return;
+      }
       setKdsReadyMap(buildKdsReadyMap(board));
       const readyIds = collectReadyLineIds(board);
       if (!readyIds.size) return;
       setCart((prev) => applyKdsReadyToCart(prev, [...readyIds]));
     };
     void syncReady();
-    const timer = window.setInterval(() => void syncReady(), 4000);
+    timer = window.setInterval(() => void syncReady(), 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [cart.filter((l) => l.sentToKitchen).length, waiterKdsTicketKey]);
+  }, [cart.filter((l) => l.sentToKitchen).length, waiterKdsTicketKey, kdsAddonOn]);
 
   /** Sync in-progress table/takeaway carts to /merchant/pos/held so main till Orders → Active lists them. */
   useEffect(() => {
@@ -494,6 +539,22 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
   };
 
   const onProductClick = (p: Product) => {
+    const pizzaTpl = findTemplateForProduct(pizzaTemplates, p.id);
+    if (pizzaTpl) {
+      setPendingPizza({
+        product: {
+          id: p.id,
+          name: p.name,
+          price: Number(p.price) || 0,
+          allowExtras: p.allowExtras,
+          extras: p.extras,
+          modifierGroups: p.modifierGroups,
+          specifications: p.specifications,
+        },
+        template: pizzaTpl,
+      });
+      return;
+    }
     if (productHasModifiers(p as ShopProductForModifiers)) {
       setPendingProduct({
         id: p.id,
@@ -1032,8 +1093,30 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onPinSuccess}
+        productName={pinGateMerchantName(
+          merchantShopName,
+          pinGateSessionMerchantName(authUser)
+        )}
+        logoUrl={merchantLogoUrl}
       />
 
+      {pendingPizza && (
+        <WebPosPizzaBuilderModal
+          product={{
+            id: pendingPizza.product.id,
+            name: pendingPizza.product.name,
+            price: Number(pendingPizza.product.price) || 0,
+            specifications: pendingPizza.product.specifications,
+          }}
+          template={pendingPizza.template}
+          onClose={() => setPendingPizza(null)}
+          onConfirm={({ selectedExtras, unitPrice, quantity }) => {
+            const prod = products.find((p) => p.id === pendingPizza.product.id);
+            if (prod) pushLine(prod, unitPrice, selectedExtras, quantity);
+            setPendingPizza(null);
+          }}
+        />
+      )}
       {pendingProduct && (
         <WebPosProductModifiersModal
           product={pendingProduct}

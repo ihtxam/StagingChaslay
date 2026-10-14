@@ -67,9 +67,13 @@ export default function InlineReservationsWidget({
   const [guestEmail, setGuestEmail] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState<{ code: string; status: string; reservedAt: string } | null>(
-    null
-  );
+  const [done, setDone] = useState<{
+    code: string;
+    status: string;
+    reservedAt: string;
+    extras?: { quotedWaitMinutes?: number | null; depositAmount?: number | null } | null;
+  } | null>(null);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
   const [partyExpanded, setPartyExpanded] = useState(false);
   const [timesExpanded, setTimesExpanded] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -217,11 +221,13 @@ export default function InlineReservationsWidget({
         date,
         time,
         notes: notes || undefined,
+        policyAccepted,
       });
       setDone({
         code: res.data.reservation.code,
         status: res.data.reservation.status,
         reservedAt: res.data.reservation.reservedAt,
+        extras: res.data.reservation.extras || null,
       });
     } catch (err: any) {
       setError(err.response?.data?.error || t('shopReservationsBookFailed'));
@@ -269,6 +275,16 @@ export default function InlineReservationsWidget({
         </p>
         <p className="font-mono text-sm">{done.code}</p>
         <p className="text-sm">{formatDateTime(done.reservedAt)}</p>
+        {done.extras?.quotedWaitMinutes ? (
+          <p className="text-sm font-semibold">
+            {t('shopWaitQuote')}: ~{done.extras.quotedWaitMinutes} min
+          </p>
+        ) : null}
+        {done.extras?.depositAmount ? (
+          <p className="text-sm font-semibold">
+            {t('shopDepositDue')}: CHF {Number(done.extras.depositAmount).toFixed(2)}
+          </p>
+        ) : null}
         {base ? (
           <Link to={`${base}/menu`} className="shop-btn-primary inline-block mt-2 px-5 py-2.5 text-sm font-semibold">
             {t('shopOrder')}
@@ -551,10 +567,41 @@ export default function InlineReservationsWidget({
           {config.settings.policiesText}
         </p>
       ) : null}
+      {config?.settings?.depositEnabled ? (
+        <p className="text-sm font-semibold">
+          {t('shopDepositDue')}:{' '}
+          {config.settings.depositType === 'percent'
+            ? `${config.settings.depositAmount || 0}% × ${partySize}`
+            : `CHF ${Number(config.settings.depositAmount || 0).toFixed(2)}`}
+        </p>
+      ) : null}
+      {config?.settings?.cancelHoursBefore != null || config?.settings?.depositEnabled ? (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={policyAccepted}
+            onChange={(e) => setPolicyAccepted(e.target.checked)}
+            required={!!config?.settings?.depositEnabled}
+          />
+          <span>
+            {t('shopPolicyAccept')}
+            {config?.settings?.cancelHoursBefore != null
+              ? ` (${config.settings.cancelHoursBefore}h)`
+              : ''}
+          </span>
+        </label>
+      ) : null}
 
       <button
         type="submit"
-        disabled={submitting || !time || config?.acceptingReservations === false || config?.vacation?.active}
+        disabled={
+          submitting ||
+          !time ||
+          config?.acceptingReservations === false ||
+          config?.vacation?.active ||
+          (!!config?.settings?.depositEnabled && !policyAccepted)
+        }
         className="shop-btn-primary w-full py-3 font-semibold rounded-lg disabled:opacity-40"
       >
         {submitting ? t('saving') : t('shopReservationsBook')}

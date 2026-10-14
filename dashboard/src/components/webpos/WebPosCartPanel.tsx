@@ -8,6 +8,7 @@ import {
   Printer,
   UtensilsCrossed,
   User,
+  Award,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -60,6 +61,10 @@ type Props = {
   membershipName?: string | null;
   membershipPointsBalance?: number | null;
   onClearMembership?: () => void;
+  comoEnabled?: boolean;
+  comoLabel?: string | null;
+  comoDiscount?: number;
+  onComo?: () => void;
   giftCardLabel?: string | null;
   onClearGiftCard?: () => void;
   fulfillmentLabel?: string | null;
@@ -203,6 +208,10 @@ export default function WebPosCartPanel({
   membershipName,
   membershipPointsBalance,
   onClearMembership,
+  comoEnabled = false,
+  comoLabel,
+  comoDiscount = 0,
+  onComo,
   giftCardLabel,
   onClearGiftCard,
   fulfillmentLabel,
@@ -630,6 +639,23 @@ export default function WebPosCartPanel({
                 <User size={18} className="shrink-0 text-stone-500" />
                 <span className="truncate">{customerLabel || t('webPosAddClient')}</span>
               </button>
+              {comoEnabled && onComo ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={cartMenuItemClass}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onComo();
+                  }}
+                >
+                  <Award size={18} className="shrink-0 text-teal-600" />
+                  <span className="truncate">
+                    {comoLabel || t('comoWebposBtn')}
+                    {comoDiscount > 0 ? ` · −${comoDiscount.toFixed(2)}` : ''}
+                  </span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"
