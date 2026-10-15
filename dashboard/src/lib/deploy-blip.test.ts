@@ -40,7 +40,7 @@ assert.equal(
 );
 assert.equal(isDeployBlip({ code: 'ERR_NETWORK', message: 'Network Error' }), true);
 assert.equal(isDeployBlip({ message: 'Failed to fetch' }), true);
-assert.equal(isDeployBlip({ code: 'ECONNABORTED' }), true);
+assert.equal(isDeployBlip({ code: 'ECONNABORTED' }), false);
 
 assert.equal(isDeployBlip({ response: { status: 401, data: { error: 'Unauthorized' } } }), false);
 assert.equal(isDeployBlip({ response: { status: 403, data: { error: 'Forbidden' } } }), false);

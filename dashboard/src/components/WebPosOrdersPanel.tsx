@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '@/lib/api';
+import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { isPaidOnlineEcommerceOrder } from '@/lib/online-payment';
@@ -682,7 +683,9 @@ export default function WebPosOrdersPanel({
     if (heldRes.status === 'fulfilled') {
       nextHeld = asArray<HeldRow>(heldRes.value.data?.held);
     } else {
-      toast.error(t('webPosOrdersLoadFailed'));
+      if (!opts?.silent) {
+        toastLoadError(heldRes.reason, t('webPosOrdersLoadFailed'));
+      }
       console.warn('[WebPOS][orders] held list failed', heldRes.reason);
     }
     if (ordersRes.status === 'fulfilled') {
@@ -690,7 +693,9 @@ export default function WebPosOrdersPanel({
       setReasons(asArray<CancelReason>(ordersRes.value.data?.cancelReasons));
       setRefundReasons(asArray<RefundReasonOption>(ordersRes.value.data?.refundReasons));
     } else if (heldRes.status === 'fulfilled') {
-      toast.error(t('webPosOrdersLoadFailed'));
+      if (!opts?.silent) {
+        toastLoadError(ordersRes.reason, t('webPosOrdersLoadFailed'));
+      }
       console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
     }
     if (invoiceRes.status === 'fulfilled') {

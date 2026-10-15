@@ -72,9 +72,10 @@ export function isDeployBlip(error: unknown): boolean {
 
   if (!err.response) {
     const code = String(err.code || '');
+    // Slow catalog/settings timeouts are not deploys — avoid "wait for system update" false positives.
+    if (code === 'ECONNABORTED') return false;
     if (
       code === 'ERR_NETWORK' ||
-      code === 'ECONNABORTED' ||
       code === 'ERR_BAD_RESPONSE' ||
       code === 'ECONNRESET'
     ) {
