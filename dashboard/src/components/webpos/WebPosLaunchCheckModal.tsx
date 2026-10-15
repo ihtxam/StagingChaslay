@@ -34,10 +34,12 @@ function CheckRow({
   icon: Icon,
   title,
   result,
+  t,
 }: {
   icon: typeof Printer;
   title: string;
   result: ConnectionCheckResult;
+  t: (key: string) => string;
 }) {
   if (result.status === 'skipped') return null;
 
@@ -49,7 +51,9 @@ function CheckRow({
           <Icon className="h-4 w-4 shrink-0" />
           {title}
         </p>
-        <p className="mt-1 text-sm text-stone-600">{result.message}</p>
+        <p className="mt-1 text-sm text-stone-600">
+          {result.messageKey ? t(result.messageKey) : result.message}
+        </p>
       </div>
     </div>
   );
@@ -147,11 +151,11 @@ export default function WebPosLaunchCheckModal({
         </p>
 
         <div className="mt-5 space-y-3">
-          <CheckRow icon={Printer} title={t('webPosLaunchCheckAgentTitle')} result={agent} />
-          <CheckRow icon={Receipt} title={t('webPosLaunchCheckReceiptTitle')} result={receipt} />
-          <CheckRow icon={Printer} title={t('webPosLaunchCheckKitchenTitle')} result={kitchen} />
-          <CheckRow icon={CreditCard} title={t('webPosLaunchCheckTerminalTitle')} result={terminal} />
-          <CheckRow icon={Nfc} title={t('webPosLaunchCheckTapToPayTitle')} result={tapToPay} />
+          <CheckRow icon={Printer} title={t('webPosLaunchCheckAgentTitle')} result={agent} t={t} />
+          <CheckRow icon={Receipt} title={t('webPosLaunchCheckReceiptTitle')} result={receipt} t={t} />
+          <CheckRow icon={Printer} title={t('webPosLaunchCheckKitchenTitle')} result={kitchen} t={t} />
+          <CheckRow icon={CreditCard} title={t('webPosLaunchCheckTerminalTitle')} result={terminal} t={t} />
+          <CheckRow icon={Nfc} title={t('webPosLaunchCheckTapToPayTitle')} result={tapToPay} t={t} />
         </div>
 
         {ready && countdown != null ? (
@@ -172,7 +176,6 @@ export default function WebPosLaunchCheckModal({
           <button
             type="button"
             className="btn-primary flex-1 py-2.5"
-            disabled={running}
             onClick={onContinue}
           >
             {ready ? t('webPosLaunchCheckContinue') : t('webPosLaunchCheckContinueAnyway')}

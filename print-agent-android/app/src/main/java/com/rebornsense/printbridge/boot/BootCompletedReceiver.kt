@@ -34,23 +34,22 @@ class BootCompletedReceiver : BroadcastReceiver() {
         val handler = Handler(Looper.getMainLooper())
         // Encrypted prefs / notification grants may not be ready on BOOT_COMPLETED alone.
         val delayMs = if (action == Intent.ACTION_USER_UNLOCKED) 0L else 4_000L
-        val retryDelaysMs = longArrayOf(0L, 12_000L, 30_000L, 60_000L, 120_000L)
         handler.postDelayed({
             try {
-                for ((index, extraMs) in retryDelaysMs.withIndex()) {
-                    handler.postDelayed(
-                        {
-                            try {
-                                startBridgeIfReady(appContext)
-                            } catch (_: Throwable) {
-                                /* keep scheduling retries */
-                            }
-                        },
-                        extraMs,
-                    )
-                }
-            } finally {
-                handler.postDelayed({ pendingResult.finish() }, retryDelaysMs.last() + 2_000L)
+                startBridgeIfReady(appContext)
+                // OEM hubs (Nebullus/Sunmi) sometimes enumerate USB a few seconds after boot.
+                handler.postDelayed(
+                    {
+                        try {
+                            startBridgeIfReady(appContext)
+                        } finally {
+                            pendingResult.finish()
+                        }
+                    },
+                    12_000L,
+                )
+            } catch (_: Throwable) {
+                pendingResult.finish()
             }
         }, delayMs)
     }

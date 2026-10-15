@@ -36,8 +36,9 @@ assert.match(prefs, /getLanHosts[\s\S]*runCatching/);
 
 assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
-assert.match(gradle, /versionName = "0\.4\.30"/);
-assert.match(gradle, /versionCode = 48/);
+assert.match(gradle, /versionName = "0\.4\.31"/);
+assert.match(gradle, /versionCode = 49/);
+assert.doesNotMatch(boot, /120_000L/);
 const settings = readFileSync(join(root, 'settings.gradle.kts'), 'utf8');
 assert.match(settings, /id\("com\.android\.application"\) version "8\.7\.2"/);
 
