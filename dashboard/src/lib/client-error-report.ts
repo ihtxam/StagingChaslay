@@ -1,5 +1,6 @@
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { DEPLOY_TOAST_ID } from '@/lib/deploy-blip';
 import { isShopCustomerSurface } from '@/lib/shop-storefront-host';
 
 type PendingError = {
@@ -76,7 +77,10 @@ export function initClientErrorReporting() {
 
   const originalError = toast.error.bind(toast);
   toast.error = ((message: unknown, opts?: Parameters<typeof toast.error>[1]) => {
-    reportClientError(message, { source: 'toast.error' });
+    // Transient deploy/gateway blips — show once in UI; do not spam System Logs as client_error.
+    if (opts?.id !== DEPLOY_TOAST_ID) {
+      reportClientError(message, { source: 'toast.error' });
+    }
     return originalError(message as Parameters<typeof toast.error>[0], opts);
   }) as typeof toast.error;
 
