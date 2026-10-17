@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Ban,
@@ -228,6 +229,7 @@ function MerchantsPage() {
   const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [showCreate, setShowCreate] = useState(() => new URLSearchParams(location.search).has('create'));
   const [manageOpenId, setManageOpenId] = useState<string | null>(null);
+  const [manageMenuPos, setManageMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [inventoryBusyId, setInventoryBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [purgeFor, setPurgeFor] = useState<{ id: string; name: string } | null>(null);
@@ -583,6 +585,37 @@ function MerchantsPage() {
     setPurgeConfirm('');
     setDeleteCustomersToo(false);
   };
+
+  const closeManageMenu = () => {
+    setManageOpenId(null);
+    setManageMenuPos(null);
+  };
+
+  const toggleManageMenu = (merchantId: string, anchor: HTMLElement) => {
+    if (manageOpenId === merchantId) {
+      closeManageMenu();
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const menuWidth = 208;
+    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+    setManageOpenId(merchantId);
+    setManageMenuPos({ top: rect.bottom + 4, left });
+  };
+
+  useEffect(() => {
+    if (!manageOpenId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeManageMenu();
+    };
+    const onScroll = () => closeManageMenu();
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [manageOpenId]);
 
   const handlePurgeSalesData = async () => {
     if (!purgeFor) return;
@@ -1053,122 +1086,21 @@ function MerchantsPage() {
                     onClick={() => void toggleInventory(m)}
                   />
                 </td>
-                <td className="relative px-4 py-3">
+                <td className="px-4 py-3">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-full border border-stone-200 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-                    onClick={() => setManageOpenId((id) => (id === m.id ? null : m.id))}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm ${
+                      manageOpenId === m.id
+                        ? 'border-stone-300 bg-stone-100 text-stone-900'
+                        : 'border-stone-200 text-stone-700 hover:bg-stone-50'
+                    }`}
+                    aria-expanded={manageOpenId === m.id}
+                    aria-haspopup="menu"
+                    onClick={(e) => toggleManageMenu(m.id, e.currentTarget)}
                   >
                     {t('agencyManage')}
                     <ChevronDown className="h-3.5 w-3.5" />
                   </button>
-                  {manageOpenId === m.id ? (
-                    <div className="absolute right-4 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-stone-100 bg-white py-1 shadow-lg">
-                      {[
-                        {
-                          label: t('merchantPlanManage'),
-                          onClick: () =>
-                            setPlanFor({
-                              id: m.id,
-                              name: m.name,
-                              editionId: m.editionId || '',
-                              planBillingPaid: m.planBillingPaid !== false,
-                              subscriptionPlan: m.subscriptionPlan || 'starter',
-                            }),
-                        },
-                        {
-                          label: t('posPostsLimits'),
-                          onClick: () =>
-                            setLimitsFor({
-                              id: m.id,
-                              name: m.name,
-                              maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
-                              maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
-                              maxLocations: limitNumberToField(Math.max(0, Number(m.maxLocations) || 1)),
-                              inventoryAddonEnabled: m.inventoryAddonEnabled === true,
-                              signageAddonEnabled: m.signageAddonEnabled === true,
-                              signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
-                              kdsAddonEnabled: m.kdsAddonEnabled === true,
-                              odsAddonEnabled: m.odsAddonEnabled === true,
-                              kioskAddonEnabled:
-                                m.kioskAddonEnabled === true || m.kioskEnabled === true,
-                              deliveryPlatformsAddonEnabled:
-                                m.deliveryPlatformsAddonEnabled === true ||
-                                m.justEatAddonEnabled === true ||
-                                m.uberEatsAddonEnabled === true,
-                              bexioAddonEnabled: m.bexioAddonEnabled === true,
-                              odooAddonEnabled: m.odooAddonEnabled === true,
-                              storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
-                              growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
-                              guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
-                            }),
-                        },
-                        {
-                          label: t('panelNavManage'),
-                          onClick: () =>
-                            setPanelNavFor({
-                              id: m.id,
-                              name: m.name,
-                              hidden: parsePanelNavHidden(m.panelNavHidden),
-                            }),
-                        },
-                        {
-                          label: t('shopCommissionManage'),
-                          onClick: () =>
-                            setShopBillFor({
-                              id: m.id,
-                              name: m.name,
-                              shopCommissionPercent: Number(m.shopCommissionPercent ?? 0) || 0,
-                            }),
-                        },
-                        {
-                          label: t('resellerOpenMerchant'),
-                          disabled: m.status === 'suspended' || m.status === 'expired',
-                          onClick: () => void openPanel(m),
-                        },
-                        m.status === 'suspended'
-                          ? {
-                              label: t('reactivate'),
-                              disabled: statusBusyId === m.id,
-                              onClick: () => void setMerchantStatus(m, 'active'),
-                            }
-                          : m.status !== 'expired'
-                            ? {
-                                label: t('suspend'),
-                                disabled: statusBusyId === m.id,
-                                onClick: () => void setMerchantStatus(m, 'suspended'),
-                              }
-                            : null,
-                        {
-                          label: revokingSessionsId === m.id ? '…' : t('revokeAllSessions'),
-                          disabled: revokingSessionsId === m.id,
-                          onClick: () => void revokeAllSessions(m),
-                        },
-                        {
-                          label: t('resellerPurgeSales'),
-                          danger: true,
-                          onClick: () => openPurge(m),
-                        },
-                      ]
-                        .filter(Boolean)
-                        .map((item) => (
-                          <button
-                            key={item!.label}
-                            type="button"
-                            disabled={item!.disabled}
-                            className={`block w-full px-3 py-2 text-left text-sm hover:bg-stone-50 disabled:opacity-40 ${
-                              item!.danger ? 'text-rose-700' : 'text-stone-700'
-                            }`}
-                            onClick={() => {
-                              setManageOpenId(null);
-                              item!.onClick();
-                            }}
-                          >
-                            {item!.label}
-                          </button>
-                        ))}
-                    </div>
-                  ) : null}
                 </td>
               </tr>
             ))}
@@ -1580,6 +1512,137 @@ function MerchantsPage() {
           </div>
         </div>
       ) : null}
+
+      {manageOpenId && manageMenuPos
+        ? (() => {
+            const m = merchants.find((row) => row.id === manageOpenId);
+            if (!m) return null;
+            const items = [
+              {
+                label: t('merchantPlanManage'),
+                onClick: () =>
+                  setPlanFor({
+                    id: m.id,
+                    name: m.name,
+                    editionId: m.editionId || '',
+                    planBillingPaid: m.planBillingPaid !== false,
+                    subscriptionPlan: m.subscriptionPlan || 'starter',
+                  }),
+              },
+              {
+                label: t('posPostsLimits'),
+                onClick: () =>
+                  setLimitsFor({
+                    id: m.id,
+                    name: m.name,
+                    maxPosPosts: Math.max(0, Number(m.maxPosPosts) || 0),
+                    maxWaiterPosts: Math.max(0, Number(m.maxWaiterPosts) || 0),
+                    maxLocations: limitNumberToField(Math.max(0, Number(m.maxLocations) || 1)),
+                    inventoryAddonEnabled: m.inventoryAddonEnabled === true,
+                    signageAddonEnabled: m.signageAddonEnabled === true,
+                    signageScreenLimit: Math.max(1, Number(m.signageScreenLimit) || 2),
+                    kdsAddonEnabled: m.kdsAddonEnabled === true,
+                    odsAddonEnabled: m.odsAddonEnabled === true,
+                    kioskAddonEnabled: m.kioskAddonEnabled === true || m.kioskEnabled === true,
+                    deliveryPlatformsAddonEnabled:
+                      m.deliveryPlatformsAddonEnabled === true ||
+                      m.justEatAddonEnabled === true ||
+                      m.uberEatsAddonEnabled === true,
+                    bexioAddonEnabled: m.bexioAddonEnabled === true,
+                    odooAddonEnabled: m.odooAddonEnabled === true,
+                    storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
+                    growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
+                    guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
+                  }),
+              },
+              {
+                label: t('panelNavManage'),
+                onClick: () =>
+                  setPanelNavFor({
+                    id: m.id,
+                    name: m.name,
+                    hidden: parsePanelNavHidden(m.panelNavHidden),
+                  }),
+              },
+              {
+                label: t('shopCommissionManage'),
+                onClick: () =>
+                  setShopBillFor({
+                    id: m.id,
+                    name: m.name,
+                    shopCommissionPercent: Number(m.shopCommissionPercent ?? 0) || 0,
+                  }),
+              },
+              {
+                label: t('resellerOpenMerchant'),
+                disabled: m.status === 'suspended' || m.status === 'expired',
+                onClick: () => void openPanel(m),
+              },
+              m.status === 'suspended'
+                ? {
+                    label: t('reactivate'),
+                    disabled: statusBusyId === m.id,
+                    onClick: () => void setMerchantStatus(m, 'active'),
+                  }
+                : m.status !== 'expired'
+                  ? {
+                      label: t('suspend'),
+                      disabled: statusBusyId === m.id,
+                      onClick: () => void setMerchantStatus(m, 'suspended'),
+                    }
+                  : null,
+              {
+                label: revokingSessionsId === m.id ? '…' : t('revokeAllSessions'),
+                disabled: revokingSessionsId === m.id,
+                onClick: () => void revokeAllSessions(m),
+              },
+              {
+                label: t('resellerPurgeSales'),
+                danger: true,
+                onClick: () => openPurge(m),
+              },
+            ].filter(Boolean) as Array<{
+              label: string;
+              disabled?: boolean;
+              danger?: boolean;
+              onClick: () => void;
+            }>;
+            return createPortal(
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-[200] cursor-default bg-transparent"
+                  aria-label={t('cancel')}
+                  onClick={closeManageMenu}
+                />
+                <div
+                  className="fixed z-[201] w-52 overflow-hidden rounded-xl border border-stone-100 bg-white py-1 shadow-lg"
+                  style={{ top: manageMenuPos.top, left: manageMenuPos.left }}
+                  role="menu"
+                >
+                  {items.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      role="menuitem"
+                      disabled={item.disabled}
+                      className={`block w-full px-3 py-2 text-left text-sm hover:bg-stone-50 disabled:opacity-40 ${
+                        item.danger ? 'text-rose-700' : 'text-stone-700'
+                      }`}
+                      onClick={() => {
+                        closeManageMenu();
+                        item.onClick();
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </>,
+              document.body
+            );
+          })()
+        : null}
 
       {purgeFor ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
