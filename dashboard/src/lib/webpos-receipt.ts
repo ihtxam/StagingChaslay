@@ -831,15 +831,45 @@ export function buildReceiptHeaderPlainTextBlock(
 const RECEIPT_PHONE_LINE_RE =
   /\s+((?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone)\s*:\s*.+)$/i;
 
-/** Split one header detail line so telephone labels start on their own row. */
-export function splitReceiptHeaderDetailLine(line: string): string[] {
+const RECEIPT_TAX_SPLIT_RE = /\s+(?=(?:VAT|UID|TVA|MwSt|MWST)\s*:)/i;
+const RECEIPT_COUNTRY_SPLIT_RE =
+  /(?:\s+|(?<=[a-zà-ÿ]))(?=(?:Suisse|Switzerland|Schweiz|France|Deutschland|Italy|Italia|Österreich|Austria)\b)/i;
+const RECEIPT_STREET_SPLIT_RE =
+  /\s+(?=(?:Rue|Rue des|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\s+)/i;
+const RECEIPT_PLZ_SPLIT_RE = /\s+(?=\d{4}\s+[A-Za-zÀ-ÿ])/;
+
+function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   const text = String(line || '').replace(/\s+/g, ' ').trim();
   if (!text) return [];
-  const phoneMatch = text.match(RECEIPT_PHONE_LINE_RE);
-  if (!phoneMatch) return [text];
-  const before = text.slice(0, phoneMatch.index).trim();
-  const phone = phoneMatch[1]!.trim();
-  return before ? [before, phone] : [phone];
+  const parts = text.split(pattern).map((p) => p.trim()).filter(Boolean);
+  return parts.length > 1 ? parts : [text];
+}
+
+/** Split one header detail line so telephone labels start on their own row. */
+export function splitReceiptHeaderDetailLine(line: string): string[] {
+  let parts = [String(line || '').replace(/\s+/g, ' ').trim()].filter(Boolean);
+  if (!parts.length) return [];
+  for (const re of [
+    RECEIPT_TAX_SPLIT_RE,
+    RECEIPT_COUNTRY_SPLIT_RE,
+    RECEIPT_STREET_SPLIT_RE,
+    RECEIPT_PLZ_SPLIT_RE,
+  ]) {
+    parts = parts.flatMap((p) => splitReceiptHeaderSegment(p, re));
+  }
+  const out: string[] = [];
+  for (const part of parts) {
+    const phoneMatch = part.match(RECEIPT_PHONE_LINE_RE);
+    if (!phoneMatch) {
+      out.push(part);
+      continue;
+    }
+    const before = part.slice(0, phoneMatch.index).trim();
+    const phone = phoneMatch[1]!.trim();
+    if (before) out.push(before);
+    out.push(phone);
+  }
+  return out;
 }
 
 /** Expand receipt header body text into one logical line per printed row. */
@@ -948,7 +978,15 @@ export function getReceiptHeaderLines(
         lines.push(fmt(line));
       }
     }
-    appendMerchantHeaderContactLines(lines, tx, fmt);
+    const bodyLooksComplete =
+      !!body &&
+      (/\b(tel|t[eé]l|phone)\s*:/i.test(body) ||
+        /\b(vat|uid|tva|mwst)\s*:/i.test(body) ||
+        /\bCHE-\d/i.test(body) ||
+        /\b\d{4}\s+[A-Za-zÀ-ÿ]/.test(body));
+    if (!bodyLooksComplete) {
+      appendMerchantHeaderContactLines(lines, tx, fmt);
+    }
     return lines;
   }
   lines.push(fmt((tx.businessName || APP_NAME).toUpperCase().slice(0, width)));
@@ -3097,8 +3135,16 @@ export function textToEscPos(
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
-    // Finish the raster, then one blank line before the store address.
-    parts.push(alignCenter, logoBytes, escposCp850Encode('\n'), ESC_POS_BLANK_LINE, alignLeft);
+    // Finish the raster, blank lines, then re-init so kitchen/double-width modes cannot mash the header.
+    parts.push(
+      alignCenter,
+      logoBytes,
+      escposCp850Encode('\n'),
+      ESC_POS_BLANK_LINE,
+      ESC_POS_BLANK_LINE,
+      new Uint8Array([0x1b, 0x40]),
+      ESC_CODEPAGE_CP850
+    );
   }
   if (prefixAfterLogo?.length) {
     parts.push(prefixAfterLogo);
@@ -3259,9 +3305,16 @@ export async function buildReceiptEscPos(
   );
 }
 
+export { isEscPosBase64, isEscPosBytePayload } from '@/lib/escpos-payload';
+
 export function uint8ToBase64(bytes: Uint8Array): string {
+  if (typeof btoa === 'undefined') return '';
+  const chunk = 0x8000;
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  for (let i = 0; i < bytes.length; i += chunk) {
+    const slice = bytes.subarray(i, i + chunk);
+    binary += String.fromCharCode(...slice);
+  }
   return btoa(binary);
 }
 
@@ -3366,13 +3419,15 @@ export async function logoUrlToEscPos(
   url: string,
   maxWidthPx = RECEIPT_LOGO_WIDTH_PX_DEFAULT
 ): Promise<Uint8Array | null> {
+  const href = String(url || '').trim();
+  if (!href || /\.(svg|webp)(\?|$)/i.test(href)) return null;
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
       el.crossOrigin = 'anonymous';
       el.onload = () => resolve(el);
       el.onerror = () => reject(new Error('logo load failed'));
-      el.src = url;
+      el.src = href;
     });
     const scale = Math.min(1, maxWidthPx / img.width);
     const w = Math.max(8, Math.floor(img.width * scale));

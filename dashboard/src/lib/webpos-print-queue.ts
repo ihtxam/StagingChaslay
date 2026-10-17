@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { friendlyPrintAgentError, listAgentPrinters, printViaAgent, resolveLivePrinterName } from '@/lib/print-agent';
+import { isEscPosBase64 } from '@/lib/escpos-payload';
 
 function safeJobError(error: unknown, printerName?: string): string {
   return friendlyPrintAgentError(error, printerName);
@@ -233,6 +234,26 @@ export function enqueueFailedPrintJob(input: {
   lineIds?: string[];
   error?: unknown;
 }): PendingPrintJob {
+  if (!isEscPosBase64(input.dataBase64)) {
+    const lastError =
+      safeJobError(input.error, input.printerName) ||
+      'Print payload corrupt — not queued for retry.';
+    const job: PendingPrintJob = {
+      id: newId(),
+      kind: input.kind || 'other',
+      label: (input.label || '').trim() || defaultLabel(input.kind || 'other', input.orderId),
+      createdAt: Date.now(),
+      lastAttemptAt: Date.now(),
+      attempts: retryConfig.maxAttempts,
+      lastError,
+      dataBase64: input.dataBase64,
+      printerName: input.printerName || undefined,
+      exhausted: true,
+    };
+    jobs = [job, ...jobs].slice(0, MAX_JOBS);
+    persist();
+    return job;
+  }
   const lastError = safeJobError(input.error, input.printerName);
   const existing = jobs.find(
     (j) => j.dataBase64 === input.dataBase64 && (j.printerName || '') === (input.printerName || '')
