@@ -16,10 +16,14 @@ class BluetoothEscPosDriver : PrinterDriver {
 
     private data class CachedSocket(val socket: BluetoothSocket, var lastUsedMs: Long)
 
-    /** One short feed + full cut — matches dashboard escposKitchenCut(). */
+    /**
+     * Feed + full cut when the job has no GS V suffix (kitchen tickets end with ESC d only).
+     * Matches Windows print-agent Get-BtCutTrailer — enough gap for the blade on clone printers.
+     */
     private val btCutTrailer: ByteArray = byteArrayOf(
-        0x1B, 0x64, 0x02,
+        0x1B, 0x64, 0x05,
         0x1D, 0x56, 0x00,
+        0x0A, 0x0A,
     )
 
     @SuppressLint("MissingPermission")
@@ -73,9 +77,9 @@ class BluetoothEscPosDriver : PrinterDriver {
     }
 
     /**
-     * Pace SPP writes so kitchen tickets are not truncated.
-     * Strips embedded cut suffix, trims trailing feeds, appends one btCutTrailer, and
-     * sends body+cut in a single paced stream — avoids visible multi-phase jerks on clones.
+     * Pace SPP writes so raster/text is not truncated.
+     * Mirror Windows Send-RawToPrinter: keep ESC d feeds in the body, drain, then send GS V (or trailer).
+     * Do not strip ESC d from customer receipts — that was cutting before the tax footer cleared the blade.
      */
     private fun transmitBluetoothJob(socket: BluetoothSocket, data: ByteArray) {
         if (NiimbotPrintClient.isNiimbotPayload(data)) {
@@ -88,40 +92,18 @@ class BluetoothEscPosDriver : PrinterDriver {
             Thread.sleep(200)
             return
         }
-        val (bodyRaw, _) = splitCutSuffix(data)
-        val body = stripTrailingFeedAndCut(bodyRaw)
-        val payload = if (body.isNotEmpty()) body + btCutTrailer else btCutTrailer
-        writePaced(socket, payload, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
-        val drainMs = (400L + payload.size / 20L).coerceAtMost(2_500L)
-        Thread.sleep(drainMs)
-    }
-
-    /** Remove stacked ESC d / GS V / LF tails before appending btCutTrailer. */
-    private fun stripTrailingFeedAndCut(data: ByteArray): ByteArray {
-        var end = data.size
-        while (end > 0) {
-            if (data[end - 1] == 0x0A.toByte()) {
-                end--
-                continue
-            }
-            if (end >= 3 && data[end - 3] == 0x1B.toByte() && data[end - 2] == 0x64.toByte()) {
-                end -= 3
-                continue
-            }
-            if (end >= 3 && data[end - 3] == 0x1D.toByte() && data[end - 2] == 0x56.toByte()) {
-                end -= 3
-                continue
-            }
-            if (end >= 2 && data[end - 2] == 0x1B.toByte() && data[end - 1] == 0x6D.toByte()) {
-                end -= 2
-                continue
-            }
-            break
+        val (body, cutSuffix) = splitCutSuffix(data)
+        if (body.isNotEmpty()) {
+            writePaced(socket, body, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
+            val drainMs = (400L + body.size / 20L).coerceAtMost(2_500L)
+            Thread.sleep(drainMs)
         }
-        return if (end == data.size) data else data.copyOfRange(0, end)
+        val cutBytes = if (cutSuffix.isNotEmpty()) cutSuffix else btCutTrailer
+        writePaced(socket, cutBytes, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
+        Thread.sleep(120)
     }
 
-    /** Mirror Windows print-agent Split-CutSuffix — scan tail for GS V / ESC d. */
+    /** Mirror Windows Split-CutSuffix — GS V / ESC m only (never ESC d; kitchen tickets use feed-only tails). */
     private fun splitCutSuffix(data: ByteArray): Pair<ByteArray, ByteArray> {
         if (data.size < 4) return data to byteArrayOf()
         val start = maxOf(0, data.size - 96)
@@ -132,7 +114,7 @@ class BluetoothEscPosDriver : PrinterDriver {
                 val trail = data.copyOfRange(i, data.size)
                 return body to trail
             }
-            if (data[i] == 0x1B.toByte() && i + 1 < data.size && data[i + 1] == 0x64.toByte()) {
+            if (data[i] == 0x1B.toByte() && i + 1 < data.size && data[i + 1] == 0x6D.toByte()) {
                 val body = data.copyOfRange(0, i)
                 val trail = data.copyOfRange(i, data.size)
                 return body to trail
