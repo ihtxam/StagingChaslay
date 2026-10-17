@@ -1,9 +1,5 @@
 name: Build Bridge APK
 
-# Slim path: JDK + Android cmdline-tools on the runner.
-# Do NOT pull mingc/android-build-box — that image fills ubuntu-latest disk
-# ("no space left on device" on run 35449045827 and every recent main build).
-
 on:
   workflow_dispatch:
   push:
@@ -18,20 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Disk before SDK
-        run: df -h
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
       - name: Write Adyen SDK keys when secrets exist
         env:
@@ -54,62 +36,34 @@ jobs:
             echo "WARNING: ADYEN_SDK_API_KEY secret is empty — this will be a print-only APK"
           fi
 
-      - name: Restore shared Bridge signing keystore (cache)
-        uses: actions/cache@v4
-        id: bridge-keystore-cache
-        with:
-          path: |
-            ~/.android/debug.keystore
-            ~/.config/.android/debug.keystore
-          key: bridge-apk-signing-keystore-v1
-
-      - name: Configure Bridge release keystore
-        env:
-          BRIDGE_KEYSTORE_BASE64: ${{ secrets.BRIDGE_KEYSTORE_BASE64 }}
-          BRIDGE_KEYSTORE_PASSWORD: ${{ secrets.BRIDGE_KEYSTORE_PASSWORD }}
-          BRIDGE_KEY_ALIAS: ${{ secrets.BRIDGE_KEY_ALIAS }}
-          BRIDGE_KEY_PASSWORD: ${{ secrets.BRIDGE_KEY_PASSWORD }}
+      - name: Build APK in Android container
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.android" "$HOME/.config/.android" print-agent-android/.secrets
-          if [[ -n "${BRIDGE_KEYSTORE_BASE64:-}" ]]; then
-            echo "$BRIDGE_KEYSTORE_BASE64" | base64 -d > print-agent-android/.secrets/bridge-release.keystore
-            {
-              echo "bridgeStoreFile=.secrets/bridge-release.keystore"
-              echo "bridgeStorePassword=${BRIDGE_KEYSTORE_PASSWORD:-android}"
-              echo "bridgeKeyAlias=${BRIDGE_KEY_ALIAS:-bridge}"
-              echo "bridgeKeyPassword=${BRIDGE_KEY_PASSWORD:-android}"
-            } >> print-agent-android/local.properties
-            echo "Using BRIDGE_KEYSTORE_BASE64 secret for release signing"
-          else
-            # Ephemeral runners need a stable debug keystore so in-place APK upgrades work across CI builds.
-            for ks in "$HOME/.android/debug.keystore" "$HOME/.config/.android/debug.keystore"; do
-              if [[ ! -f "$ks" ]]; then
+          mkdir -p backend/public/downloads
+          docker run --rm \
+            -e ANDROID_SDK_ROOT=/opt/android-sdk-linux \
+            -e GRADLE_USER_HOME=/tmp/gradle-home \
+            -v "$PWD/print-agent-android:/project" \
+            -v "$PWD/backend/public/downloads:/out" \
+            -w /project \
+            mingc/android-build-box:latest \
+            bash -c 'set -euo pipefail
+              export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+              rm -rf /project/.gradle /project/app/build /tmp/gradle-home
+              mkdir -p /opt/android-sdk/.android /tmp/gradle-home
+              if [[ ! -f /opt/android-sdk/.android/debug.keystore ]]; then
                 keytool -genkeypair -v \
-                  -keystore "$ks" \
+                  -keystore /opt/android-sdk/.android/debug.keystore \
                   -storepass android -alias androiddebugkey -keypass android \
                   -keyalg RSA -keysize 2048 -validity 10000 \
                   -dname "CN=Reborn Print Bridge,O=Reborn,C=CH"
               fi
-            done
-            if [[ "${{ steps.bridge-keystore-cache.outputs.cache-hit }}" == "true" ]]; then
-              echo "Restored cached Bridge debug keystore for consistent APK signatures"
-            else
-              echo "Created new Bridge debug keystore (will be cached for future CI builds)"
-            fi
-          fi
-
-      - name: Build APK
-        working-directory: print-agent-android
-        run: |
-          set -euo pipefail
-          mkdir -p ../backend/public/downloads
-          chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon --no-build-cache
-          APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
-          test -n "$APK"
-          cp -f "$APK" ../backend/public/downloads/reborn-print-bridge.apk
-          df -h
+              chmod +x ./gradlew
+              ./gradlew assembleRelease --no-daemon --no-build-cache -g /tmp/gradle-home
+              APK="$(find app/build/outputs/apk/release -name "*.apk" | head -1)"
+              test -n "$APK"
+              cp -f "$APK" /out/reborn-print-bridge.apk
+            '
 
       - name: Verify APK version matches build.gradle
         run: |
@@ -135,20 +89,6 @@ jobs:
           )"
           echo "gradle=$BRIDGE_VERSION apk=$APK_VERSION"
           test "$APK_VERSION" = "$BRIDGE_VERSION"
-
-      - name: Update download manifest
-        run: |
-          BRIDGE_VERSION="$(grep -E 'versionName\s*=' print-agent-android/app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
-          python3 - <<PY
-          import json, datetime
-          from pathlib import Path
-          manifest = Path("backend/public/downloads/reborn-print-bridge.json")
-          data = json.loads(manifest.read_text())
-          data["version"] = "$BRIDGE_VERSION"
-          data["builtAt"] = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-          data["signed"] = True
-          manifest.write_text(json.dumps(data, indent=2) + "\n")
-          PY
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
