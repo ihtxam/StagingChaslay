@@ -2834,9 +2834,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }))
           : asArray(p.extras),
         modifierGroups: Array.isArray(p.modifierGroups)
-          ? p.modifierGroups.map((g: any) => ({
+          ? p.modifierGroups.map((g: any, gi: number) => ({
               ...g,
               name: repairCatalogText(g?.name || ''),
+              sortOrder: Number(g?.sortOrder ?? g?.catalogSortOrder) || gi,
               options: Array.isArray(g?.options)
                 ? g.options.map((o: any) => ({
                     ...o,
@@ -2871,9 +2872,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                         }))
                       : asArray(sp?.extras),
                     modifierGroups: Array.isArray(sp?.modifierGroups)
-                      ? sp.modifierGroups.map((g: any) => ({
+                      ? sp.modifierGroups.map((g: any, gi: number) => ({
                           ...g,
                           name: repairCatalogText(g?.name || ''),
+                          sortOrder: Number(g?.sortOrder ?? g?.catalogSortOrder) || gi,
                           options: Array.isArray(g?.options)
                             ? g.options.map((o: any) => ({
                                 ...o,

@@ -1042,6 +1042,23 @@ router.get("/modifiers", async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /api/merchant/modifiers/reorder
+ */
+router.put("/modifiers/reorder", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+    const orderedIds = Array.isArray(req.body.orderedIds) ? req.body.orderedIds : [];
+    const groups = await ModifierService.reorderGroups(merchantId, orderedIds);
+    res.json({ success: true, groups });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to reorder modifier groups",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/modifiers/:groupId
  */
 router.get("/modifiers/:groupId", async (req: Request, res: Response) => {

@@ -238,17 +238,25 @@ export class ModifierService {
       where: eq(schema.productModifierGroups.groupId, groupId),
     });
     const previousIds = previous.map((p) => p.productId);
+    const previousSortByProduct = new Map(previous.map((p) => [p.productId, p.sortOrder ?? 0]));
 
     await db.delete(schema.productModifierGroups).where(eq(schema.productModifierGroups.groupId, groupId));
 
     if (uniqueIds.length) {
-      await db.insert(schema.productModifierGroups).values(
-        uniqueIds.map((productId, idx) => ({
-          productId,
-          groupId,
-          sortOrder: idx,
-        }))
-      );
+      const rows: { productId: string; groupId: string; sortOrder: number }[] = [];
+      for (const productId of uniqueIds) {
+        let sortOrder = previousSortByProduct.get(productId);
+        if (sortOrder === undefined) {
+          const siblings = await db.query.productModifierGroups.findMany({
+            where: eq(schema.productModifierGroups.productId, productId),
+            columns: { sortOrder: true },
+          });
+          const maxSibling = siblings.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), -1);
+          sortOrder = maxSibling + 1;
+        }
+        rows.push({ productId, groupId, sortOrder });
+      }
+      await db.insert(schema.productModifierGroups).values(rows);
     }
 
     const touched = new Set([...previousIds, ...uniqueIds]);
@@ -322,10 +330,61 @@ export class ModifierService {
       const g = link.group as any;
       if (!g || g.merchantId !== merchantId || g.isActive === false) continue;
       const list = byProduct.get(link.productId) || [];
-      list.push(this.serializeGroup(g));
+      list.push(this.serializeGroup(g, { productSortOrder: link.sortOrder }));
       byProduct.set(link.productId, list);
     }
+    for (const [productId, list] of byProduct) {
+      byProduct.set(productId, this.orderGroupsForProduct(list));
+    }
     return byProduct;
+  }
+
+  /** Persist display order for modifier groups (merchant catalog list). */
+  static async reorderGroups(merchantId: string, orderedIds: string[]) {
+    const db = getDb();
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      throw new Error("orderedIds is required");
+    }
+
+    const existing = await db.query.modifierGroups.findMany({
+      where: eq(schema.modifierGroups.merchantId, merchantId),
+      columns: { id: true },
+    });
+    const owned = new Set(existing.map((g) => g.id));
+    for (const id of orderedIds) {
+      if (!owned.has(id)) throw new Error("Invalid modifier group id in reorder list");
+    }
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await tx
+          .update(schema.modifierGroups)
+          .set({ sortOrder: i, updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.modifierGroups.id, orderedIds[i]),
+              eq(schema.modifierGroups.merchantId, merchantId)
+            )
+          );
+      }
+    });
+
+    return this.list(merchantId);
+  }
+
+  private static orderGroupsForProduct(groups: ReturnType<typeof ModifierService.serializeGroup>) {
+    return [...groups].sort((a, b) => {
+      const sa = Number(a.sortOrder) || 0;
+      const sb = Number(b.sortOrder) || 0;
+      if (sa !== sb) return sa - sb;
+      const ga = Number(a.catalogSortOrder) || 0;
+      const gb = Number(b.catalogSortOrder) || 0;
+      if (ga !== gb) return ga - gb;
+      return String(a.title).localeCompare(String(b.title), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
   }
 
   private static async replaceOptions(
@@ -400,7 +459,7 @@ export class ModifierService {
       .where(eq(schema.products.id, productId));
   }
 
-  private static serializeGroup(g: any) {
+  private static serializeGroup(g: any, opts?: { productSortOrder?: number | null }) {
     const options = (g.options || []).map(publicOption);
     const products = (g.productLinks || [])
       .map((link: any) => {
@@ -416,6 +475,12 @@ export class ModifierService {
       })
       .filter(Boolean);
 
+    const catalogSortOrder = g.sortOrder ?? 0;
+    const productSortOrder =
+      opts?.productSortOrder !== undefined && opts?.productSortOrder !== null
+        ? Number(opts.productSortOrder) || 0
+        : undefined;
+
     return {
       id: g.id,
       title: g.title,
@@ -426,7 +491,8 @@ export class ModifierService {
       defaultCollapsed: !!g.defaultCollapsed,
       allowMultipleSameItem: !!g.allowMultipleSameItem,
       priceScope: normalizePriceScope(g.priceScope),
-      sortOrder: g.sortOrder ?? 0,
+      sortOrder: productSortOrder ?? catalogSortOrder,
+      catalogSortOrder,
       isActive: g.isActive !== false,
       options,
       products,

@@ -836,7 +836,10 @@ export default function Products() {
   };
 
   const linkedModifierGroups = useMemo(
-    () => allModifierGroups.filter((g) => form.modifierGroupIds.includes(g.id)),
+    () =>
+      form.modifierGroupIds
+        .map((id) => allModifierGroups.find((g) => g.id === id))
+        .filter((g): g is ModifierGroupSummary => !!g),
     [allModifierGroups, form.modifierGroupIds]
   );
 
@@ -2897,28 +2900,52 @@ export default function Products() {
                           {t('noModifiersLinked')}
                         </p>
                       )}
-                      {linkedModifierGroups.map((g) => (
-                        <div key={g.id} className="flex items-center justify-between px-3 py-2">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{g.title}</p>
-                            <p className="text-[11px] muted truncate">
-                              {(g.options || []).map((o) => o.name).join(' · ') || t('noOptions')}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)]"
-                            onClick={() =>
-                              setForm({
-                                ...form,
-                                modifierGroupIds: form.modifierGroupIds.filter((id) => id !== g.id),
-                              })
-                            }
+                      <SortableContainer
+                        as="div"
+                        items={linkedModifierGroups}
+                        onReorder={(next) =>
+                          setForm({
+                            ...form,
+                            modifierGroupIds: next.map((g) => g.id),
+                          })
+                        }
+                      >
+                        {linkedModifierGroups.map((g) => (
+                          <SortableRow
+                            key={g.id}
+                            id={g.id}
+                            as="div"
+                            className="flex items-center justify-between gap-2 px-3 py-2 bg-[var(--bg-elevated)]"
                           >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                            {({ attributes, listeners }) => (
+                              <>
+                                <DragHandle attributes={attributes} listeners={listeners} />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate">{g.title}</p>
+                                  <p className="text-[11px] muted truncate">
+                                    {(g.options || []).map((o) => o.name).join(' · ') ||
+                                      t('noOptions')}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)]"
+                                  onClick={() =>
+                                    setForm({
+                                      ...form,
+                                      modifierGroupIds: form.modifierGroupIds.filter(
+                                        (id) => id !== g.id
+                                      ),
+                                    })
+                                  }
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </SortableRow>
+                        ))}
+                      </SortableContainer>
                     </div>
                   </div>
                 </div>

@@ -32,7 +32,20 @@ export interface ShopModifierGroup {
   minSelectable?: number;
   maxSelectable?: number;
   priceScope?: 'fixed' | 'per_guest' | string;
+  /** Display order on the product (from product_modifier_groups.sort_order). */
+  sortOrder?: number;
   options: ShopModifierOption[];
+}
+
+function compareModifierGroups(a: ShopModifierGroup, b: ShopModifierGroup): number {
+  const sa = Number(a.sortOrder) || 0;
+  const sb = Number(b.sortOrder) || 0;
+  if (sa !== sb) return sa - sb;
+  return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+export function sortModifierGroups(groups: ShopModifierGroup[]): ShopModifierGroup[] {
+  return [...groups].sort(compareModifierGroups);
 }
 
 /** Catalogue size/spec row (Small / Regular / Large, each with its own price). */
@@ -134,7 +147,7 @@ function sizeGroupFromSpecifications(product: ShopProductForModifiers): ShopModi
 
 function legacyExtrasGroups(product: ShopProductForModifiers): ShopModifierGroup[] {
   if (product.modifierGroups?.length) {
-    return product.modifierGroups.map((g) => normalizeModifierGroup(g));
+    return sortModifierGroups(product.modifierGroups.map((g) => normalizeModifierGroup(g)));
   }
   if (product.allowExtras && product.extras?.length) {
     return [

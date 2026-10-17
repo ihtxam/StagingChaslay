@@ -7,6 +7,7 @@ import {
   modifierOptionDisplayName,
   nosOptionDisplayName,
   productRequiresModifierModal,
+  sortModifierGroups,
 } from './shop-modifier-utils';
 
 describe('isNosModifierGroup', () => {
@@ -64,6 +65,32 @@ describe('buildExtrasFromSelection', () => {
       { id: 'n1', name: 'No Onion', price: 0, groupId: 'nos', groupTitle: "No's" },
       { id: 'e1', name: 'Bacon', price: 2, groupId: 'extras', groupTitle: 'Extras' },
     ]);
+  });
+});
+
+describe('sortModifierGroups', () => {
+  it('orders by sortOrder then numeric title', () => {
+    const sorted = sortModifierGroups([
+      {
+        id: 'b',
+        title: 'Votre 2ème sauce',
+        sortOrder: 0,
+        options: [],
+      },
+      {
+        id: 'a',
+        title: 'Votre 1ère sauce',
+        sortOrder: 0,
+        options: [],
+      },
+      {
+        id: 'c',
+        title: 'Extras',
+        sortOrder: 2,
+        options: [],
+      },
+    ]);
+    expect(sorted.map((g) => g.id)).toEqual(['a', 'b', 'c']);
   });
 });
 

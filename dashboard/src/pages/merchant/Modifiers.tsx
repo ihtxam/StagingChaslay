@@ -64,6 +64,7 @@ interface ModifierGroup {
   defaultCollapsed: boolean;
   allowMultipleSameItem: boolean;
   priceScope?: 'fixed' | 'per_guest';
+  sortOrder?: number;
   options: ModifierOption[];
   products: LinkedProduct[];
   productIds: string[];
@@ -136,6 +137,7 @@ export default function Modifiers() {
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const load = async () => {
     try {
@@ -187,6 +189,23 @@ export default function Modifiers() {
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const onReorderGroups = async (next: ModifierGroup[]) => {
+    const prev = groups;
+    setGroups(next);
+    setReordering(true);
+    try {
+      const res = await api.put('/merchant/modifiers/reorder', {
+        orderedIds: next.map((g) => g.id),
+      });
+      setGroups(res.data.groups || next);
+    } catch (err: any) {
+      setGroups(prev);
+      toast.error(err.response?.data?.error || t('categoryToastReorderFailed'));
+    } finally {
+      setReordering(false);
+    }
   };
 
   const toggleSelectAllFiltered = () => {
@@ -482,6 +501,10 @@ export default function Modifiers() {
         </div>
       ) : null}
 
+      {!search.trim() && filtered.length > 1 ? (
+        <p className="text-xs text-slate-500">{t('sortOrder')}: drag groups to set tab order on POS.</p>
+      ) : null}
+
       <div className="space-y-3">
         {filtered.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
@@ -497,13 +520,27 @@ export default function Modifiers() {
           </div>
         )}
 
-        {filtered.map((group) => (
-          <article
+        <SortableContainer
+          as="div"
+          className="space-y-3"
+          items={search.trim() ? filtered : groups}
+          onReorder={search.trim() ? () => {} : onReorderGroups}
+          disabled={reordering || !!search.trim()}
+        >
+        {(search.trim() ? filtered : groups).map((group) => (
+          <SortableRow
             key={group.id}
+            id={group.id}
+            as="div"
             className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+            disabled={reordering || !!search.trim()}
           >
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+            {({ attributes, listeners }) => (
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
               <div className="flex gap-3 min-w-0">
+                {!search.trim() ? (
+                  <DragHandle attributes={attributes} listeners={listeners} className="mt-1" />
+                ) : null}
                 <label className="flex shrink-0 items-start pt-1">
                   <input
                     type="checkbox"
@@ -567,8 +604,10 @@ export default function Modifiers() {
                 </button>
               </div>
             </div>
-          </article>
+            )}
+          </SortableRow>
         ))}
+        </SortableContainer>
       </div>
 
       {editorOpen && (

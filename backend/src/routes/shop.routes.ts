@@ -133,8 +133,13 @@ function shopSeoFromMerchant(
   return { site, seoTitle: resolved.title, seoDescription: resolved.description };
 }
 
-function serializeShopModifierGroup(g: any) {
+function serializeShopModifierGroup(g: any, productSortOrder?: number | null) {
   const pricingType = g.pricingType || "fixed";
+  const catalogSortOrder = Number(g.sortOrder) || 0;
+  const sortOrder =
+    productSortOrder !== undefined && productSortOrder !== null
+      ? Number(productSortOrder) || 0
+      : catalogSortOrder;
   return {
     id: g.id,
     title: g.title,
@@ -144,6 +149,7 @@ function serializeShopModifierGroup(g: any) {
     maxSelectable: Number(g.maxSelectable) || 1,
     priceScope: String(g.priceScope || "fixed").toLowerCase() === "per_guest" ? "per_guest" : "fixed",
     allowMultipleSameItem: !!g.allowMultipleSameItem,
+    sortOrder,
     options: (g.options || [])
       .filter((o: any) => (o.saleStatus || "in_stock") !== "out_of_stock")
       .map((o: any) => ({
@@ -458,8 +464,20 @@ async function loadModifierGroupsByProduct(merchantId: string, productIds: strin
     const g = link.group as any;
     if (!g || g.merchantId !== merchantId || g.isActive === false) continue;
     const list = byProduct.get(link.productId) || [];
-    list.push(serializeShopModifierGroup(g));
+    list.push(serializeShopModifierGroup(g, link.sortOrder));
     byProduct.set(link.productId, list);
+  }
+  for (const [productId, list] of byProduct) {
+    list.sort((a, b) => {
+      const sa = Number(a.sortOrder) || 0;
+      const sb = Number(b.sortOrder) || 0;
+      if (sa !== sb) return sa - sb;
+      return String(a.title).localeCompare(String(b.title), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+    byProduct.set(productId, list);
   }
   return byProduct;
 }
