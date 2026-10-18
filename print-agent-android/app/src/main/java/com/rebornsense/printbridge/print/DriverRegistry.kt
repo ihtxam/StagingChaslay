@@ -107,4 +107,8 @@ class DriverRegistry(
         drivers.firstOrNull { it.key == endpoint.driverKey }
 
     fun hasReadyPrinter(): Boolean = cached.isNotEmpty()
+
+    fun releaseBluetoothConnection(address: String) {
+        bluetooth.releaseConnection(address)
+    }
 }
