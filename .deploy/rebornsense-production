@@ -6,3 +6,4 @@
 # Deploy retry 2026-10-03T22:13:00Z — production deploy after installer-fetch fix
 
 # Deploy 2026-10-04T07:30:00Z — restore merchant and shop catalogs when products columns are missing
+# Deploy 2026-10-18T20:00:00Z — Bridge Reborn 0.4.38 (USB plug permission, service UI, FR i18n)
