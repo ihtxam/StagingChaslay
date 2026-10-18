@@ -3,6 +3,7 @@ package com.rebornsense.printbridge.usb
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.PrintBridgeLauncher
@@ -27,7 +28,7 @@ object UsbHostPermissions {
         device: UsbDevice,
     ): Boolean {
         if (usb.hasPermission(device)) return false
-        return UsbDeviceClassifier.isUsbPrinterCandidate(context.applicationContext, device)
+        return UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(context.applicationContext, device)
     }
 
     fun register(context: android.content.Context) {
@@ -120,6 +121,7 @@ object UsbHostPermissions {
         val usb = usbManager(activity) ?: return false
         val app = activity.applicationContext
         reconcilePendingWithGrant(usb, app)
+        clearStalePendingRequest(usb)
         if (pendingPermissionDeviceId != null) return false
         val preferred = preferredVidPid?.trim()?.takeIf { it.isNotEmpty() }
         val candidates = usb.deviceList.values
@@ -139,6 +141,7 @@ object UsbHostPermissions {
         val usb = usbManager(activity) ?: return false
         val app = activity.applicationContext
         reconcilePendingWithGrant(usb, app)
+        clearStalePendingRequest(usb)
         if (pendingPermissionDeviceId != null) return false
         if (!needsPermissionRequest(app, usb, device)) {
             if (usb.hasPermission(device)) {
@@ -156,6 +159,7 @@ object UsbHostPermissions {
         val app = context.applicationContext
         val usb = usbManager(app) ?: return false
         reconcilePendingWithGrant(usb, app)
+        clearStalePendingRequest(usb)
         if (pendingPermissionDeviceId != null) return false
         if (!needsPermissionRequest(app, usb, device)) {
             if (usb.hasPermission(device)) {
@@ -175,6 +179,30 @@ object UsbHostPermissions {
 
     fun isRequestPending(): Boolean = pendingPermissionDeviceId != null
 
+    /** Stale pending blocks the USB grant button and transparent attach activity. */
+    fun clearStalePendingRequest(usb: UsbManager, maxAgeMs: Long = 45_000L): Boolean {
+        val pendingId = pendingPermissionDeviceId ?: return false
+        val device = usb.deviceList.values.firstOrNull { it.deviceId == pendingId }
+        if (device != null && usb.hasPermission(device)) {
+            pendingPermissionDeviceId = null
+            return true
+        }
+        if (device == null) {
+            pendingPermissionDeviceId = null
+            return true
+        }
+        val age = SystemClock.elapsedRealtime() - pendingRequestStartedElapsed
+        if (age > maxAgeMs) {
+            Log.w(TAG, "Clearing stale USB permission pending for deviceId=$pendingId ageMs=$age")
+            pendingPermissionDeviceId = null
+            return true
+        }
+        return false
+    }
+
+    @Volatile
+    private var pendingRequestStartedElapsed: Long = 0L
+
     private fun requestPermission(appContext: android.content.Context, usb: UsbManager, device: UsbDevice) {
         if (usb.hasPermission(device)) {
             Log.d(TAG, "Skip USB requestPermission — hasPermission already true for ${deviceKey(device)}")
@@ -182,6 +210,7 @@ object UsbHostPermissions {
             return
         }
         pendingPermissionDeviceId = device.deviceId
+        pendingRequestStartedElapsed = SystemClock.elapsedRealtime()
         val flags = android.app.PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 android.app.PendingIntent.FLAG_MUTABLE

@@ -103,17 +103,21 @@ object UsbDeviceClassifier {
 
     fun isScannerOrReaderPeripheral(device: UsbDevice): Boolean {
         return runCatching {
+            if (hasPrinterClass(device)) return@runCatching false
             if (device.deviceClass == UsbConstants.USB_CLASS_HID) return@runCatching true
             if (device.deviceClass == UsbConstants.USB_CLASS_HUB) return@runCatching true
             val classes = interfaceClasses(device)
             if (classes.any { it == 0x0B }) return@runCatching true
-            if (device.vendorId in SERIAL_ADAPTER_VENDOR_IDS &&
-                UsbConstants.USB_CLASS_PRINTER !in classes
-            ) {
+            // CH340/CP210x serial chips are used by both barcode wedges and cheap USB receipt
+            // printers — do not blanket-ignore the vendor; fall through to interface checks.
+            if (classes.isNotEmpty() && classes.all { it in NON_PRINTER_INTERFACE_CLASSES }) {
+                if (UsbConstants.USB_CLASS_HID in classes) return@runCatching true
+                // CH340/CP210x receipt printers are often CDC-only; classify in [isUsbPrinterCandidate].
+                if (device.vendorId in SERIAL_ADAPTER_VENDOR_IDS) return@runCatching false
                 return@runCatching true
             }
-            classes.isNotEmpty() && classes.all { it in NON_PRINTER_INTERFACE_CLASSES }
-        }.getOrDefault(true)
+            false
+        }.getOrDefault(false)
     }
 
     /**
@@ -150,11 +154,17 @@ object UsbDeviceClassifier {
             }
             if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return@runCatching true
             if (hasPrinterInterface(device)) return@runCatching true
-            if (device.vendorId in KNOWN_PRINTER_VENDOR_IDS && hasAnyBulkOut(device)) {
+            if (device.vendorId in KNOWN_PRINTER_VENDOR_IDS && hasEscPosBulkOut(device)) {
                 return@runCatching true
             }
+            if (device.vendorId in SERIAL_ADAPTER_VENDOR_IDS) {
+                val classes = interfaceClasses(device)
+                if (UsbConstants.USB_CLASS_HID !in classes && hasEscPosBulkOut(device, allowCdcData = true)) {
+                    return@runCatching true
+                }
+            }
             // Gemini receipt printers often expose only a vendor-class bulk OUT interface.
-            hasAnyBulkOut(device)
+            hasEscPosBulkOut(device)
         }.getOrDefault(false)
     }
 
@@ -222,10 +232,30 @@ object UsbDeviceClassifier {
     }
 
     private fun hasAnyBulkOut(device: UsbDevice): Boolean {
+        return hasEscPosBulkOut(device, allowCdcData = false)
+    }
+
+    /**
+     * Bulk OUT on printer/vendor interfaces, and on CDC data when the device is a known
+     * receipt printer or was granted before (Gemini 0418, CH340 thermal, etc.).
+     */
+    private fun hasEscPosBulkOut(device: UsbDevice, allowCdcData: Boolean = true): Boolean {
+        val allowCdc = allowCdcData &&
+            (
+                device.vendorId in KNOWN_PRINTER_VENDOR_IDS ||
+                    hasPrinterClass(device) ||
+                    hasPrinterInterface(device)
+            )
         for (index in 0 until device.interfaceCount) {
             val iface = runCatching { device.getInterface(index) }.getOrNull() ?: continue
-            if (iface.interfaceClass in NON_PRINTER_INTERFACE_CLASSES) continue
-            if (hasBulkOut(iface)) return true
+            val cls = iface.interfaceClass
+            when {
+                cls == UsbConstants.USB_CLASS_PRINTER -> if (hasBulkOut(iface)) return true
+                cls == UsbConstants.USB_CLASS_VENDOR_SPEC -> if (hasBulkOut(iface)) return true
+                allowCdc && cls == UsbConstants.USB_CLASS_CDC_DATA -> if (hasBulkOut(iface)) return true
+                cls in NON_PRINTER_INTERFACE_CLASSES -> continue
+                hasBulkOut(iface) -> return true
+            }
         }
         return false
     }

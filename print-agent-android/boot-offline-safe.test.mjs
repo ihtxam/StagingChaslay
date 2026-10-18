@@ -56,8 +56,9 @@ assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
 assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
 assert.match(launcher, /recordBlockedStartInCrashLog/);
-assert.match(gradle, /versionName = "0\.4\.38"/);
-assert.match(gradle, /versionCode = 56/);
+assert.match(gradle, /versionName = "0\.4\.39"/);
+assert.match(gradle, /versionCode = 57/);
+assert.match(attachActivity, /shouldOfferUsbAccessOnAttach/);
 assert.match(mainActivity, /setStartBridgeButtonVisible/);
 assert.doesNotMatch(boot, /120_000L/);
 const settings = readFileSync(join(root, 'settings.gradle.kts'), 'utf8');

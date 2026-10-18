@@ -50,7 +50,7 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         }
         val device = UsbBootPermissionNotifier.resolveDeviceFromIntent(this, intent)
             ?: intent?.usbDeviceExtra()
-        if (device == null || !UsbDeviceClassifier.isUsbPrinterCandidate(applicationContext, device)) {
+        if (device == null || !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)) {
             Log.d(TAG, "Skip USB attach activity — not a printer candidate")
             finish()
             return
@@ -59,6 +59,7 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             finish()
             return
         }
+        UsbHostPermissions.clearStalePendingRequest(usb)
         UsbHostPermissions.recordGrantedDevices(this)
         if (usb.hasPermission(device)) {
             UsbBootPermissionNotifier.cancelNotification(this)
@@ -71,6 +72,7 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             return
         }
         if (UsbHostPermissions.isRequestPending()) {
+            finish()
             return
         }
         if (!usbPromptIssued) {
