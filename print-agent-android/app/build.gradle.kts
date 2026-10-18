@@ -28,8 +28,8 @@ android {
         // Adyen Tap to Pay requires API 26+; print-only still works on API 24 when SDK absent.
         minSdk = if (hasAdyenSdk) 26 else 24
         targetSdk = 35
-        versionCode = 50
-        versionName = "0.4.32"
+        versionCode = 51
+        versionName = "0.4.33"
         buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
     }
 

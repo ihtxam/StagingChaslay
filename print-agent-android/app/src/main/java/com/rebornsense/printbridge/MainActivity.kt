@@ -134,6 +134,7 @@ class MainActivity : AppCompatActivity() {
         printerAdapter = PrinterListAdapter(
             onSetDefault = { endpoint -> setDefaultPrinter(endpoint) },
             onTestPrint = { endpoint -> testPrint(endpoint) },
+            onRemove = { endpoint -> confirmRemovePrinter(endpoint) },
         )
         findViewById<RecyclerView>(R.id.printerRecycler).adapter = printerAdapter
         setupAutoStartSwitch()
@@ -152,17 +153,48 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** After notifications are allowed: status text only — no USB/BT scan, no FGS. */
+    /** After notifications are allowed: auto-start Bridge, scan printers, refresh status. */
     private fun onNotificationReadyUiOnly() {
         if (isFinishing || isDestroyed) return
         findViewById<TextView>(R.id.statusText).text = getString(R.string.status_service_checking)
-        findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
-        if (PrinterPreferences.isAutoStartEnabled(this)) {
-            BridgeSafeStart.scheduleStartFromActivity(this, 1_200L)
-        }
+        findViewById<TextView>(R.id.hintText).text = getString(R.string.main_hint_short)
+        ensureBluetoothScanPermissions()
+        autoStartBridgeOnAppOpen()
         if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-            refreshServiceStatusReadOnly()
+            refreshServiceStatusReadOnly(scanPrinters = true)
         }
+    }
+
+    private fun ensureBluetoothScanPermissions() {
+        val needed = bluetoothPermissionsNeeded()
+        if (needed.isNotEmpty()) {
+            bluetoothPermissionLauncher.launch(needed.toTypedArray())
+        }
+    }
+
+    /** Start the foreground service when the app opens (no manual Start tap). */
+    private fun autoStartBridgeOnAppOpen() {
+        if (!BridgePermissions.hasNotificationPermission(this)) return
+        UsbHostPermissions.register(this)
+        BridgeSafeStart.markUiReady()
+        Thread {
+            val before = runCatching { BridgeHealthChecker.probeResult() }.getOrElse { error ->
+                BridgeHealthChecker.ProbeOutcome(failureReason = error.message ?: error.javaClass.simpleName)
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (before.snapshot != null) {
+                    applyBridgeReady(before.snapshot, scanPrinters = true)
+                    return@runOnUiThread
+                }
+                val epoch = beginStatusEpoch()
+                startInProgress = true
+                findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
+                BridgeSafeStart.startNow(this, bypassDebounce = true)
+                val startNote = BridgeCrashLog.lastReason(this)
+                scheduleHealthProbes(epoch, startNote)
+            }
+        }.start()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -493,7 +525,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun publishPrinters(printers: List<PrinterEndpoint>, defaultId: String?) {
-        val deduped = dedupeDisplayedPrinters(withoutUnpluggedUsb(printers))
+        val hidden = PrinterPreferences.hiddenPrinterIds(this)
+        val visible = printers.filter { it.id !in hidden }
+        val deduped = dedupeDisplayedPrinters(withoutUnpluggedUsb(visible))
         val marked = deduped.map { ep -> ep.copy(isDefault = ep.id == defaultId) }.let { list ->
             if (list.none { it.isDefault } && list.isNotEmpty()) {
                 list.mapIndexed { index, ep -> ep.copy(isDefault = index == 0) }
@@ -786,6 +820,32 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(
             this,
             getString(R.string.default_set, PrinterDisplay.title(endpoint)),
+            Toast.LENGTH_SHORT,
+        ).show()
+        refreshPrinters()
+    }
+
+    private fun confirmRemovePrinter(endpoint: PrinterEndpoint) {
+        val title = PrinterDisplay.title(endpoint)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.remove_printer_title)
+            .setMessage(getString(R.string.remove_printer_message, title))
+            .setPositiveButton(R.string.remove_printer_confirm) { _, _ -> removePrinter(endpoint) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun removePrinter(endpoint: PrinterEndpoint) {
+        if (endpoint.connectionType == "lan") {
+            val host = endpoint.meta["host"]?.trim().orEmpty()
+            if (host.isNotBlank()) {
+                PrinterPreferences.removeLanHost(this, host)
+            }
+        }
+        PrinterPreferences.hidePrinter(this, endpoint.id)
+        Toast.makeText(
+            this,
+            getString(R.string.printer_removed, PrinterDisplay.title(endpoint)),
             Toast.LENGTH_SHORT,
         ).show()
         refreshPrinters()

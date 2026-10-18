@@ -69,4 +69,31 @@ assert.ok(nova.some((l) => l.includes('Rue des Draizes 22')));
 assert.ok(nova.some((l) => /Tel:\s*032/.test(l)));
 assert.ok(nova.some((l) => /VAT:\s*CHE-131/.test(l)));
 
+const polacafeGlued = splitReceiptHeaderDetailLine(
+  'POLACAFEBahnhofstrasse 1, ZürichTel: +41 79 000 00 00VAT: CHE-123.321.432 MWST'
+);
+assert.ok(polacafeGlued[0]?.includes('POLACAFE'));
+assert.ok(polacafeGlued.some((l) => l.includes('Bahnhofstrasse')));
+assert.ok(polacafeGlued.some((l) => /Tel:\s*\+41/.test(l)));
+
+const polacafe = getReceiptHeaderLines(
+  {
+    headerTitle: '',
+    header:
+      'POLACAFE Bahnhofstrasse 1, Zürich Tel: +41 79 000 00 00 VAT: CHE-123.321.432 MWST',
+    businessName: 'POLACAFE',
+    address: 'Bahnhofstrasse 1, Zürich',
+    phone: '+41 79 000 00 00',
+    vatNumber: 'CHE-123.321.432',
+    headerAlign: 'center',
+  },
+  48,
+  { padLines: false }
+);
+assert.ok(polacafe.length >= 4);
+assert.equal(polacafe[0], 'POLACAFE');
+assert.ok(polacafe.some((l) => l.includes('Bahnhofstrasse 1')));
+assert.ok(polacafe.some((l) => /Tel:\s*\+41/.test(l)));
+assert.ok(polacafe.some((l) => /VAT:\s*CHE-123/.test(l)));
+
 console.log('webpos-receipt-header.test.ts ok');

@@ -37,6 +37,7 @@ object DeviceProfiler {
         val brands = listOf(
             "XIAOMI", "REDMI", "POCO", "OPPO", "REALME", "ONEPLUS", "VIVO", "IQOO",
             "HUAWEI", "HONOR", "MEIZU", "LENOVO", "ZTE", "COOLPAD", "TCL", "BLACKVIEW",
+            "NEBULLUS", "NEBULLAR", "SUNMI",
         )
         return brands.any { manufacturer.contains(it) }
     }

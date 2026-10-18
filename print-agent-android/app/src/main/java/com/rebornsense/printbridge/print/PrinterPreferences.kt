@@ -106,4 +106,36 @@ object PrinterPreferences {
     }
 
     private const val KEY_USB_DEVICES = "usb_granted_vid_pid"
+    private const val KEY_HIDDEN_PRINTERS = "hidden_printer_ids"
+
+    fun hiddenPrinterIds(context: Context): Set<String> {
+        return runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getStringSet(KEY_HIDDEN_PRINTERS, emptySet())
+                ?.filter { it.isNotBlank() }
+                ?.toSet()
+                ?: emptySet()
+        }.getOrDefault(emptySet())
+    }
+
+    fun hidePrinter(context: Context, printerId: String) {
+        val id = printerId.trim()
+        if (id.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val next = prefs.getStringSet(KEY_HIDDEN_PRINTERS, emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (!next.add(id)) return
+        prefs.edit().putStringSet(KEY_HIDDEN_PRINTERS, next).apply()
+        if (getDefaultPrinterId(context) == id) {
+            setDefaultPrinterId(context, null)
+        }
+    }
+
+    fun unhidePrinter(context: Context, printerId: String) {
+        val id = printerId.trim()
+        if (id.isBlank()) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val next = prefs.getStringSet(KEY_HIDDEN_PRINTERS, emptySet())?.toMutableSet() ?: return
+        if (!next.remove(id)) return
+        prefs.edit().putStringSet(KEY_HIDDEN_PRINTERS, next).apply()
+    }
 }

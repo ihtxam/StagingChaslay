@@ -13,6 +13,7 @@ import com.rebornsense.printbridge.print.PrinterEndpoint
 class PrinterListAdapter(
     private val onSetDefault: (PrinterEndpoint) -> Unit,
     private val onTestPrint: (PrinterEndpoint) -> Unit,
+    private val onRemove: (PrinterEndpoint) -> Unit,
 ) : RecyclerView.Adapter<PrinterListAdapter.RowHolder>() {
 
     private var items: List<PrinterEndpoint> = emptyList()
@@ -48,7 +49,7 @@ class PrinterListAdapter(
     }
 
     override fun onBindViewHolder(holder: RowHolder, position: Int) {
-        holder.bind(items[position], defaultId, onSetDefault, onTestPrint)
+        holder.bind(items[position], defaultId, onSetDefault, onTestPrint, onRemove)
     }
 
     override fun getItemCount(): Int = items.size
@@ -59,12 +60,14 @@ class PrinterListAdapter(
         private val typeText: TextView? = itemView.findViewById(R.id.printerTypeText)
         private val defaultBadge: TextView? = itemView.findViewById(R.id.defaultBadge)
         private val testRowBtn: MaterialButton? = itemView.findViewById(R.id.testRowBtn)
+        private val removeRowBtn: MaterialButton? = itemView.findViewById(R.id.removeRowBtn)
 
         fun bind(
             endpoint: PrinterEndpoint,
             defaultId: String?,
             onSetDefault: (PrinterEndpoint) -> Unit,
             onTestPrint: (PrinterEndpoint) -> Unit,
+            onRemove: (PrinterEndpoint) -> Unit,
         ) {
             val isDefault = endpoint.id == defaultId
             val context = itemView.context
@@ -92,6 +95,7 @@ class PrinterListAdapter(
                 if (!isDefault) onSetDefault(endpoint)
             }
             testRowBtn?.setOnClickListener { onTestPrint(endpoint) }
+            removeRowBtn?.setOnClickListener { onRemove(endpoint) }
         }
     }
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bridge Reborn</string>
+    <string name="notification_title">Bridge Reborn actif</string>
+    <string name="notification_body">WebPOS dans Chrome peut imprimer et encaisser NFC sur http://127.0.0.1:9101</string>
+    <string name="status_ready">Bridge prêt sur le port 9101</string>
+    <string name="status_starting">Démarrage de Bridge Reborn…</string>
+    <string name="status_start_failed">Bridge arrêté — échec du démarrage</string>
+    <string name="status_service_running">Service en arrière-plan actif</string>
+    <string name="status_service_stopped">Service en arrière-plan inactif</string>
+    <string name="status_service_checking">Vérification du service Bridge…</string>
+    <string name="main_hint_short">WebPOS dans Chrome imprime via Bridge sur cet appareil.</string>
+    <string name="refresh_printers">Actualiser</string>
+    <string name="grant_usb_printer">Accès imprimante USB</string>
+    <string name="add_bluetooth_printer">Bluetooth</string>
+    <string name="add_network_printer">Ajouter réseau</string>
+    <string name="start_bridge_service">Démarrer le service</string>
+    <string name="tap_start_bridge_hint">Le service démarre automatiquement à l\'ouverture de l\'app.</string>
+    <string name="printer_list_hint">Touchez une imprimante pour la définir par défaut. Test pour vérifier l\'impression.</string>
+    <string name="test_print">Test</string>
+    <string name="remove_printer">Retirer</string>
+    <string name="remove_printer_title">Retirer l\'imprimante ?</string>
+    <string name="remove_printer_message">Masquer %1$s dans Bridge et retirer le défaut. Réassociez-la plus tard via Actualiser.</string>
+    <string name="remove_printer_confirm">Retirer</string>
+    <string name="printer_removed">%1$s retirée</string>
+    <string name="default_badge">DÉFAUT</string>
+    <string name="set_default">Définir par défaut</string>
+    <string name="no_printers_yet">Aucune imprimante. Branchez l\'USB, associez le Bluetooth ou ajoutez une IP LAN.</string>
+    <string name="printer_scan_failed">Impossible de scanner les imprimantes — réessayez.</string>
+    <string name="auto_start_title">Démarrer automatiquement au redémarrage</string>
+    <string name="auto_start_summary">Lance Bridge Reborn après chaque redémarrage et reconnecte USB, Bluetooth et Wi‑Fi.</string>
+    <string name="auto_start_enabled_toast">Bridge Reborn démarrera automatiquement après redémarrage</string>
+    <string name="auto_start_disabled_toast">Bridge ne démarrera qu\'en ouvrant cette application</string>
+    <string name="bridge_start_requested">Démarrage de Bridge Reborn…</string>
+</resources>
