@@ -18,4 +18,10 @@
     <usb-device vendor-id="1046" />
     <!-- Nebullus / common 0418:5011 receipt printers -->
     <usb-device vendor-id="1048" />
+    <!-- Bixolon / SNBC / Netchip stacks -->
+    <usb-device vendor-id="5380" />
+    <usb-device vendor-id="5551" />
+    <usb-device vendor-id="1317" />
+    <!-- Vendor-class bulk OTG receipt printers -->
+    <usb-device class="255" />
 </resources>

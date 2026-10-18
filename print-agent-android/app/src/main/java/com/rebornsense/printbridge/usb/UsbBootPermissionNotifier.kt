@@ -99,7 +99,7 @@ object UsbBootPermissionNotifier {
         val app = context.applicationContext
         val usb = app.getSystemService(UsbManager::class.java) ?: return emptyList()
         return usb.deviceList.values.filter { device ->
-            UsbDeviceClassifier.isUsbPrinterCandidate(app, device) &&
+            UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(app, device) &&
                 !usb.hasPermission(device)
         }
     }
