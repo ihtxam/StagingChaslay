@@ -40,7 +40,7 @@ assert.match(btHotplug, /BOND_STATE_CHANGED/);
 assert.match(launcher, /refreshAfterHardwareChange/);
 
 assert.match(attachActivity, /ACTION_USB_DEVICE_ATTACHED/);
-assert.match(attachActivity, /EARLY_BOOT_MS/);
+assert.match(attachActivity, /PrintBridgeLauncher\.start\(this/);
 
 assert.match(manifest, /UsbPrinterAttachActivity/);
 assert.match(manifest, /USB_DEVICE_ATTACHED/);
@@ -52,8 +52,10 @@ assert.match(prefs, /getLanHosts[\s\S]*runCatching/);
 
 assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
-assert.match(gradle, /versionName = "0\.4\.36"/);
-assert.match(gradle, /versionCode = 54/);
+assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
+assert.match(launcher, /recordBlockedStartInCrashLog/);
+assert.match(gradle, /versionName = "0\.4\.37"/);
+assert.match(gradle, /versionCode = 55/);
 assert.doesNotMatch(boot, /120_000L/);
 const settings = readFileSync(join(root, 'settings.gradle.kts'), 'utf8');
 assert.match(settings, /id\("com\.android\.application"\) version "8\.7\.2"/);

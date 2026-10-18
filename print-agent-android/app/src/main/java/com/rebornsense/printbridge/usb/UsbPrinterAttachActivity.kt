@@ -3,11 +3,11 @@ package com.rebornsense.printbridge.usb
 import android.content.Intent
 import android.hardware.usb.UsbManager
 import android.os.Bundle
-import android.os.SystemClock
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import com.rebornsense.printbridge.BridgeUserUnlock
 import com.rebornsense.printbridge.MainActivity
+import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
@@ -29,8 +29,10 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             finish()
             return
         }
-        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
-            PrintBridgeLauncher.startIfEnabled(applicationContext)
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED &&
+            PrinterPreferences.isAutoStartEnabled(this)
+        ) {
+            PrintBridgeLauncher.start(this, recordBlockedStartInCrashLog = false)
         }
     }
 
@@ -61,13 +63,6 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         if (usb.hasPermission(device)) {
             UsbBootPermissionNotifier.cancelNotification(this)
             onUsbAccessReady(skipMainActivity = true)
-            return
-        }
-        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED &&
-            SystemClock.elapsedRealtime() < EARLY_BOOT_MS
-        ) {
-            Log.d(TAG, "Defer USB permission dialog during early boot")
-            finish()
             return
         }
         val systemHotPlug = intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED
@@ -116,6 +111,5 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "UsbPrinterAttach"
-        private const val EARLY_BOOT_MS = 25_000L
     }
 }
