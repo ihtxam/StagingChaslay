@@ -396,6 +396,7 @@ class MainActivity : AppCompatActivity() {
                 if (before.snapshot != null) {
                     // Already listening. Do not start, stop, or show a failure dialog.
                     applyBridgeReady(before.snapshot, scanPrinters = true)
+                    Toast.makeText(this, R.string.service_already_running, Toast.LENGTH_SHORT).show()
                     return@runOnUiThread
                 }
                 findViewById<TextView>(R.id.statusText).text = getString(R.string.status_starting)
@@ -502,9 +503,10 @@ class MainActivity : AppCompatActivity() {
             failureDialogFromStart = false
         }
         findViewById<TextView>(R.id.statusText).text = getString(R.string.status_ready)
-        findViewById<TextView>(R.id.hintText).text = getString(R.string.main_hint_short)
+        findViewById<TextView>(R.id.hintText).text = getString(R.string.status_service_running)
         findViewById<View>(R.id.serviceStatusIndicator)
             .setBackgroundResource(R.drawable.service_status_running)
+        setStartBridgeButtonVisible(running = true)
         updateTapToPayDiagnostics(health)
         if (scanPrinters) refreshPrintersSafely()
     }
@@ -516,6 +518,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
         findViewById<View>(R.id.serviceStatusIndicator)
             .setBackgroundResource(R.drawable.service_status_stopped)
+        setStartBridgeButtonVisible(running = false)
+    }
+
+    /** Green status = service up — hide Start so merchants are not asked to tap again. */
+    private fun setStartBridgeButtonVisible(running: Boolean) {
+        val btn = findViewById<com.google.android.material.button.MaterialButton>(R.id.startBridgeBtn)
+        btn.visibility = if (running) android.view.View.GONE else android.view.View.VISIBLE
     }
 
     /** Adds saved LAN hosts without dropping USB, Bluetooth, or built-in rows. */
@@ -656,6 +665,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.hintText).text = getString(R.string.tap_start_bridge_hint)
         findViewById<View>(R.id.serviceStatusIndicator)
             .setBackgroundResource(R.drawable.service_status_stopped)
+        setStartBridgeButtonVisible(running = false)
         val probe = probeReason?.trim().orEmpty()
         val log = runCatching { BridgeCrashLog.read(this) }.getOrNull()?.trim().orEmpty()
         val body = when {

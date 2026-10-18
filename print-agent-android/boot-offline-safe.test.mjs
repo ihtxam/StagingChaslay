@@ -8,6 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const src = join(root, 'app/src/main/java/com/rebornsense/printbridge');
 
 const application = readFileSync(join(src, 'PrintBridgeApplication.kt'), 'utf8');
+const mainActivity = readFileSync(join(src, 'MainActivity.kt'), 'utf8');
 const unlock = readFileSync(join(src, 'BridgeUserUnlock.kt'), 'utf8');
 const boot = readFileSync(join(src, 'boot/BootCompletedReceiver.kt'), 'utf8');
 const usb = readFileSync(join(src, 'usb/UsbAttachReceiver.kt'), 'utf8');
@@ -55,8 +56,9 @@ assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
 assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
 assert.match(launcher, /recordBlockedStartInCrashLog/);
-assert.match(gradle, /versionName = "0\.4\.37"/);
-assert.match(gradle, /versionCode = 55/);
+assert.match(gradle, /versionName = "0\.4\.38"/);
+assert.match(gradle, /versionCode = 56/);
+assert.match(mainActivity, /setStartBridgeButtonVisible/);
 assert.doesNotMatch(boot, /120_000L/);
 const settings = readFileSync(join(root, 'settings.gradle.kts'), 'utf8');
 assert.match(settings, /id\("com\.android\.application"\) version "8\.7\.2"/);
