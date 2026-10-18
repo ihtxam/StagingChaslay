@@ -33,26 +33,30 @@ object PrintBridgeLauncher {
      * @return true when startForegroundService was invoked; false when notification permission
      *         is missing on Android 13+ (caller should request permission first).
      */
-    fun start(context: Context): Boolean {
+    fun start(context: Context, recordBlockedStartInCrashLog: Boolean = true): Boolean {
         val appContext = context.applicationContext
         if (!BridgePermissions.hasNotificationPermission(appContext)) {
             Log.w(TAG, "Skipping FGS start — POST_NOTIFICATIONS not granted")
-            BridgeCrashLog.recordReason(
-                appContext,
-                "startForegroundService",
-                "POST_NOTIFICATIONS not granted",
-            )
+            if (recordBlockedStartInCrashLog) {
+                BridgeCrashLog.recordReason(
+                    appContext,
+                    "startForegroundService",
+                    "POST_NOTIFICATIONS not granted",
+                )
+            }
             return false
         }
         // Boot receiver sets allowBootReceiverStart inside mayStartForegroundService().
         // Do not also require canStartBackgroundService() here — that blocked BOOT_COMPLETED.
         if (!BridgeSafeStart.mayStartForegroundService(context)) {
             Log.w(TAG, "Skipping FGS start — no eligible foreground context")
-            BridgeCrashLog.recordReason(
-                appContext,
-                "startForegroundService",
-                "no eligible foreground context",
-            )
+            if (recordBlockedStartInCrashLog) {
+                BridgeCrashLog.recordReason(
+                    appContext,
+                    "startForegroundService",
+                    "no eligible foreground context",
+                )
+            }
             return false
         }
         val intent = Intent(appContext, PrintBridgeService::class.java)
@@ -113,11 +117,6 @@ object PrintBridgeLauncher {
             }
         }
         Thread {
-            BridgeSafeStart.runWithBootReceiverStart {
-                if (PrinterPreferences.isAutoStartEnabled(appContext)) {
-                    start(appContext)
-                }
-            }
             val healthy = runCatching { BridgeHealthChecker.isHealthy() }.getOrElse { false }
             if (healthy) {
                 runCatching { appContext.startService(intent) }
@@ -127,10 +126,12 @@ object PrintBridgeLauncher {
             if (!PrinterPreferences.isAutoStartEnabled(appContext)) return@Thread
             if (!BridgePermissions.hasNotificationPermission(appContext)) return@Thread
             BridgeSafeStart.runWithBootReceiverStart {
-                runCatching { ContextCompat.startForegroundService(appContext, intent) }
-                    .onFailure { error ->
-                        BridgeCrashLog.record(appContext, error, "hardware refresh FGS start")
-                    }
+                start(appContext, recordBlockedStartInCrashLog = false)
+            }
+            val up = runCatching { BridgeHealthChecker.isHealthy() }.getOrElse { false }
+            if (up) {
+                runCatching { appContext.startService(intent) }
+                    .onFailure { Log.w(TAG, "hardware refresh after start failed", it) }
             }
         }.start()
     }
