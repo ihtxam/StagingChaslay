@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FocusEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,6 +14,7 @@ import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
+import { useSoftKeyboardLayout } from '@/lib/useSoftKeyboardLayout';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -187,6 +188,11 @@ export default function LoginPage() {
   );
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+  const { keyboardOpen, pageStyle, scrollFieldIntoView } = useSoftKeyboardLayout();
+
+  const onFormFieldFocus = (event: FocusEvent<HTMLElement>) => {
+    scrollFieldIntoView(event.currentTarget);
+  };
 
   const {
     register,
@@ -196,6 +202,8 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
+  const emailField = register('email');
+  const passwordField = register('password');
 
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
@@ -268,8 +276,10 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-4"
-      style={{ backgroundColor: BRAND_BLUE_CHARCOAL }}
+      className={`flex w-full flex-col items-center p-4 ${
+        keyboardOpen ? 'justify-start pt-2' : 'min-h-screen justify-center'
+      }`}
+      style={{ backgroundColor: BRAND_BLUE_CHARCOAL, ...pageStyle }}
     >
       <div
         className="absolute inset-0 pointer-events-none"
@@ -279,18 +289,23 @@ export default function LoginPage() {
       />
 
       <div className="relative w-full max-w-[420px]">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <img
-            src={REBORN_LOGO_WHITE}
-            alt={APP_NAME}
-            className="h-24 w-auto max-w-[200px] object-contain"
-          />
-          <p className="mt-4 text-sm opacity-80" style={{ color: BRAND_WARM_WHITE }}>
-            {t('loginTagline')}
-          </p>
-        </div>
+        {!keyboardOpen && (
+          <div className="mb-8 flex flex-col items-center text-center">
+            <img
+              src={REBORN_LOGO_WHITE}
+              alt={APP_NAME}
+              className="h-24 w-auto max-w-[200px] object-contain"
+            />
+            <p className="mt-4 text-sm opacity-80" style={{ color: BRAND_WARM_WHITE }}>
+              {t('loginTagline')}
+            </p>
+          </div>
+        )}
 
-        <div className="rounded-2xl p-8 shadow-2xl" style={{ backgroundColor: BRAND_WARM_WHITE }}>
+        <div
+          className={`rounded-2xl shadow-2xl ${keyboardOpen ? 'p-5' : 'p-8'}`}
+          style={{ backgroundColor: BRAND_WARM_WHITE }}
+        >
           {view === 'login' && (
             <>
               <h2 className="text-lg font-semibold text-slate-900">{t('loginTitle')}</h2>
@@ -308,7 +323,9 @@ export default function LoginPage() {
                     placeholder="name@company.com"
                     className="input py-2.5"
                     autoComplete="username"
-                    autoFocus
+                    autoFocus={!keyboardOpen}
+                    enterKeyHint="next"
+                    onFocus={onFormFieldFocus}
                   />
                   {errors.email && (
                     <p className="text-red-500 text-sm mt-1">{t('loginEmailInvalid')}</p>
@@ -336,6 +353,8 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     className="input py-2.5"
                     autoComplete="current-password"
+                    enterKeyHint="go"
+                    onFocus={onFormFieldFocus}
                   />
                   {errors.password && (
                     <p className="text-red-500 text-sm mt-1">{t('loginPasswordMin')}</p>
@@ -371,7 +390,9 @@ export default function LoginPage() {
                     placeholder="name@company.com"
                     className="input py-2.5"
                     autoComplete="username"
-                    autoFocus
+                    autoFocus={!keyboardOpen}
+                    enterKeyHint="go"
+                    onFocus={onFormFieldFocus}
                     required
                   />
                 </div>
@@ -427,9 +448,15 @@ export default function LoginPage() {
             </button>
           ))}
         </div>
-        <p className="mt-4 text-center text-[11px] opacity-50" style={{ color: BRAND_WARM_WHITE }}>{APP_TAGLINE}</p>
+        {!keyboardOpen && (
+          <p className="mt-4 text-center text-[11px] opacity-50" style={{ color: BRAND_WARM_WHITE }}>
+            {APP_TAGLINE}
+          </p>
+        )}
       </div>
-      <RebornPoweredByFooter variant="login" className="relative mt-8 w-full max-w-[420px]" />
+      {!keyboardOpen && (
+        <RebornPoweredByFooter variant="login" className="relative mt-8 w-full max-w-[420px]" />
+      )}
     </div>
   );
 }
