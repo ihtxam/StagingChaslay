@@ -9,23 +9,52 @@ import com.rebornsense.printbridge.BridgeUserUnlock
 import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
- * USB unplug only. Hot-plug permission + discovery use exported [UsbPrinterAttachActivity]
- * (same pattern as Ojavana POS) so the system allow dialog appears without opening Bridge.
+ * USB plug/unplug. The exported [UsbPrinterAttachActivity] handles system attach on some OEMs;
+ * this receiver explicitly launches the allow dialog when the service is not running yet.
  */
 class UsbAttachReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         runCatching {
             if (!BridgeUserUnlock.isCredentialStorageReady(context)) return
-            if (intent?.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
-            val device = intent.usbDeviceExtra()
-            if (device != null) {
-                UsbAttachPromptGuard.clearSuppressForDevice(context.applicationContext, device)
+            val action = intent?.action ?: return
+            val app = context.applicationContext
+            when (action) {
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> onUsbAttached(app, intent)
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> onUsbDetached(app, intent)
             }
-            Log.d(TAG, "USB detached — refresh printer list")
-            PrintBridgeLauncher.refreshAfterHardwareChange(context.applicationContext)
         }.onFailure { error ->
-            Log.w(TAG, "USB detach ignored", error)
+            Log.w(TAG, "USB broadcast ignored", error)
         }
+    }
+
+    private fun onUsbAttached(app: Context, intent: Intent) {
+        val device = intent.usbDeviceExtra() ?: return
+        if (!UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(app, device)) {
+            Log.d(TAG, "USB attach ignored — not a printer candidate")
+            return
+        }
+        val usb = app.getSystemService(UsbManager::class.java) ?: return
+        if (usb.hasPermission(device)) {
+            PrintBridgeLauncher.refreshAfterHardwareChange(app)
+            return
+        }
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(app, device)) {
+            Log.d(TAG, "USB attach — permission prompt debounced")
+            return
+        }
+        Log.d(TAG, "USB attach — launch permission UI for ${device.vendorId}:${device.productId}")
+        if (!UsbPermissionUi.launchPermissionPrompt(app, device)) {
+            UsbBootPermissionNotifier.onDiscoveryFinished(app)
+        }
+    }
+
+    private fun onUsbDetached(app: Context, intent: Intent) {
+        val device = intent.usbDeviceExtra()
+        if (device != null) {
+            UsbAttachPromptGuard.clearSuppressForDevice(app, device)
+        }
+        Log.d(TAG, "USB detached — refresh printer list")
+        PrintBridgeLauncher.refreshAfterHardwareChange(app)
     }
 
     companion object {

@@ -28,6 +28,7 @@
     <string name="crash_log_title">Last crash — Bridge Reborn v%1$s</string>
     <string name="crash_log_clear">Clear</string>
     <string name="bridge_start_requested">Starting Bridge Reborn…</string>
+    <string name="service_already_running">Bridge is already running on port 9101.</string>
     <string name="lan_printer_invalid">Enter a valid IP address (example: 192.168.1.50).</string>
     <string name="printer_scan_failed">Could not scan printers — try again in a moment.</string>
     <string name="usb_printer_attach_prompt">Allow USB access for %1$s</string>

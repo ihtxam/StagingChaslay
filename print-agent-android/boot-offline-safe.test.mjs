@@ -8,6 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const src = join(root, 'app/src/main/java/com/rebornsense/printbridge');
 
 const application = readFileSync(join(src, 'PrintBridgeApplication.kt'), 'utf8');
+const mainActivity = readFileSync(join(src, 'MainActivity.kt'), 'utf8');
 const unlock = readFileSync(join(src, 'BridgeUserUnlock.kt'), 'utf8');
 const boot = readFileSync(join(src, 'boot/BootCompletedReceiver.kt'), 'utf8');
 const usb = readFileSync(join(src, 'usb/UsbAttachReceiver.kt'), 'utf8');
@@ -31,16 +32,17 @@ assert.match(boot, /BridgeUserUnlock\.isCredentialStorageReady/);
 assert.match(boot, /startBridgeIfReady/);
 
 assert.match(usb, /ACTION_USB_DEVICE_DETACHED/);
+assert.match(usb, /ACTION_USB_DEVICE_ATTACHED/);
+assert.match(usb, /launchPermissionPrompt/);
 assert.match(usb, /clearSuppressForDevice/);
 assert.match(usb, /refreshAfterHardwareChange/);
-assert.doesNotMatch(usb, /ACTION_USB_DEVICE_ATTACHED/);
 
 assert.match(btHotplug, /ACTION_ACL_CONNECTED/);
 assert.match(btHotplug, /BOND_STATE_CHANGED/);
 assert.match(launcher, /refreshAfterHardwareChange/);
 
 assert.match(attachActivity, /ACTION_USB_DEVICE_ATTACHED/);
-assert.match(attachActivity, /EARLY_BOOT_MS/);
+assert.match(attachActivity, /PrintBridgeLauncher\.start\(this/);
 
 assert.match(manifest, /UsbPrinterAttachActivity/);
 assert.match(manifest, /USB_DEVICE_ATTACHED/);
@@ -52,8 +54,11 @@ assert.match(prefs, /getLanHosts[\s\S]*runCatching/);
 
 assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
-assert.match(gradle, /versionName = "0\.4\.36"/);
-assert.match(gradle, /versionCode = 54/);
+assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
+assert.match(launcher, /recordBlockedStartInCrashLog/);
+assert.match(gradle, /versionName = "0\.4\.38"/);
+assert.match(gradle, /versionCode = 56/);
+assert.match(mainActivity, /setStartBridgeButtonVisible/);
 assert.doesNotMatch(boot, /120_000L/);
 const settings = readFileSync(join(root, 'settings.gradle.kts'), 'utf8');
 assert.match(settings, /id\("com\.android\.application"\) version "8\.7\.2"/);

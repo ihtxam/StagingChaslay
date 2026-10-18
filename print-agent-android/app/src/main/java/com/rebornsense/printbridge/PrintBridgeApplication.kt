@@ -21,10 +21,17 @@ class PrintBridgeApplication : Application() {
         }
         if (PrinterPreferences.isAutoStartEnabled(this)) {
             val handler = Handler(Looper.getMainLooper())
-            BridgeSafeStart.runWithBootReceiverStart {
-                handler.postDelayed({ PrintBridgeLauncher.startIfEnabled(this) }, 5_000L)
-                handler.postDelayed({ PrintBridgeLauncher.startIfEnabled(this) }, 18_000L)
-            }
+            val app = this
+            handler.postDelayed({
+                BridgeSafeStart.runWithBootReceiverStart {
+                    PrintBridgeLauncher.startIfEnabled(app)
+                }
+            }, 5_000L)
+            handler.postDelayed({
+                BridgeSafeStart.runWithBootReceiverStart {
+                    PrintBridgeLauncher.startIfEnabled(app)
+                }
+            }, 18_000L)
         }
     }
 }
