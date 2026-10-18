@@ -16,7 +16,7 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (intent?.action != UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION) {
+        if (!UsbPermissionUi.isPermissionPromptAction(intent?.action)) {
             finish()
             return
         }
@@ -64,10 +64,7 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
     private fun onUsbAccessReady(skipMainActivity: Boolean = false) {
         UsbHostPermissions.promoteGrantedUsbPrinters(applicationContext)
         PrintBridgeLauncher.refreshPrinters(applicationContext)
-        if (
-            skipMainActivity ||
-            intent?.action == UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION
-        ) {
+        if (skipMainActivity || UsbPermissionUi.isPermissionPromptAction(intent?.action)) {
             finish()
             return
         }

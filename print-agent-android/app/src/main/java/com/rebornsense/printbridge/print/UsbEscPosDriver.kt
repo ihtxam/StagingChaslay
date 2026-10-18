@@ -72,12 +72,22 @@ class UsbEscPosDriver : PrinterDriver {
                 val detail =
                     "USB permission not granted for ${endpoint.name} (deviceId=${device.deviceId} ${device.vendorId}:${device.productId})"
                 com.rebornsense.printbridge.BridgeEventsLog.record(context, "print-usb", detail)
+                val usbDevice = device
                 runCatching {
-                    com.rebornsense.printbridge.usb.UsbBootPermissionNotifier.onDiscoveryFinished(context)
+                    if (
+                        !com.rebornsense.printbridge.usb.UsbPermissionUi.launchPermissionPrompt(
+                            context,
+                            usbDevice,
+                        )
+                    ) {
+                        com.rebornsense.printbridge.usb.UsbBootPermissionNotifier.onDiscoveryFinished(
+                            context,
+                        )
+                    }
                 }
                 return Result.failure(
                     IllegalStateException(
-                        "$detail — tap the Bridge USB notification or open Bridge Reborn once after reboot",
+                        "$detail — allow USB access in the popup, or tap the Bridge notification",
                     ),
                 )
             }

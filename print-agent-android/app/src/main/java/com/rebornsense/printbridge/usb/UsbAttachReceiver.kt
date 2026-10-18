@@ -23,6 +23,10 @@ class UsbAttachReceiver : BroadcastReceiver() {
             if (!BridgeUserUnlock.isCredentialStorageReady(context)) return
             when (intent?.action) {
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    val device = intent.usbDeviceExtra()
+                    if (device != null) {
+                        UsbAttachPromptGuard.clearSuppressForDevice(context.applicationContext, device)
+                    }
                     PrintBridgeLauncher.refreshPrinters(context)
                 }
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
@@ -62,7 +66,9 @@ class UsbAttachReceiver : BroadcastReceiver() {
             return
         }
         UsbAttachPromptGuard.markPromptIssued(app, device)
-        UsbHostPermissions.requestPermissionFromContext(app, device)
+        if (!UsbPermissionUi.launchPermissionPrompt(app, device)) {
+            UsbHostPermissions.requestPermissionFromContext(app, device)
+        }
     }
 
     companion object {
