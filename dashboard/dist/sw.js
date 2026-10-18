@@ -2,7 +2,7 @@
  * Caches the app shell /assets so the installed window can open offline.
  * API/data are never cached; WebPOS catalog/sales use IndexedDB in the page.
  */
-const CACHE = 'reborn-shell-v13';
+const CACHE = 'reborn-shell-v14';
 
 /** Static files that must not depend on auth or SPA routing. */
 const PRECACHE = [
@@ -124,28 +124,21 @@ self.addEventListener('fetch', (event) => {
   // Never cache API / auth traffic  WebPOS offline uses IndexedDB instead.
   if (url.pathname.startsWith('/api')) return;
 
-  // Navigations: network-first; keep all in-scope SPA routes inside the installed window.
+  // Navigations: network-only when online. Do not pin /merchant/pos to an old
+  // HTML shell — that left one till on a stale bundle after deploy.
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
-          const res = await fetch(request);
+          const res = await fetch(request, { cache: 'no-store' });
           if (res.ok && res.type === 'basic') {
             const cache = await caches.open(CACHE);
             await cachePutSafe(cache, '/index.html', res.clone());
-            if (isAppNavigation(url.pathname)) {
-              await cachePutSafe(cache, request, res.clone());
-              await cachePutSafe(cache, new Request(url.pathname), res.clone());
-            }
             void precacheAssetsFromIndex(cache);
           }
           return res;
         } catch {
           const cache = await caches.open(CACHE);
-          const cachedRoute = await cache.match(request);
-          if (cachedRoute) return cachedRoute;
-          const cachedPath = await cache.match(new Request(url.pathname));
-          if (cachedPath) return cachedPath;
           if (isAppNavigation(url.pathname)) {
             const shell = await navigationFallback();
             if (shell) return shell;

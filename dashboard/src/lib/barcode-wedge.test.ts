@@ -11,6 +11,7 @@ import {
   isCoarsePointerDevice,
   mergeRetailScanBuffer,
   shouldMaintainBarcodeWedgeCaptureFocus,
+  focusBarcodeWedgeCapture,
 } from './barcode-wedge';
 
 assert.equal(stripScannerControlChars('76\x1D0123456789012'), '760123456789012');
@@ -25,5 +26,6 @@ assert.equal(mergeRetailScanBuffer('64202560', '642025600'), '642025600');
 
 assert.equal(typeof isCoarsePointerDevice(), 'boolean');
 assert.equal(shouldMaintainBarcodeWedgeCaptureFocus(), true);
+assert.equal(typeof focusBarcodeWedgeCapture(), 'undefined');
 
 console.log('barcode-wedge.test.ts OK');

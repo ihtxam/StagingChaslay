@@ -1,5 +1,6 @@
 import { Search, Settings, Wallet, Gift, X } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { focusBarcodeWedgeCapture } from '@/lib/barcode-wedge';
 import { useI18n } from '@/lib/i18n';
 import WebPosExpressCheckoutBar from './WebPosExpressCheckoutBar';
 import type { RetailTileSize } from '@/lib/pos-checkout';
@@ -29,6 +30,9 @@ type Props = {
   onSearchClear?: () => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
   autoFocusSearch?: boolean;
+  /** Tablet: HID scans via hidden wedge; tap search bar to type manually. */
+  preferScannerWedge?: boolean;
+  onRequestWedgeFocus?: () => void;
   tileSize?: RetailTileSize;
   onProductClick: (product: Product) => void;
   cartQtyByProduct: Map<string, number>;
@@ -62,6 +66,8 @@ export default function WebPosRetailProductCenter({
   onSearchClear,
   searchInputRef,
   autoFocusSearch = false,
+  preferScannerWedge = false,
+  onRequestWedgeFocus,
   tileSize = 'lg',
   onProductClick,
   cartQtyByProduct,
@@ -87,6 +93,8 @@ export default function WebPosRetailProductCenter({
   const { t } = useI18n();
   const localRef = useRef<HTMLInputElement>(null);
   const inputRef = searchInputRef || localRef;
+  const [manualRetailSearch, setManualRetailSearch] = useState(false);
+  const wedgeScanMode = preferScannerWedge && !manualRetailSearch;
   const colorByCat = useMemo(() => categoryColorMap(categories), [categories]);
   const gridClass = RETAIL_TILE_GRID[tileSize] || RETAIL_TILE_GRID.lg;
   const hasSearch = !!search.trim();
@@ -103,10 +111,10 @@ export default function WebPosRetailProductCenter({
   const showNoProducts = products.length === 0;
 
   useEffect(() => {
-    if (!autoFocusSearch) return;
+    if (!autoFocusSearch || preferScannerWedge) return;
     const id = window.setTimeout(() => inputRef.current?.focus(), 80);
     return () => window.clearTimeout(id);
-  }, [autoFocusSearch, inputRef]);
+  }, [autoFocusSearch, preferScannerWedge, inputRef]);
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
@@ -131,10 +139,30 @@ export default function WebPosRetailProductCenter({
                 onSearchSubmit?.();
               }
             }}
+            type="search"
+            name="pos-scan-query"
             autoComplete="off"
-            inputMode="search"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-manual-retail-search={manualRetailSearch ? '1' : '0'}
+            readOnly={wedgeScanMode}
+            inputMode={wedgeScanMode ? 'none' : 'search'}
             enterKeyHint="search"
             aria-label={t('webPosRetailScanSearch')}
+            onPointerDown={() => {
+              if (!preferScannerWedge || manualRetailSearch) return;
+              setManualRetailSearch(true);
+              window.setTimeout(() => inputRef.current?.focus(), 0);
+            }}
+            onBlur={() => {
+              if (!preferScannerWedge) return;
+              setManualRetailSearch(false);
+              onRequestWedgeFocus?.();
+              focusBarcodeWedgeCapture();
+            }}
           />
           {showClearButton ? (
             <button

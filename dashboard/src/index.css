@@ -1671,6 +1671,12 @@ button {
     outline-offset: 1px;
   }
 
+  @media (pointer: coarse) {
+    .webpos-retail-pay-footer {
+      padding-bottom: max(5rem, calc(env(safe-area-inset-bottom, 0px) + 3.25rem));
+    }
+  }
+
   .webpos-shell[data-appearance='night'] .webpos-retail-product-tile {
     @apply border-stone-600 bg-stone-900;
   }
