@@ -856,7 +856,12 @@ docker ps -aq --filter "name=_${migrate_project}-migrate" | xargs -r docker rm -
 # Leftover API containers from a failed recreate block the next deploy.
 docker ps -aq --filter "name=${migrate_project}-api" | xargs -r docker rm -f 2>/dev/null || true
 docker ps -aq --filter "name=_${migrate_project}-api" | xargs -r docker rm -f 2>/dev/null || true
-dc up -d --build db api dashboard caddy
+# Compose v2 can leave hash-prefixed siblings (e.g. f7958bcc8517_rebornsense-api-1).
+while IFS= read -r orphan_api; do
+  [[ -z "$orphan_api" ]] && continue
+  docker rm -f "$orphan_api" 2>/dev/null || true
+done < <(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E "(^|_)${migrate_project}-api-" || true)
+dc up -d --build --remove-orphans db api dashboard caddy
 
 # Caddyfile is bind-mounted. `caddy reload` can leave stale site blocks (e.g. new
 # order.rebornsense.com hub) — force-recreate when the file changes or reload fails.
