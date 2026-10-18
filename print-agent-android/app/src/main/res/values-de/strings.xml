@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bridge Reborn</string>
+    <string name="notification_title">Bridge Reborn läuft</string>
+    <string name="notification_body">WebPOS in Chrome kann über http://127.0.0.1:9101 drucken und NFC-Zahlungen annehmen</string>
+    <string name="status_ready">Bridge bereit auf Port 9101</string>
+    <string name="status_starting">Bridge Reborn wird gestartet…</string>
+    <string name="status_start_failed">Bridge gestoppt — Start fehlgeschlagen</string>
+    <string name="status_service_running">Hintergrunddienst läuft</string>
+    <string name="status_service_stopped">Hintergrunddienst läuft nicht</string>
+    <string name="status_service_checking">Bridge-Dienst wird geprüft…</string>
+    <string name="main_hint_short">WebPOS in Chrome druckt über Bridge auf diesem Gerät.</string>
+    <string name="refresh_printers">Aktualisieren</string>
+    <string name="grant_usb_printer">USB-Druckerzugriff</string>
+    <string name="add_bluetooth_printer">Bluetooth</string>
+    <string name="add_network_printer">Netzwerk hinzufügen</string>
+    <string name="start_bridge_service">Dienst starten</string>
+    <string name="tap_start_bridge_hint">Der Dienst startet automatisch beim Öffnen der App.</string>
+    <string name="printer_list_hint">Drucker antippen als Standard. Test druckt eine Probe.</string>
+    <string name="test_print">Test</string>
+    <string name="remove_printer">Entfernen</string>
+    <string name="remove_printer_title">Drucker entfernen?</string>
+    <string name="remove_printer_message">%1$s in Bridge ausblenden und Standard aufheben. Später über Aktualisieren wieder hinzufügen.</string>
+    <string name="remove_printer_confirm">Entfernen</string>
+    <string name="printer_removed">%1$s entfernt</string>
+    <string name="default_badge">STANDARD</string>
+    <string name="set_default">Als Standard</string>
+    <string name="no_printers_yet">Keine Drucker. USB anschließen, Bluetooth koppeln oder LAN-IP hinzufügen.</string>
+    <string name="printer_scan_failed">Druckersuche fehlgeschlagen — bitte erneut versuchen.</string>
+    <string name="auto_start_title">Automatisch nach Neustart starten</string>
+    <string name="auto_start_summary">Startet Bridge Reborn nach jedem Neustart und verbindet USB-, Bluetooth- und WLAN-Drucker.</string>
+    <string name="auto_start_enabled_toast">Bridge Reborn startet nach dem Neustart automatisch</string>
+    <string name="auto_start_disabled_toast">Bridge startet erst nach Öffnen dieser App</string>
+    <string name="bridge_start_requested">Bridge Reborn wird gestartet…</string>
+</resources>

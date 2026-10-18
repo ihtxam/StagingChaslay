@@ -1,6 +1,9 @@
 package com.rebornsense.printbridge
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.usb.UsbHostPermissions
 
 class PrintBridgeApplication : Application() {
@@ -15,6 +18,13 @@ class PrintBridgeApplication : Application() {
         runCatching {
             val hooks = Class.forName("com.rebornsense.printbridge.payment.adyen.AdyenApplicationHooks")
             hooks.getMethod("onCreate", Application::class.java).invoke(null, this)
+        }
+        if (PrinterPreferences.isAutoStartEnabled(this)) {
+            val handler = Handler(Looper.getMainLooper())
+            BridgeSafeStart.runWithBootReceiverStart {
+                handler.postDelayed({ PrintBridgeLauncher.startIfEnabled(this) }, 5_000L)
+                handler.postDelayed({ PrintBridgeLauncher.startIfEnabled(this) }, 18_000L)
+            }
         }
     }
 }

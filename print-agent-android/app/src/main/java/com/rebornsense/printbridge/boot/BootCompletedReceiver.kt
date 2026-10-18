@@ -42,11 +42,23 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     {
                         try {
                             startBridgeIfReady(appContext)
+                        } catch (_: Throwable) {
+                            /* retry below */
+                        }
+                    },
+                    12_000L,
+                )
+                // Nebullus Gemini / Android 15 hubs: USB + notification grants often land after 20–40s.
+                handler.postDelayed({ startBridgeIfReady(appContext) }, 25_000L)
+                handler.postDelayed(
+                    {
+                        try {
+                            startBridgeIfReady(appContext)
                         } finally {
                             pendingResult.finish()
                         }
                     },
-                    12_000L,
+                    45_000L,
                 )
             } catch (_: Throwable) {
                 pendingResult.finish()

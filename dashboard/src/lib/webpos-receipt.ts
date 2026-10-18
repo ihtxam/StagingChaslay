@@ -836,7 +836,16 @@ const RECEIPT_COUNTRY_SPLIT_RE =
   /(?:\s+|(?<=[a-zà-ÿ]))(?=(?:Suisse|Switzerland|Schweiz|France|Deutschland|Italy|Italia|Österreich|Austria)\b)/i;
 const RECEIPT_STREET_SPLIT_RE =
   /\s+(?=(?:Rue|Rue des|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\s+)/i;
+const RECEIPT_DE_CH_STREET_SPLIT_RE =
+  /(?<=[A-Za-zÀ-ÿäöüÄÖÜß])(?=(?:Bahnhof|Haupt|Markt|Neu|Alte|Obere|Untere)?[A-Za-zÀ-ÿäöüÄÖÜß-]*(?:strasse|straße|Strasse|Straße|gasse|Gasse|weg|We|platz|Platz|allee|Allee)\b)/i;
+const RECEIPT_DE_STREET_SPACED_RE =
+  /\s+(?=(?:Bahnhof|Haupt|Markt|Neu|Alte|Obere|Untere)?[A-Za-zÀ-ÿäöüÄÖÜß-]*(?:strasse|straße|Strasse|Straße|gasse|Gasse|weg|We|platz|Platz|allee|Allee)\b)/i;
 const RECEIPT_PLZ_SPLIT_RE = /\s+(?=\d{4}\s+[A-Za-zÀ-ÿ])/;
+/** City name glued to Tel:/Tél: label (e.g. ZürichTel:). */
+const RECEIPT_GLUED_PHONE_SPLIT_RE =
+  /(?<=[\wäöüÄÖÜßà-ÿ])(?=(?:Tel|Tél|Telephone|Téléphone|Phone)\s*:)/i;
+/** VAT label glued after phone digits (e.g. 00 00VAT:). */
+const RECEIPT_GLUED_VAT_SPLIT_RE = /(?<=[\w\d)])(?=(?:VAT|UID|TVA|MwSt|MWST)\s*:)/i;
 
 function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   const text = String(line || '').replace(/\s+/g, ' ').trim();
@@ -850,8 +859,12 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
   let parts = [String(line || '').replace(/\s+/g, ' ').trim()].filter(Boolean);
   if (!parts.length) return [];
   for (const re of [
+    RECEIPT_GLUED_VAT_SPLIT_RE,
+    RECEIPT_GLUED_PHONE_SPLIT_RE,
     RECEIPT_TAX_SPLIT_RE,
     RECEIPT_COUNTRY_SPLIT_RE,
+    RECEIPT_DE_CH_STREET_SPLIT_RE,
+    RECEIPT_DE_STREET_SPACED_RE,
     RECEIPT_STREET_SPLIT_RE,
     RECEIPT_PLZ_SPLIT_RE,
   ]) {
@@ -2424,10 +2437,14 @@ export function escposReceiptFeedAndCut(feedLines = 4): Uint8Array {
  * Avoid stacking heavy feeds on the ticket body (was wasting ~30+ lines of paper).
  */
 export function escposKitchenCut(): Uint8Array {
-  return new Uint8Array([
-    0x1b, 0x64, 0x01, // ESC d 1 — minimal gap before cut
-    0x1d, 0x56, 0x00, // GS V 0 full cut (one command — fewer beeps on clones)
-  ]);
+  return concatBytes(
+    new Uint8Array([0x1b, 0x40]),
+    ESC_CODEPAGE_CP850,
+    new Uint8Array([
+      0x1b, 0x64, 0x01, // ESC d 1 — minimal gap before cut
+      0x1d, 0x56, 0x00, // GS V 0 full cut (one command — fewer beeps on clones)
+    ])
+  );
 }
 
 /**
@@ -2438,8 +2455,11 @@ export function escposFeedAndCut(): Uint8Array {
   return escposReceiptFeedAndCut(3);
 }
 
-/** Feed only — printKitchenViaAgentOrQueue sends the actual cut as a follow-up job. */
-const KITCHEN_TICKET_CUT = escposKitchenTicketEnd();
+/** Feed + full cut on kitchen tickets (USB/LAN); BT driver may split GS V into a paced trailer. */
+const KITCHEN_TICKET_CUT = concatBytes(
+  escposKitchenTicketEnd(),
+  new Uint8Array([0x1d, 0x56, 0x00])
+);
 
 /** Kitchen ticket as ESC/POS (default scale 1 = plain normal-height text). */
 export function generateKitchenTicketEscPos(opts: KitchenTicketOpts): Uint8Array {
@@ -3135,13 +3155,15 @@ export function textToEscPos(
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
   if (logoBytes?.length) {
-    // Finish the raster, blank lines, then re-init so kitchen/double-width modes cannot mash the header.
+    // Finish the raster, feed past the logo row, then re-init so text never prints beside the bitmap.
     parts.push(
       alignCenter,
       logoBytes,
       escposCp850Encode('\n'),
       ESC_POS_BLANK_LINE,
       ESC_POS_BLANK_LINE,
+      new Uint8Array([0x1b, 0x61, 0x00]),
+      new Uint8Array([0x1b, 0x64, 0x04]),
       new Uint8Array([0x1b, 0x40]),
       ESC_CODEPAGE_CP850
     );
