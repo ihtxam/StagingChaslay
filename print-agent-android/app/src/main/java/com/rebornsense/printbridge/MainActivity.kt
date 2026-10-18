@@ -35,6 +35,7 @@ import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.BridgeHealthChecker
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.setup.SetupWizardActivity
+import com.rebornsense.printbridge.usb.UsbBootPermissionNotifier
 import com.rebornsense.printbridge.usb.UsbDeviceClassifier
 import com.rebornsense.printbridge.usb.UsbHostPermissions
 import com.rebornsense.printbridge.BuildConfig
@@ -256,6 +257,7 @@ class MainActivity : AppCompatActivity() {
         dropUnpluggedUsbFromList()
         if (runtimePermissionsResolved) {
             refreshServiceStatusReadOnly(scanPrinters = true)
+            runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
         }
     }
 

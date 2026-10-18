@@ -31,9 +31,10 @@ assert.match(boot, /BridgeUserUnlock\.isCredentialStorageReady/);
 assert.match(boot, /startBridgeIfReady/);
 
 assert.match(usb, /ACTION_USB_DEVICE_DETACHED/);
+assert.match(usb, /ACTION_USB_DEVICE_ATTACHED/);
+assert.match(usb, /launchPermissionPrompt/);
 assert.match(usb, /clearSuppressForDevice/);
 assert.match(usb, /refreshAfterHardwareChange/);
-assert.doesNotMatch(usb, /ACTION_USB_DEVICE_ATTACHED/);
 
 assert.match(btHotplug, /ACTION_ACL_CONNECTED/);
 assert.match(btHotplug, /BOND_STATE_CHANGED/);
