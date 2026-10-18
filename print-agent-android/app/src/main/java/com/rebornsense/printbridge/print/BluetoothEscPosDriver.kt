@@ -169,6 +169,11 @@ class BluetoothEscPosDriver : PrinterDriver {
         runCatching { cached.socket.close() }
     }
 
+    /** Drop cached SPP link after ACL disconnect so the next print opens a fresh socket. */
+    fun releaseConnection(address: String) {
+        closeSocket(address.trim())
+    }
+
     @SuppressLint("MissingPermission")
     private fun openBluetoothSocket(device: BluetoothDevice): BluetoothSocket {
         val errors = mutableListOf<Throwable>()

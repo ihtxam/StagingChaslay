@@ -22,7 +22,7 @@ class UsbAttachReceiver : BroadcastReceiver() {
                 UsbAttachPromptGuard.clearSuppressForDevice(context.applicationContext, device)
             }
             Log.d(TAG, "USB detached — refresh printer list")
-            PrintBridgeLauncher.refreshPrinters(context)
+            PrintBridgeLauncher.refreshAfterHardwareChange(context.applicationContext)
         }.onFailure { error ->
             Log.w(TAG, "USB detach ignored", error)
         }

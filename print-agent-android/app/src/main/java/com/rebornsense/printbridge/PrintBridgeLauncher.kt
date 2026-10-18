@@ -18,6 +18,7 @@ object PrintBridgeLauncher {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     const val ACTION_REFRESH_PRINTERS = "com.rebornsense.printbridge.action.REFRESH_PRINTERS"
+    const val EXTRA_RELEASE_BT_ADDRESS = "release_bt_address"
 
     /** Start the service when auto-start is enabled (boot, package update). */
     fun startIfEnabled(context: Context) {
@@ -96,5 +97,45 @@ object PrintBridgeLauncher {
                     }
             }
         }.start()
+    }
+
+    /** USB unplug, Bluetooth pair/connect/disconnect — keep WebPOS printer list current without opening Bridge. */
+    fun refreshAfterHardwareChange(
+        context: Context,
+        releaseBluetoothAddress: String? = null,
+    ) {
+        val appContext = context.applicationContext
+        val intent = Intent(appContext, PrintBridgeService::class.java).apply {
+            action = ACTION_REFRESH_PRINTERS
+            val addr = releaseBluetoothAddress?.trim().orEmpty()
+            if (addr.isNotEmpty()) {
+                putExtra(EXTRA_RELEASE_BT_ADDRESS, addr)
+            }
+        }
+        Thread {
+            BridgeSafeStart.runWithBootReceiverStart {
+                if (PrinterPreferences.isAutoStartEnabled(appContext)) {
+                    start(appContext)
+                }
+            }
+            val healthy = runCatching { BridgeHealthChecker.isHealthy() }.getOrElse { false }
+            if (healthy) {
+                runCatching { appContext.startService(intent) }
+                    .onFailure { Log.w(TAG, "hardware refresh via startService failed", it) }
+                return@Thread
+            }
+            if (!PrinterPreferences.isAutoStartEnabled(appContext)) return@Thread
+            if (!BridgePermissions.hasNotificationPermission(appContext)) return@Thread
+            BridgeSafeStart.runWithBootReceiverStart {
+                runCatching { ContextCompat.startForegroundService(appContext, intent) }
+                    .onFailure { error ->
+                        BridgeCrashLog.record(appContext, error, "hardware refresh FGS start")
+                    }
+            }
+        }.start()
+    }
+
+    fun notifyBluetoothDisconnected(context: Context, address: String) {
+        refreshAfterHardwareChange(context, releaseBluetoothAddress = address)
     }
 }

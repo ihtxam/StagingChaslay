@@ -85,6 +85,10 @@ class PrintBridgeService : Service() {
         }
         try {
             if (intent?.action == PrintBridgeLauncher.ACTION_REFRESH_PRINTERS) {
+                val btAddr = intent.getStringExtra(PrintBridgeLauncher.EXTRA_RELEASE_BT_ADDRESS)
+                if (!btAddr.isNullOrBlank()) {
+                    registry.releaseBluetoothConnection(btAddr)
+                }
                 refreshPrintersOnBackground()
             }
         } catch (t: Throwable) {
