@@ -928,7 +928,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun usbPermissionDeniedMessage(endpoint: PrinterEndpoint): String {
-        return "USB permission not granted for ${endpoint.name} — open Bridge Reborn and allow USB access"
+        return "USB permission not granted for ${endpoint.name} — allow access in the USB popup"
     }
 
     private fun performTestPrint(endpoint: PrinterEndpoint) {
