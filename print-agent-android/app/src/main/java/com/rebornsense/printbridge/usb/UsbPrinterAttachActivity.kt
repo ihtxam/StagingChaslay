@@ -3,30 +3,53 @@ package com.rebornsense.printbridge.usb
 import android.content.Intent
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
+import com.rebornsense.printbridge.BridgeUserUnlock
 import com.rebornsense.printbridge.MainActivity
 import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
- * Shown only from the boot notification when USB permission is missing after reboot.
- * Hot-plug uses [UsbAttachReceiver] + [UsbManager.requestPermission] (no "Open app to handle USB?" chooser).
+ * Ojavana-style USB hot-plug: exported [UsbManager.ACTION_USB_DEVICE_ATTACHED] activity so Android
+ * shows the system "Allow … USB Printer Port?" dialog even when Bridge is in the background.
+ *
+ * Also used from the boot notification and internal [UsbPermissionUi] launches.
  */
 class UsbPrinterAttachActivity : AppCompatActivity() {
     private var usbPromptIssued = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!UsbPermissionUi.isPermissionPromptAction(intent?.action)) {
+        if (!BridgeUserUnlock.isCredentialStorageReady(this)) {
             finish()
             return
         }
+        if (!isHandledUsbIntent(intent?.action)) {
+            finish()
+            return
+        }
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            PrintBridgeLauncher.startIfEnabled(applicationContext)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        usbPromptIssued = false
     }
 
     override fun onResume() {
         super.onResume()
+        if (!BridgeUserUnlock.isCredentialStorageReady(this)) {
+            finish()
+            return
+        }
         val device = UsbBootPermissionNotifier.resolveDeviceFromIntent(this, intent)
             ?: intent?.usbDeviceExtra()
         if (device == null || !UsbDeviceClassifier.isUsbPrinterCandidate(applicationContext, device)) {
+            Log.d(TAG, "Skip USB attach activity — not a printer candidate")
             finish()
             return
         }
@@ -40,7 +63,15 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             onUsbAccessReady(skipMainActivity = true)
             return
         }
-        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(this, device)) {
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED &&
+            SystemClock.elapsedRealtime() < EARLY_BOOT_MS
+        ) {
+            Log.d(TAG, "Defer USB permission dialog during early boot")
+            finish()
+            return
+        }
+        val systemHotPlug = intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED
+        if (!systemHotPlug && UsbAttachPromptGuard.shouldSuppressPermissionDialog(this, device)) {
             finish()
             return
         }
@@ -49,7 +80,9 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         }
         if (!usbPromptIssued) {
             usbPromptIssued = true
-            UsbAttachPromptGuard.markPromptIssued(this, device)
+            if (!systemHotPlug) {
+                UsbAttachPromptGuard.markPromptIssued(this, device)
+            }
             if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
                 if (usb.hasPermission(device)) {
                     onUsbAccessReady(skipMainActivity = true)
@@ -57,14 +90,13 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             }
             return
         }
-        // User closed the allow dialog without granting.
         finish()
     }
 
     private fun onUsbAccessReady(skipMainActivity: Boolean = false) {
         UsbHostPermissions.promoteGrantedUsbPrinters(applicationContext)
         PrintBridgeLauncher.refreshPrinters(applicationContext)
-        if (skipMainActivity || UsbPermissionUi.isPermissionPromptAction(intent?.action)) {
+        if (skipMainActivity || isHandledUsbIntent(intent?.action)) {
             finish()
             return
         }
@@ -75,5 +107,15 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             },
         )
         finish()
+    }
+
+    private fun isHandledUsbIntent(action: String?): Boolean {
+        return action == UsbManager.ACTION_USB_DEVICE_ATTACHED ||
+            UsbPermissionUi.isPermissionPromptAction(action)
+    }
+
+    companion object {
+        private const val TAG = "UsbPrinterAttach"
+        private const val EARLY_BOOT_MS = 25_000L
     }
 }

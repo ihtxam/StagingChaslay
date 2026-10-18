@@ -16,4 +16,6 @@
     <usb-device vendor-id="1659" />
     <!-- Winbond / common TSPL USB -->
     <usb-device vendor-id="1046" />
+    <!-- Nebullus / common 0418:5011 receipt printers -->
+    <usb-device vendor-id="1048" />
 </resources>
