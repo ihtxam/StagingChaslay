@@ -11,6 +11,8 @@ const application = readFileSync(join(src, 'PrintBridgeApplication.kt'), 'utf8')
 const unlock = readFileSync(join(src, 'BridgeUserUnlock.kt'), 'utf8');
 const boot = readFileSync(join(src, 'boot/BootCompletedReceiver.kt'), 'utf8');
 const usb = readFileSync(join(src, 'usb/UsbAttachReceiver.kt'), 'utf8');
+const attachActivity = readFileSync(join(src, 'usb/UsbPrinterAttachActivity.kt'), 'utf8');
+const manifest = readFileSync(join(root, 'app/src/main/AndroidManifest.xml'), 'utf8');
 const prefs = readFileSync(join(src, 'print/PrinterPreferences.kt'), 'utf8');
 const gradle = readFileSync(join(root, 'app/build.gradle.kts'), 'utf8');
 const http = readFileSync(join(src, 'http/BridgeHttpServer.kt'), 'utf8');
@@ -26,20 +28,24 @@ assert.match(application, /Never throw out of Application\.onCreate/);
 assert.match(boot, /BridgeUserUnlock\.isCredentialStorageReady/);
 assert.match(boot, /startBridgeIfReady/);
 
-assert.match(usb, /runCatching \{/);
-assert.match(usb, /BridgeUserUnlock\.isCredentialStorageReady/);
-assert.match(usb, /EARLY_BOOT_MS/);
-assert.match(usb, /Skip USB permission dialog during early boot/);
+assert.match(usb, /ACTION_USB_DEVICE_DETACHED/);
+assert.match(usb, /clearSuppressForDevice/);
+assert.doesNotMatch(usb, /ACTION_USB_DEVICE_ATTACHED/);
+
+assert.match(attachActivity, /ACTION_USB_DEVICE_ATTACHED/);
+assert.match(attachActivity, /EARLY_BOOT_MS/);
+
+assert.match(manifest, /UsbPrinterAttachActivity/);
+assert.match(manifest, /USB_DEVICE_ATTACHED/);
+assert.match(manifest, /usb_device_filter/);
 
 assert.match(prefs, /isAutoStartEnabled[\s\S]*runCatching/);
 assert.match(prefs, /getLanHosts[\s\S]*runCatching/);
 
 assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
-assert.match(gradle, /versionName = "0\.4\.34"/);
-assert.match(gradle, /versionCode = 52/);
-assert.match(usb, /UsbPermissionUi\.launchPermissionPrompt/);
-assert.match(usb, /clearSuppressForDevice/);
+assert.match(gradle, /versionName = "0\.4\.35"/);
+assert.match(gradle, /versionCode = 53/);
 assert.doesNotMatch(boot, /120_000L/);
 const settings = readFileSync(join(root, 'settings.gradle.kts'), 'utf8');
 assert.match(settings, /id\("com\.android\.application"\) version "8\.7\.2"/);

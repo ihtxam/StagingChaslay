@@ -31,6 +31,7 @@ object UsbDeviceClassifier {
     private val KNOWN_PRINTER_VENDOR_IDS = setOf(
         0x0355, // Niimbot / Jingchen
         0x0416, // Winbond TSPL
+        0x0418, // Common Gemini / 80mm USB receipt
         0x04B8, // Epson
         0x0519, // Star Micronics
         0x0FE6, // ICS Advent
