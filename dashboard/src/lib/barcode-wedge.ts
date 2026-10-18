@@ -9,6 +9,7 @@ export const BARCODE_WEDGE_MIN_LENGTH = 3;
 export const BARCODE_WEDGE_REFOCUS_MS = 400;
 
 export const BARCODE_WEDGE_INPUT_CLASS = 'barcode-wedge-capture';
+export const RETAIL_SCAN_INPUT_CLASS = 'webpos-retail-search';
 
 /**
  * Merge retail POS search keystrokes after the visible field was cleared mid-scan.
@@ -69,6 +70,10 @@ export function isBarcodeFieldInput(el: Element | null): boolean {
 }
 
 /** Keep wedge focus from overriding product search and other visible POS inputs. */
+export function isRetailScanSearchInput(el: Element | null): boolean {
+  return el instanceof HTMLInputElement && el.classList.contains(RETAIL_SCAN_INPUT_CLASS);
+}
+
 export function shouldYieldBarcodeFocus(
   activeEl: Element | null,
   wedgeInput: HTMLInputElement | null
@@ -76,7 +81,24 @@ export function shouldYieldBarcodeFocus(
   if (!activeEl || activeEl === wedgeInput) return false;
   if (isBarcodeFieldInput(activeEl)) return true;
   if (!isEditableField(activeEl)) return false;
-  return !isBarcodeWedgeInput(activeEl);
+  if (isBarcodeWedgeInput(activeEl)) return false;
+  // Tablet retail: keep HID wedge on the hidden capture unless the cashier tapped search to type.
+  if (isCoarsePointerDevice() && isRetailScanSearchInput(activeEl)) {
+    return activeEl.dataset.manualRetailSearch === '1';
+  }
+  return true;
+}
+
+/** Focus the hidden capture input so USB/BT scanners work without the soft keyboard. */
+export function focusBarcodeWedgeCapture(): void {
+  if (typeof document === 'undefined') return;
+  const input = document.querySelector<HTMLInputElement>(`.${BARCODE_WEDGE_INPUT_CLASS}`);
+  if (!input) return;
+  try {
+    input.focus({ preventScroll: true });
+  } catch {
+    input.focus();
+  }
 }
 
 function shouldCaptureBarcodeWedgeKeyboard(activeEl: Element | null): boolean {

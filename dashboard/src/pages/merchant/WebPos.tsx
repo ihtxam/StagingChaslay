@@ -193,6 +193,8 @@ import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
 import {
   BARCODE_WEDGE_IDLE_MS,
   BARCODE_WEDGE_MIN_LENGTH,
+  focusBarcodeWedgeCapture,
+  isCoarsePointerDevice,
   mergeRetailScanBuffer,
   isBarcodeWedgeInput,
   useBarcodeWedge,
@@ -1853,7 +1855,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const isRetail = posMode === 'retail';
   const useRetailLayout =
     isRetail && checkoutSettings.retailLayoutEnabled !== false && posTab === 'register';
+  const retailPreferScannerWedge =
+    useRetailLayout &&
+    isCoarsePointerDevice() &&
+    checkoutSettings.retailScannerFirst !== false;
   const retailSearchRef = useRef<HTMLInputElement>(null);
+  const refocusRetailScanner = useCallback(() => {
+    if (!retailPreferScannerWedge) return;
+    retailSearchRef.current?.blur();
+    window.setTimeout(() => focusBarcodeWedgeCapture(), 50);
+  }, [retailPreferScannerWedge]);
   const retailTakeawayEnabled =
     !!checkoutSettings.retailTakeawayEnabled && editionAllows('channel_takeaway');
   const retailDeliveryEnabled =
@@ -10397,6 +10408,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       onScan: handlePosScan,
     });
 
+  useEffect(() => {
+    if (!barcodeWedgeEnabled || !retailPreferScannerWedge || posView !== 'register') return;
+    const id = window.setTimeout(() => focusBarcodeWedgeCapture(), 150);
+    return () => window.clearTimeout(id);
+  }, [barcodeWedgeEnabled, retailPreferScannerWedge, posView]);
+
   const submitRetailScan = useCallback(
     (raw?: string) => {
       const code = (raw?.trim() || retailScanBufferRef.current || '').trim();
@@ -11611,7 +11628,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   setSearch('');
                 }}
                 searchInputRef={retailSearchRef}
-                autoFocusSearch={checkoutSettings.retailScannerFirst !== false}
+                autoFocusSearch={
+                  checkoutSettings.retailScannerFirst !== false && !isCoarsePointerDevice()
+                }
+                preferScannerWedge={retailPreferScannerWedge}
+                onRequestWedgeFocus={refocusRetailScanner}
                 tileSize={checkoutSettings.retailTileSize || 'lg'}
                 onProductClick={onProductClick}
                 cartQtyByProduct={cartQtyByProduct}
@@ -11854,6 +11875,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   setSuccessInfo(null);
                   setLastSplitReceipts([]);
                   splitReceiptsRef.current = [];
+                  refocusRetailScanner();
                 }}
               />
             </div>
@@ -11866,7 +11888,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         total={totals.total}
         busy={busy}
         onClose={() => {
-          if (!busy) setRetailCashPayOpen(false);
+          if (!busy) {
+            setRetailCashPayOpen(false);
+            refocusRetailScanner();
+          }
         }}
         onComplete={(tendered, changeDue) => void completeRetailCashPay(tendered, changeDue)}
       />

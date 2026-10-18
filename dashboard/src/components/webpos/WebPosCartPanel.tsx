@@ -1181,7 +1181,7 @@ export default function WebPosCartPanel({
 
         <div
           className={`shrink-0 border-t border-stone-200 bg-white p-2 ${
-            retailPayBar ? 'space-y-2' : `grid gap-1.5 ${
+            retailPayBar ? 'webpos-retail-pay-footer space-y-2' : `grid gap-1.5 ${
               isRetail
                 ? isPage && onBack
                   ? 'grid-cols-[auto_1fr_1fr]'
