@@ -7,3 +7,4 @@
 
 # Deploy 2026-10-04T07:30:00Z — restore merchant and shop catalogs when products columns are missing
 # Deploy 2026-10-18T20:00:00Z — Bridge Reborn 0.4.38 (USB plug permission, service UI, FR i18n)
+# Deploy 2026-10-18T22:00:00Z — Bridge Reborn 0.4.39 (USB CDC/CH340 permission fix)
