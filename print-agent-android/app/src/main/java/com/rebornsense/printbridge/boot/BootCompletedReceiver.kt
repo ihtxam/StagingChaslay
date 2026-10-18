@@ -70,7 +70,10 @@ class BootCompletedReceiver : BroadcastReceiver() {
         if (!BridgeUserUnlock.isCredentialStorageReady(appContext)) return
         runCatching {
             BridgeSafeStart.runWithBootReceiverStart {
-                PrintBridgeLauncher.startIfEnabled(appContext)
+                val started = PrintBridgeLauncher.startIfEnabled(appContext)
+                if (!started) {
+                    BootAutostartNotifier.notifyIfAutoStartBlocked(appContext)
+                }
             }
         }
     }

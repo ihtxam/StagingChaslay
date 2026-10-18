@@ -11,6 +11,13 @@ import android.hardware.usb.UsbManager
 class UsbEscPosDriver : PrinterDriver {
     override val key: String = "usb"
 
+    companion object {
+        private const val USB_CHUNK_SIZE = 512
+        private const val USB_CHUNK_DELAY_MS = 12L
+        private const val USB_TRANSFER_TIMEOUT_MS = 20_000
+        private const val USB_WRITE_RETRIES = 6
+    }
+
     override fun discover(context: Context): List<PrinterEndpoint> {
         val usb = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return emptyList()
         // Only devices plugged in right now. Do not synthesize rows from
@@ -163,28 +170,67 @@ class UsbEscPosDriver : PrinterDriver {
         return false
     }
 
-    /** First bulk OUT only — a second bulk OUT on the same device is not another printer. */
+    /** Prefer USB printer-class bulk OUT; OTG Type-B printers often use vendor or CDC data. */
     private fun bulkOutEndpoint(device: UsbDevice): Pair<UsbInterface, UsbEndpoint>? {
-        for (i in 0 until device.interfaceCount) {
-            val intf = device.getInterface(i)
-            for (e in 0 until intf.endpointCount) {
-                val ep = intf.getEndpoint(e)
-                if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK && ep.direction == UsbConstants.USB_DIR_OUT) {
-                    return intf to ep
+        fun findInClass(targetClass: Int): Pair<UsbInterface, UsbEndpoint>? {
+            for (i in 0 until device.interfaceCount) {
+                val intf = device.getInterface(i)
+                if (intf.interfaceClass != targetClass) continue
+                for (e in 0 until intf.endpointCount) {
+                    val ep = intf.getEndpoint(e)
+                    if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
+                        ep.direction == UsbConstants.USB_DIR_OUT
+                    ) {
+                        return intf to ep
+                    }
                 }
             }
+            return null
         }
-        return null
+        return findInClass(UsbConstants.USB_CLASS_PRINTER)
+            ?: findInClass(UsbConstants.USB_CLASS_VENDOR_SPEC)
+            ?: findInClass(UsbConstants.USB_CLASS_CDC_DATA)
+            ?: run {
+                for (i in 0 until device.interfaceCount) {
+                    val intf = device.getInterface(i)
+                    if (intf.interfaceClass == UsbConstants.USB_CLASS_HID) continue
+                    for (e in 0 until intf.endpointCount) {
+                        val ep = intf.getEndpoint(e)
+                        if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK &&
+                            ep.direction == UsbConstants.USB_DIR_OUT
+                        ) {
+                            return intf to ep
+                        }
+                    }
+                }
+                null
+            }
     }
 
     private fun sendChunks(connection: UsbDeviceConnection, endpoint: UsbEndpoint, data: ByteArray) {
         var offset = 0
-        val chunk = 4096
         while (offset < data.size) {
-            val len = minOf(chunk, data.size - offset)
-            val written = connection.bulkTransfer(endpoint, data, offset, len, 5000)
-            if (written <= 0) throw IllegalStateException("USB bulk transfer failed at offset $offset")
+            val len = minOf(USB_CHUNK_SIZE, data.size - offset)
+            var written = 0
+            var attempt = 0
+            while (written <= 0 && attempt < USB_WRITE_RETRIES) {
+                written = connection.bulkTransfer(
+                    endpoint,
+                    data,
+                    offset,
+                    len,
+                    USB_TRANSFER_TIMEOUT_MS,
+                )
+                attempt++
+                if (written <= 0) Thread.sleep(25L)
+            }
+            if (written <= 0) {
+                throw IllegalStateException("USB bulk transfer failed at offset $offset")
+            }
             offset += written
+            if (offset < data.size && USB_CHUNK_DELAY_MS > 0L) {
+                Thread.sleep(USB_CHUNK_DELAY_MS)
+            }
         }
     }
 }

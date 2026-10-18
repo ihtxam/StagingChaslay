@@ -803,7 +803,14 @@ class MainActivity : AppCompatActivity() {
             }
         val requested = UsbHostPermissions.requestNextMissingPermission(this, preferred)
         if (!requested) {
-            Toast.makeText(this, R.string.usb_grant_none_pending, Toast.LENGTH_LONG).show()
+            val usb = getSystemService(android.hardware.usb.UsbManager::class.java)
+            val attached = usb?.deviceList?.size ?: 0
+            val message = if (attached == 0) {
+                R.string.usb_grant_no_otg_device
+            } else {
+                R.string.usb_grant_none_pending
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
         refreshPrinters()
     }

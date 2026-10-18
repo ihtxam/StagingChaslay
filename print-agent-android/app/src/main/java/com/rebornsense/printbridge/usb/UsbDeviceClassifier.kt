@@ -79,9 +79,27 @@ object UsbDeviceClassifier {
         if (isScannerOrReaderPeripheral(device)) return false
         if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
         if (context != null && isUsbPrinterCandidate(context, device)) return true
+        if (isOtgEscPosBulkDevice(device)) return true
         return (0 until device.interfaceCount).any { index ->
             device.getInterface(index).interfaceClass == UsbConstants.USB_CLASS_PRINTER
         }
+    }
+
+    /**
+     * USB Type-B OTG receipt printers (CDC/CH340/vendor bulk) that do not declare USB printer class.
+     * Used for permission prompts and discovery — not for HID keyboard wedges.
+     */
+    fun isOtgEscPosBulkDevice(device: UsbDevice): Boolean {
+        return runCatching {
+            if (hasPrinterClass(device)) return@runCatching true
+            if (device.deviceClass == UsbConstants.USB_CLASS_HID) return@runCatching false
+            if (device.deviceClass == UsbConstants.USB_CLASS_HUB) return@runCatching false
+            val classes = interfaceClasses(device)
+            if (classes.any { it == 0x0B }) return@runCatching false
+            if (classes.any { it == UsbConstants.USB_CLASS_HID }) return@runCatching false
+            if (isUsbNetworkAdapter(null, device)) return@runCatching false
+            hasOtgBulkOut(device)
+        }.getOrDefault(false)
     }
 
     /**
@@ -163,6 +181,7 @@ object UsbDeviceClassifier {
                     return@runCatching true
                 }
             }
+            if (isOtgEscPosBulkDevice(device)) return@runCatching true
             // Gemini receipt printers often expose only a vendor-class bulk OUT interface.
             hasEscPosBulkOut(device)
         }.getOrDefault(false)
@@ -239,6 +258,17 @@ object UsbDeviceClassifier {
      * Bulk OUT on printer/vendor interfaces, and on CDC data when the device is a known
      * receipt printer or was granted before (Gemini 0418, CH340 thermal, etc.).
      */
+    private fun hasOtgBulkOut(device: UsbDevice): Boolean {
+        for (index in 0 until device.interfaceCount) {
+            val iface = runCatching { device.getInterface(index) }.getOrNull() ?: continue
+            val cls = iface.interfaceClass
+            if (cls == UsbConstants.USB_CLASS_HUB) continue
+            if (cls == UsbConstants.USB_CLASS_HID) continue
+            if (hasBulkOut(iface)) return true
+        }
+        return false
+    }
+
     private fun hasEscPosBulkOut(device: UsbDevice, allowCdcData: Boolean = true): Boolean {
         val allowCdc = allowCdcData &&
             (

@@ -21,9 +21,9 @@ object PrintBridgeLauncher {
     const val EXTRA_RELEASE_BT_ADDRESS = "release_bt_address"
 
     /** Start the service when auto-start is enabled (boot, package update). */
-    fun startIfEnabled(context: Context) {
-        if (!PrinterPreferences.isAutoStartEnabled(context)) return
-        start(context)
+    fun startIfEnabled(context: Context): Boolean {
+        if (!PrinterPreferences.isAutoStartEnabled(context)) return false
+        return start(context, recordBlockedStartInCrashLog = false)
     }
 
     /**

@@ -18,6 +18,11 @@
     <string name="bluetooth_permission_toast">Allow Bluetooth so Bridge can list paired printers.</string>
     <string name="usb_grant_wait_permissions">Allow notifications first, then tap USB printer access.</string>
     <string name="usb_grant_none_pending">No USB receipt printer needs access. Barcode/RFID scanners are ignored. Plug in the printer and tap again.</string>
+    <string name="usb_grant_no_otg_device">No USB device on OTG. Power the printer on, use the tablet USB host port (not charge-only), and reconnect the Type-B cable.</string>
+    <string name="boot_autostart_notification_channel">Bridge auto-start</string>
+    <string name="boot_autostart_notification_channel_desc">Shown after reboot when notifications must be allowed for Bridge to start.</string>
+    <string name="boot_autostart_notification_title">Start Bridge Reborn after reboot</string>
+    <string name="boot_autostart_notification_body">Tap to open Bridge and allow notifications so WebPOS can print.</string>
     <string name="notification_permission_required">Notifications are required so Bridge can run in the background. Allow notifications, then tap Start background service.</string>
     <string name="start_bridge_service">Start background service</string>
     <string name="tap_start_bridge_hint">Tap Start background service after allowing notifications.</string>
