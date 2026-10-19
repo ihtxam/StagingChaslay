@@ -94,6 +94,11 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             onUsbAccessReady(skipMainActivity = true)
             return
         }
+        Log.i(TAG, "USB permission missing — open MainActivity for system dialog")
+        if (UsbPermissionUi.launchMainActivityForUsbPermission(this, device, minimizeAfter = true)) {
+            finish()
+            return
+        }
         if (!systemHotPlug && UsbAttachPromptGuard.shouldSuppressPermissionDialog(this, device)) {
             finish()
             return

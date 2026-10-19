@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard, Loader2, Nfc, Printer, Receipt, XCircle } from 'lucide-react';
+import { requestBridgeUsbPermissionActivity } from '@/lib/device-bridge';
 import {
   runWebPosConnectionChecks,
   type CheckStatus,
@@ -152,6 +153,11 @@ export default function WebPosLaunchCheckModal({
     return () => window.clearTimeout(id);
   }, [countdown, open, onContinue]);
 
+  const needsUsbPermission =
+    receipt.messageKey === 'webPosLaunchCheckUsbPermission' ||
+    kitchen.messageKey === 'webPosLaunchCheckUsbPermission' ||
+    agent.messageKey === 'webPosLaunchCheckUsbPermission';
+
   if (!open) return null;
 
   return (
@@ -176,7 +182,24 @@ export default function WebPosLaunchCheckModal({
           </p>
         ) : null}
 
+        {androidProbe && needsUsbPermission ? (
+          <p className="mt-4 text-sm text-stone-700">{t('webPosLaunchCheckUsbPermissionHint')}</p>
+        ) : null}
+
         <div className="mt-5 flex flex-wrap gap-2">
+          {androidProbe && needsUsbPermission ? (
+            <button
+              type="button"
+              className="btn-primary w-full py-2.5"
+              disabled={running}
+              onClick={() => {
+                requestBridgeUsbPermissionActivity();
+                window.setTimeout(() => void runChecks(), 2_000);
+              }}
+            >
+              {t('webPosLaunchCheckOpenBridgeUsb')}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn-secondary flex-1 py-2.5"

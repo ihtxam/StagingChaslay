@@ -48,6 +48,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingWizardLaunch = false
     private var autoWizardShownThisSession = false
     private var runtimePermissionsResolved = false
+    private var usbPermissionLaunchPending = false
+    private var usbPermissionThenMinimize = false
     private var notificationPermissionResolved = false
     private var printerScanInFlight = false
     private var healthProbeInFlight = false
@@ -146,6 +148,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.addLanBtn).setOnClickListener { showAddNetworkPrinterDialog() }
         findViewById<MaterialButton>(R.id.setupWizardBtn).setOnClickListener { openOemSetupWizard() }
         findViewById<MaterialButton>(R.id.startBridgeBtn).setOnClickListener { startBridgeManually() }
+        consumeUsbPermissionLaunchExtra(intent)
         handleUsbAttachIntent(intent)
         handleAutostartBridgeIntent(intent)
         showLanPrintersNow()
@@ -164,6 +167,7 @@ class MainActivity : AppCompatActivity() {
         if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
             refreshServiceStatusReadOnly(scanPrinters = true)
         }
+        tryRunUsbPermissionLaunch()
     }
 
     private fun ensureBluetoothScanPermissions() {
@@ -201,6 +205,7 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        consumeUsbPermissionLaunchExtra(intent)
         handleUsbAttachIntent(intent)
         handleAutostartBridgeIntent(intent)
         consumeRefreshPrintersExtra(intent)
@@ -210,6 +215,36 @@ class MainActivity : AppCompatActivity() {
         if (intent?.getBooleanExtra(EXTRA_REFRESH_PRINTERS, false) != true) return
         intent.removeExtra(EXTRA_REFRESH_PRINTERS)
         refreshPrintersSafely()
+    }
+
+    private fun consumeUsbPermissionLaunchExtra(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_REQUEST_USB_PERMISSION, false) != true) return
+        intent.removeExtra(EXTRA_REQUEST_USB_PERMISSION)
+        usbPermissionThenMinimize = intent.getBooleanExtra(EXTRA_USB_PERMISSION_THEN_MINIMIZE, true)
+        usbPermissionLaunchPending = true
+    }
+
+    /** WebPOS / boot / hot-plug — show the system USB allow dialog on this visible activity. */
+    private fun tryRunUsbPermissionLaunch() {
+        if (!usbPermissionLaunchPending || !runtimePermissionsResolved) return
+        usbPermissionLaunchPending = false
+        window.decorView.post {
+            if (isFinishing || isDestroyed) return@post
+            val device = UsbBootPermissionNotifier.resolveDeviceFromIntent(this, getIntent())
+                ?: com.rebornsense.printbridge.usb.UsbPlugPlay.pickBestMissingPrinter(this)
+            if (device == null) return@post
+            val usb = getSystemService(UsbManager::class.java) ?: return@post
+            if (usb.hasPermission(device)) {
+                if (usbPermissionThenMinimize) {
+                    usbPermissionThenMinimize = false
+                    moveTaskToBack(true)
+                }
+                return@post
+            }
+            if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
+                com.rebornsense.printbridge.usb.UsbPlugPlay.promptForMissingPrinter(this, device)
+            }
+        }
     }
 
     /** Legacy extra from older builds; USB attach is handled by [UsbPrinterAttachActivity]. */
@@ -261,6 +296,7 @@ class MainActivity : AppCompatActivity() {
             if (!UsbHostPermissions.requestNextMissingPermission(this)) {
                 runCatching { com.rebornsense.printbridge.usb.UsbPlugPlay.promptForMissingPrinter(this) }
             }
+            tryRunUsbPermissionLaunch()
         }
     }
 
@@ -635,6 +671,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun onUsbPermissionSettled() {
         if (isFinishing || isDestroyed) return
+        if (usbPermissionThenMinimize) {
+            usbPermissionThenMinimize = false
+            refreshPrintersSafely()
+            moveTaskToBack(true)
+            return
+        }
         val pending = pendingUsbTestPrint
         pendingUsbTestPrint = null
         refreshPrintersSafely()
@@ -1045,6 +1087,10 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_USB_DEVICE_ID = "usb_device_id"
         const val EXTRA_REFRESH_PRINTERS = "refresh_printers"
         const val EXTRA_AUTOSTART_BRIDGE = "autostart_bridge_service"
+        /** Open Bridge only to show the system USB allow dialog (from WebPOS / boot / plug). */
+        const val EXTRA_REQUEST_USB_PERMISSION = "request_usb_permission"
+        /** Return to WebPOS after the cashier taps OK on the USB dialog. */
+        const val EXTRA_USB_PERMISSION_THEN_MINIMIZE = "usb_permission_then_minimize"
         private const val TAG = "MainActivity"
         private val START_PROBE_DELAYS_MS = longArrayOf(1_000L, 2_000L, 4_000L)
     }
