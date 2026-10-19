@@ -131,6 +131,18 @@ export default function WebPosLaunchCheckModal({
   }, [open, runChecks]);
 
   useEffect(() => {
+    if (!open || !androidProbe) return;
+    const needsUsb =
+      receipt.messageKey === 'webPosLaunchCheckUsbPermission' ||
+      kitchen.messageKey === 'webPosLaunchCheckUsbPermission';
+    if (!needsUsb) return;
+    const id = window.setInterval(() => {
+      void runChecks();
+    }, 3_000);
+    return () => window.clearInterval(id);
+  }, [open, androidProbe, receipt.messageKey, kitchen.messageKey, runChecks]);
+
+  useEffect(() => {
     if (countdown == null || !open) return;
     if (countdown <= 0) {
       onContinue();

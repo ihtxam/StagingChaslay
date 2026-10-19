@@ -36,9 +36,10 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             finish()
             return
         }
-        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED &&
-            PrinterPreferences.isAutoStartEnabled(this)
-        ) {
+        val bootOrAttach =
+            intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED ||
+                UsbPermissionUi.isPermissionPromptAction(intent?.action)
+        if (bootOrAttach && PrinterPreferences.isAutoStartEnabled(this)) {
             PrintBridgeLauncher.start(this, recordBlockedStartInCrashLog = false)
         }
     }
@@ -69,6 +70,7 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             return
         }
         val device = resolveTargetDevice()
+            ?: UsbPlugPlay.pickBestMissingPrinter(applicationContext)
         if (device == null || !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)) {
             Log.d(TAG, "Skip USB attach activity — not a printer candidate")
             finish()
