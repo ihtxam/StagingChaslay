@@ -38,11 +38,11 @@ object UsbBootPermissionNotifier {
             cancelNotification(context)
             return
         }
-        val device = pickSingleNotificationTarget(context, missing) ?: run {
+        val device = UsbPermissionPicker.pickBest(context, missing) ?: run {
             BridgeEventsLog.record(
                 context,
                 "usb-permission",
-                "skip notification — ${missing.size} printer candidates lack permission (ambiguous)",
+                "skip notification — no USB printer candidate for permission",
             )
             return
         }
@@ -78,30 +78,12 @@ object UsbBootPermissionNotifier {
         return null
     }
 
-    private fun pickSingleNotificationTarget(
-        context: Context,
-        missing: List<UsbDevice>,
-    ): UsbDevice? {
-        if (missing.size == 1) return missing.single()
-        val app = context.applicationContext
-        val remembered = missing.filter { device ->
-            PrinterPreferences.isRememberedUsbDevice(app, "${device.vendorId}:${device.productId}")
-        }
-        if (remembered.size == 1) return remembered.single()
-        val printerClass = missing.filter { device ->
-            UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(app, device)
-        }
-        if (printerClass.size == 1) return printerClass.single()
-        return null
+    fun postPermissionNotificationForDevice(context: Context, device: UsbDevice) {
+        postPermissionNotification(context.applicationContext, device)
     }
 
     private fun missingPermissionPrinterCandidates(context: Context): List<UsbDevice> {
-        val app = context.applicationContext
-        val usb = app.getSystemService(UsbManager::class.java) ?: return emptyList()
-        return usb.deviceList.values.filter { device ->
-            UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(app, device) &&
-                !usb.hasPermission(device)
-        }
+        return UsbPlugPlay.missingPrinterDevices(context)
     }
 
     private fun currentBootWallTimeMs(): Long =
@@ -111,7 +93,7 @@ object UsbBootPermissionNotifier {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val last = prefs.getLong(KEY_NOTIFIED_BOOT, 0L)
         val boot = currentBootWallTimeMs()
-        return last != 0L && kotlin.math.abs(last - boot) < 60_000L
+        return last != 0L && kotlin.math.abs(last - boot) < 180_000L
     }
 
     private fun markNotifiedThisBoot(context: Context) {

@@ -132,7 +132,7 @@ object UsbHostPermissions {
                 }.thenBy { !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(app, it) }
                     .thenBy { it.deviceId },
             )
-        val device = candidates.firstOrNull() ?: return false
+        val device = UsbPermissionPicker.pickBest(app, candidates) ?: return false
         return requestPermissionForDevice(activity, device)
     }
 

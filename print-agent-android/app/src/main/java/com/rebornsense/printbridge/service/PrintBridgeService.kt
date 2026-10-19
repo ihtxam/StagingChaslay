@@ -173,15 +173,18 @@ class PrintBridgeService : Service() {
      */
     /** Some Nebullus hubs enumerate the receipt printer a few seconds after boot. */
     private fun schedulePermissionRecheck() {
+        val delays = longArrayOf(PERMISSION_RECHECK_MS, 25_000L, 45_000L)
         val worker = Thread {
-            try {
-                Thread.sleep(PERMISSION_RECHECK_MS)
-            } catch (_: InterruptedException) {
-                return@Thread
+            for (delay in delays) {
+                try {
+                    Thread.sleep(delay)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+                if (!foregroundStarted) return@Thread
+                runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
+                    .onFailure { error -> Log.w(TAG, "USB permission recheck failed", error) }
             }
-            if (!foregroundStarted) return@Thread
-            runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
-                .onFailure { error -> Log.w(TAG, "USB permission recheck failed", error) }
         }
         worker.name = "print-bridge-usb-perm"
         worker.isDaemon = true

@@ -1,6 +1,7 @@
 package com.rebornsense.printbridge.print
 
 import android.content.Context
+import com.rebornsense.printbridge.usb.UsbPlugPlay
 
 class DriverRegistry(
     private val sunmi: SunmiInternalDriver = SunmiInternalDriver(),
@@ -106,7 +107,20 @@ class DriverRegistry(
     fun driverFor(endpoint: PrinterEndpoint): PrinterDriver? =
         drivers.firstOrNull { it.key == endpoint.driverKey }
 
-    fun hasReadyPrinter(): Boolean = cached.isNotEmpty()
+    fun hasReadyPrinter(context: Context? = null): Boolean {
+        if (cached.isEmpty()) return false
+        val app = context?.applicationContext
+        if (app == null) return true
+        val default = cached.firstOrNull { it.isDefault } ?: cached.first()
+        if (UsbPlugPlay.endpointNeedsUsbPermission(app, default)) return false
+        return true
+    }
+
+    fun usbPermissionPending(context: Context): Boolean {
+        val app = context.applicationContext
+        return cached.any { UsbPlugPlay.endpointNeedsUsbPermission(app, it) } ||
+            UsbPlugPlay.missingPrinterDevices(app).isNotEmpty()
+    }
 
     fun releaseBluetoothConnection(address: String) {
         bluetooth.releaseConnection(address)

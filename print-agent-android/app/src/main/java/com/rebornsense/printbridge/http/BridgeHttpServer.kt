@@ -14,6 +14,7 @@ import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.payment.hasNfcFeature
 import com.rebornsense.printbridge.scale.AclasScaleReader
+import com.rebornsense.printbridge.usb.UsbPlugPlay
 import com.rebornsense.printbridge.scale.AclasScaleReading
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.runBlocking
@@ -92,7 +93,8 @@ class BridgeHttpServer(
                         .put("manufacturer", android.os.Build.MANUFACTURER)
                         .put("model", android.os.Build.MODEL)
                         .put("features", features)
-                        .put("printerReady", registry.hasReadyPrinter())
+                        .put("printerReady", registry.hasReadyPrinter(appContext))
+                        .put("usbPermissionRequired", registry.usbPermissionPending(appContext))
                         .put("queueDepth", queue.queueDepth())
                         .put("nfcAvailable", nfcAvailable)
                         .put("hasAdyenSdk", BuildConfig.HAS_ADYEN_SDK)
@@ -186,6 +188,16 @@ class BridgeHttpServer(
                         JSONObject().put("ok", false).put("error", "No printer available"),
                         Response.Status.BAD_REQUEST
                     )
+                if (UsbPlugPlay.endpointNeedsUsbPermission(appContext, endpoint)) {
+                    UsbPlugPlay.promptForMissingPrinter(appContext)
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "USB permission required — allow in the Bridge popup or notification")
+                            .put("usbPermissionRequired", true),
+                        Response.Status.CONFLICT,
+                    )
+                }
                 val bytes = try {
                     PrintJobQueue.decodeBase64(dataBase64)
                 } catch (e: Exception) {

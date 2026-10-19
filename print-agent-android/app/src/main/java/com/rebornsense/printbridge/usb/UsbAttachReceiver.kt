@@ -43,7 +43,7 @@ class UsbAttachReceiver : BroadcastReceiver() {
             return
         }
         Log.d(TAG, "USB attach — launch permission UI for ${device.vendorId}:${device.productId}")
-        if (!UsbPermissionUi.launchPermissionPrompt(app, device)) {
+        if (!UsbPlugPlay.promptForMissingPrinter(app, device)) {
             UsbBootPermissionNotifier.onDiscoveryFinished(app)
         }
     }
