@@ -13,7 +13,7 @@ fi
 SSH_ALIAS="${REBORN_POS_ANDROID_SSH_ALIAS:-${PRODUCTION_SSH_ALIAS:-production-reborn}}"
 REMOTE_PATH="${REBORN_POS_ANDROID_REMOTE_PATH:-${PRODUCTION_DEPLOY_PATH:-/root/rebornSense}/backend/public/downloads}"
 LOCAL_DIR="${REBORN_POS_ANDROID_DOWNLOADS_DIR:-$ROOT/backend/public/downloads}"
-BUILD="${REBORN_POS_ANDROID_BUILD:-1}"
+BUILD="${REBORN_POS_ANDROID_BUILD:-0}"
 
 APK="$LOCAL_DIR/reborn-pos-android.apk"
 JSON="$LOCAL_DIR/reborn-pos-android.json"

@@ -1,10 +1,10 @@
 {
   "name": "reborn-pos-android",
   "displayName": "RebornPOS (Android)",
-  "description": "Native Android POS for restaurants and retail — syncs with your Reborn merchant account.",
+  "description": "Native Android POS for restaurants and retail \u2014 syncs with your Reborn merchant account.",
   "version": "1.0.23",
   "apkFile": "reborn-pos-android.apk",
   "platform": "android",
-  "builtAt": null,
+  "builtAt": "2026-10-19T12:12:26Z",
   "signed": true
 }

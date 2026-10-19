@@ -702,6 +702,53 @@ if [[ ! -f "$BRIDGE_APK" ]] || ! head -c 2 "$BRIDGE_APK" | grep -q PK; then
   echo "WARNING: $BRIDGE_APK missing or not a valid APK (expected PK zip header)"
 fi
 
+echo "=== Build RebornPOS Android APK ==="
+POS_ANDROID_APK="$DOWNLOADS_DIR/reborn-pos-android.apk"
+POS_ANDROID_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/app/build.gradle.kts" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
+[[ -n "$POS_ANDROID_VERSION" ]] || POS_ANDROID_VERSION="0.0.0"
+POS_LP="$REPO_DIR/local.properties"
+HAS_POS_ADYEN_KEY=0
+if [[ -f "$POS_LP" ]] && grep -qE '^adyenSdkApiKey=' "$POS_LP" 2>/dev/null; then
+  HAS_POS_ADYEN_KEY=1
+fi
+if [[ "${SKIP_ANDROID_POS_BUILD:-0}" != "1" && "$HAS_POS_ADYEN_KEY" == "1" ]]; then
+  BUILT_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  if docker run --rm \
+    -e "ANDROID_SDK_ROOT=/opt/android-sdk-linux" \
+    -e "GRADLE_USER_HOME=/tmp/gradle-home" \
+    -v "$REPO_DIR:/project" \
+    -w /project \
+    mingc/android-build-box:latest \
+    bash -c 'set -euo pipefail
+      export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+      chmod +x ./gradlew
+      ./gradlew :app:assembleRelease --no-daemon --no-build-cache -g /tmp/gradle-home
+      test -f backend/public/downloads/reborn-pos-android.apk
+      head -c 2 backend/public/downloads/reborn-pos-android.apk | grep -q PK
+    '; then
+    printf '%s\n' \
+      "{" \
+      "  \"name\": \"reborn-pos-android\"," \
+      "  \"displayName\": \"RebornPOS (Android)\"," \
+      "  \"version\": \"${POS_ANDROID_VERSION}\"," \
+      "  \"apkFile\": \"reborn-pos-android.apk\"," \
+      "  \"platform\": \"android\"," \
+      "  \"builtAt\": \"${BUILT_AT}\"," \
+      "  \"signed\": true" \
+      "}" > "$DOWNLOADS_DIR/reborn-pos-android.json"
+    echo "RebornPOS Android APK ready: $POS_ANDROID_APK v${POS_ANDROID_VERSION}"
+  else
+    echo "WARNING: RebornPOS Android APK build failed — native POS download may 404 until CI artifact is published."
+  fi
+elif [[ "${SKIP_ANDROID_POS_BUILD:-0}" == "1" ]]; then
+  echo "SKIP_ANDROID_POS_BUILD=1 - using existing $POS_ANDROID_APK (if any)"
+else
+  echo "Skipping RebornPOS Android APK build (add adyenSdkApiKey to $POS_LP or publish CI artifact — see scripts/publish-reborn-pos-android-download.sh)"
+fi
+if [[ ! -f "$POS_ANDROID_APK" ]] || ! head -c 2 "$POS_ANDROID_APK" | grep -q PK; then
+  echo "WARNING: $POS_ANDROID_APK missing or not a valid APK"
+fi
+
 # Keep versioned copies of the current installers so Superadmin can list history.
 # Older reborn-print-bridge-*.apk / RebornPrint-*.apk / *-setup-*.exe files are left in place.
 archive_current_download() {
