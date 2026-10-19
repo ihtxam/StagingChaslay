@@ -36,8 +36,11 @@ import com.chaslay.pos.data.remote.dto.SyncModifierGroupDto
 import com.chaslay.pos.data.remote.dto.SyncProductDto
 import com.chaslay.pos.data.remote.dto.SyncVariantDto
 import com.chaslay.pos.data.repository.SettingsRepository
+import com.chaslay.pos.util.PosLocalPrefs
 import com.google.gson.JsonElement
 import com.chaslay.pos.data.repository.ReceiptPublicUrls
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import java.time.Instant
 import java.util.Calendar
 import javax.inject.Inject
@@ -54,6 +57,7 @@ enum class MenuSyncMode {
 
 @Singleton
 class MenuSyncRepository @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val syncApi: SyncApi,
     private val syncPreferences: SyncPreferences,
     private val syncApiKeyStore: SyncApiKeyStore,
@@ -223,7 +227,10 @@ class MenuSyncRepository @Inject constructor(
             vatNumber = dto.vatNumber?.takeIf { it.isNotBlank() } ?: current.vatNumber,
             takeawayVatRate = dto.taxTakeawayRate?.takeIf { it > 0.0 } ?: current.takeawayVatRate,
             dineInVatRate = dto.taxDineInRate?.takeIf { it > 0.0 } ?: current.dineInVatRate,
-            vatIncludedInPrice = dto.taxIncludedInPrice ?: current.vatIncludedInPrice,
+            vatIncludedInPrice = PosLocalPrefs.applyVatIncludedIfUserSet(
+                appContext,
+                dto.taxIncludedInPrice ?: current.vatIncludedInPrice
+            ),
             vatAfterDiscount = dto.vatAfterDiscount ?: current.vatAfterDiscount,
             defaultLanguage = dto.defaultLanguage?.takeIf { it.isNotBlank() } ?: current.defaultLanguage,
             receiptBaseUrl = dto.receiptBaseUrl?.takeIf { it.isNotBlank() }?.let { ReceiptPublicUrls.normalizeBase(it) }

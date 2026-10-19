@@ -48,6 +48,14 @@ class AuthViewModel @Inject constructor(
     /** True when finishing a cloud email login (replace local demo menu). */
     private var pendingPullCloudMenu: Boolean = false
 
+    fun tryAutoLoginWithPin(pin: String) {
+        viewModelScope.launch {
+            if (authRepository.pinMatchesActiveStaff(pin)) {
+                loginWithPin(pin)
+            }
+        }
+    }
+
     fun loginWithPin(pin: String) {
         viewModelScope.launch {
             val session = authRepository.loginWithPin(pin)

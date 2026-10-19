@@ -182,7 +182,7 @@ fun OrderHistoryScreen(
                     goodwillMethod
                 )
             },
-            onPrintReceipt = viewModel::printSelectedOrder
+            onPrintReceipt = viewModel::printLastRefundReceipt
         )
     }
 
@@ -672,7 +672,7 @@ private fun RecordsTableRow(
         )
         Row(modifier = Modifier.width(80.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                shortOrderId(order.transactionNumber),
+                shortOrderId(order.transactionNumber, order.notes),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
@@ -757,10 +757,17 @@ private fun StatusPill(text: String, color: Color, compact: Boolean = false) {
     }
 }
 
-private fun shortOrderId(number: String): String =
-    com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(number).ifBlank {
-        number.removePrefix("TX-")
+private fun shortOrderId(number: String, notes: String? = null): String {
+    val meta = com.chaslay.pos.util.parseOrderMetaFromNotes(notes)
+    return com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(
+        orderNumber = number,
+        orderDisplay = meta.ticketDisplay,
+        tabNumber = meta.tabNumber
+    ).ifBlank {
+        com.chaslay.pos.util.OrderNumberFormat.formatOrderNumberDisplay(number)
+            .ifBlank { number.removePrefix("TX-") }
     }
+}
 
 private fun orderTypeLabel(serviceType: ServiceType?): String = when (serviceType) {
     ServiceType.DINE_IN -> "DINE IN"

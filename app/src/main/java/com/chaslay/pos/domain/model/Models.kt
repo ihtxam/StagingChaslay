@@ -100,7 +100,14 @@ enum class PosMode(val displayName: String) {
 
     companion object {
         fun fromName(name: String?): PosMode =
-            entries.find { it.name == name } ?: RESTAURANT
+            entries.find { it.name.equals(name, ignoreCase = true) } ?: RESTAURANT
+
+        /** Merchant panel / sync checkout uses `retail` | `restaurant` (WebPOS parity). */
+        fun fromCheckoutValue(value: String?): PosMode? = when (value?.trim()?.lowercase()) {
+            "retail" -> RETAIL
+            "restaurant" -> RESTAURANT
+            else -> null
+        }
     }
 }
 
@@ -304,6 +311,50 @@ data class CartItem(
     fun hasModifierPopupContent(): Boolean =
         !isCombo && (modifiers.isNotEmpty() || addons.isNotEmpty() || variantName != null)
 
+    /** Indented cart / receipt modifier rows (WebPOS `- label`, no `1x` qty prefix). */
+    fun cartModifierRows(): List<CartModifierRow> {
+        val rows = mutableListOf<CartModifierRow>()
+        comboSelections.forEach { sel ->
+            val slot = sel.slotName.trim()
+            val product = sel.productName.trim()
+            val head = when {
+                slot.isNotBlank() && product.isNotBlank() -> "$slot: $product"
+                product.isNotBlank() -> product
+                slot.isNotBlank() -> slot
+                else -> null
+            }
+            head?.let { rows.add(CartModifierRow(it)) }
+            sel.modifiers.forEach { rows.add(CartModifierRow(it.name.trim())) }
+            sel.extras.forEach { extra ->
+                val name = extra.name.trim()
+                if (name.isNotBlank()) {
+                    rows.add(CartModifierRow(name, extra.price.takeIf { it > 0.0 }))
+                }
+            }
+        }
+        if (comboSelections.isEmpty()) {
+            modifiers.forEach { mod ->
+                mod.name.trim().takeIf { it.isNotBlank() }?.let { rows.add(CartModifierRow(it)) }
+            }
+            addons.forEach { addon ->
+                addon.name.trim().takeIf { it.isNotBlank() }?.let { name ->
+                    rows.add(CartModifierRow(name, addon.price.takeIf { it > 0.0 }))
+                }
+            }
+        } else {
+            modifiers.forEach { mod ->
+                mod.name.trim().takeIf { it.isNotBlank() }?.let { rows.add(CartModifierRow(it)) }
+            }
+            addons.forEach { addon ->
+                addon.name.trim().takeIf { it.isNotBlank() }?.let { name ->
+                    rows.add(CartModifierRow(name, addon.price.takeIf { it > 0.0 }))
+                }
+            }
+        }
+        if (rows.isNotEmpty()) return rows
+        return parseCartModifierRowsFromNotes(notes)
+    }
+
     fun freeformNotes(): String? {
         val generated = mutableSetOf<String>()
         modifiers.forEach { generated.add("${it.quantity}x ${it.name}") }
@@ -375,7 +426,9 @@ data class CartSummary(
     val subtotal: Double get() = items.sumOf { it.catalogLineSubtotal }
     val itemDiscountTotal: Double get() = items.sumOf { it.lineDiscount }
     val netSubtotal: Double get() = roundMoney((subtotal - itemDiscountTotal).coerceAtLeast(0.0))
-    private val rawTaxTotal: Double get() = items.sumOf { it.lineTax }
+    /** Use cart-level VAT mode so totals stay correct if line flags are stale. */
+    private val rawTaxTotal: Double
+        get() = items.sumOf { computeLineTax(it.lineSubtotal, it.taxRate, vatIncludedInPrice) }
     val discountValue: Double
         get() = resolveCartBillDiscountAmount(this)
     private val merchandiseBase: Double
@@ -485,6 +538,27 @@ data class ProductCustomizeState(
 data class SelectedModifier(val name: String, val quantity: Int = 1)
 
 data class SelectedAddon(val name: String, val price: Double, val quantity: Int = 1)
+
+data class CartModifierRow(
+    val label: String,
+    val price: Double? = null
+)
+
+private val cartNoteQtyPrefix = Regex("^\\d+x\\s+(.+)$", RegexOption.IGNORE_CASE)
+
+private fun parseCartModifierRowsFromNotes(notes: String?): List<CartModifierRow> {
+    if (notes.isNullOrBlank()) return emptyList()
+    val lines = notes.lines().map { it.trim() }.filter { it.isNotBlank() }
+    val startIndex = if (lines.firstOrNull() == COMBO_NOTES_MARKER) 1 else 0
+    return lines.drop(startIndex).mapNotNull { line ->
+        if (line.contains(':') && !cartNoteQtyPrefix.containsMatchIn(line)) {
+            CartModifierRow(line)
+        } else {
+            cartNoteQtyPrefix.find(line)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
+                ?.let { CartModifierRow(it) }
+        }
+    }
+}
 
 data class ComboSelection(
     val slotName: String,

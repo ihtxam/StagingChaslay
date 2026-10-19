@@ -77,7 +77,7 @@ class AdyenTerminalClient @Inject constructor() {
             val terminalId = normalizeTerminalId(settings.adyenTerminalId)
             val apiKey = settings.adyenApiKey.trim()
             val live = settings.adyenLiveEnvironment
-            val saleId = settings.adyenClientId.trim().ifBlank { "ChaslayPOS" }
+            val saleId = settings.adyenClientId.trim().ifBlank { "RebornPOS" }
 
             if (settings.adyenUseLegacyEndpoint) {
                 return@withContext testLegacyConnection(apiKey, live, saleId, terminalId)
@@ -235,7 +235,7 @@ class AdyenTerminalClient @Inject constructor() {
         val merchantAccount = settings.adyenMerchantAccount.trim()
         val terminalId = normalizeTerminalId(settings.adyenTerminalId)
         val apiKey = settings.adyenApiKey.trim()
-        val saleId = settings.adyenClientId.trim().ifBlank { "ChaslayPOS" }
+        val saleId = settings.adyenClientId.trim().ifBlank { "RebornPOS" }
         val live = settings.adyenLiveEnvironment
 
         val requestBody = buildPaymentRequestBody(
@@ -277,7 +277,7 @@ class AdyenTerminalClient @Inject constructor() {
         val merchantAccount = settings.adyenMerchantAccount.trim()
         val terminalId = normalizeTerminalId(settings.adyenTerminalId)
         val apiKey = settings.adyenApiKey.trim()
-        val saleId = settings.adyenClientId.trim().ifBlank { "ChaslayPOS" }
+        val saleId = settings.adyenClientId.trim().ifBlank { "RebornPOS" }
         val live = settings.adyenLiveEnvironment
         val requestBody = buildDisplayRequestBody(saleId, terminalId, outputXhtmlBase64)
         val body = requestBody.toRequestBody(jsonMediaType)
@@ -644,7 +644,7 @@ class AdyenTerminalClient @Inject constructor() {
         val merchantAccount = settings.adyenMerchantAccount.trim()
         val terminalId = normalizeTerminalId(settings.adyenTerminalId)
         val apiKey = settings.adyenApiKey.trim()
-        val saleId = settings.adyenClientId.trim().ifBlank { "ChaslayPOS" }
+        val saleId = settings.adyenClientId.trim().ifBlank { "RebornPOS" }
         val live = settings.adyenLiveEnvironment
 
         val requestBody = buildReversalRequestBody(
@@ -807,7 +807,7 @@ class AdyenTerminalClient @Inject constructor() {
         val merchantAccount = settings.adyenMerchantAccount.trim()
         val terminalId = normalizeTerminalId(settings.adyenTerminalId)
         val apiKey = settings.adyenApiKey.trim()
-        val saleId = settings.adyenClientId.trim().ifBlank { "ChaslayPOS" }
+        val saleId = settings.adyenClientId.trim().ifBlank { "RebornPOS" }
         val live = settings.adyenLiveEnvironment
 
         val requestBody = buildUnreferencedRefundRequestBody(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Android launcher icons from Chaslay POS logo (alpha-mask PNG)."""
+"""Build Android launcher icons from Reborn white logo PNG."""
 from __future__ import annotations
 
 import sys
@@ -9,7 +9,8 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "app/src/main/res"
-SOURCE = ROOT / "assets/chaslay_logo_pos.png"
+SOURCE = ROOT / "assets/reborn_logo_white.png"
+BURGUNDY = (0x80, 0x00, 0x20, 255)
 SIZES = {
     "mipmap-mdpi": 48,
     "mipmap-hdpi": 72,
@@ -68,7 +69,7 @@ def main() -> None:
     master_full = fit_square(full, 512, pad_ratio=0.06)
     master_fg = fit_square(fg, 512, pad_ratio=0.14)
 
-    master_full.save(drawable / "chaslay_logo.png")
+    master_full.save(drawable / "reborn_logo_white.png")
     master_fg.save(drawable / "ic_launcher_foreground.png")
 
     xml_fg = drawable / "ic_launcher_foreground.xml"
@@ -84,7 +85,7 @@ def main() -> None:
         print(f"Wrote {folder} ({px}px)")
 
     white_px = sum(1 for p in master_full.getdata() if p[0] > 50)
-    print(f"chaslay_logo.png white pixels: {white_px}")
+    print(f"reborn_logo_white.png white pixels: {white_px}")
     print("Done.")
 
 

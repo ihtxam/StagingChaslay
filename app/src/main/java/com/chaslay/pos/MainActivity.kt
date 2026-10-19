@@ -35,6 +35,8 @@ import com.chaslay.pos.ui.navigation.ChaslayNavHost
 import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.theme.ChaslayPosTheme
 import com.chaslay.pos.ui.theme.ProvideVectronTheme
+import com.chaslay.pos.ui.theme.ChaslayBrand
+import com.chaslay.pos.ui.theme.rebornLoginBackground
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -98,8 +100,13 @@ class MainActivity : AppCompatActivity() {
                     Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
                         when (licenseState.gateState) {
                             LicenseGateState.LOADING -> {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator()
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .rebornLoginBackground(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = ChaslayBrand.WarmWhite)
                                 }
                             }
                             LicenseGateState.NEEDS_ACTIVATION, LicenseGateState.EXPIRED -> {

@@ -9,9 +9,11 @@ import com.chaslay.pos.data.remote.dto.PaymentConfigResponse
 import com.chaslay.pos.data.remote.dto.PushTerminalItemDto
 import com.chaslay.pos.data.remote.dto.PushTerminalsRequest
 import com.chaslay.pos.data.remote.dto.SyncCheckoutDto
+import android.content.Context
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.sync.mergePosCheckoutSettings
 import com.chaslay.pos.sync.mergePosPrintSettings
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +21,7 @@ import kotlinx.coroutines.withContext
 
 @Singleton
 class TerminalSyncRepository @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val syncApi: SyncApi,
     private val settingsRepository: SettingsRepository,
     private val discountPresetDao: DiscountPresetDao,
@@ -97,7 +100,7 @@ class TerminalSyncRepository @Inject constructor(
                 terminals = listOf(
                     PushTerminalItemDto(
                         terminalId = terminalId,
-                        terminalName = "POS  $terminalId",
+                        terminalName = "POS ï¿½ $terminalId",
                         serialNumber = terminalId,
                         status = if (settings.adyenTerminalEnabled) "active" else "inactive"
                     )
@@ -162,7 +165,7 @@ class TerminalSyncRepository @Inject constructor(
         // coursesEnabled is managed in POS Settings ? General (not overwritten by panel sync).
 
         config.checkout?.let { checkout ->
-            merged = merged.mergePosCheckoutSettings(checkout)
+            merged = merged.mergePosCheckoutSettings(checkout, appContext)
         }
 
         config.receiptBaseUrl?.takeIf { it.isNotBlank() }?.let { url ->

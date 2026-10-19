@@ -1,16 +1,18 @@
 package com.chaslay.pos.domain
 
 import com.chaslay.pos.domain.model.CartSummary
+import com.chaslay.pos.domain.model.computeLineTax
 import kotlin.math.max
 import kotlin.math.min
 
 /** Merchandise base used for order-level % / fixed discount. */
 fun cartMerchandiseBase(cart: CartSummary): Double {
     return if (cart.vatIncludedInPrice) {
-        roundMoney(cart.netSubtotal + cart.let {
-            // raw tax before order discount adjustment
-            it.items.sumOf { item -> item.lineTax }
-        })
+        roundMoney(
+            cart.netSubtotal + cart.items.sumOf { item ->
+                computeLineTax(item.lineSubtotal, item.taxRate, cart.vatIncludedInPrice)
+            }
+        )
     } else {
         cart.netSubtotal
     }

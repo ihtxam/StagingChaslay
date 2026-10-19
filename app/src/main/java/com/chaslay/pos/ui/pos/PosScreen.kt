@@ -91,6 +91,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -342,6 +343,18 @@ fun PosScreen(
                 onCancel = viewModel::cancelTerminalPayment,
                 onRetry = { viewModel.retryTerminalPayment(activity) },
                 onClose = viewModel::dismissTerminalPaymentModal
+            )
+        }
+        if (state.showGiftCardPayDialog) {
+            GiftCardPayDialog(
+                amountDue = state.giftCardPayDue,
+                currencySymbol = state.currencySymbol,
+                busy = state.giftCardPayBusy,
+                lookupError = state.giftCardPayError,
+                lookedUpCard = state.giftCardPayLookedUpCard,
+                onDismiss = viewModel::dismissGiftCardPayDialog,
+                onLookup = viewModel::lookupGiftCardForPay,
+                onConfirm = viewModel::confirmGiftCardPayment
             )
         }
         return
@@ -650,7 +663,7 @@ fun PosScreen(
         )
     }
 
-    if (state.showTableTransferItemsDialog) {
+    if (state.showTableTransferItemsDialog && isTableServiceEnabled) {
         TableTransferItemsDialog(
             items = state.cart.items,
             selectedIds = state.tableTransferSelectedIds,
@@ -661,7 +674,7 @@ fun PosScreen(
         )
     }
 
-    if (state.showTableTransferDestDialog && state.tableTransferMode != null) {
+    if (state.showTableTransferDestDialog && state.tableTransferMode != null && isTableServiceEnabled) {
         val sourceTableId = state.cart.tableId
         TableTransferDestinationDialog(
             tables = state.tables.filter { it.id != sourceTableId },
@@ -2357,6 +2370,34 @@ private fun SwipeableCartRow(
 }
 
 @Composable
+private fun CartModifierLineRows(item: CartItem, currencySymbol: String) {
+    item.cartModifierRows().forEach { row ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, top = 1.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "- ${row.label}",
+                color = Color(0xFF666666),
+                fontSize = 11.sp,
+                maxLines = 2,
+                modifier = Modifier.weight(1f)
+            )
+            row.price?.let { price ->
+                Text(
+                    text = formatMoney(price, currencySymbol),
+                    color = Color(0xFF888888),
+                    fontSize = 11.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun VectronCartRow(
     item: CartItem,
     currencySymbol: String,
@@ -2403,6 +2444,16 @@ private fun VectronCartRow(
                 Text(it, color = Color(0xFF888888), fontSize = 11.sp)
             }
             item.variantName?.let { Text(it, color = Color(0xFF666666), fontSize = 11.sp) }
+            CartModifierLineRows(item = item, currencySymbol = currencySymbol)
+            item.freeformNotes()?.lines()?.map { it.trim() }?.filter { it.isNotBlank() }?.forEach { note ->
+                Text(
+                    text = note,
+                    color = Color(0xFF888888),
+                    fontSize = 11.sp,
+                    fontStyle = FontStyle.Italic,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+            }
             if (item.lineDiscount > 0) {
                 Text(
                     "-${formatMoney(item.lineDiscount, currencySymbol)}",
@@ -3691,8 +3742,8 @@ private fun TakeoutScheduleDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.88f),
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.94f),
             shape = RoundedCornerShape(12.dp),
             color = Color.White
         ) {
@@ -3874,8 +3925,8 @@ private fun ChooseCustomerDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .fillMaxHeight(0.9f),
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.94f),
             shape = RoundedCornerShape(12.dp),
             color = Color.White
         ) {

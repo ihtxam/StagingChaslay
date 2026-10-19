@@ -1,11 +1,16 @@
 package com.chaslay.pos.sync
 
+import android.content.Context
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.data.remote.dto.SyncCheckoutDto
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.util.PosLocalPrefs
 
 /** Apply merchant panel posCheckoutSettings onto local business settings. */
-fun BusinessSettingsEntity.mergePosCheckoutSettings(checkout: SyncCheckoutDto): BusinessSettingsEntity {
+fun BusinessSettingsEntity.mergePosCheckoutSettings(
+    checkout: SyncCheckoutDto,
+    context: Context? = null
+): BusinessSettingsEntity {
     val tipCsv = checkout.tipPresetsPercent
         .filter { it >= 0 }
         .take(8)
@@ -18,7 +23,13 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(checkout: SyncCheckoutDto): 
         .ifBlank { "10,20,50,100" }
     val step = checkout.roundingStep
     val roundingStep = if (step in listOf(0.0, 0.05, 0.1, 0.5, 1.0)) step else this.roundingStep
-    val requireTable = checkout.requireTableForDineIn ?: (this.posMode != PosMode.RETAIL)
+    val syncedMode = PosMode.fromCheckoutValue(checkout.posMode) ?: this.posMode
+    val requireTable = checkout.requireTableForDineIn ?: (syncedMode != PosMode.RETAIL)
+    val vatIncluded = if (context != null && PosLocalPrefs.hasUserSetVatIncluded(context)) {
+        vatIncludedInPrice
+    } else {
+        checkout.vatIncludedInPrice
+    }
     return copy(
         tipsEnabled = checkout.tipsEnabled,
         allowCustomTip = checkout.allowCustomTip,
@@ -29,11 +40,10 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(checkout: SyncCheckoutDto): 
         quickCashDenominationsCsv = densCsv,
         splitBillsEnabled = checkout.splitBillsEnabled,
         maxSplitParts = checkout.maxSplitParts.coerceIn(2, 20),
-        vatIncludedInPrice = checkout.vatIncludedInPrice,
+        vatIncludedInPrice = vatIncluded,
         vatAfterDiscount = checkout.vatAfterDiscount,
-        // Device POS mode is local — cloud restaurant default must not flip a retail till.
-        posMode = this.posMode,
-        tablesEnabled = if (this.posMode == PosMode.RETAIL) this.tablesEnabled else checkout.tablesEnabled,
+        posMode = syncedMode,
+        tablesEnabled = if (syncedMode == PosMode.RETAIL) false else checkout.tablesEnabled,
         retailDineInEnabled = checkout.retailDineInEnabled,
         retailTakeawayEnabled = checkout.retailTakeawayEnabled,
         retailDeliveryEnabled = checkout.retailDeliveryEnabled,

@@ -417,6 +417,7 @@
     <string name="daily_sales">Daily Sales</string>
     <string name="product_sales">Product Sales</string>
     <string name="user_performance">User Performance</string>
+    <string name="eod_include_products_on_print">Include product breakdown on EOD print</string>
     <string name="today_sales">Today\'s Sales</string>
     <string name="transactions">Transactions</string>
     <string name="cash_revenue">Cash Revenue</string>
@@ -748,6 +749,7 @@
     <string name="quick_edit">Quick edit</string>
 
     <!-- License -->
+    <string name="license_brand_domain">www.rebornsense.com</string>
     <string name="license_activate_title">Activate Reborn</string>
     <string name="license_activate_body">Your trial has ended. Enter the activation code we sent you. Internet is required once to activate this device.</string>
     <string name="license_expired_title">Subscription expired</string>

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Undo
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,6 +52,8 @@ fun EndOfDayReportScreen(
     currencySymbol: String,
     onPrint: () -> Unit,
     modifier: Modifier = Modifier,
+    includeProductsOnPrint: Boolean = true,
+    onIncludeProductsOnPrintChange: (Boolean) -> Unit = {},
     staffOptions: List<EodStaffOption> = emptyList(),
     selectedStaffId: Long? = null,
     onStaffSelected: (Long?) -> Unit = {},
@@ -75,6 +78,23 @@ fun EndOfDayReportScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         EndOfDayHeader(onPrint = onPrint)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 4.dp)
+                .clickable { onIncludeProductsOnPrintChange(!includeProductsOnPrint) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = includeProductsOnPrint,
+                onCheckedChange = onIncludeProductsOnPrintChange,
+            )
+            Text(
+                stringResource(R.string.eod_include_products_on_print),
+                fontSize = 13.sp,
+                color = ReportDashColors.TextPrimary,
+            )
+        }
         if (staffOptions.isNotEmpty()) {
             EodStaffSelector(
                 options = staffOptions,

@@ -147,10 +147,17 @@ class ReceiptRepository @Inject constructor(
         customerPhone: String?,
         customerAddress: String?
     ): ReceiptPublishResponse {
+        val txnNumber = orderNumber.trim().takeIf { it.isNotEmpty() }?.let { raw ->
+            if (raw.startsWith("#") || raw.startsWith("D-", ignoreCase = true)) {
+                "WP-${clientId.replace("-", "").take(16).uppercase()}"
+            } else {
+                raw
+            }
+        } ?: clientId
         return receiptApi.publishReceipt(
             ReceiptPublishRequest(
                 id = clientId,
-                transactionNumber = orderNumber,
+                transactionNumber = txnNumber,
                 total = total,
                 currency = currency,
                 paymentMethod = "invoice",

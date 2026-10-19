@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -311,35 +312,43 @@ fun CheckoutScreen(
                     }
                 )
             }
-            CheckoutMethodButton(
-                title = stringResource(R.string.pay_later),
-                icon = Icons.Default.Schedule,
-                selected = checkoutState.method == PaymentMethod.PAY_LATER,
-                accent = Color(0xFFF59E0B),
-                onClick = {
-                    tenderBuffer = ""
-                    onTenderAmount(0.0)
-                    onSelectMethod(PaymentMethod.PAY_LATER)
-                }
-            )
-            CheckoutMethodButton(
-                title = stringResource(R.string.invoice),
-                icon = Icons.Default.Description,
-                selected = checkoutState.method == PaymentMethod.INVOICE,
-                accent = Color(0xFF0EA5E9),
-                onClick = {
-                    tenderBuffer = ""
-                    onTenderAmount(0.0)
-                    onSelectMethod(PaymentMethod.INVOICE)
-                }
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                CheckoutMethodButton(
+                    title = stringResource(R.string.pay_later),
+                    icon = Icons.Default.Schedule,
+                    selected = checkoutState.method == PaymentMethod.PAY_LATER,
+                    accent = Color(0xFFF59E0B),
+                    onClick = {
+                        tenderBuffer = ""
+                        onTenderAmount(0.0)
+                        onSelectMethod(PaymentMethod.PAY_LATER)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                CheckoutMethodButton(
+                    title = stringResource(R.string.invoice),
+                    icon = Icons.Default.Description,
+                    selected = checkoutState.method == PaymentMethod.INVOICE,
+                    accent = Color(0xFF0EA5E9),
+                    onClick = {
+                        tenderBuffer = ""
+                        onTenderAmount(0.0)
+                        onSelectMethod(PaymentMethod.INVOICE)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
             if (giftCardsEnabled) {
                 CheckoutMethodButton(
                     title = stringResource(R.string.gift_card_pay),
                     icon = Icons.Default.Redeem,
                     selected = checkoutState.payWithGiftCard && checkoutState.giftCardRedeemAmount > 0.001,
                     accent = CheckoutTeal,
-                    onClick = onGiftCardPay
+                    onClick = onGiftCardPay,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -665,14 +674,15 @@ private fun CheckoutMethodButton(
     icon: ImageVector,
     selected: Boolean,
     accent: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val border = if (selected) accent else Color(0xFFD4D4D8)
     val bg = if (selected) accent.copy(alpha = 0.10f) else Color(0xFFF8FAFC)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
             .border(1.5.dp, border, RoundedCornerShape(12.dp))

@@ -135,6 +135,12 @@ class AuthRepository @Inject constructor(
         }
     }
 
+    suspend fun pinMatchesActiveStaff(pin: String): Boolean {
+        if (pin.length < com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH) return false
+        val hash = hash(pin)
+        return userDao.getPinUsers().any { it.pinHash == hash && it.isActive }
+    }
+
     suspend fun loginWithPin(pin: String): AuthSession? {
         val hash = hash(pin)
         userDao.getPinUsers().find { it.pinHash == hash && it.isActive }?.let { user ->
@@ -662,7 +668,8 @@ class TransactionRepository @Inject constructor(
     ): TransactionEntity {
         val settings = settingsDao.get() ?: BusinessSettingsEntity()
         val resolvedTransactionId = transactionId ?: UUID.randomUUID().toString()
-        val txNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() } ?: generateTransactionNumber()
+        val txNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
+            ?: guestFacingOrderNumberFallback()
         // Receipt URL is set only after a successful server publish — never pre-fill a local URL.
         val resolvedReceiptUrl = receiptUrl
 
@@ -1055,7 +1062,8 @@ class TransactionRepository @Inject constructor(
     ): TransactionEntity {
         val settings = settingsDao.get() ?: BusinessSettingsEntity()
         val transactionId = UUID.randomUUID().toString()
-        val txNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() } ?: generateTransactionNumber()
+        val txNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }
+            ?: guestFacingOrderNumberFallback()
         val subtotal = cart.subtotal
         val itemDiscount = cart.itemDiscountTotal
         val discountAmount = when {
@@ -1196,6 +1204,9 @@ class TransactionRepository @Inject constructor(
         return "TX-${formatter.format(System.currentTimeMillis())}-${(1000..9999).random()}"
     }
 
+    private fun guestFacingOrderNumberFallback(): String =
+        com.chaslay.pos.util.WalkInTicket.next().display
+
     private fun dayBounds(): Pair<Long, Long> {
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -1210,18 +1221,32 @@ class TransactionRepository @Inject constructor(
 
 @Singleton
 class SettingsRepository @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val settingsDao: BusinessSettingsDao,
     private val discountPresetDao: com.chaslay.pos.data.local.dao.DiscountPresetDao,
     private val printerConfigDao: com.chaslay.pos.data.local.dao.PrinterConfigDao
 ) {
+    private fun withLocalPreferences(settings: BusinessSettingsEntity): BusinessSettingsEntity =
+        settings.copy(
+            vatIncludedInPrice = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(
+                appContext,
+                settings.vatIncludedInPrice
+            )
+        )
+
     fun observeSettings(): Flow<BusinessSettingsEntity> =
-        settingsDao.observe().map { it ?: BusinessSettingsEntity() }
+        settingsDao.observe().map { withLocalPreferences(it ?: BusinessSettingsEntity()) }
 
     suspend fun getSettings(): BusinessSettingsEntity =
-        settingsDao.get() ?: BusinessSettingsEntity()
+        withLocalPreferences(settingsDao.get() ?: BusinessSettingsEntity())
 
     suspend fun saveSettings(settings: BusinessSettingsEntity) {
-        settingsDao.upsert(settings.copy(id = 1))
+        val vat = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetVatIncluded(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(appContext, settings.vatIncludedInPrice)
+        } else {
+            settings.vatIncludedInPrice
+        }
+        settingsDao.upsert(settings.copy(id = 1, vatIncludedInPrice = vat))
     }
 
     fun observeDiscountPresets(): Flow<List<com.chaslay.pos.domain.model.DiscountPreset>> =
@@ -1272,10 +1297,12 @@ class CartManager @Inject constructor(
     )
 
     private val _cart = MutableStateFlow(
-        cartPreferences.load() ?: CartSummary(
-            items = emptyList(),
-            serviceType = ServiceType.TAKEAWAY,
-            fulfillmentType = FulfillmentType.PICKUP
+        normalizeCartVatFlags(
+            cartPreferences.load() ?: CartSummary(
+                items = emptyList(),
+                serviceType = ServiceType.TAKEAWAY,
+                fulfillmentType = FulfillmentType.PICKUP
+            )
         )
     )
     val cart: Flow<CartSummary> = _cart.asStateFlow()
@@ -1541,15 +1568,15 @@ class CartManager @Inject constructor(
     }
 
     fun setVatIncludedInPrice(included: Boolean) {
-        _cart.update { cart ->
-            if (cart.vatIncludedInPrice == included && cart.items.all { it.vatIncludedInPrice == included }) {
-                cart
-            } else {
-                cart.copy(
-                    vatIncludedInPrice = included,
-                    items = cart.items.map { it.copy(vatIncludedInPrice = included) }
-                )
-            }
+        _cart.update { cart -> normalizeCartVatFlags(cart.copy(vatIncludedInPrice = included)) }
+    }
+
+    private fun normalizeCartVatFlags(cart: CartSummary): CartSummary {
+        val included = cart.vatIncludedInPrice
+        return if (cart.items.all { it.vatIncludedInPrice == included }) {
+            cart
+        } else {
+            cart.copy(items = cart.items.map { it.copy(vatIncludedInPrice = included) })
         }
     }
 
@@ -1774,13 +1801,22 @@ class CartManager @Inject constructor(
         }
     }
 
-    fun ensureOrderNumber(): String {
-        val current = _cart.value.orderNumber
-        if (!current.isNullOrBlank()) return current
-        val generated = "P-${System.currentTimeMillis().toString().takeLast(6)}"
-        _cart.update { it.copy(orderNumber = generated) }
-        return generated
+    fun ensureWalkInTicket(): String {
+        val current = _cart.value.orderNumber?.trim().orEmpty()
+        if (current.isNotEmpty() && !isOpaqueBackendOrderNumber(current)) {
+            return current
+        }
+        val ticket = com.chaslay.pos.util.WalkInTicket.next()
+        _cart.update { it.copy(orderNumber = ticket.display) }
+        return ticket.display
     }
+
+    fun ensureOrderNumber(): String = ensureWalkInTicket()
+
+    private fun isOpaqueBackendOrderNumber(value: String): Boolean =
+        value.startsWith("WP-", ignoreCase = true) ||
+            value.startsWith("DI-", ignoreCase = true) ||
+            value.startsWith("TX-", ignoreCase = true)
 }
 
 sealed class TableTransferResult {
@@ -1795,6 +1831,7 @@ sealed class TableTransferResult {
 
 @Singleton
 class TableOrderRepository @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val tableDao: RestaurantTableDao,
     private val floorDao: com.chaslay.pos.data.local.dao.TableFloorDao,
     private val floorPlanElementDao: com.chaslay.pos.data.local.dao.FloorPlanElementDao,
@@ -2326,7 +2363,8 @@ class TableOrderRepository @Inject constructor(
         val order = orderDao.getById(orderId) ?: return false
         val table = tableDao.getById(order.tableId) ?: return false
         val items = orderItemDao.getByOrder(orderId).map { it.toCartItem() }
-        val vatIncluded = settingsDao.get()?.vatIncludedInPrice ?: false
+        val rawVat = settingsDao.get()?.vatIncludedInPrice ?: false
+        val vatIncluded = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(appContext, rawVat)
         val vatAfterDiscount = settingsDao.get()?.vatAfterDiscount ?: true
         cartManager.loadTableOrder(
             tableId = table.id,
@@ -2402,6 +2440,7 @@ class TableOrderRepository @Inject constructor(
 
 @Singleton
 class HeldOrderRepository @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val heldOrderDao: com.chaslay.pos.data.local.dao.HeldOrderDao,
     private val heldOrderItemDao: com.chaslay.pos.data.local.dao.HeldOrderItemDao,
     private val cancelReasonDao: com.chaslay.pos.data.local.dao.CancelReasonDao,
@@ -2566,7 +2605,8 @@ class HeldOrderRepository @Inject constructor(
     suspend fun loadHeldOrderToCart(cartManager: CartManager, heldOrderId: String): Boolean {
         val order = heldOrderDao.getById(heldOrderId) ?: return false
         val items = heldOrderItemDao.getByOrder(heldOrderId).map { it.toCartItem() }
-        val vatIncluded = settingsDao.get()?.vatIncludedInPrice ?: false
+        val rawVat = settingsDao.get()?.vatIncludedInPrice ?: false
+        val vatIncluded = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(appContext, rawVat)
         if (order.tableId != null && order.tableName != null && order.tableOrderId != null) {
             cartManager.loadTableOrder(
                 tableId = order.tableId,
@@ -2692,6 +2732,14 @@ private fun buildOrderNotes(
     paymentTenders: List<PaymentTender> = emptyList()
 ): String? {
     val lines = mutableListOf<String>()
+    cart.orderNumber?.trim()?.takeIf { it.isNotBlank() }?.let { orderNo ->
+        if (!orderNo.startsWith("WP-", ignoreCase = true) &&
+            !orderNo.startsWith("DI-", ignoreCase = true) &&
+            !orderNo.startsWith("TX-", ignoreCase = true)
+        ) {
+            lines.add(com.chaslay.pos.util.formatOrderMetaTicketTag(orderNo))
+        }
+    }
     cart.cartNotes?.trim()?.takeIf { it.isNotBlank() }?.let { lines.add(it) }
     giftCardPaymentAmount?.takeIf { it > 0.0 }?.let { amount ->
         lines.add(String.format(Locale.US, "Gift card payment: %.2f", amount))

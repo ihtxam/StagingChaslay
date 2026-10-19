@@ -138,7 +138,7 @@ class UsbPrinterManager @Inject constructor(
     }
 
     fun buildTestPayload(): ByteArray {
-        val text = "ChaslayPOS\nUSB: é è ü Ø\n\n\n"
+        val text = "RebornPOS\nUSB: é è ü Ø\n\n\n"
         return byteArrayOf(0x1B, 0x40, 0x1B, 0x74, 0x02) +
             EscPosEncoder.encode(text) +
             byteArrayOf(0x1D, 0x56, 0x00)

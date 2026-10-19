@@ -22,7 +22,7 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <application
-        android:name=".RebornPosApp"
+        android:name=".ChaslayPosApp"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"

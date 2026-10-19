@@ -202,7 +202,16 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val settings = settingsRepository.getSettings()
+            var settings = settingsRepository.getSettings()
+            val rawVat = settings.vatIncludedInPrice
+            val localVat = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(
+                appContext,
+                rawVat
+            )
+            if (localVat != rawVat) {
+                settings = settings.copy(vatIncludedInPrice = localVat)
+                settingsRepository.saveSettings(settings)
+            }
             currentSettings = settings
             val sessionLanguage = sessionManager.appLanguage.first()
             val settingsLanguage = AppLanguage.fromCode(settings.defaultLanguage)
@@ -875,6 +884,7 @@ class SettingsViewModel @Inject constructor(
     fun updateTakeawayVatRate(value: String) = _uiState.update { it.copy(takeawayVatRate = value) }
     fun updateVatIncludedInPrice(value: Boolean) {
         _uiState.update { it.copy(vatIncludedInPrice = value) }
+        com.chaslay.pos.util.PosLocalPrefs.saveVatIncludedInPrice(appContext, value)
         saveSettings()
     }
     fun updateNewTableName(value: String) = _uiState.update { it.copy(newTableName = value) }

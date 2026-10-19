@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -375,6 +376,7 @@ fun RefundWizardDialog(
     var amountText by remember { mutableStateOf("") }
     var selectedReasonId by remember { mutableStateOf(RefundReasonLabels.options.first().id) }
     var customReason by remember { mutableStateOf("") }
+    var completedRefundAmount by remember { mutableDoubleStateOf(0.0) }
 
     val refundableItems = items.mapNotNull { item ->
         val left = (item.quantity - item.refundedQuantity).coerceAtLeast(0)
@@ -401,6 +403,36 @@ fun RefundWizardDialog(
             }
         }
         null -> 0.0
+    }
+
+    fun submitRefund() {
+        val reason = RefundReasonLabels.resolveReason(
+            languageCode,
+            selectedReasonId,
+            customReason
+        ).takeIf { it.isNotBlank() }
+        completedRefundAmount = previewAmount
+        when (RefundAmountTab.entries.find { it.index == amountTab }) {
+            RefundAmountTab.ENTIRE_BILL ->
+                onConfirm(maxAmount, true, emptyList(), reason, "referenced", "cash")
+            RefundAmountTab.BY_ARTICLE -> {
+                val picks = selectedQty.mapNotNull { (id, qty) ->
+                    if (qty > 0) id to qty else null
+                }
+                onConfirm(0.0, false, picks, reason, "referenced", "cash")
+            }
+            RefundAmountTab.CUSTOM_AMOUNT ->
+                onConfirm(
+                    amountText.toDoubleOrNull() ?: 0.0,
+                    false,
+                    emptyList(),
+                    reason,
+                    "referenced",
+                    "cash"
+                )
+            null -> Unit
+        }
+        step = RefundWizardStep.COMPLETED
     }
 
     Dialog(
@@ -607,7 +639,10 @@ fun RefundWizardDialog(
                             reasonOptions.forEach { (id, label) ->
                                 val selected = selectedReasonId == id
                                 Surface(
-                                    onClick = { selectedReasonId = id },
+                                    onClick = {
+                                        selectedReasonId = id
+                                        if (id != "other") submitRefund()
+                                    },
                                     shape = RoundedCornerShape(10.dp),
                                     color = if (selected) ChaslayTealLight else PageBg,
                                     border = androidx.compose.foundation.BorderStroke(
@@ -640,49 +675,36 @@ fun RefundWizardDialog(
                             )
                         }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(onClick = { step = RefundWizardStep.AMOUNT }, modifier = Modifier.weight(1f)) {
-                                Text(stringResource(R.string.back))
-                            }
-                            Button(
-                                onClick = {
-                                    val reason = RefundReasonLabels.resolveReason(
-                                        languageCode,
-                                        selectedReasonId,
-                                        customReason
-                                    ).takeIf { it.isNotBlank() }
-                                    when (RefundAmountTab.entries.find { it.index == amountTab }) {
-                                        RefundAmountTab.ENTIRE_BILL ->
-                                            onConfirm(maxAmount, true, emptyList(), reason, "referenced", "cash")
-                                        RefundAmountTab.BY_ARTICLE -> {
-                                            val picks = selectedQty.mapNotNull { (id, qty) ->
-                                                if (qty > 0) id to qty else null
-                                            }
-                                            onConfirm(0.0, false, picks, reason, "referenced", "cash")
-                                        }
-                                        RefundAmountTab.CUSTOM_AMOUNT ->
-                                            onConfirm(
-                                                amountText.toDoubleOrNull() ?: 0.0,
-                                                false,
-                                                emptyList(),
-                                                reason,
-                                                "referenced",
-                                                "cash"
-                                            )
-                                        null -> Unit
-                                    }
-                                    step = RefundWizardStep.COMPLETED
-                                },
-                                enabled = selectedReasonId != "other" || customReason.isNotBlank(),
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = ChaslayTeal)
+                        if (selectedReasonId == "other") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(stringResource(R.string.confirm_refund))
+                                OutlinedButton(
+                                    onClick = { step = RefundWizardStep.AMOUNT },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(stringResource(R.string.back))
+                                }
+                                Button(
+                                    onClick = { submitRefund() },
+                                    enabled = customReason.isNotBlank(),
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = ChaslayTeal)
+                                ) {
+                                    Text(stringResource(R.string.confirm_refund))
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { step = RefundWizardStep.AMOUNT },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                            ) {
+                                Text(stringResource(R.string.back))
                             }
                         }
                     }
@@ -707,7 +729,7 @@ fun RefundWizardDialog(
                                 fontSize = 20.sp
                             )
                             Text(
-                                formatMoney(previewAmount, currencySymbol),
+                                formatMoney(completedRefundAmount, currencySymbol),
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = ChaslayTeal

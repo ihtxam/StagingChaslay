@@ -276,7 +276,13 @@ fun UsersRolesSection(
                             FilterChip(
                                 selected = state.formRoleId == role.id,
                                 onClick = { viewModel.updateFormRoleId(role.id) },
-                                label = { Text(role.name) },
+                                label = {
+                                    Text(
+                                        role.name,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = AccentTeal,
                                     selectedLabelColor = Color.White

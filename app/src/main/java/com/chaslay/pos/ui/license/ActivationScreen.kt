@@ -3,8 +3,10 @@ package com.chaslay.pos.ui.license
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,10 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -28,17 +32,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.LicenseGateState
+import com.chaslay.pos.ui.theme.ChaslayBrand
+import com.chaslay.pos.ui.theme.rebornLoginBackground
 
 @Composable
 fun LicenseSettingsSection(
@@ -187,7 +197,11 @@ private fun LicenseActivationForm(
         Button(
             onClick = onActivate,
             modifier = Modifier.fillMaxWidth(),
-            enabled = activationCode.isNotBlank() && !isActivating
+            enabled = activationCode.isNotBlank() && !isActivating,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ChaslayBrand.Burgundy,
+                contentColor = ChaslayBrand.White
+            )
         ) {
             if (isActivating) {
                 CircularProgressIndicator(modifier = Modifier.height(20.dp))
@@ -205,45 +219,81 @@ fun ActivationScreen(
     val license by viewModel.licenseState.collectAsStateWithLifecycle()
     val form by viewModel.formState.collectAsStateWithLifecycle()
 
-    if (license.gateState == LicenseGateState.LOADING) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
-    val expired = license.gateState == LicenseGateState.EXPIRED
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .rebornLoginBackground()
     ) {
-        Text(
-            text = if (expired) stringResource(R.string.license_expired_title) else stringResource(R.string.license_activate_title),
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = if (expired) stringResource(R.string.license_expired_body) else stringResource(R.string.license_activate_body),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        LicenseActivationForm(
-            activationCode = form.activationCode,
-            deviceId = form.liveDeviceId.ifBlank { license.snapshot.deviceId },
-            isActivating = form.isActivating,
-            errorMessage = form.errorMessage,
-            merchantName = form.lookedUpMerchantName ?: license.snapshot.customerName,
-            isLookingUpMerchant = form.isLookingUpMerchant,
-            onCodeChange = viewModel::updateActivationCode,
-            onActivate = viewModel::activate
-        )
+        if (license.gateState == LicenseGateState.LOADING) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = ChaslayBrand.WarmWhite)
+            }
+            return
+        }
+
+        val expired = license.gateState == LicenseGateState.EXPIRED
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Image(
+                painter = painterResource(R.drawable.reborn_logo_white),
+                contentDescription = stringResource(R.string.app_name),
+                modifier = Modifier.height(96.dp),
+                contentScale = ContentScale.Fit
+            )
+            Text(
+                text = stringResource(R.string.app_name),
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = ChaslayBrand.WarmWhite
+            )
+            Text(
+                text = stringResource(R.string.license_brand_domain),
+                fontSize = 14.sp,
+                color = ChaslayBrand.WarmWhite.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 480.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(ChaslayBrand.WarmWhite)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = if (expired) stringResource(R.string.license_expired_title) else stringResource(R.string.license_activate_title),
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ChaslayBrand.Gray900
+                )
+                Text(
+                    text = if (expired) stringResource(R.string.license_expired_body) else stringResource(R.string.license_activate_body),
+                    color = ChaslayBrand.Gray600
+                )
+                LicenseActivationForm(
+                    activationCode = form.activationCode,
+                    deviceId = form.liveDeviceId.ifBlank { license.snapshot.deviceId },
+                    isActivating = form.isActivating,
+                    errorMessage = form.errorMessage,
+                    merchantName = form.lookedUpMerchantName ?: license.snapshot.customerName,
+                    isLookingUpMerchant = form.isLookingUpMerchant,
+                    onCodeChange = viewModel::updateActivationCode,
+                    onActivate = viewModel::activate
+                )
+            }
+        }
     }
 }
 
