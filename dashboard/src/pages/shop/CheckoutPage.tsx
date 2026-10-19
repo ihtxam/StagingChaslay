@@ -21,6 +21,7 @@ import {
   shopBasePath,
   shopCustomerAuthConfig,
   shopMenuApiPath,
+  shopMenuLandingPath,
   type ShopCheckoutDraft,
   type ShopChannel,
 } from '@/lib/shop-cart';
@@ -46,6 +47,7 @@ import { localizedShopCopy } from '@/lib/shop-site-settings';
 import { isLocale, shopLangStorageKey, useI18n } from '@/lib/i18n';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import { loadShopLocationSession } from '@/lib/shop-location-session';
 import ZipCityFields from '@/components/shop/ZipCityFields';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import { formatShopVacationMessage } from '@/lib/shop-ordering-status';
@@ -1347,7 +1349,10 @@ export default function CheckoutPage() {
       draft.paymentMethod === 'cash' ||
       (draft.channel === 'delivery' && draft.paymentMethod !== 'card'));
   const cardSelected = !payWithPoints && draft.paymentMethod === 'card';
-  const menuPath = `${shopBasePath(shopKey, locSlug)}/menu`;
+  const menuPath = shopMenuLandingPath(
+    shopKey,
+    loadShopLocationSession(shopKey)?.locationSlug ?? locSlug
+  );
   const accountPath = `${shopBasePath(shopKey, locSlug)}/account`.replace(/\/+/g, '/');
 
   const formatMoney = (amount: number) => formatShopMoney(amount, shopCurrency, locale);

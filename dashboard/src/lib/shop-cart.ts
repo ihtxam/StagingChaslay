@@ -460,6 +460,37 @@ export function resolveShopLocationSlug(params?: { locationSlug?: string }) {
   return params?.locationSlug?.trim() || null;
 }
 
+/** Path-based shop hub (order.rebornsense.com/{slug}, shop.chaslay.com/{slug}). */
+export function isShopPathHubRouting(): boolean {
+  return subdomainLabel() === 'shop';
+}
+
+/**
+ * Customer menu URL after location hub or deep links.
+ * On path hubs, keep /{slug}/menu — location lives in sessionStorage, not the URL.
+ */
+export function shopMenuLandingPath(shopKey: string, locationSlug?: string | null): string {
+  if (isShopPathHubRouting()) {
+    return `${shopBasePath(shopKey, null)}/menu`;
+  }
+  const loc = String(locationSlug || '').trim();
+  if (loc) return `${shopBasePath(shopKey, loc)}/menu`;
+  return `${shopBasePath(shopKey, null)}/menu`;
+}
+
+/** Resolve menu/catalog location: URL segment, then hub session, then optional fallback. */
+export function resolveShopMenuLocationSlug(
+  shopKey: string,
+  urlLocationSlug?: string | null,
+  sessionLocationSlug?: string | null
+): string | null {
+  const fromUrl = String(urlLocationSlug || '').trim();
+  if (fromUrl) return fromUrl;
+  const fromSession = String(sessionLocationSlug || '').trim();
+  if (fromSession) return fromSession;
+  return null;
+}
+
 const CUSTOMER_TOKEN_PREFIX = 'manupos_shop_customer:';
 
 export function loadCustomerToken(shopKey: string) {

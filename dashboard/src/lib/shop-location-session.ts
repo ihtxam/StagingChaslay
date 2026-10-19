@@ -35,6 +35,11 @@ export function saveShopLocationSession(shopKey: string, session: ShopLocationSe
   if (!shopKey) return;
   try {
     sessionStorage.setItem(key(shopKey), JSON.stringify(session));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('shop:location-session', { detail: { shopKey } })
+      );
+    }
   } catch {
     /* ignore */
   }
