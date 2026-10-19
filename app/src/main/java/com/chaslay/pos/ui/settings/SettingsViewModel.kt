@@ -89,6 +89,9 @@ data class SettingsUiState(
     val adyenLiveRegion: String = "EU",
     val adyenUseLegacyEndpoint: Boolean = false,
     val isTestingAdyen: Boolean = false,
+    val tapToPayReadiness: com.chaslay.pos.payment.taptopay.TapToPayReadiness =
+        com.chaslay.pos.payment.taptopay.TapToPayReadiness.NO_SDK,
+    val isActivatingTapToPay: Boolean = false,
     val roundingStep: String = "0.05",
     val cashEnabled: Boolean = true,
     val cardEnabled: Boolean = true,
@@ -190,7 +193,8 @@ class SettingsViewModel @Inject constructor(
     private val terminalSyncRepository: com.chaslay.pos.sync.TerminalSyncRepository,
     private val syncService: com.chaslay.pos.sync.SyncService,
     private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val tapToPayEngine: com.chaslay.pos.payment.taptopay.TapToPayEngine
 ) : ViewModel() {
 
     private val _launchOnlineSettingsIntent = Channel<Intent>(Channel.BUFFERED)
@@ -839,6 +843,33 @@ class SettingsViewModel @Inject constructor(
     fun updateAdyenLiveEnvironment(enabled: Boolean) = _uiState.update { it.copy(adyenLiveEnvironment = enabled) }
     fun updateAdyenLiveRegion(value: String) = _uiState.update { it.copy(adyenLiveRegion = value) }
     fun updateAdyenUseLegacyEndpoint(enabled: Boolean) = _uiState.update { it.copy(adyenUseLegacyEndpoint = enabled) }
+
+    /** Re-reads why Tap to Pay can or cannot run, so Settings shows a current status. */
+    fun refreshTapToPayReadiness() {
+        viewModelScope.launch {
+            val readiness = tapToPayEngine.readiness()
+            _uiState.update { it.copy(tapToPayReadiness = readiness) }
+        }
+    }
+
+    /**
+     * Runs Adyen device attestation from Settings. Deliberately not done during a
+     * sale: first-run attestation is slow and its failures look like a declined card.
+     */
+    fun activateTapToPay() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActivatingTapToPay = true) }
+            val result = tapToPayEngine.registerDevice()
+            val readiness = tapToPayEngine.readiness()
+            _uiState.update {
+                it.copy(
+                    isActivatingTapToPay = false,
+                    tapToPayReadiness = readiness,
+                    message = result.message,
+                )
+            }
+        }
+    }
 
     fun testAdyenConnection() {
         viewModelScope.launch {

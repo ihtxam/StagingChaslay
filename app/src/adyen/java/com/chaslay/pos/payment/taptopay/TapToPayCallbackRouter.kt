@@ -30,20 +30,32 @@ object TapToPayCallbackRouter {
 
     fun onSuccess(result: AdyenPaymentResult) {
         val deferred = pending.getAndSet(null) ?: return
-        deferred.complete(
-            if (result.success) {
-                PaymentResult.Success(
-                    reference = result.data?.takeIf { it.isNotBlank() },
-                    method = PaymentMethod.TAP_TO_PAY
-                )
-            } else {
-                PaymentResult.Failure("Tap to Pay was declined.")
-            }
-        )
+        deferred.complete(toPaymentResult(result.success, result.data))
     }
 
     fun onFailure(error: Throwable) {
         val deferred = pending.getAndSet(null) ?: return
         deferred.complete(PaymentResult.Failure(error.message ?: "Tap to Pay failed."))
+    }
+
+    /**
+     * Turns the SDK's serialized Terminal API response into a [PaymentResult].
+     *
+     * `data` is a response document, not a reference, so it is parsed rather than
+     * stored whole. The POI transaction id becomes the payment reference — the same
+     * value the networked terminal path records, and the one a refund needs. Order
+     * reconciliation does not depend on it: that uses the client reference sent to
+     * /sale, which the backend matches against orders.client_id.
+     */
+    internal fun toPaymentResult(success: Boolean, data: String?): PaymentResult {
+        if (!success) return PaymentResult.Failure("Tap to Pay was declined.")
+        val parsed = TapToPaySaleResponseParser.parse(data)
+        return PaymentResult.Success(
+            reference = parsed?.poiTransactionId?.takeIf { it.isNotBlank() },
+            poiTimestamp = parsed?.poiTimestamp,
+            method = PaymentMethod.TAP_TO_PAY,
+            adyenCustomerReceipt = parsed?.customerReceipt,
+            adyenCashierReceipt = parsed?.cashierReceipt,
+        )
     }
 }

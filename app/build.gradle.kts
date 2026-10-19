@@ -9,9 +9,29 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// The Adyen In-Person Payments SDK is served from a credentialed Maven repo (see
+// settings.gradle.kts), so it is only on the classpath when a POS Mobile API key is
+// present in local.properties. Tap to Pay sources therefore live in src/adyen and are
+// swapped for the inert src/noAdyen implementation when no key is configured — that
+// way the app still builds and runs without Adyen access.
+val adyenLocalProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val adyenEnv = (adyenLocalProps.getProperty("adyenEnv") ?: "test").lowercase()
+val hasAdyenTestKey = adyenLocalProps.getProperty("adyenSdkApiKey").orEmpty().isNotBlank()
+val hasAdyenLiveKey = adyenLocalProps.getProperty("adyenSdkApiKeyLive").orEmpty().isNotBlank()
+val hasAdyenSdk = (adyenEnv == "live" && hasAdyenLiveKey) || hasAdyenTestKey
+
 android {
     namespace = "com.chaslay.pos"
     compileSdk = 35
+
+    sourceSets {
+        getByName("main") {
+            java.srcDir(if (hasAdyenSdk) "src/adyen/java" else "src/noAdyen/java")
+        }
+    }
 
     defaultConfig {
         applicationId = "com.chaslay.pos"
@@ -33,6 +53,7 @@ android {
         buildConfigField("String", "SYNC_API_KEY", "\"ihtsham_76875hgf755rjgkjh7zrzrhvjhv\"")
         buildConfigField("int", "TRIAL_DAYS", "15")
         buildConfigField("int", "LICENSE_RENEWAL_WARNING_DAYS", "30")
+        buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -164,25 +185,19 @@ dependencies {
     // settings.gradle.kts. adyenEnv=test → -debug (Adyen TEST env);
     // adyenEnv=live → -release (Adyen LIVE env). See:
     // https://docs.adyen.com/point-of-sale/mobile-android/build/tap-to-pay
-    run {
-        val adyenProps = Properties().apply {
-            val f = rootProject.file("local.properties")
-            if (f.exists()) f.inputStream().use { load(it) }
-        }
+    // Absent a key, src/noAdyen is compiled instead and these are skipped.
+    if (hasAdyenSdk) {
         val adyenPosVersion = "2.16.0"
-        val adyenEnv = (adyenProps.getProperty("adyenEnv") ?: "test").lowercase()
-        val hasTestKey = adyenProps.getProperty("adyenSdkApiKey").orEmpty().isNotBlank()
-        val hasLiveKey = adyenProps.getProperty("adyenSdkApiKeyLive").orEmpty().isNotBlank()
-        if (adyenEnv == "live" && hasLiveKey) {
+        if (adyenEnv == "live" && hasAdyenLiveKey) {
             implementation("com.adyen.ipp:pos-mobile-release:$adyenPosVersion")
             implementation("com.adyen.ipp:payment-tap-to-pay-release:$adyenPosVersion")
-            implementation("androidx.startup:startup-runtime:1.1.1")
-        } else if (hasTestKey) {
+        } else {
             implementation("com.adyen.ipp:pos-mobile-debug:$adyenPosVersion")
             implementation("com.adyen.ipp:payment-tap-to-pay-debug:$adyenPosVersion")
-            implementation("androidx.startup:startup-runtime:1.1.1")
         }
     }
+    // Needed by the Adyen SDK's startup initializer; harmless otherwise.
+    implementation("androidx.startup:startup-runtime:1.1.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

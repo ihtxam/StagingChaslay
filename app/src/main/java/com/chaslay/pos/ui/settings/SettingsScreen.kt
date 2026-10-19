@@ -69,6 +69,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.BuildConfig
 import com.chaslay.pos.R
+import com.chaslay.pos.payment.taptopay.TapToPayReadiness
 import com.chaslay.pos.domain.model.AppLanguage
 import com.chaslay.pos.domain.model.CategoryPrintSetting
 import com.chaslay.pos.domain.model.PrintTarget
@@ -595,6 +596,49 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )
+            LaunchedEffect(state.tapToPayEnabled) { viewModel.refreshTapToPayReadiness() }
+
+            val readiness = state.tapToPayReadiness
+            // Device attestation runs here rather than inside a sale: it is slow on
+            // first run and its failures are indistinguishable from a declined card.
+            val statusText = when {
+                state.isActivatingTapToPay -> stringResource(R.string.tap_to_pay_activating)
+                readiness == TapToPayReadiness.NO_SDK ->
+                    stringResource(R.string.tap_to_pay_status_no_sdk)
+                readiness == TapToPayReadiness.OS_TOO_OLD ->
+                    stringResource(R.string.tap_to_pay_status_os_too_old)
+                readiness == TapToPayReadiness.NO_NFC ->
+                    stringResource(R.string.tap_to_pay_status_no_nfc)
+                readiness == TapToPayReadiness.NOT_SIGNED_IN ->
+                    stringResource(R.string.tap_to_pay_status_not_signed_in)
+                readiness == TapToPayReadiness.NOT_REGISTERED ->
+                    stringResource(R.string.tap_to_pay_status_not_registered)
+                else -> stringResource(R.string.tap_to_pay_status_ready)
+            }
+            Text(
+                statusText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (readiness == TapToPayReadiness.READY) colors.textPrimary
+                else colors.textSecondary
+            )
+            // Unavailable devices keep the button visible but disabled, so staff can
+            // read why tap payments will not work instead of guessing at checkout.
+            val canActivate = readiness == TapToPayReadiness.NOT_REGISTERED ||
+                readiness == TapToPayReadiness.READY
+            OutlinedButton(
+                onClick = viewModel::activateTapToPay,
+                enabled = canActivate && !state.isActivatingTapToPay,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    when {
+                        state.isActivatingTapToPay -> stringResource(R.string.tap_to_pay_activating)
+                        readiness == TapToPayReadiness.READY ->
+                            stringResource(R.string.tap_to_pay_reactivate)
+                        else -> stringResource(R.string.tap_to_pay_activate)
+                    }
+                )
+            }
         }
         SettingSwitch(stringResource(R.string.adyen_terminal), state.adyenTerminalEnabled, viewModel::updateAdyenEnabled)
         if (state.adyenTerminalEnabled) {

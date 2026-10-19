@@ -3,7 +3,7 @@ package com.chaslay.pos.payment
 import android.app.Activity
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.domain.model.PaymentMethod
-import com.chaslay.pos.payment.taptopay.AdyenTapToPayService
+import com.chaslay.pos.payment.taptopay.TapToPayEngine
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,14 +36,15 @@ class PaymentOrchestrator @Inject constructor(
         activity: Activity?,
         amount: Double,
         currencyCode: String,
-        settings: BusinessSettingsEntity
+        settings: BusinessSettingsEntity,
+        reference: String? = null
     ): PaymentResult {
         return when {
             settings.tapToPayEnabled -> {
                 if (activity == null) {
                     PaymentResult.Failure("Tap to Pay requires an active checkout screen.")
                 } else {
-                    tapToPayService.processPayment(activity, amount, currencyCode)
+                    tapToPayService.processPayment(activity, amount, currencyCode, reference)
                 }
             }
             settings.cardEnabled -> {
@@ -59,18 +60,23 @@ class PaymentOrchestrator @Inject constructor(
 
 @Singleton
 class TapToPayService @Inject constructor(
-    private val adyenTapToPayService: AdyenTapToPayService
+    private val tapToPayEngine: TapToPayEngine
 ) {
     /** True when the device has NFC. Real attestation is enforced by the SDK at run time. */
-    fun isSupported(): Boolean = adyenTapToPayService.isSupported()
+    fun isSupported(): Boolean = tapToPayEngine.isSupported()
 
     /**
      * Runs an Adyen Tap to Pay on Android (SoftPOS) sale — the phone's NFC reader
      * acts as the card terminal. Requires a Play-Integrity-compliant device and
      * Adyen SoftPOS enablement; returns [PaymentResult.Failure] otherwise.
      */
-    suspend fun processPayment(activity: Activity, amount: Double, currencyCode: String): PaymentResult =
-        adyenTapToPayService.processPayment(activity, amount, currencyCode)
+    suspend fun processPayment(
+        activity: Activity,
+        amount: Double,
+        currencyCode: String,
+        reference: String? = null
+    ): PaymentResult =
+        tapToPayEngine.processPayment(activity, amount, currencyCode, reference)
 }
 
 @Singleton

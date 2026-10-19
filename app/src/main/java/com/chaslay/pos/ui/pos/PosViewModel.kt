@@ -4388,7 +4388,14 @@ class PosViewModel @Inject constructor(
 
             val saleCartForPayment = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart else payable
             var pendingTransactionId: String? = null
-            if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
+            // Both Adyen paths publish the order before taking payment. Adyen reports the
+            // result asynchronously on the AUTHORISATION webhook, which reconciles by
+            // matching merchantReference against orders.client_id — so the order has to
+            // exist first, or the backend drops the payment with nothing to attach it to.
+            val needsPendingReceipt =
+                (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) ||
+                    (method == PaymentMethod.CARD && settings.tapToPayEnabled)
+            if (needsPendingReceipt) {
                 pendingTransactionId = UUID.randomUUID().toString()
                 if (isDeviceOnline()) {
                     runCatching {
@@ -4519,7 +4526,8 @@ class PosViewModel @Inject constructor(
                                     activity,
                                     cardCharge,
                                     settings.defaultCurrency,
-                                    settings
+                                    settings,
+                                    reference = pendingTransactionId
                                 )
                             }
                         }
@@ -4688,12 +4696,18 @@ class PosViewModel @Inject constructor(
                     }
                     val splitIndex = if (isEqualSplit) equalSplitPaid else null
                     val splitTotal = if (isEqualSplit) fullCart.splitCount else null
-                    val adyenCustomerReceipt = if (resolvedMethod == PaymentMethod.ADYEN_TERMINAL) {
+                    // Tap to Pay returns the same Terminal API receipt blocks as the
+                    // networked terminal, so both carry the card-scheme detail a card
+                    // receipt needs. Printing and reprints read these from the stored
+                    // transaction and are method-agnostic; this was the only gate.
+                    val carriesAdyenReceipt = resolvedMethod == PaymentMethod.ADYEN_TERMINAL ||
+                        resolvedMethod == PaymentMethod.TAP_TO_PAY
+                    val adyenCustomerReceipt = if (carriesAdyenReceipt) {
                         paymentResult.adyenCustomerReceipt
                     } else {
                         null
                     }
-                    val adyenCashierReceipt = if (resolvedMethod == PaymentMethod.ADYEN_TERMINAL) {
+                    val adyenCashierReceipt = if (carriesAdyenReceipt) {
                         paymentResult.adyenCashierReceipt
                     } else {
                         null
