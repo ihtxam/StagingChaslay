@@ -10410,8 +10410,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     if (!barcodeWedgeEnabled || !retailPreferScannerWedge || posView !== 'register') return;
-    const id = window.setTimeout(() => focusBarcodeWedgeCapture(), 150);
-    return () => window.clearTimeout(id);
+    const focus = () => focusBarcodeWedgeCapture();
+    const id0 = window.setTimeout(focus, 80);
+    const id1 = window.setTimeout(focus, 450);
+    const id2 = window.setTimeout(focus, 1_500);
+    return () => {
+      window.clearTimeout(id0);
+      window.clearTimeout(id1);
+      window.clearTimeout(id2);
+    };
   }, [barcodeWedgeEnabled, retailPreferScannerWedge, posView]);
 
   const submitRetailScan = useCallback(
