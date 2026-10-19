@@ -1160,6 +1160,8 @@ const en: Dict = {
   webPosLaunchCheckAgentOfflineAndroid:
     'Bridge Reborn is not running on this tablet (localhost:9101)',
   webPosLaunchCheckAgentOffline: 'Print Agent is not running on this device (localhost:9101)',
+  webPosLaunchCheckUsbPermission:
+    'USB permission required — allow Bridge Reborn to access the USB printer in the popup',
   orderAccepted: 'Order accepted',
   orderRejected: 'Order rejected',
   download: 'Download',
@@ -5929,6 +5931,8 @@ const fr: Dict = {
   webPosLaunchCheckAgentOfflineAndroid:
     'Bridge Reborn n’est pas démarré sur cette tablette (localhost:9101)',
   webPosLaunchCheckAgentOffline: 'Print Agent n’est pas démarré sur cet appareil (localhost:9101)',
+  webPosLaunchCheckUsbPermission:
+    'Autorisation USB requise — autorisez Bridge Reborn à accéder à l’imprimante dans la fenêtre système',
   orderAccepted: 'Commande acceptée',
   orderRejected: 'Commande refusée',
   download: 'Télécharger',
@@ -10780,6 +10784,8 @@ const de: Dict = {
   webPosLaunchCheckAgentOfflineAndroid:
     'Bridge Reborn läuft auf diesem Tablet nicht (localhost:9101)',
   webPosLaunchCheckAgentOffline: 'Print Agent läuft auf diesem Gerät nicht (localhost:9101)',
+  webPosLaunchCheckUsbPermission:
+    'USB-Berechtigung erforderlich — erlauben Sie Bridge Reborn den Zugriff im Systemdialog',
   orderAccepted: 'Bestellung angenommen',
   orderRejected: 'Bestellung abgelehnt',
   download: 'Herunterladen',

@@ -56,8 +56,10 @@ assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
 assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
 assert.match(launcher, /recordBlockedStartInCrashLog/);
-assert.match(gradle, /versionName = "0\.4\.41"/);
-assert.match(gradle, /versionCode = 59/);
+assert.match(gradle, /versionName = "0\.4\.42"/);
+assert.match(gradle, /versionCode = 60/);
+assert.match(manifest, /showWhenLocked="true"/);
+assert.match(attachActivity, /clearStalePendingRequest\(usb, maxAgeMs = 3_000L\)/);
 assert.match(usb, /UsbPlugPlay/);
 assert.match(boot, /BootAutostartNotifier/);
 assert.match(attachActivity, /shouldOfferUsbAccessOnAttach/);

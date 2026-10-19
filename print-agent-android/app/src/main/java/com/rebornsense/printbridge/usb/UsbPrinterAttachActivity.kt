@@ -1,7 +1,9 @@
 package com.rebornsense.printbridge.usb
 
 import android.content.Intent
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
@@ -18,9 +20,14 @@ import com.rebornsense.printbridge.PrintBridgeLauncher
  */
 class UsbPrinterAttachActivity : AppCompatActivity() {
     private var usbPromptIssued = false
+    private var targetDevice: UsbDevice? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
         if (!BridgeUserUnlock.isCredentialStorageReady(this)) {
             finish()
             return
@@ -40,7 +47,20 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         usbPromptIssued = false
+        targetDevice = null
     }
+
+    override fun onStart() {
+        super.onStart()
+        UsbHostPermissions.onPermissionSettled = permissionSettledListener
+    }
+
+    override fun onStop() {
+        UsbHostPermissions.onPermissionSettled = null
+        super.onStop()
+    }
+
+    private val permissionSettledListener: () -> Unit = { onPermissionBroadcastSettled() }
 
     override fun onResume() {
         super.onResume()
@@ -48,46 +68,77 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             finish()
             return
         }
-        val device = UsbBootPermissionNotifier.resolveDeviceFromIntent(this, intent)
-            ?: intent?.usbDeviceExtra()
+        val device = resolveTargetDevice()
         if (device == null || !UsbDeviceClassifier.shouldOfferUsbAccessOnAttach(applicationContext, device)) {
             Log.d(TAG, "Skip USB attach activity — not a printer candidate")
             finish()
             return
         }
+        targetDevice = device
         val usb = getSystemService(UsbManager::class.java) ?: run {
             finish()
             return
         }
-        UsbHostPermissions.clearStalePendingRequest(usb)
+        val systemHotPlug = intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED
+        if (systemHotPlug) {
+            // Boot/service may have left a stale pending flag without ever showing the dialog.
+            UsbHostPermissions.clearStalePendingRequest(usb, maxAgeMs = 3_000L)
+        } else {
+            UsbHostPermissions.clearStalePendingRequest(usb)
+        }
         UsbHostPermissions.recordGrantedDevices(this)
         if (usb.hasPermission(device)) {
             UsbBootPermissionNotifier.cancelNotification(this)
             onUsbAccessReady(skipMainActivity = true)
             return
         }
-        val systemHotPlug = intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED
         if (!systemHotPlug && UsbAttachPromptGuard.shouldSuppressPermissionDialog(this, device)) {
             finish()
             return
         }
         if (UsbHostPermissions.isRequestPending()) {
-            finish()
+            Log.d(TAG, "USB permission dialog already pending — waiting for user")
             return
         }
-        if (!usbPromptIssued) {
+        schedulePermissionPrompt(device, systemHotPlug)
+    }
+
+    private fun schedulePermissionPrompt(device: UsbDevice, systemHotPlug: Boolean) {
+        if (usbPromptIssued) return
+        window?.decorView?.post {
+            if (isFinishing || isDestroyed) return@post
+            val usb = getSystemService(UsbManager::class.java) ?: return@post
+            val current = resolveTargetDevice() ?: device
+            if (usb.hasPermission(current)) {
+                onUsbAccessReady(skipMainActivity = true)
+                return@post
+            }
+            if (UsbHostPermissions.isRequestPending()) return@post
             usbPromptIssued = true
             if (!systemHotPlug) {
-                UsbAttachPromptGuard.markPromptIssued(this, device)
+                UsbAttachPromptGuard.markPromptIssued(this, current)
             }
-            if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
-                if (usb.hasPermission(device)) {
+            if (!UsbHostPermissions.requestPermissionForDevice(this, current)) {
+                if (usb.hasPermission(current)) {
                     onUsbAccessReady(skipMainActivity = true)
                 }
             }
-            return
         }
-        finish()
+    }
+
+    private fun onPermissionBroadcastSettled() {
+        if (isFinishing || isDestroyed) return
+        val device = resolveTargetDevice() ?: return
+        val usb = getSystemService(UsbManager::class.java) ?: return
+        if (usb.hasPermission(device)) {
+            onUsbAccessReady(skipMainActivity = true)
+        }
+    }
+
+    private fun resolveTargetDevice(): UsbDevice? {
+        return UsbBootPermissionNotifier.resolveDeviceFromIntent(this, intent)
+            ?: intent?.usbDeviceExtra()
+            ?: targetDevice
     }
 
     private fun onUsbAccessReady(skipMainActivity: Boolean = false) {

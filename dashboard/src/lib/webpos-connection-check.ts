@@ -3,6 +3,8 @@ import {
   isConfiguredPrinterMissing,
   listAgentPrinters,
   probePrintAgentHealth,
+  requestBridgeUsbPermission,
+  resolveLivePrinterName,
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { probeDeviceBridgeHealth, requestBridgeRebornAutostart } from '@/lib/device-bridge';
@@ -64,6 +66,19 @@ function resolveActiveTerminalId(
   return active[0]?.terminalId || '';
 }
 
+function configuredUsbLacksPermission(
+  printSettings: PosPrintSettingsClient | null,
+  role: 'receipt' | 'kitchen',
+  livePrinters: AgentPrinter[]
+): boolean {
+  const targets = printersForRole(printSettings, role);
+  return targets.some((target) => {
+    const resolved = resolveLivePrinterName(target.name, livePrinters);
+    const row = livePrinters.find((p) => p.name === resolved);
+    return row?.connectionType === 'usb' && row.hasPermission === false;
+  });
+}
+
 function checkRolePrinters(
   role: 'receipt' | 'kitchen',
   printSettings: PosPrintSettingsClient | null,
@@ -81,6 +96,13 @@ function checkRolePrinters(
         role === 'receipt'
           ? 'No receipt printer configured — check Settings → Printers'
           : 'No kitchen printer configured — check Settings → Printers',
+    };
+  }
+  if (configuredUsbLacksPermission(printSettings, role, livePrinters)) {
+    return {
+      status: 'error',
+      message: 'USB permission required — allow in the Bridge popup',
+      messageKey: 'webPosLaunchCheckUsbPermission',
     };
   }
   const missing = targets.filter((t) =>
@@ -164,6 +186,7 @@ async function probeBridgeHealthFast(androidProbe: boolean): Promise<{
   ok: boolean;
   version?: string;
   platform?: string;
+  usbPermissionRequired?: boolean;
 }> {
   if (!androidProbe) {
     return getPrintAgentHealth().catch(() => ({ ok: false as const }));
@@ -232,6 +255,10 @@ export async function runWebPosConnectionChecks(opts: {
 
   let livePrinters: AgentPrinter[] = [];
   if (health.ok) {
+    if (androidProbe && health.usbPermissionRequired) {
+      await requestBridgeUsbPermission().catch(() => false);
+      await sleep(1_200);
+    }
     livePrinters = await listAgentPrinters().catch(() => []);
   }
 

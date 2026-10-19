@@ -141,9 +141,11 @@ object UsbBootPermissionNotifier {
                     .bigText(app.getString(R.string.usb_permission_notification_body, label)),
             )
             .setContentIntent(launch)
+            .setFullScreenIntent(launch, true)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
         app.getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification)
     }

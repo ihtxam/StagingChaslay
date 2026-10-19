@@ -111,10 +111,24 @@ class BridgeHttpServer(
                         .put("isDefault", ep.isDefault)
                         .put("connectionType", ep.connectionType)
                         .put("driver", ep.driverKey)
+                        .put(
+                            "hasPermission",
+                            ep.connectionType != "usb" || ep.meta["hasPermission"] == "true",
+                        )
                 }
                 val arr = JSONArray()
                 printers.forEach { arr.put(it) }
                 jsonResponse(JSONObject().put("printers", arr))
+            }
+
+            uri == "/usb/request-permission" && method == Method.POST -> {
+                val launched = UsbPlugPlay.promptForMissingPrinter(appContext)
+                jsonResponse(
+                    JSONObject()
+                        .put("ok", true)
+                        .put("launched", launched)
+                        .put("usbPermissionRequired", registry.usbPermissionPending(appContext)),
+                )
             }
 
             uri == "/print/niimbot-label" && method == Method.POST -> {
