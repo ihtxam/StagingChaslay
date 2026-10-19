@@ -94,7 +94,15 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             onUsbAccessReady(skipMainActivity = true)
             return
         }
-        Log.i(TAG, "USB permission missing — post notification (no auto MainActivity)")
+        val userTappedAllow =
+            intent?.action == UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION ||
+                UsbPermissionUi.isPermissionPromptAction(intent?.action)
+        if (userTappedAllow || systemHotPlug) {
+            Log.i(TAG, "USB permission missing — showing system allow dialog (user-facing)")
+            schedulePermissionPrompt(device, systemHotPlug)
+            return
+        }
+        Log.i(TAG, "USB permission missing — post notification (background)")
         UsbPlugPlay.promptForMissingPrinter(this, device, allowForegroundActivity = false)
         finish()
     }

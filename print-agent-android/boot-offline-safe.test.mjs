@@ -56,8 +56,13 @@ assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
 assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
 assert.match(launcher, /recordBlockedStartInCrashLog/);
-assert.match(gradle, /versionName = "0\.4\.45"/);
-assert.match(gradle, /versionCode = 63/);
+assert.match(gradle, /versionName = "0\.4\.46"/);
+assert.match(gradle, /versionCode = 64/);
+assert.match(attachActivity, /schedulePermissionPrompt/);
+assert.match(
+  mainActivity,
+  /onResume\(\)[\s\S]*tryRunUsbPermissionLaunch\(\)/,
+);
 assert.match(mainActivity, /EXTRA_REQUEST_USB_PERMISSION/);
 assert.match(readFileSync(join(src, 'usb/UsbPlugPlay.kt'), 'utf8'), /allowForegroundActivity/);
 assert.doesNotMatch(boot, /scheduleUsbPermissionPrompts/);
