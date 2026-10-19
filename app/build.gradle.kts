@@ -55,10 +55,21 @@ android {
                 keyAlias = project.findProperty("RELEASE_KEY_ALIAS") as String?
                 keyPassword = project.findProperty("RELEASE_KEY_PASSWORD") as String?
             } else {
-                storeFile = signingConfigs.getByName("debug").storeFile
-                storePassword = signingConfigs.getByName("debug").storePassword
-                keyAlias = signingConfigs.getByName("debug").keyAlias
-                keyPassword = signingConfigs.getByName("debug").keyPassword
+                val debugKs = sequenceOf(
+                    File(System.getProperty("user.home"), ".android/debug.keystore"),
+                    File(System.getProperty("user.home"), ".config/.android/debug.keystore"),
+                ).firstOrNull { it.isFile }
+                if (debugKs != null) {
+                    storeFile = debugKs
+                    storePassword = "android"
+                    keyAlias = "androiddebugkey"
+                    keyPassword = "android"
+                } else {
+                    storeFile = signingConfigs.getByName("debug").storeFile
+                    storePassword = signingConfigs.getByName("debug").storePassword
+                    keyAlias = signingConfigs.getByName("debug").keyAlias
+                    keyPassword = signingConfigs.getByName("debug").keyPassword
+                }
             }
         }
     }

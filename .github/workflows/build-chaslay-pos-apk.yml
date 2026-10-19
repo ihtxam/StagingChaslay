@@ -53,14 +53,16 @@ jobs:
 
       - name: Ensure debug keystore for release signing fallback
         run: |
-          mkdir -p "$HOME/.android"
-          if [[ ! -f "$HOME/.android/debug.keystore" ]]; then
-            keytool -genkeypair -v \
-              -keystore "$HOME/.android/debug.keystore" \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Chaslay POS,O=Reborn,C=CH"
-          fi
+          mkdir -p "$HOME/.android" "$HOME/.config/.android"
+          for ks in "$HOME/.android/debug.keystore" "$HOME/.config/.android/debug.keystore"; do
+            if [[ ! -f "$ks" ]]; then
+              keytool -genkeypair -v \
+                -keystore "$ks" \
+                -storepass android -alias androiddebugkey -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Chaslay POS,O=Reborn,C=CH"
+            fi
+          done
 
       - name: Build release APK
         run: |
