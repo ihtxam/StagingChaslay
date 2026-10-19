@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -103,6 +104,7 @@ fun TablePlanDesignerScreen(
 }
 
 /** Embedded designer for Settings → Tables (no second scaffold). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TablePlanDesignerContent(
     viewModel: TablePlanViewModel = hiltViewModel(),
