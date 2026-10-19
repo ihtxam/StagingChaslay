@@ -61,6 +61,10 @@ assert.match(gradle, /versionCode = 63/);
 assert.match(mainActivity, /EXTRA_REQUEST_USB_PERMISSION/);
 assert.match(readFileSync(join(src, 'usb/UsbPlugPlay.kt'), 'utf8'), /allowForegroundActivity/);
 assert.doesNotMatch(boot, /scheduleUsbPermissionPrompts/);
+assert.doesNotMatch(
+  readFileSync(join(src, 'usb/UsbBootPermissionNotifier.kt'), 'utf8'),
+  /setFullScreenIntent/,
+);
 assert.match(manifest, /showWhenLocked="true"/);
 assert.match(attachActivity, /clearStalePendingRequest\(usb, maxAgeMs = 3_000L\)/);
 assert.match(usb, /UsbPlugPlay/);
