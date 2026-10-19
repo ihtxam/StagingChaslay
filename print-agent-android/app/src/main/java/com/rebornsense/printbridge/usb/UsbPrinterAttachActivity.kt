@@ -94,20 +94,9 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             onUsbAccessReady(skipMainActivity = true)
             return
         }
-        Log.i(TAG, "USB permission missing — open MainActivity for system dialog")
-        if (UsbPermissionUi.launchMainActivityForUsbPermission(this, device, minimizeAfter = true)) {
-            finish()
-            return
-        }
-        if (!systemHotPlug && UsbAttachPromptGuard.shouldSuppressPermissionDialog(this, device)) {
-            finish()
-            return
-        }
-        if (UsbHostPermissions.isRequestPending()) {
-            Log.d(TAG, "USB permission dialog already pending — waiting for user")
-            return
-        }
-        schedulePermissionPrompt(device, systemHotPlug)
+        Log.i(TAG, "USB permission missing — post notification (no auto MainActivity)")
+        UsbPlugPlay.promptForMissingPrinter(this, device, allowForegroundActivity = false)
+        finish()
     }
 
     private fun schedulePermissionPrompt(device: UsbDevice, systemHotPlug: Boolean) {

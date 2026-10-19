@@ -29,6 +29,11 @@ object UsbPermissionUi {
         return launchMainActivityForUsbPermission(context, device, minimizeAfter = true)
     }
 
+    /** Background-safe: notification only — never start MainActivity. */
+    fun promptViaNotificationOnly(context: Context, device: UsbDevice) {
+        UsbBootPermissionNotifier.postPermissionNotificationForDevice(context.applicationContext, device)
+    }
+
     fun launchMainActivityForUsbPermission(
         context: Context,
         device: UsbDevice,

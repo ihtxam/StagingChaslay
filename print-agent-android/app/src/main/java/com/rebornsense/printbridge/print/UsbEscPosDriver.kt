@@ -84,6 +84,7 @@ class UsbEscPosDriver : PrinterDriver {
                     com.rebornsense.printbridge.usb.UsbPlugPlay.promptForMissingPrinter(
                         context,
                         usbDevice,
+                        allowForegroundActivity = false,
                     )
                 }
                 return Result.failure(

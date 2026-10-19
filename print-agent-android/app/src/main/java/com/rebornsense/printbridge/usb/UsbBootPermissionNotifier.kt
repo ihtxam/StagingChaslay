@@ -46,10 +46,6 @@ object UsbBootPermissionNotifier {
             )
             return
         }
-        if (UsbPermissionUi.launchPermissionPrompt(context, device)) {
-            UsbAttachPromptGuard.markPromptIssued(context, device)
-            return
-        }
         if (alreadyNotifiedThisBoot(context)) return
         postPermissionNotification(context, device)
         markNotifiedThisBoot(context)

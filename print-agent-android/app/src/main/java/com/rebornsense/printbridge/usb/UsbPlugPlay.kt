@@ -8,7 +8,7 @@ import com.rebornsense.printbridge.print.PrinterEndpoint
 
 /**
  * WebPOS prints from a background service — the system USB allow dialog must be
- * launched from an Activity or a high-priority notification the user taps once.
+ * launched from an Activity the user chose to open, not from boot timers.
  */
 object UsbPlugPlay {
     private const val TAG = "UsbPlugPlay"
@@ -25,8 +25,16 @@ object UsbPlugPlay {
         return UsbPermissionPicker.pickBest(context, missingPrinterDevices(context))
     }
 
-    /** Launch permission UI or post a tap-to-allow notification. */
-    fun promptForMissingPrinter(context: Context, preferred: UsbDevice? = null): Boolean {
+    /**
+     * @param allowForegroundActivity true only when the user explicitly opened Bridge / tapped
+     *   "Allow USB" in WebPOS. Background paths must use notification only.
+     */
+    fun promptForMissingPrinter(
+        context: Context,
+        preferred: UsbDevice? = null,
+        allowForegroundActivity: Boolean = false,
+        userInitiated: Boolean = false,
+    ): Boolean {
         val app = context.applicationContext
         val device = preferred?.takeIf { dev ->
             val usb = app.getSystemService(UsbManager::class.java)
@@ -36,8 +44,12 @@ object UsbPlugPlay {
             Log.d(TAG, "No missing USB printer permission to prompt for")
             return false
         }
-        Log.i(TAG, "Prompt USB permission for ${device.vendorId}:${device.productId}")
-        if (UsbPermissionUi.launchPermissionPrompt(app, device)) {
+        Log.i(TAG, "Prompt USB permission for ${device.vendorId}:${device.productId} foreground=$allowForegroundActivity")
+        if (
+            allowForegroundActivity &&
+            UsbForegroundPromptGate.launchMainActivity(userInitiated) &&
+            UsbPermissionUi.launchMainActivityForUsbPermission(app, device, minimizeAfter = userInitiated)
+        ) {
             UsbAttachPromptGuard.markPromptIssued(app, device)
             return true
         }

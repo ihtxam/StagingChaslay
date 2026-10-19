@@ -7,11 +7,7 @@ import {
   resolveLivePrinterName,
   type AgentPrinter,
 } from '@/lib/print-agent';
-import {
-  probeDeviceBridgeHealth,
-  requestBridgeRebornAutostart,
-  requestBridgeUsbPermissionActivity,
-} from '@/lib/device-bridge';
+import { probeDeviceBridgeHealth, requestBridgeRebornAutostart } from '@/lib/device-bridge';
 import { printersForRole, type PosPrintSettingsClient } from '@/lib/webpos-receipt';
 
 export type CheckStatus = 'pending' | 'checking' | 'ok' | 'warn' | 'error' | 'skipped';
@@ -261,25 +257,7 @@ export async function runWebPosConnectionChecks(opts: {
 
   let livePrinters: AgentPrinter[] = [];
   if (health.ok) {
-    if (androidProbe && health.usbPermissionRequired) {
-      requestBridgeUsbPermissionActivity();
-      await requestBridgeUsbPermission().catch(() => false);
-      for (let attempt = 0; attempt < 10; attempt++) {
-        await sleep(attempt === 0 ? 800 : 1_500);
-        livePrinters = await listAgentPrinters().catch(() => []);
-        const receiptNeedsUsb = configuredUsbLacksPermission(opts.printSettings, 'receipt', livePrinters);
-        const kitchenNeedsUsb = configuredUsbLacksPermission(opts.printSettings, 'kitchen', livePrinters);
-        if (!receiptNeedsUsb && !kitchenNeedsUsb) break;
-        if (attempt === 1 || attempt === 3 || attempt === 6) {
-          requestBridgeUsbPermissionActivity();
-        }
-        if (attempt === 2 || attempt === 5 || attempt === 8) {
-          await requestBridgeUsbPermission().catch(() => false);
-        }
-      }
-    } else {
-      livePrinters = await listAgentPrinters().catch(() => []);
-    }
+    livePrinters = await listAgentPrinters().catch(() => []);
   }
 
   const bridge =

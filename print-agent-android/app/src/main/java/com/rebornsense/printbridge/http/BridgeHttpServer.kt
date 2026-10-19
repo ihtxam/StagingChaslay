@@ -122,7 +122,11 @@ class BridgeHttpServer(
             }
 
             uri == "/usb/request-permission" && method == Method.POST -> {
-                val launched = UsbPlugPlay.promptForMissingPrinter(appContext)
+                val launched = UsbPlugPlay.promptForMissingPrinter(
+                    appContext,
+                    allowForegroundActivity = true,
+                    userInitiated = true,
+                )
                 jsonResponse(
                     JSONObject()
                         .put("ok", true)
@@ -203,7 +207,11 @@ class BridgeHttpServer(
                         Response.Status.BAD_REQUEST
                     )
                 if (UsbPlugPlay.endpointNeedsUsbPermission(appContext, endpoint)) {
-                    UsbPlugPlay.promptForMissingPrinter(appContext)
+                    UsbPlugPlay.promptForMissingPrinter(
+                        appContext,
+                        allowForegroundActivity = true,
+                        userInitiated = true,
+                    )
                     return jsonResponse(
                         JSONObject()
                             .put("ok", false)

@@ -242,7 +242,12 @@ class MainActivity : AppCompatActivity() {
                 return@post
             }
             if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
-                com.rebornsense.printbridge.usb.UsbPlugPlay.promptForMissingPrinter(this, device)
+                UsbBootPermissionNotifier.postPermissionNotificationForDevice(this, device)
+            }
+            if (usbPermissionThenMinimize) {
+                window.decorView.postDelayed({
+                    if (!isFinishing && !isDestroyed) moveTaskToBack(true)
+                }, 500L)
             }
         }
     }
@@ -292,10 +297,6 @@ class MainActivity : AppCompatActivity() {
         dropUnpluggedUsbFromList()
         if (runtimePermissionsResolved) {
             refreshServiceStatusReadOnly(scanPrinters = true)
-            runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
-            if (!UsbHostPermissions.requestNextMissingPermission(this)) {
-                runCatching { com.rebornsense.printbridge.usb.UsbPlugPlay.promptForMissingPrinter(this) }
-            }
             tryRunUsbPermissionLaunch()
         }
     }

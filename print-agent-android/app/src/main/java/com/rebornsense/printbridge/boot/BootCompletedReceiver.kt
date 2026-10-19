@@ -8,8 +8,6 @@ import android.os.Looper
 import com.rebornsense.printbridge.BridgeSafeStart
 import com.rebornsense.printbridge.BridgeUserUnlock
 import com.rebornsense.printbridge.PrintBridgeLauncher
-import com.rebornsense.printbridge.usb.UsbPlugPlay
-
 /**
  * Starts the print bridge foreground service after device reboot or app update
  * so WebPOS can reach localhost:9101 without opening the app manually.
@@ -51,7 +49,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 )
                 // Nebullus Gemini / Android 15 hubs: USB + notification grants often land after 20–40s.
                 handler.postDelayed({ startBridgeIfReady(appContext) }, 25_000L)
-                scheduleUsbPermissionPrompts(appContext, handler)
                 handler.postDelayed(
                     {
                         try {
@@ -66,16 +63,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 pendingResult.finish()
             }
         }, delayMs)
-    }
-
-    /** Ojavana-style: after reboot, surface the system USB allow dialog without opening Bridge manually. */
-    private fun scheduleUsbPermissionPrompts(appContext: Context, handler: Handler) {
-        val delays = longArrayOf(6_000L, 14_000L, 28_000L, 42_000L)
-        for (delay in delays) {
-            handler.postDelayed({
-                runCatching { UsbPlugPlay.promptForMissingPrinter(appContext) }
-            }, delay)
-        }
     }
 
     private fun startBridgeIfReady(appContext: Context) {

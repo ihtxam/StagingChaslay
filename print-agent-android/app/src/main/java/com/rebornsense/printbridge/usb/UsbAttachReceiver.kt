@@ -43,9 +43,7 @@ class UsbAttachReceiver : BroadcastReceiver() {
             return
         }
         Log.d(TAG, "USB attach — launch permission UI for ${device.vendorId}:${device.productId}")
-        if (!UsbPlugPlay.promptForMissingPrinter(app, device)) {
-            UsbBootPermissionNotifier.onDiscoveryFinished(app)
-        }
+        UsbPlugPlay.promptForMissingPrinter(app, device, allowForegroundActivity = false)
     }
 
     private fun onUsbDetached(app: Context, intent: Intent) {
