@@ -119,6 +119,8 @@ export interface SyncSalePayload {
   clientId: string;
   /** POS / WebPOS location; falls back to request context or merchant default */
   locationId?: string | null;
+  /** Floor register within location (kitchen routing / reports). */
+  stationId?: string | null;
   deviceId?: string;
   orderNumber?: string;
   /** Kitchen / takeaway shout number shown to staff & customers, e.g. #4821 */
@@ -659,9 +661,17 @@ export class SyncService {
         sale.locationId ?? contextLocationId
       );
 
+      const { PosStationsService } = await import("@/services/pos-stations.service");
+      const resolvedStationId = await PosStationsService.resolveStationId(
+        merchantId,
+        resolvedLocationId,
+        sale.stationId
+      );
+
       const orderValuesBase = {
         merchantId,
         locationId: resolvedLocationId,
+        stationId: resolvedStationId,
         orderType: "pos" as const,
         fulfillmentChannel: channel,
         status,

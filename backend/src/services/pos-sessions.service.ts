@@ -190,6 +190,7 @@ export class PosSessionsService {
       staffId?: string | null;
       staffName?: string | null;
       locationId?: string | null;
+      stationId?: string | null;
     }
   ) {
     const deviceId = String(input.deviceId || "").trim().slice(0, 128);
@@ -211,6 +212,18 @@ export class PosSessionsService {
       console.warn("[pos-sessions] location resolve skipped:", error);
     }
 
+    let stationId: string | null = null;
+    try {
+      const { PosStationsService } = await import("@/services/pos-stations.service");
+      stationId = await PosStationsService.resolveStationId(
+        merchantId,
+        locationId,
+        input.stationId
+      );
+    } catch (error) {
+      console.warn("[pos-sessions] station resolve skipped:", error);
+    }
+
     const { row, kickedSessionIds } = await withMerchantSchemaRetry(() =>
       db.transaction(async (tx) => {
         const kickedSessionIds = await this.enforceLimit(
@@ -226,6 +239,7 @@ export class PosSessionsService {
             .values({
               merchantId,
               locationId,
+              stationId,
               sessionKind: input.sessionKind,
               platform: input.platform,
               deviceId,

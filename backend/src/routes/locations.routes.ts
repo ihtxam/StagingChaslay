@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
 import { setLocationContext } from "@/middleware/location.middleware";
 import { LocationsService } from "@/services/locations.service";
+import { PosStationsService } from "@/services/pos-stations.service";
 import { MerchantEntitlementsService } from "@/services/merchant-entitlements.service";
 
 const router = Router();
@@ -131,6 +132,79 @@ router.put("/locations/staff/:staffId", async (req: Request, res: Response) => {
     });
   }
 });
+
+/** GET /api/merchant/locations/:locationId/stations */
+router.get("/locations/:locationId/stations", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const stations = await PosStationsService.listForLocation(merchantId, req.params.locationId);
+    res.json({ success: true, stations });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to list stations",
+    });
+  }
+});
+
+/** POST /api/merchant/locations/:locationId/stations */
+router.post("/locations/:locationId/stations", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const body = req.body || {};
+    const station = await PosStationsService.create(merchantId, req.params.locationId, {
+      name: body.name,
+      sortOrder: body.sortOrder,
+      isDefault: body.isDefault,
+      settings: body.settings,
+    });
+    res.json({ success: true, station });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to create station",
+    });
+  }
+});
+
+/** PUT /api/merchant/locations/:locationId/stations/:stationId */
+router.put("/locations/:locationId/stations/:stationId", async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const body = req.body || {};
+    const station = await PosStationsService.update(
+      merchantId,
+      req.params.locationId,
+      req.params.stationId,
+      {
+        name: body.name,
+        sortOrder: body.sortOrder,
+        isDefault: body.isDefault,
+        settings: body.settings,
+        status: body.status,
+      }
+    );
+    res.json({ success: true, station });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to update station",
+    });
+  }
+});
+
+/** DELETE /api/merchant/locations/:locationId/stations/:stationId */
+router.delete(
+  "/locations/:locationId/stations/:stationId",
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId!;
+      await PosStationsService.remove(merchantId, req.params.locationId, req.params.stationId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to delete station",
+      });
+    }
+  }
+);
 
 /** GET /api/merchant/locations/context — resolve active location for client */
 router.get("/locations/context", setLocationContext, async (req: Request, res: Response) => {

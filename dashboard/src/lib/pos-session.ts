@@ -111,6 +111,7 @@ function registerPosSessionKey(opts: {
   platform: PosSessionPlatform;
   staffId?: string | null;
   locationId?: string | null;
+  stationId?: string | null;
 }): string {
   const locationId = opts.locationId ?? getSelectedLocationId();
   return [
@@ -119,6 +120,7 @@ function registerPosSessionKey(opts: {
     webPosDeviceId(),
     opts.staffId ?? '',
     locationId ?? '',
+    opts.stationId ?? '',
   ].join('|');
 }
 
@@ -132,6 +134,7 @@ async function registerPosSessionOnce(opts: {
   staffName?: string | null;
   deviceLabel?: string;
   locationId?: string | null;
+  stationId?: string | null;
 }): Promise<RegisterPosSessionResult> {
   try {
     const res = await api.post('/merchant/pos/sessions/register', {
@@ -142,6 +145,7 @@ async function registerPosSessionOnce(opts: {
       staffId: opts.staffId || null,
       staffName: opts.staffName || null,
       locationId: opts.locationId || getSelectedLocationId(),
+      stationId: opts.stationId || null,
     });
     const sessionId = String(res.data?.sessionId || '');
     if (!sessionId) {
@@ -173,6 +177,7 @@ export async function registerPosSession(opts: {
   staffName?: string | null;
   deviceLabel?: string;
   locationId?: string | null;
+  stationId?: string | null;
 }): Promise<RegisterPosSessionResult> {
   const key = registerPosSessionKey(opts);
   if (registerInFlight && registerInFlightKey === key) {
