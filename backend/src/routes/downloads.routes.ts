@@ -5,9 +5,11 @@ import {
   LEGACY_PRINT_AGENT_SETUP_FILE,
   PRINT_AGENT_SETUP_FILE,
   PRINT_BRIDGE_APK_FILE,
+  REBORN_POS_ANDROID_APK_FILE,
   REBORN_POS_SETUP_FILE,
   describePrintAgentExe,
   describePrintBridgeApk,
+  describeRebornPosAndroidApk,
   describeRebornPosExe,
   downloadsFilePath,
   fileMagicOk,
@@ -55,6 +57,15 @@ router.get("/reborn-pos-setup.json", (_req: Request, res: Response) => {
   });
 });
 
+router.get("/reborn-pos-android.json", (_req: Request, res: Response) => {
+  const manifest = readDownloadManifest("reborn-pos-android");
+  res.json({
+    success: true,
+    ...describeRebornPosAndroidApk(),
+    ...(manifest || {}),
+  });
+});
+
 /** @deprecated legacy manifest filename */
 router.get("/chaslayreborn-print-agent.json", (_req: Request, res: Response) => {
   res.redirect(302, "/downloads/reborn-print-agent.json");
@@ -87,6 +98,57 @@ function sendRebornPosExe(res: Response) {
 
 router.get(`/${REBORN_POS_SETUP_FILE}`, (_req: Request, res: Response) => {
   sendRebornPosExe(res);
+});
+
+function sendRebornPosAndroidApk(res: Response) {
+  const filePath = downloadsFilePath(REBORN_POS_ANDROID_APK_FILE);
+  const desc = describeRebornPosAndroidApk();
+  if (!fileMagicOk(filePath, "apk") || !desc.available) {
+    return res
+      .status(404)
+      .type("text/plain")
+      .send(
+        desc.message ||
+          [
+            "RebornPOS Android APK is not available on this server.",
+            "",
+            "Build from app/ and deploy:",
+            "  backend/public/downloads/reborn-pos-android.apk",
+          ].join("\n")
+      );
+  }
+  const filename = `reborn-pos-android-${desc.version || "latest"}.apk`;
+  sendBinary(res, filePath, filename, "application/vnd.android.package-archive", "attachment");
+}
+
+router.get(`/${REBORN_POS_ANDROID_APK_FILE}`, (_req: Request, res: Response) => {
+  sendRebornPosAndroidApk(res);
+});
+
+router.get("/reborn-pos-android-:version.apk", (req: Request, res: Response) => {
+  const version = String(req.params.version || "").trim();
+  if (!version || version.toLowerCase() === "latest") {
+    return sendRebornPosAndroidApk(res);
+  }
+  const candidates = [`reborn-pos-android-${version}.apk`, `chaslaypos-${version}.apk`];
+  for (const filename of candidates) {
+    const filePath = downloadsFilePath(filename);
+    if (fileMagicOk(filePath, "apk")) {
+      return sendBinary(res, filePath, filename, "application/vnd.android.package-archive");
+    }
+  }
+  const desc = describeRebornPosAndroidApk();
+  if (desc.version && version === desc.version) {
+    return sendRebornPosAndroidApk(res);
+  }
+  return res
+    .status(404)
+    .type("text/plain")
+    .send(
+      desc.version
+        ? `This server does not have RebornPOS Android v${version}. Current is v${desc.version}.`
+        : "RebornPOS Android APK is not available on this server."
+    );
 });
 
 function sendPrintBridgeApk(res: Response) {

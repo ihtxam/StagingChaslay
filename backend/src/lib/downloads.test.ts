@@ -8,16 +8,22 @@ import path from "path";
 
 const src = fs.readFileSync(path.join(__dirname, "downloads.ts"), "utf8");
 assert.match(src, /REBORN_POS_SETUP_FILE = "reborn-pos-setup\.exe"/);
+assert.match(src, /REBORN_POS_ANDROID_APK_FILE = "reborn-pos-android\.apk"/);
+assert.match(src, /export function describeRebornPosAndroidApk/);
 assert.match(src, /export function describeRebornPosExe/);
+assert.match(src, /id: "pos-android"/);
 assert.match(src, /id: "reborn-pos"/);
 assert.match(src, /readDownloadManifest\("reborn-pos-setup"\)/);
-assert.doesNotMatch(
-  src.slice(src.indexOf("export function describeRebornPosExe")),
-  /print-agent-setup/
-);
+const rebornPosExeFn = src.match(
+  /export function describeRebornPosExe\(\)[\s\S]*?\n\}/
+)?.[0];
+assert.ok(rebornPosExeFn, "describeRebornPosExe body");
+assert.doesNotMatch(rebornPosExeFn!, /print-agent-setup/);
 
 const routes = fs.readFileSync(path.join(__dirname, "../routes/downloads.routes.ts"), "utf8");
 assert.match(routes, /\/reborn-pos-setup\.json/);
+assert.match(routes, /\/reborn-pos-android\.json/);
+assert.match(routes, /describeRebornPosAndroidApk/);
 assert.match(routes, /describeRebornPosExe/);
 assert.match(routes, /REBORN_POS_SETUP_FILE/);
 

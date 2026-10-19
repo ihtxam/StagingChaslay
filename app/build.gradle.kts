@@ -1,3 +1,4 @@
+import java.time.Instant
 import java.util.Properties
 
 plugins {
@@ -215,4 +216,38 @@ afterEvaluate {
 
     registerCopyApkTask("copyReleaseApkForTesting", "assembleRelease", "release", suffix = "")
     registerCopyApkTask("copyDebugApkForTesting", "assembleDebug", "debug", suffix = "debug")
+}
+
+afterEvaluate {
+    val copyReleaseApkToDownloads = tasks.register<Copy>("copyReleaseApkToDownloads") {
+        dependsOn("assembleRelease")
+        from(layout.buildDirectory.dir("outputs/apk/release"))
+        include("app-release.apk")
+        into(rootProject.projectDir.resolve("backend/public/downloads"))
+        rename { "reborn-pos-android.apk" }
+        doLast {
+            val downloads = rootProject.projectDir.resolve("backend/public/downloads")
+            val versionName = android.defaultConfig.versionName
+            val versioned = downloads.resolve("reborn-pos-android-$versionName.apk")
+            val main = downloads.resolve("reborn-pos-android.apk")
+            if (main.isFile) {
+                main.copyTo(versioned, overwrite = true)
+            }
+            val manifest = downloads.resolve("reborn-pos-android.json")
+            if (manifest.isFile) {
+                val builtAt = Instant.now().toString()
+                val text = manifest.readText()
+                val updated = text
+                    .replace(Regex("\"version\"\\s*:\\s*\"[^\"]*\""), "\"version\": \"$versionName\"")
+                    .replace(
+                        Regex("\"builtAt\"\\s*:\\s*\"[^\"]*\"|\"builtAt\"\\s*:\\s*null"),
+                        "\"builtAt\": \"$builtAt\"",
+                    )
+                manifest.writeText(updated)
+            }
+            logger.lifecycle("Published APK: ${main.absolutePath}")
+            logger.lifecycle("Versioned copy: ${versioned.absolutePath}")
+        }
+    }
+    tasks.findByName("assembleRelease")?.finalizedBy(copyReleaseApkToDownloads)
 }

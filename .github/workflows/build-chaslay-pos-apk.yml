@@ -1,0 +1,95 @@
+name: Build Chaslay POS Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'settings.gradle.kts'
+      - 'build.gradle.kts'
+      - 'backend/public/downloads/reborn-pos-android.json'
+      - '.github/workflows/build-chaslay-pos-apk.yml'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;36.0.0'
+
+      - name: Write Adyen SDK keys when secrets exist
+        env:
+          ADYEN_SDK_API_KEY: ${{ secrets.ADYEN_SDK_API_KEY }}
+          ADYEN_SDK_API_KEY_LIVE: ${{ secrets.ADYEN_SDK_API_KEY_LIVE }}
+          ADYEN_SDK_ENV: ${{ secrets.ADYEN_SDK_ENV }}
+        run: |
+          {
+            echo "adyenEnv=${ADYEN_SDK_ENV:-test}"
+            if [[ -n "${ADYEN_SDK_API_KEY:-}" ]]; then
+              echo "adyenSdkApiKey=${ADYEN_SDK_API_KEY}"
+            fi
+            if [[ -n "${ADYEN_SDK_API_KEY_LIVE:-}" ]]; then
+              echo "adyenSdkApiKeyLive=${ADYEN_SDK_API_KEY_LIVE}"
+            fi
+          } >> local.properties
+          if [[ -z "${ADYEN_SDK_API_KEY:-}" && -z "${ADYEN_SDK_API_KEY_LIVE:-}" ]]; then
+            echo "ERROR: ADYEN_SDK_API_KEY is required to compile the native POS app (Tap to Pay sources)."
+            exit 1
+          fi
+
+      - name: Ensure debug keystore for release signing fallback
+        run: |
+          mkdir -p "$HOME/.android"
+          if [[ ! -f "$HOME/.android/debug.keystore" ]]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Chaslay POS,O=Reborn,C=CH"
+          fi
+
+      - name: Build release APK
+        run: |
+          set -euo pipefail
+          mkdir -p backend/public/downloads
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon --no-build-cache
+          test -f backend/public/downloads/reborn-pos-android.apk
+          ls -la backend/public/downloads/reborn-pos-android*.apk
+
+      - name: Update download manifest
+        run: |
+          POS_VERSION="$(grep -E 'versionName\s*=' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
+          python3 - <<PY
+          import json, datetime
+          from pathlib import Path
+          manifest = Path("backend/public/downloads/reborn-pos-android.json")
+          data = json.loads(manifest.read_text())
+          data["version"] = "$POS_VERSION"
+          data["builtAt"] = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+          data["signed"] = True
+          manifest.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reborn-pos-android-apk
+          path: |
+            backend/public/downloads/reborn-pos-android.apk
+            backend/public/downloads/reborn-pos-android-*.apk
+          retention-days: 90

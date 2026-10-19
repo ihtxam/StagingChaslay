@@ -48,6 +48,18 @@ try {
   writeFake(path.join(root, "reborn-print-agent-setup.exe"), "exe", "agent");
   writeFake(path.join(root, "reborn-print-agent-setup-1.10.5.exe"), "exe", "agent-old");
 
+  fs.writeFileSync(
+    path.join(root, "reborn-pos-android.json"),
+    JSON.stringify({
+      version: "1.0.23",
+      builtAt: "2026-10-19T12:00:00Z",
+      signed: true,
+    })
+  );
+  writeFake(path.join(root, "reborn-pos-android.apk"), "apk", "pos-latest");
+  writeFake(path.join(root, "reborn-pos-android-1.0.23.apk"), "apk", "pos123");
+  writeFake(path.join(root, "reborn-pos-android-1.0.22.apk"), "apk", "pos122");
+
   const products = listAppVersionHistory(root);
   const byId = Object.fromEntries(products.map((p) => [p.id, p]));
 
@@ -69,6 +81,14 @@ try {
   assert.equal(oldAlias?.filename, "RebornPrint-0.3.9.apk");
   assert.equal(oldAlias?.isLatest, false);
   assert.equal(oldAlias?.downloadUrl, "/downloads/RebornPrint-0.3.9.apk");
+
+  assert.ok(byId["pos-android"], "POS Android product present");
+  assert.equal(byId["pos-android"].currentVersion, "1.0.23");
+  assert.deepEqual(
+    byId["pos-android"].releases.map((r) => r.version),
+    ["1.0.23", "1.0.22"]
+  );
+  assert.equal(byId["pos-android"].releases[0].filename, "reborn-pos-android-1.0.23.apk");
 
   assert.ok(byId["pos-windows"], "POS product present");
   assert.equal(byId["pos-windows"].currentVersion, "0.1.3");

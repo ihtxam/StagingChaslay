@@ -38,6 +38,7 @@ export default function AppDownloads() {
 
   const productTitle = (product: AppProductHistory) => {
     if (product.id === 'print-bridge') return t('appDownloadsProductBridge');
+    if (product.id === 'pos-android') return t('appDownloadsProductPosAndroid');
     if (product.id === 'pos-windows') return t('appDownloadsProductPos');
     if (product.id === 'print-agent') return t('appDownloadsProductAgent');
     return product.name;

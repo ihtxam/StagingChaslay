@@ -8,6 +8,7 @@ export const PRINT_AGENT_SETUP_FILE = "reborn-print-agent-setup.exe";
 export const LEGACY_PRINT_AGENT_SETUP_FILE = "chaslayreborn-print-agent-setup.exe";
 export const PRINT_BRIDGE_APK_FILE = "reborn-print-bridge.apk";
 export const REBORN_POS_SETUP_FILE = "reborn-pos-setup.exe";
+export const REBORN_POS_ANDROID_APK_FILE = "reborn-pos-android.apk";
 
 export function downloadsFilePath(filename: string, root: string = DOWNLOADS_ROOT): string {
   const safe = path.basename(filename);
@@ -126,6 +127,52 @@ export function describePrintAgentExe(): DownloadDescriptor {
   };
 }
 
+export function describeRebornPosAndroidApk(root: string = DOWNLOADS_ROOT): DownloadDescriptor {
+  const manifest = readDownloadManifest("reborn-pos-android", root);
+  const declaredVersion =
+    typeof manifest?.version === "string" ? manifest.version.trim() || null : null;
+
+  const posProduct = listAppVersionHistory(root).find((p) => p.id === "pos-android");
+  const latestRelease =
+    posProduct?.releases.find((r) => r.isLatest && r.downloadUrl) ||
+    posProduct?.releases.find((r) => r.downloadUrl);
+
+  const canonicalFilename = latestRelease?.filename || REBORN_POS_ANDROID_APK_FILE;
+  const filePath = downloadsFilePath(canonicalFilename, root);
+  const valid = fileMagicOk(filePath, "apk");
+  const stat = valid ? fs.statSync(filePath) : null;
+  const apkVersion = valid ? readApkMeta(filePath).versionName : null;
+  const version =
+    latestRelease?.version || apkVersion || posProduct?.currentVersion || declaredVersion;
+  const displayName =
+    typeof manifest?.displayName === "string" && manifest.displayName.trim()
+      ? manifest.displayName.trim()
+      : "RebornPOS (Android)";
+
+  const cacheBust = stat
+    ? `?v=${encodeURIComponent(version || String(stat.mtimeMs))}`
+    : "";
+  const downloadPath = latestRelease?.downloadUrl
+    ? `${latestRelease.downloadUrl}${cacheBust}`
+    : valid && version
+      ? `/downloads/reborn-pos-android-${version}.apk${cacheBust}`
+      : null;
+
+  return {
+    id: "pos-android",
+    name: displayName,
+    filename: canonicalFilename,
+    available: valid && !!downloadPath,
+    sizeBytes: stat?.size ?? 0,
+    version,
+    declaredVersion: declaredVersion || posProduct?.currentVersion || version,
+    downloadUrl: downloadPath,
+    message: valid
+      ? undefined
+      : "RebornPOS Android APK is not published on this server yet. Build from app/ or contact support.",
+  };
+}
+
 export function describeRebornPosExe(): DownloadDescriptor {
   const filePath = downloadsFilePath(REBORN_POS_SETUP_FILE);
   const manifest = readDownloadManifest("reborn-pos-setup");
@@ -200,6 +247,18 @@ const APP_PRODUCTS: ProductSpec[] = [
     manifests: ["reborn-print-bridge"],
   },
   {
+    id: "pos-android",
+    name: "RebornPOS (Android)",
+    platform: "android",
+    kind: "apk",
+    latestFiles: ["reborn-pos-android.apk"],
+    versionedPatterns: [
+      /^reborn-pos-android-(.+)\.apk$/i,
+      /^chaslaypos-(.+)\.apk$/i,
+    ],
+    manifests: ["reborn-pos-android"],
+  },
+  {
     id: "pos-windows",
     name: "RebornPOS (Windows)",
     platform: "windows",
@@ -257,6 +316,11 @@ function filenamePreference(filename: string, spec: ProductSpec): number {
     if (/^rebornprint-\d/.test(lower)) return 30;
     if (lower === "reborn-print-bridge.apk") return 20;
     if (lower === "rebornprint.apk") return 10;
+  }
+  if (spec.id === "pos-android") {
+    if (/^reborn-pos-android-\d/.test(lower)) return 40;
+    if (/^chaslaypos-\d/.test(lower)) return 30;
+    if (lower === "reborn-pos-android.apk") return 20;
   }
   return isVersioned ? 25 : 15;
 }

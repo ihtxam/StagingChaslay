@@ -747,6 +747,13 @@ if [[ -f "$BRIDGE_APK" ]] && head -c 2 "$BRIDGE_APK" | grep -q PK; then
   archive_current_download "$BRIDGE_APK" "$BRIDGE_VERSION" "$DOWNLOADS_DIR/RebornPrint-${BRIDGE_VERSION}.apk"
 fi
 
+POS_ANDROID_APK="$DOWNLOADS_DIR/reborn-pos-android.apk"
+POS_ANDROID_VERSION="$(grep -E 'versionName\s*=' "$REPO_DIR/app/build.gradle.kts" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
+[[ -n "$POS_ANDROID_VERSION" ]] || POS_ANDROID_VERSION="0.0.0"
+if [[ -f "$POS_ANDROID_APK" ]] && head -c 2 "$POS_ANDROID_APK" | grep -q PK; then
+  archive_current_download "$POS_ANDROID_APK" "$POS_ANDROID_VERSION" "$DOWNLOADS_DIR/reborn-pos-android-${POS_ANDROID_VERSION}.apk"
+fi
+
 compose_project_name() {
   local dir="${1:-$REPO_DIR}"
   if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then

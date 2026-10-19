@@ -7,6 +7,7 @@ Check availability without downloading the binary:
 - `GET /downloads/reborn-print-bridge.json` — `{ available, version, downloadUrl }`
 - `GET /downloads/reborn-print-agent.json` — Windows agent manifest (legacy sidecar)
 - `GET /downloads/reborn-pos-setup.json` — RebornPOS desktop installer (primary Windows download)
+- `GET /downloads/reborn-pos-android.json` — native Android POS APK manifest
 
 ## RebornPOS (Windows NSIS installer)
 
@@ -39,6 +40,33 @@ curl -sI https://app.rebornsense.com/downloads/reborn-pos-setup.exe
 ```
 
 Public URL: `https://app.rebornsense.com/downloads/reborn-pos-setup.exe`
+
+## RebornPOS (Android APK)
+
+`reborn-pos-android.apk` is **gitignored** unless committed via `!` rules. Built from `app/` (package `com.chaslay.pos`).
+
+### Build locally
+
+```bash
+./gradlew :app:assembleRelease
+# Copies release APK → backend/public/downloads/reborn-pos-android.apk
+# and reborn-pos-android-<version>.apk for Superadmin history
+```
+
+### Publish to production server
+
+```bash
+bash scripts/publish-reborn-pos-android-download.sh
+```
+
+### Verify
+
+```bash
+curl -sL https://app.rebornsense.com/downloads/reborn-pos-android.json
+curl -sI https://app.rebornsense.com/downloads/reborn-pos-android.apk
+```
+
+Public URL: `https://app.rebornsense.com/downloads/reborn-pos-android.apk`
 
 ## Print agent (Windows EXE)
 
