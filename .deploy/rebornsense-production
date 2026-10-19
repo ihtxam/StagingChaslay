@@ -10,3 +10,5 @@
 # Deploy 2026-10-18T22:00:00Z — Bridge Reborn 0.4.39 (USB CDC/CH340 permission fix)
 # Deploy 2026-10-18T23:00:00Z — Bridge Reborn 0.4.40 (OTG USB, paced print, boot notify)
 # Deploy 2026-10-18T23:05:00Z — retry production deploy (compose API orphan cleanup)
+
+# Deploy 2026-10-19T08:00:00Z — Bridge Reborn 0.4.41 USB plug-and-play permission
