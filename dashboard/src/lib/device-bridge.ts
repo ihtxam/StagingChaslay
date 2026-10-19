@@ -12,6 +12,8 @@ import { isAndroidWebPosTill, PRINT_AGENT_URL } from '@/lib/print-agent';
 
 const BRIDGE_REBORN_PACKAGE = 'com.rebornsense.printbridge';
 const BRIDGE_AUTOSTART_EXTRA = 'autostart_bridge_service';
+const BRIDGE_USB_PERMISSION_EXTRA = 'request_usb_permission';
+const BRIDGE_USB_MINIMIZE_EXTRA = 'usb_permission_then_minimize';
 let lastBridgeAutostartAttemptMs = 0;
 
 export type DeviceBridgeHealth = {
@@ -112,6 +114,27 @@ export type BridgeRebornAutostartOptions = {
   /** Launch-check path: always fire the Bridge intent even inside the cooldown window. */
   bypassCooldown?: boolean;
 };
+
+/**
+ * Bring Bridge to the foreground so Android shows the system USB allow dialog (Ojavana-style).
+ * WebPOS cannot call UsbManager.requestPermission from Chrome — this is the supported path.
+ */
+export function requestBridgeUsbPermissionActivity(): boolean {
+  if (typeof window === 'undefined' || !isAndroidWebPosTill()) return false;
+  const component = `${BRIDGE_REBORN_PACKAGE}/com.rebornsense.printbridge.MainActivity`;
+  const intentUrl =
+    `intent:#Intent;action=android.intent.action.MAIN;` +
+    `category=android.intent.category.LAUNCHER;` +
+    `component=${component};` +
+    `B.${BRIDGE_USB_PERMISSION_EXTRA}=true;` +
+    `B.${BRIDGE_USB_MINIMIZE_EXTRA}=true;end`;
+  try {
+    window.location.href = intentUrl;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function requestBridgeRebornAutostart(
   options: BridgeRebornAutostartOptions | number = {}

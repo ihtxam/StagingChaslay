@@ -1162,6 +1162,9 @@ const en: Dict = {
   webPosLaunchCheckAgentOffline: 'Print Agent is not running on this device (localhost:9101)',
   webPosLaunchCheckUsbPermission:
     'USB permission required — allow Bridge Reborn to access the USB printer in the popup',
+  webPosLaunchCheckUsbPermissionHint:
+    'Tap the button below — Bridge will open briefly so Android can show the USB allow dialog. Tap OK, then return here and tap Retry.',
+  webPosLaunchCheckOpenBridgeUsb: 'Allow USB printer (open Bridge)',
   orderAccepted: 'Order accepted',
   orderRejected: 'Order rejected',
   download: 'Download',
@@ -5933,6 +5936,9 @@ const fr: Dict = {
   webPosLaunchCheckAgentOffline: 'Print Agent n’est pas démarré sur cet appareil (localhost:9101)',
   webPosLaunchCheckUsbPermission:
     'Autorisation USB requise — autorisez Bridge Reborn à accéder à l’imprimante dans la fenêtre système',
+  webPosLaunchCheckUsbPermissionHint:
+    'Appuyez sur le bouton ci-dessous — Bridge s’ouvre un instant pour la fenêtre Android « Autoriser l’accès USB ». Appuyez sur OK, revenez ici puis Réessayer.',
+  webPosLaunchCheckOpenBridgeUsb: 'Autoriser l’imprimante USB (ouvrir Bridge)',
   orderAccepted: 'Commande acceptée',
   orderRejected: 'Commande refusée',
   download: 'Télécharger',
@@ -10786,6 +10792,9 @@ const de: Dict = {
   webPosLaunchCheckAgentOffline: 'Print Agent läuft auf diesem Gerät nicht (localhost:9101)',
   webPosLaunchCheckUsbPermission:
     'USB-Berechtigung erforderlich — erlauben Sie Bridge Reborn den Zugriff im Systemdialog',
+  webPosLaunchCheckUsbPermissionHint:
+    'Tippen Sie unten — Bridge öffnet kurz den Android-USB-Dialog. OK tippen, zurückkehren und Erneut versuchen.',
+  webPosLaunchCheckOpenBridgeUsb: 'USB-Drucker erlauben (Bridge öffnen)',
   orderAccepted: 'Bestellung angenommen',
   orderRejected: 'Bestellung abgelehnt',
   download: 'Herunterladen',
