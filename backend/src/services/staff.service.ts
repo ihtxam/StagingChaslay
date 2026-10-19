@@ -944,6 +944,7 @@ export class StaffService {
       roleId: staff.roleId,
       roleName: role?.name || "Staff",
       permissions,
+      loginHome: normalizeStaffLoginHome(staff.loginHome),
       preferredTerminalId: staff.preferredTerminalId || null,
       accessToken,
       /** Android PosPermission-compatible keys for clients that consume this payload. */

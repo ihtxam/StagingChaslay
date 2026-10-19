@@ -74,7 +74,8 @@ import PlatformMessagesProvider, {
   PlatformStatusBannerSlot,
 } from '@/components/platform/PlatformMessagesProvider';
 import { useAuthStore } from '@/store/auth';
-import { homePathForUser } from '@/lib/auth-home';
+import { homePathForUser, navigateTargetAfterStaffPin } from '@/lib/auth-home';
+import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import {
   allowOrderCenterRoute,
   resolveDeniedRouteFallback,
@@ -134,7 +135,6 @@ import {
 import type { EditionFeatureKey } from '@/lib/edition-features';
 import type { BusinessModule } from '@/lib/business-module';
 import { isRestaurantModule, normalizeBusinessModule } from '@/lib/business-module';
-import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
@@ -838,6 +838,20 @@ function MerchantShell() {
       }
       return;
     }
+    if (normalizeStaffLoginHome(user?.loginHome) === 'pos') {
+      if (!isAppShellRoute) {
+        const dest = homePathForUser({
+          role: 'staff',
+          permissions: perms,
+          isOwner: false,
+          loginHome: 'pos',
+        });
+        const path = location.pathname.replace(/\/$/, '') || '/merchant';
+        const normalizedDest = dest.replace(/\/$/, '') || '/merchant';
+        if (path !== normalizedDest) navigate(dest, { replace: true });
+      }
+      return;
+    }
     const registerFirst = isRegisterFirstStaff(perms, false);
     if (!registerFirst && canJwtReturnToPanel(perms, jwtIsOwner, user?.role)) return;
     const floorOnly = isFloorWaiterStaff(perms, false);
@@ -1150,6 +1164,7 @@ function MerchantShell() {
       roleId: string;
       roleName: string;
       permissions: string[];
+      loginHome?: string;
       accessToken?: string;
     }) => {
       const session = webPosSessionFromStaffProfile({
@@ -1163,8 +1178,22 @@ function MerchantShell() {
       saveWebPosStaffSession(session);
       setPinSession(session);
       notifyWebPosStaffSessionChanged();
+      const dest = navigateTargetAfterStaffPin(
+        {
+          permissions: staff.permissions as Permission[],
+          loginHome: normalizeStaffLoginHome(staff.loginHome),
+        },
+        location.pathname,
+        'gate'
+      );
+      if (dest) {
+        if (dest === '/merchant/pos' || dest === '/merchant/waiter') {
+          window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+        }
+        navigate(dest, { replace: true });
+      }
     },
-    []
+    [location.pathname, navigate]
   );
 
   const handlePanelPinLogout = useCallback(() => {

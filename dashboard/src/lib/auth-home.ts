@@ -5,6 +5,7 @@ import {
   hasFullPanelAccess,
   hasPermission,
   isDeliveryDriverOnlyStaff,
+  isPosFloorPath,
   isRegisterFirstStaff,
   isStorekeeperOnlyStaff,
   isKioskOnlyStaff,
@@ -17,6 +18,10 @@ import {
   type Permission,
 } from '@/lib/permissions';
 import { normalizeStaffLoginHome, type StaffLoginHome } from '@/lib/staff-login-home';
+
+function normalizePath(path: string): string {
+  return path.split('?')[0].replace(/\/$/, '') || '/merchant';
+}
 
 /** Home path after email/password login. Does not affect PIN WebPOS / waiter PIN. */
 export function homePathForUser(
@@ -78,4 +83,39 @@ export function homePathForUser(
   if (hasPermission(perms, 'DELIVERY_ORDERS', false)) return deliveryDriverHomePath();
   if (hasPermission(perms, 'VIEW_ORDER_HISTORY', false)) return orderCenterHomePath();
   return '/merchant/pos';
+}
+
+/** Where to land after a staff PIN verify (clock-in / switch user). Honors per-user loginHome. */
+export function homePathAfterStaffPin(
+  profile: Pick<User, 'permissions' | 'loginHome'>
+): string {
+  return homePathForUser({
+    role: 'staff',
+    permissions: profile.permissions,
+    isOwner: false,
+    loginHome: profile.loginHome,
+  });
+}
+
+/**
+ * After PIN success, navigate when the clocked-in user's home differs from the current route.
+ * On the POS floor gate, two POS destinations (pos vs waiter) count as the same shell.
+ */
+export function navigateTargetAfterStaffPin(
+  profile: Pick<User, 'permissions' | 'loginHome'>,
+  currentPath: string,
+  mode: 'gate' | 'switch'
+): string | null {
+  const dest = homePathAfterStaffPin(profile);
+  const normDest = normalizePath(dest);
+  const normCurrent = normalizePath(currentPath);
+  if (normDest === normCurrent) return null;
+  if (isPosFloorPath(normCurrent) && isPosFloorPath(normDest)) return null;
+
+  if (mode === 'switch') return dest;
+
+  // Panel PIN gate: send floor staff to their register app when loginHome is POS.
+  if (!isPosFloorPath(normCurrent) && isPosFloorPath(normDest)) return dest;
+
+  return null;
 }

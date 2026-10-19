@@ -2,7 +2,11 @@
  * Staff login home routing — run: npx tsx dashboard/src/lib/auth-home.test.ts
  */
 import assert from 'node:assert/strict';
-import { homePathForUser } from './auth-home';
+import {
+  homePathAfterStaffPin,
+  homePathForUser,
+  navigateTargetAfterStaffPin,
+} from './auth-home';
 import { loginHomeFromPermissions } from './staff-login-home';
 import { isRegisterFirstStaff, type Permission } from './permissions';
 
@@ -88,6 +92,67 @@ const STOREKEEPER_PERMS: Permission[] = ['STOREKEEPER_INTAKE'];
     loginHome: 'panel',
   });
   assert.equal(path, '/merchant');
+}
+
+const WAITER_MENU_PERMS: Permission[] = [
+  'USE_WEBPOS',
+  'MANAGE_TABLES',
+  'MANAGE_PRODUCTS',
+  'PROCESS_PAYMENTS',
+];
+
+// Waiter + menu editor with loginHome pos → WebPOS (not products)
+{
+  const path = homePathAfterStaffPin({
+    permissions: WAITER_MENU_PERMS,
+    loginHome: 'pos',
+  });
+  assert.equal(path, '/merchant/pos');
+}
+
+// Manager PIN switch must not send user to WebPOS when loginHome is panel
+{
+  const path = homePathAfterStaffPin({
+    permissions: MANAGER_PERMS,
+    loginHome: 'panel',
+  });
+  assert.equal(path, '/merchant');
+}
+
+// Panel PIN gate → floor staff with loginHome pos
+{
+  assert.equal(
+    navigateTargetAfterStaffPin(
+      { permissions: WAITER_MENU_PERMS, loginHome: 'pos' },
+      '/merchant',
+      'gate'
+    ),
+    '/merchant/pos'
+  );
+}
+
+// POS switch user → manager goes to panel
+{
+  assert.equal(
+    navigateTargetAfterStaffPin(
+      { permissions: MANAGER_PERMS, loginHome: 'panel' },
+      '/merchant/pos',
+      'switch'
+    ),
+    '/merchant'
+  );
+}
+
+// POS gate clock-in → manager stays on register (switch handles panel return)
+{
+  assert.equal(
+    navigateTargetAfterStaffPin(
+      { permissions: MANAGER_PERMS, loginHome: 'panel' },
+      '/merchant/pos',
+      'gate'
+    ),
+    null
+  );
 }
 
 console.log('auth-home: all assertions passed');
