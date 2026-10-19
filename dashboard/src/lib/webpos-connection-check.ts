@@ -75,7 +75,7 @@ function configuredUsbLacksPermission(
   return targets.some((target) => {
     const resolved = resolveLivePrinterName(target.name, livePrinters);
     const row = livePrinters.find((p) => p.name === resolved);
-    return row?.connectionType === 'usb' && row.hasPermission === false;
+    return row?.connectionType === 'usb' && row.hasPermission !== true;
   });
 }
 
@@ -182,12 +182,14 @@ function tapToPayPass(r: ConnectionCheckResult): boolean {
   return r.status === 'ok' || r.status === 'skipped' || r.status === 'warn';
 }
 
-async function probeBridgeHealthFast(androidProbe: boolean): Promise<{
+type BridgeHealthProbe = {
   ok: boolean;
   version?: string;
   platform?: string;
   usbPermissionRequired?: boolean;
-}> {
+};
+
+async function probeBridgeHealthFast(androidProbe: boolean): Promise<BridgeHealthProbe> {
   if (!androidProbe) {
     return getPrintAgentHealth().catch(() => ({ ok: false as const }));
   }
@@ -227,7 +229,7 @@ export async function runWebPosConnectionChecks(opts: {
   const androidProbe = !!opts.androidProbe;
 
   const probeWork = async (): Promise<{
-    health: { ok: boolean; version?: string; platform?: string };
+    health: BridgeHealthProbe;
     bridgeAutostartRequested: boolean;
   }> => {
     if (androidProbe) {
@@ -257,9 +259,19 @@ export async function runWebPosConnectionChecks(opts: {
   if (health.ok) {
     if (androidProbe && health.usbPermissionRequired) {
       await requestBridgeUsbPermission().catch(() => false);
-      await sleep(1_200);
+      for (let attempt = 0; attempt < 10; attempt++) {
+        await sleep(attempt === 0 ? 800 : 1_500);
+        livePrinters = await listAgentPrinters().catch(() => []);
+        const receiptNeedsUsb = configuredUsbLacksPermission(opts.printSettings, 'receipt', livePrinters);
+        const kitchenNeedsUsb = configuredUsbLacksPermission(opts.printSettings, 'kitchen', livePrinters);
+        if (!receiptNeedsUsb && !kitchenNeedsUsb) break;
+        if (attempt === 2 || attempt === 5 || attempt === 8) {
+          await requestBridgeUsbPermission().catch(() => false);
+        }
+      }
+    } else {
+      livePrinters = await listAgentPrinters().catch(() => []);
     }
-    livePrinters = await listAgentPrinters().catch(() => []);
   }
 
   const bridge =
@@ -271,12 +283,20 @@ export async function runWebPosConnectionChecks(opts: {
 
   const agentPlatform = health.platform ? ` (${health.platform})` : '';
   const agent: ConnectionCheckResult = health.ok
-    ? {
-        status: 'ok',
-        message: androidProbe
-          ? `Bridge Reborn v${health.version || '?'} running${agentPlatform}`
-          : `Print Agent v${health.version || '?'} running`,
-      }
+    ? health.usbPermissionRequired
+      ? {
+          status: 'warn',
+          message: androidProbe
+            ? `Bridge Reborn v${health.version || '?'} — USB printer permission required`
+            : 'Print Agent — USB printer permission required',
+          messageKey: 'webPosLaunchCheckUsbPermission',
+        }
+      : {
+          status: 'ok',
+          message: androidProbe
+            ? `Bridge Reborn v${health.version || '?'} running${agentPlatform}`
+            : `Print Agent v${health.version || '?'} running`,
+        }
     : {
         status: 'error',
         message: androidProbe
@@ -298,8 +318,11 @@ export async function runWebPosConnectionChecks(opts: {
 
   const ready =
     agent.status === 'ok' &&
+    !health.usbPermissionRequired &&
     rolePass(receipt) &&
     rolePass(kitchen) &&
+    receipt.status === 'ok' &&
+    kitchen.status === 'ok' &&
     terminalPass(terminal) &&
     tapToPayPass(tapToPay);
 
