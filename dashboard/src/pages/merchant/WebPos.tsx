@@ -1226,6 +1226,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
   const [posStations, setPosStations] = useState<PosStation[]>([]);
   const [stationPickerOpen, setStationPickerOpen] = useState(false);
+  const [deviceDefaultStationId, setDeviceDefaultStationIdState] = useState(() =>
+    getDeviceDefaultStationId(posLocationId)
+  );
   const [pendingPinStaff, setPendingPinStaff] = useState<{
     id: string;
     name: string;
@@ -2990,6 +2993,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       .then(setPosStations)
       .catch(() => setPosStations([]));
   }, [posLocationId]);
+
+  useEffect(() => {
+    setDeviceDefaultStationIdState(getDeviceDefaultStationId(posLocationId));
+  }, [posLocationId]);
+
+  const changeDeviceDefaultStation = useCallback(
+    (stationId: string) => {
+      setDeviceDefaultStationId(posLocationId, stationId || null);
+      setDeviceDefaultStationIdState(stationId || '');
+      toast.success(t('posStationDeviceDefaultSaved'));
+    },
+    [posLocationId, t]
+  );
 
   /** Branch staff: default POS catalog to their assigned location(s). */
   useEffect(() => {
@@ -11166,6 +11182,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             terminals={activeTerminals}
             selectedTerminalId={selectedTerminalId}
             onTerminalChange={(id) => void changePosTerminal(id)}
+            posStations={posStations}
+            deviceDefaultStationId={deviceDefaultStationId}
+            onDeviceDefaultStationChange={changeDeviceDefaultStation}
           />
           )
         }

@@ -593,6 +593,9 @@ export function WebPosSettingsDropdown({
   terminals = [],
   selectedTerminalId = '',
   onTerminalChange,
+  posStations = [],
+  deviceDefaultStationId = '',
+  onDeviceDefaultStationChange,
 }: {
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
@@ -639,6 +642,10 @@ export function WebPosSettingsDropdown({
   terminals?: Array<{ terminalId: string; terminalName: string | null }>;
   selectedTerminalId?: string;
   onTerminalChange?: (terminalId: string) => void;
+  /** Floor registers at this location (2+ → show tablet default picker). */
+  posStations?: Array<{ id: string; name: string }>;
+  deviceDefaultStationId?: string;
+  onDeviceDefaultStationChange?: (stationId: string) => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -979,6 +986,30 @@ export function WebPosSettingsDropdown({
             {t('webPosEodPrint')}
           </button>
           <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
+        </div>
+      ) : null}
+
+      {posStations.length >= 2 && onDeviceDefaultStationChange ? (
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('posStationDeviceDefault')}
+          </p>
+          <label className="block space-y-1 text-xs">
+            <span className="text-[11px] text-stone-500">{t('posStationPickerTitle')}</span>
+            <select
+              className="input w-full text-xs"
+              value={deviceDefaultStationId}
+              onChange={(e) => onDeviceDefaultStationChange(e.target.value)}
+            >
+              <option value="">{t('webPosTerminalPick')}</option>
+              {posStations.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[10px] leading-snug text-stone-500">{t('posStationDeviceDefaultHint')}</p>
         </div>
       ) : null}
 

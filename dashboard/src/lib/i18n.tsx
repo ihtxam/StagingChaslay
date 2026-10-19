@@ -831,6 +831,7 @@ const en: Dict = {
   posStationDeviceDefault: 'This tablet’s default register',
   posStationDeviceDefaultHint:
     'Set once per device so PIN login pre-selects the right floor. Ask staff not to move tablets between floors.',
+  posStationDeviceDefaultSaved: 'Default register saved for this tablet.',
   businessType: 'Business type',
   restaurant: 'Restaurant',
   retail: 'Retail',
