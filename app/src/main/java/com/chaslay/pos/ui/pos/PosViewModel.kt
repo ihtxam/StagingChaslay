@@ -309,8 +309,22 @@ class PosViewModel @Inject constructor(
         ) { categories, categoryId, products, cart, settings ->
             DataBundle(categories, categoryId, products, cart, settings)
         },
-        combine(_uiExtras, _productCustomize, _comboPick, _tables, _tableFloors, _floorElements) { extras, productCustomize, comboPick, tables, tableFloors, floorElements ->
-            UiExtrasBundle(extras, productCustomize, comboPick, tables, tableFloors, floorElements)
+        combine(
+            combine(_uiExtras, _productCustomize, _comboPick) { extras, productCustomize, comboPick ->
+                Triple(extras, productCustomize, comboPick)
+            },
+            combine(_tables, _tableFloors, _floorElements) { tables, tableFloors, floorElements ->
+                Triple(tables, tableFloors, floorElements)
+            },
+        ) { uiTriple, layoutTriple ->
+            UiExtrasBundle(
+                uiTriple.first,
+                uiTriple.second,
+                uiTriple.third,
+                layoutTriple.first,
+                layoutTriple.second,
+                layoutTriple.third,
+            )
         },
         _discountPresets
     ) { bundle, extrasBundle, discountPresets ->
