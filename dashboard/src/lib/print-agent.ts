@@ -743,6 +743,8 @@ export type PrintAgentHealth = {
   platform?: string;
   features?: string[];
   printerReady?: boolean;
+  /** Android Bridge: true when a USB receipt printer is visible but UsbManager permission is missing. */
+  usbPermissionRequired?: boolean;
 };
 
 /** Android Bridge 0.3.2+ strips embedded cut and sends one BT trailer per job. */
@@ -871,6 +873,7 @@ export async function getPrintAgentHealth(
           platform?: unknown;
           features?: unknown[];
           printerReady?: unknown;
+          usbPermissionRequired?: unknown;
         };
         const features = Array.isArray(data.features)
           ? data.features.map((f: unknown) => String(f))
@@ -881,6 +884,7 @@ export async function getPrintAgentHealth(
           platform: data.platform != null ? String(data.platform) : undefined,
           features,
           printerReady: data.printerReady === true,
+          usbPermissionRequired: data.usbPermissionRequired === true,
         };
       } catch (e) {
         lastErr = e;
@@ -1011,6 +1015,19 @@ function mapDesktopScaleDevice(
     connectionType: d.connectionType,
     hasPermission: d.hasPermission,
   };
+}
+
+/** Ask Bridge to foreground the system USB allow dialog (Android tablet WebPOS). */
+export async function requestBridgeUsbPermission(): Promise<boolean> {
+  if (isDesktopApp() || window.manuposDesktop) return false;
+  try {
+    const data = (await agentFetch('/usb/request-permission', { method: 'POST' })) as {
+      launched?: boolean;
+    };
+    return data.launched === true;
+  } catch {
+    return false;
+  }
 }
 
 export async function listAgentPrinters(): Promise<AgentPrinter[]> {
