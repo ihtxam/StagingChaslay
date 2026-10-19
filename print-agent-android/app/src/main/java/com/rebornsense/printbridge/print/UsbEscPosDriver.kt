@@ -81,16 +81,10 @@ class UsbEscPosDriver : PrinterDriver {
                 com.rebornsense.printbridge.BridgeEventsLog.record(context, "print-usb", detail)
                 val usbDevice = device
                 runCatching {
-                    if (
-                        !com.rebornsense.printbridge.usb.UsbPermissionUi.launchPermissionPrompt(
-                            context,
-                            usbDevice,
-                        )
-                    ) {
-                        com.rebornsense.printbridge.usb.UsbBootPermissionNotifier.onDiscoveryFinished(
-                            context,
-                        )
-                    }
+                    com.rebornsense.printbridge.usb.UsbPlugPlay.promptForMissingPrinter(
+                        context,
+                        usbDevice,
+                    )
                 }
                 return Result.failure(
                     IllegalStateException(

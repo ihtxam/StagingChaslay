@@ -258,6 +258,9 @@ class MainActivity : AppCompatActivity() {
         if (runtimePermissionsResolved) {
             refreshServiceStatusReadOnly(scanPrinters = true)
             runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
+            if (!UsbHostPermissions.requestNextMissingPermission(this)) {
+                runCatching { com.rebornsense.printbridge.usb.UsbPlugPlay.promptForMissingPrinter(this) }
+            }
         }
     }
 

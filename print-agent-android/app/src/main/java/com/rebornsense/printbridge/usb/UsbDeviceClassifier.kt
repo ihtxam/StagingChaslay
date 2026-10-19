@@ -80,6 +80,7 @@ object UsbDeviceClassifier {
         if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
         if (context != null && isUsbPrinterCandidate(context, device)) return true
         if (isOtgEscPosBulkDevice(device)) return true
+        if (context != null && isSoleOtgReceiptCandidate(context, device)) return true
         return (0 until device.interfaceCount).any { index ->
             device.getInterface(index).interfaceClass == UsbConstants.USB_CLASS_PRINTER
         }
@@ -89,6 +90,18 @@ object UsbDeviceClassifier {
      * USB Type-B OTG receipt printers (CDC/CH340/vendor bulk) that do not declare USB printer class.
      * Used for permission prompts and discovery — not for HID keyboard wedges.
      */
+    /** Type-B OTG cable with only the receipt printer on the bus (no built-in hub peripherals). */
+    fun isSoleOtgReceiptCandidate(context: Context, device: UsbDevice): Boolean {
+        val usb = context.applicationContext.getSystemService(Context.USB_SERVICE) as? UsbManager
+            ?: return false
+        val otherPeripherals = usb.deviceList.values.count { peer ->
+            peer.deviceId != device.deviceId &&
+                peer.deviceClass != UsbConstants.USB_CLASS_HUB &&
+                !isScannerOrReaderPeripheral(peer)
+        }
+        return otherPeripherals == 0 && isOtgEscPosBulkDevice(device)
+    }
+
     fun isOtgEscPosBulkDevice(device: UsbDevice): Boolean {
         return runCatching {
             if (hasPrinterClass(device)) return@runCatching true
