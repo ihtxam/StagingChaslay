@@ -116,6 +116,29 @@ export default function WebPosRetailProductCenter({
     return () => window.clearTimeout(id);
   }, [autoFocusSearch, preferScannerWedge, inputRef]);
 
+  /** Android HID wedge: visible search must not hold focus while read-only or scans are dropped. */
+  useEffect(() => {
+    if (!preferScannerWedge) return;
+    const focusWedge = () => focusBarcodeWedgeCapture();
+    const t0 = window.setTimeout(focusWedge, 50);
+    const t1 = window.setTimeout(focusWedge, 400);
+    const t2 = window.setTimeout(focusWedge, 1_200);
+    return () => {
+      window.clearTimeout(t0);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [preferScannerWedge, categoryId]);
+
+  useEffect(() => {
+    if (!preferScannerWedge) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') focusBarcodeWedgeCapture();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [preferScannerWedge]);
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
       <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2.5">
@@ -150,8 +173,20 @@ export default function WebPosRetailProductCenter({
             data-manual-retail-search={manualRetailSearch ? '1' : '0'}
             readOnly={wedgeScanMode}
             inputMode={wedgeScanMode ? 'none' : 'search'}
+            tabIndex={wedgeScanMode ? -1 : 0}
             enterKeyHint="search"
             aria-label={t('webPosRetailScanSearch')}
+            onFocus={(e) => {
+              if (!wedgeScanMode) return;
+              e.currentTarget.blur();
+              focusBarcodeWedgeCapture();
+            }}
+            onInput={(e) => {
+              if (!wedgeScanMode) return;
+              const value = e.currentTarget.value;
+              e.currentTarget.value = '';
+              if (value) onSearchChange(value);
+            }}
             onPointerDown={() => {
               if (!preferScannerWedge || manualRetailSearch) return;
               setManualRetailSearch(true);

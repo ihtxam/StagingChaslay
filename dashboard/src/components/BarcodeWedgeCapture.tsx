@@ -98,7 +98,7 @@ export default function BarcodeWedgeCapture({
       autoCapitalize="off"
       spellCheck={false}
       aria-hidden
-      tabIndex={-1}
+      tabIndex={0}
       className={`${inputClassName} pointer-events-none fixed -left-[9999px] top-0 h-px w-px opacity-0`}
       onInput={(e) => {
         const el = e.currentTarget;
