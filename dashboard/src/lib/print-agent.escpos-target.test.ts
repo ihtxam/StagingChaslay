@@ -22,5 +22,8 @@ assert.equal(isStaleUsbEthernetPrinterName('3034:33106'), true);
 assert.equal(isStaleUsbEthernetPrinterName('USB 10/100 LAN'), true);
 assert.equal(isStaleUsbEthernetPrinterName('USB Printer Port'), false);
 assert.match(src, /isStaleUsbEthernetPrinterName/);
+assert.match(src, /connectionType === 'sunmi-internal'/);
+assert.match(src, /export function resolveLiveEscPosTargetNames/);
+assert.match(src, /export async function listNormalizedLiveAgentPrinters/);
 
 console.log('print-agent.escpos-target.test.ts ok');

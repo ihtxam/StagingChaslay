@@ -99,12 +99,14 @@ import {
   isPrinterDisconnectedError,
   isUnsuitableRawPrinter,
   listAgentPrinters,
+  listNormalizedLiveAgentPrinters,
   pairPrintAgentCloudRelay,
   printViaAgent,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
   resolveEscPosPrinterName,
+  resolveLiveEscPosTargetNames,
   resolveLivePrinterName,
   looksLikeLabelPrinterName,
   suggestPrinterAutoHeal,
@@ -8253,21 +8255,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : opts.role === 'kitchen'
           ? t('webPosPrintJobKitchen')
           : lastReceiptOrderNumber || t('webPosPrintJobReceipt');
-    const targetsToPrint = names
-      .map((name) => {
-        const configured = (name || '').trim();
-        const label =
-          configured && printers.length > 0
-            ? resolveEscPosPrinterName(configured, printers) || ''
-            : configured;
-        return label;
-      })
-      .filter(Boolean)
-      .filter(
-        (label) =>
-          opts.role === 'eod' ||
-          (!looksLikeLabelPrinterName(label) && !printerUsesLabelProtocol(printSettings, label))
-      );
+    let livePrinters = printers;
+    if (!livePrinters.length) {
+      livePrinters = await listNormalizedLiveAgentPrinters();
+    }
+    const profileHints = new Map(
+      (printSettings?.printers || []).map((p) => [
+        String(p.name || '').trim(),
+        { portName: p.portName, matchHint: p.matchHint },
+      ])
+    );
+    const targetsToPrint = resolveLiveEscPosTargetNames(names, livePrinters, (configured) =>
+      profileHints.get(configured)
+    ).filter(
+      (label) =>
+        opts.role === 'eod' ||
+        (!looksLikeLabelPrinterName(label) && !printerUsesLabelProtocol(printSettings, label))
+    );
     for (const label of targetsToPrint) {
       if (label && isUnsuitableRawPrinter(label)) {
         if (opts.role === 'eod') {
@@ -8288,7 +8292,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             retryLocally: printRetryLocally,
             jobKind,
             jobLabel,
-            skipRetarget: true,
+            skipRetarget: !livePrinters.length,
           });
           return { ok: true as const, mode, label };
         } catch (e: unknown) {
