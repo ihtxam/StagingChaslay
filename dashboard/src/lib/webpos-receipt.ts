@@ -356,6 +356,8 @@ export const KITCHEN_PRINT_DESTINATIONS: KitchenPrintDestination[] = [
 export type WebPosReceipt = {
   businessName: string;
   address?: string;
+  /** City / locality printed on the line after street. */
+  city?: string;
   phone?: string;
   vatNumber?: string;
   id: string;
@@ -807,6 +809,15 @@ export function isReceiptTelephoneLine(line: string): boolean {
   return /^(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone)\s*:/i.test(text);
 }
 
+/** Store VAT / TVA / MWST line in the receipt header. */
+export function isReceiptVatLine(line: string): boolean {
+  const text = String(line || '').replace(/\s+/g, ' ').trim();
+  return /^(?:vat|tva|mwst|uid|n°\s*tva|no\.?\s*tva)\s*:/i.test(text);
+}
+
+const RECEIPT_CONTACT_LABEL_RE =
+  /(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone|vat|tva|mwst|uid)\s*:/i;
+
 /** One blank line (LF). ESC d 1 is the same feed the cut path already uses. */
 const ESC_POS_BLANK_LINE = new Uint8Array([0x0a]);
 const ESC_POS_FEED_ONE = new Uint8Array([0x1b, 0x64, 0x01]);
@@ -823,9 +834,41 @@ export function buildReceiptHeaderPlainTextBlock(
   for (let i = 0; i < unpaddedLines.length; i++) {
     block += alignLine(unpaddedLines[i]!, width, align) + '\n';
     if (i === 0 && titleBodyGap) block += '\n';
-    if (isReceiptTelephoneLine(unpaddedLines[i] || '')) block += '\n';
+    if (isReceiptTelephoneLine(unpaddedLines[i] || '') || isReceiptVatLine(unpaddedLines[i] || '')) {
+      block += '\n';
+    }
   }
   return `${block}\n`;
+}
+
+/** Word-wrap a header line to the next row instead of slicing mid-field. */
+export function wrapReceiptHeaderLine(text: string, width: number): string[] {
+  const n = String(text || '').replace(/\s+/g, ' ').trim();
+  const max = Math.max(8, Number(width) || 32);
+  if (!n) return [];
+  if (n.length <= max) return [n];
+  const words = n.split(' ');
+  const out: string[] = [];
+  let cur = '';
+  for (const word of words) {
+    if (!word) continue;
+    if (word.length > max) {
+      if (cur) {
+        out.push(cur);
+        cur = '';
+      }
+      for (let i = 0; i < word.length; i += max) out.push(word.slice(i, i + max));
+      continue;
+    }
+    const next = cur ? `${cur} ${word}` : word;
+    if (next.length <= max) cur = next;
+    else {
+      out.push(cur);
+      cur = word;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
 }
 
 const RECEIPT_PHONE_LINE_RE =
@@ -836,11 +879,15 @@ const RECEIPT_COUNTRY_SPLIT_RE =
   /(?:\s+|(?<=[a-zà-ÿ]))(?=(?:Suisse|Switzerland|Schweiz|France|Deutschland|Italy|Italia|Österreich|Austria)\b)/i;
 const RECEIPT_STREET_SPLIT_RE =
   /\s+(?=(?:Rue|Rue des|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\s+)/i;
+/** Store name glued to DE/CH street (e.g. POLACAFEBahnhofstrasse) — prefix word required so we do not split inside "…strasse". */
 const RECEIPT_DE_CH_STREET_SPLIT_RE =
-  /(?<=[A-Za-zÀ-ÿäöüÄÖÜß])(?=(?:Bahnhof|Haupt|Markt|Neu|Alte|Obere|Untere)?[A-Za-zÀ-ÿäöüÄÖÜß-]*(?:strasse|straße|Strasse|Straße|gasse|Gasse|weg|We|platz|Platz|allee|Allee)\b)/i;
+  /(?<=[A-Za-zÀ-ÿäöüÄÖÜß])(?=(?:Bahnhof|Haupt|Markt|Neu|Alte|Obere|Untere)[A-Za-zÀ-ÿäöüÄÖÜß-]*(?:strasse|straße|Strasse|Straße|gasse|Gasse|weg|We|platz|Platz|allee|Allee)\b)/i;
 const RECEIPT_DE_STREET_SPACED_RE =
-  /\s+(?=(?:Bahnhof|Haupt|Markt|Neu|Alte|Obere|Untere)?[A-Za-zÀ-ÿäöüÄÖÜß-]*(?:strasse|straße|Strasse|Straße|gasse|Gasse|weg|We|platz|Platz|allee|Allee)\b)/i;
+  /\s+(?=(?:Bahnhof|Haupt|Markt|Neu|Alte|Obere|Untere)[A-Za-zÀ-ÿäöüÄÖÜß-]*(?:strasse|straße|Strasse|Straße|gasse|Gasse|weg|We|platz|Platz|allee|Allee)\b)/i;
 const RECEIPT_PLZ_SPLIT_RE = /\s+(?=\d{4}\s+[A-Za-zÀ-ÿ])/;
+/** ALL-CAPS store name glued to street (e.g. POLACAFEBahnhofstrasse). */
+const RECEIPT_GLUED_CAPS_STORE_STREET_RE =
+  /(?<=[A-Z])(?=(?:Bahnhof|Haupt|Markt|Rue|Rua|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\b)/i;
 /** City name glued to Tel:/Tél: label (e.g. ZürichTel:). */
 const RECEIPT_GLUED_PHONE_SPLIT_RE =
   /(?<=[\wäöüÄÖÜßà-ÿ])(?=(?:Tel|Tél|Telephone|Téléphone|Phone)\s*:)/i;
@@ -854,13 +901,19 @@ function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   return parts.length > 1 ? parts : [text];
 }
 
-/** Split one header detail line so telephone labels start on their own row. */
+/** Split one header detail line so Tel / VAT labels start on their own row. */
 export function splitReceiptHeaderDetailLine(line: string): string[] {
-  let parts = [String(line || '').replace(/\s+/g, ' ').trim()].filter(Boolean);
-  if (!parts.length) return [];
+  const raw = String(line || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return [];
+  const spaced = raw.replace(
+    /([^\s:])(?=(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone|vat|tva|mwst|uid)\s*:)/gi,
+    '$1 '
+  );
+  let parts = [spaced].filter(Boolean);
   for (const re of [
     RECEIPT_GLUED_VAT_SPLIT_RE,
     RECEIPT_GLUED_PHONE_SPLIT_RE,
+    RECEIPT_GLUED_CAPS_STORE_STREET_RE,
     RECEIPT_TAX_SPLIT_RE,
     RECEIPT_COUNTRY_SPLIT_RE,
     RECEIPT_DE_CH_STREET_SPLIT_RE,
@@ -882,7 +935,135 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
     if (before) out.push(before);
     out.push(phone);
   }
+  return out.length ? out : [raw];
+}
+
+function normalizeHeaderContactLine(line: string): string {
+  const text = String(line || '').replace(/\s+/g, ' ').trim();
+  const vat = text.match(/^(?:vat|tva|mwst|uid|n°\s*tva|no\.?\s*tva)\s*:\s*(.+)$/i);
+  if (vat) return `VAT: ${vat[1]!.trim()}`;
+  const tel = text.match(/^(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone)\s*:\s*(.+)$/i);
+  if (tel) return `Tel: ${tel[1]!.trim()}`;
+  return text;
+}
+
+/** Street on one line, postal + city on the next — even when stored as one blob. */
+export function splitMerchantAddressLines(address: string, city?: string | null): string[] {
+  const locality = String(city || '').replace(/\s+/g, ' ').trim();
+  let street = String(address || '').replace(/\s+/g, ' ').trim();
+  if (!street && !locality) return [];
+
+  const peeled: string[] = [];
+  if (street) {
+    for (const part of splitReceiptHeaderDetailLine(street)) {
+      const normalized = normalizeHeaderContactLine(part);
+      if (isReceiptTelephoneLine(normalized) || isReceiptVatLine(normalized)) {
+        peeled.push(normalized);
+        continue;
+      }
+      peeled.push(...splitStreetAndLocality(normalized));
+    }
+  }
+
+  const lines = peeled.filter((line) => !isReceiptTelephoneLine(line) && !isReceiptVatLine(line));
+  const contacts = peeled.filter((line) => isReceiptTelephoneLine(line) || isReceiptVatLine(line));
+
+  if (locality) {
+    const compactCity = compactHeaderKey(locality);
+    const already = lines.some((line) => compactHeaderKey(line) === compactCity);
+    if (!already) {
+      const last = lines[lines.length - 1] || '';
+      if (last && compactHeaderKey(last).endsWith(compactCity) && compactHeaderKey(last) !== compactCity) {
+        const stripped = last
+          .replace(new RegExp(`[,\\s]+${locality.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i'), '')
+          .trim();
+        if (stripped) lines[lines.length - 1] = stripped;
+      }
+      lines.push(locality);
+    }
+  }
+
+  return [...dedupeHeaderLines(lines), ...contacts];
+}
+
+export function splitStreetAndLocality(address: string): string[] {
+  const text = String(address || '').replace(/\s+/g, ' ').trim();
+  if (!text) return [];
+
+  const comma = text.lastIndexOf(',');
+  if (comma > 0) {
+    const street = text.slice(0, comma).replace(/[,\s]+$/, '').trim();
+    const city = text.slice(comma + 1).trim();
+    if (street && city) return [street, city];
+  }
+
+  const pt = text.match(/^(.*?)(\d{4}-\d{3}\b.*)$/);
+  if (pt && pt[1]!.trim() && pt[2]!.trim()) {
+    return [pt[1]!.replace(/[,\s]+$/, '').trim(), pt[2]!.trim()];
+  }
+
+  const postal = text.match(/^(.*?)\s+(\d{4,5}\b(?:\s+[A-Za-zÀ-ÿ].*)?)$/);
+  if (postal && postal[1]!.trim() && /\d/.test(postal[1]!) && postal[2]!.trim()) {
+    const street = postal[1]!.replace(/[,\s]+$/, '').trim();
+    const city = postal[2]!.trim();
+    if (street.split(' ').length >= 2) return [street, city];
+  }
+
+  return [text];
+}
+
+function compactHeaderKey(value: string): string {
+  return String(value || '').replace(/\s+/g, '').toLowerCase();
+}
+
+function dedupeHeaderLines(lines: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const key = compactHeaderKey(line);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
   return out;
+}
+
+function headerHasDedicatedLine(lines: string[], needle: string): boolean {
+  const n = String(needle || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!n) return true;
+  return lines.some((line) => String(line || '').replace(/\s+/g, ' ').trim().toLowerCase() === n);
+}
+
+function headerHasDedicatedContact(lines: string[], kind: 'tel' | 'vat', value: string): boolean {
+  const compact = compactHeaderKey(value);
+  if (!compact) return true;
+  return lines.some((line) => {
+    if (kind === 'tel' && !isReceiptTelephoneLine(line)) return false;
+    if (kind === 'vat' && !isReceiptVatLine(line)) return false;
+    return compactHeaderKey(line).includes(compact);
+  });
+}
+
+function splitTitleFromBusinessName(
+  title: string,
+  businessName: string
+): { title: string; extra: string } {
+  const raw = String(title || '').replace(/\s+/g, ' ').trim();
+  const name = String(businessName || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return { title: '', extra: '' };
+  if (!name || raw.length <= name.length) return { title: raw, extra: '' };
+  const rawLower = raw.toLowerCase();
+  const nameLower = name.toLowerCase();
+  if (rawLower.startsWith(nameLower)) {
+    return {
+      title: raw.slice(0, name.length),
+      extra: raw.slice(name.length).replace(/^[\s,;/-]+/, '').trim(),
+    };
+  }
+  if (compactHeaderKey(raw).startsWith(compactHeaderKey(name))) {
+    return { title: name, extra: raw.slice(name.length).replace(/^[\s,;/-]+/, '').trim() };
+  }
+  return { title: raw, extra: '' };
 }
 
 /** Expand receipt header body text into one logical line per printed row. */
@@ -890,44 +1071,36 @@ export function expandReceiptHeaderDetailLines(text: string): string[] {
   const out: string[] = [];
   for (const raw of String(text || '').split(/\r?\n/)) {
     for (const part of splitReceiptHeaderDetailLine(raw)) {
-      const trimmed = part.trim();
-      if (trimmed) out.push(trimmed);
+      const trimmed = normalizeHeaderContactLine(part.trim());
+      if (!trimmed) continue;
+      if (isReceiptTelephoneLine(trimmed) || isReceiptVatLine(trimmed)) {
+        out.push(trimmed);
+        continue;
+      }
+      for (const addressLine of splitStreetAndLocality(trimmed)) {
+        if (addressLine) out.push(addressLine);
+      }
     }
   }
   return out;
 }
 
-function headerLineAlreadyPresent(lines: string[], needle: string): boolean {
-  const n = String(needle || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  if (!n) return true;
-  return lines.some((line) => {
-    const hay = String(line || '').replace(/\s+/g, ' ').trim().toLowerCase();
-    return hay === n || hay.includes(n) || n.includes(hay);
-  });
-}
-
 function appendMerchantHeaderContactLines(
   lines: string[],
-  tx: Pick<WebPosReceipt, 'address' | 'phone' | 'vatNumber'>,
-  fmt: (text: string) => string
+  tx: Pick<WebPosReceipt, 'address' | 'city' | 'phone' | 'vatNumber'>,
+  push: (text: string) => void
 ): void {
-  const address = String(tx.address || '').trim();
-  if (address && !headerLineAlreadyPresent(lines, address)) {
-    lines.push(fmt(address.slice(0, 2000)));
+  for (const part of splitMerchantAddressLines(tx.address || '', tx.city)) {
+    if (isReceiptTelephoneLine(part) || isReceiptVatLine(part)) continue;
+    if (!headerHasDedicatedLine(lines, part)) push(part);
   }
   const phone = String(tx.phone || '').trim();
-  if (phone) {
-    const telLine = `Tel: ${phone}`;
-    if (!headerLineAlreadyPresent(lines, phone) && !headerLineAlreadyPresent(lines, telLine)) {
-      lines.push(fmt(telLine.slice(0, 2000)));
-    }
+  if (phone && !headerHasDedicatedContact(lines, 'tel', phone)) {
+    push(`Tel: ${phone}`);
   }
   const vat = String(tx.vatNumber || '').trim();
-  if (vat) {
-    const vatLine = `VAT: ${vat}`;
-    if (!headerLineAlreadyPresent(lines, vat)) {
-      lines.push(fmt(vatLine.slice(0, 2000)));
-    }
+  if (vat && !headerHasDedicatedContact(lines, 'vat', vat)) {
+    push(`VAT: ${vat}`);
   }
 }
 
@@ -959,53 +1132,76 @@ export function normalizeReceiptHeaderFields(settings?: {
 export function getReceiptHeaderLines(
   tx: Pick<
     WebPosReceipt,
-    'header' | 'headerTitle' | 'businessName' | 'address' | 'phone' | 'vatNumber' | 'headerAlign'
+    | 'header'
+    | 'headerTitle'
+    | 'businessName'
+    | 'address'
+    | 'city'
+    | 'phone'
+    | 'vatNumber'
+    | 'headerAlign'
   >,
   width: number,
-  opts?: { padLines?: boolean }
+  opts?: { padLines?: boolean; titleScale?: 1 | 2 | 3 }
 ): string[] {
   const align = tx.headerAlign ?? 'center';
   const padLines = opts?.padLines !== false;
-  const fmt = (text: string) =>
-    padLines ? alignLine(text, width, align) : text.slice(0, width);
+  const titleWidth =
+    opts?.titleScale === 3 ? Math.max(12, Math.floor(width / 2)) : width;
+  const push = (lines: string[], text: string, maxWidth = width) => {
+    for (const part of wrapReceiptHeaderLine(text, maxWidth)) {
+      lines.push(padLines ? alignLine(part, width, align) : part);
+    }
+  };
   const { title, body } = normalizeReceiptHeaderFields({
     headerTitle: tx.headerTitle,
     header: tx.header,
   });
   const lines: string[] = [];
+  const addressParts = splitMerchantAddressLines(tx.address || '', tx.city).filter(
+    (part) => !isReceiptTelephoneLine(part) && !isReceiptVatLine(part)
+  );
   if (title || body) {
+    const peeledTitle = expandReceiptHeaderDetailLines(title);
+    const peeledBody = expandReceiptHeaderDetailLines(body);
+    const leftover: string[] = [];
+    let titleLine = '';
+    for (const part of peeledTitle) {
+      if (isReceiptTelephoneLine(part) || isReceiptVatLine(part)) {
+        leftover.push(part);
+        continue;
+      }
+      if (!titleLine) titleLine = part;
+      else leftover.push(part);
+    }
     const address = String(tx.address || '').trim();
-    let titleLine = title;
     if (titleLine && address && titleLine.includes(address)) {
       const idx = titleLine.indexOf(address);
       const namePart = titleLine.slice(0, idx).replace(/[,\s]+$/, '').trim();
       titleLine = namePart || titleLine;
     }
-    if (titleLine) {
-      for (const part of splitReceiptHeaderDetailLine(titleLine)) {
-        if (part.trim()) lines.push(fmt(part.trim()));
+    const splitName = splitTitleFromBusinessName(titleLine, tx.businessName || '');
+    titleLine = splitName.title;
+    if (splitName.extra) leftover.unshift(splitName.extra);
+    if (titleLine) push(lines, titleLine, titleWidth);
+    for (const line of [...leftover, ...peeledBody]) {
+      if (isReceiptTelephoneLine(line) || isReceiptVatLine(line)) {
+        if (!headerHasDedicatedLine(lines, line)) push(lines, line);
+        continue;
       }
+      if (headerHasDedicatedLine(lines, line)) continue;
+      if (RECEIPT_CONTACT_LABEL_RE.test(line) && line.length > width * 2) continue;
+      const alreadyAddress = addressParts.some(
+        (part) => compactHeaderKey(part) === compactHeaderKey(line)
+      );
+      if (alreadyAddress) continue;
+      push(lines, line);
     }
-    if (body) {
-      for (const line of expandReceiptHeaderDetailLines(body)) {
-        lines.push(fmt(line));
-      }
-    }
-    const bodyLooksComplete =
-      !!body &&
-      (/\b(tel|t[eé]l|phone)\s*:/i.test(body) ||
-        /\b(vat|uid|tva|mwst)\s*:/i.test(body) ||
-        /\bCHE-\d/i.test(body) ||
-        /\b\d{4}\s+[A-Za-zÀ-ÿ]/.test(body));
-    if (!bodyLooksComplete) {
-      appendMerchantHeaderContactLines(lines, tx, fmt);
-    }
+    appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
     return lines;
   }
-  lines.push(fmt((tx.businessName || APP_NAME).toUpperCase().slice(0, width)));
-  if (tx.address) lines.push(fmt(tx.address.slice(0, width)));
-  if (tx.phone) lines.push(fmt(`Tel: ${tx.phone}`.slice(0, width)));
-  if (tx.vatNumber) lines.push(fmt(`VAT: ${tx.vatNumber}`.slice(0, width)));
+  push(lines, (tx.businessName || APP_NAME).toUpperCase(), titleWidth);
+  appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
   return lines;
 }
 
@@ -1028,8 +1224,8 @@ export function buildReceiptHeaderEscPos(
   }
   parts.push(escBold(false), escKitchenSize(1), escAlign(0));
   const lastLine = lines[lines.length - 1] || '';
-  if (isReceiptTelephoneLine(lastLine)) {
-    // One blank line between the telephone and the separator under it.
+  if (isReceiptTelephoneLine(lastLine) || isReceiptVatLine(lastLine)) {
+    // One blank line between contact lines and the separator under them.
     parts.push(ESC_POS_FEED_ONE);
   } else {
     parts.push(escposCp850Encode('\n\n'));
@@ -4072,6 +4268,7 @@ export function posOrderToWebPosReceipt(
   ctx: {
     businessName: string;
     address?: string;
+    city?: string;
     phone?: string;
     vatNumber?: string;
     taxRate?: number;
@@ -4136,6 +4333,7 @@ export function posOrderToWebPosReceipt(
   return {
     businessName: ctx.businessName,
     address: ctx.address,
+    city: ctx.city,
     phone: ctx.phone,
     vatNumber: ctx.vatNumber,
     id: order.clientId || order.id,

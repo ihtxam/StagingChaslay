@@ -51,6 +51,7 @@ async function printReceiptText(
     locale?: string;
     merchantName?: string | null;
     merchantAddress?: string | null;
+    merchantCity?: string | null;
     merchantPhone?: string | null;
     merchantVatNumber?: string | null;
   }
@@ -83,12 +84,13 @@ async function printReceiptText(
       header: opts.printSettings?.receiptHeader,
       businessName: opts.merchantName || APP_NAME,
       address: opts.merchantAddress,
+      city: opts.merchantCity,
       phone: opts.merchantPhone,
       vatNumber: opts.merchantVatNumber,
       headerAlign: headerFmt.align,
     },
     lineWidthForPaper(paper === 58 ? 58 : 80),
-    { padLines: false }
+    { padLines: false, titleScale: headerFmt.textScale }
   );
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,
@@ -140,7 +142,8 @@ export async function printMerchantOrderReceipt(
     opts.merchant.vatRate != null ? Number(opts.merchant.vatRate) : 8.1;
   const receiptPayload = posOrderToWebPosReceipt(order, {
     businessName: opts.merchant.name || APP_NAME,
-    address: [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
+    address: opts.merchant.address || undefined,
+    city: opts.merchant.city || undefined,
     phone: opts.merchant.phone || undefined,
     vatNumber: opts.merchant.vatNumber || undefined,
     taxRate: fallbackRate,
@@ -161,7 +164,8 @@ export async function printMerchantOrderReceipt(
     deliveryQrUrl: deliveryDirectionsUrlForReceipt(receiptPayload),
     logoUrl: opts.printSettings?.receiptLogoUrl || opts.merchant.shopLogoUrl || null,
     merchantName: opts.merchant.name || APP_NAME,
-    merchantAddress: [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
+    merchantAddress: opts.merchant.address || undefined,
+    merchantCity: opts.merchant.city || undefined,
     merchantPhone: opts.merchant.phone || undefined,
     merchantVatNumber: opts.merchant.vatNumber || undefined,
   });
@@ -181,7 +185,7 @@ export async function printRefundReceipt(
     {
       ...payload,
       businessName: payload.businessName || opts.merchant.name || APP_NAME,
-      address: payload.address || [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
+      address: payload.address || opts.merchant.address || undefined,
       phone: payload.phone || opts.merchant.phone || undefined,
       language: lang,
       paperWidthMm: opts.printSettings?.paperWidthMm || 80,
@@ -196,7 +200,8 @@ export async function printRefundReceipt(
     locale: opts.locale,
     logoUrl: opts.printSettings?.receiptLogoUrl || opts.merchant.shopLogoUrl || null,
     merchantName: payload.businessName || opts.merchant.name || APP_NAME,
-    merchantAddress: payload.address || [opts.merchant.address, opts.merchant.city].filter(Boolean).join(', '),
+    merchantAddress: payload.address || opts.merchant.address || undefined,
+    merchantCity: opts.merchant.city || undefined,
     merchantPhone: payload.phone || opts.merchant.phone || undefined,
     merchantVatNumber: opts.merchant.vatNumber || undefined,
   });
