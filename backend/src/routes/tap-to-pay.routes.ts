@@ -50,9 +50,9 @@ async function loadMerchant(merchantId: string) {
 }
 
 function tapToPayBlocked(merchant: NonNullable<Awaited<ReturnType<typeof loadMerchant>>>) {
-  if (merchant.tapToPayEnabled !== true) {
-    return "Tap to Pay is disabled for this merchant.";
-  }
+  // Availability now follows the Adyen credentials alone: a merchant that has an
+  // API key and a merchant account configured can transact. The merchants.tap_to_pay_enabled
+  // flag is no longer consulted here.
   if (!merchant.adyenApiKey || !merchant.adyenMerchantAccount) {
     return "Adyen credentials are not configured for this merchant.";
   }
