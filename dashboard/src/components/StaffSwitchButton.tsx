@@ -5,17 +5,11 @@ import toast from 'react-hot-toast';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import { useI18n } from '@/lib/i18n';
 import { registerPosSession } from '@/lib/pos-session';
+import { homePathAfterStaffPin } from '@/lib/auth-home';
+import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import {
-  backOfficeHomePath,
-  deliveryDriverHomePath,
-  hasPermission,
-  isDeliveryDriverOnlyStaff,
-  isOrderCenterOnlyStaff,
-  isStorekeeperOnlyStaff,
   notifyWebPosStaffSessionChanged,
-  orderCenterHomePath,
   saveWebPosStaffSession,
-  storekeeperHomePath,
   type Permission,
 } from '@/lib/permissions';
 
@@ -31,15 +25,6 @@ type Props = {
   showTrigger?: boolean;
   onOpen?: () => void;
 };
-
-function staffSwitchHomePath(permissions: Permission[]): string {
-  if (isDeliveryDriverOnlyStaff(permissions, false)) return deliveryDriverHomePath();
-  if (isStorekeeperOnlyStaff(permissions, false)) return storekeeperHomePath();
-  if (isOrderCenterOnlyStaff(permissions, false)) return orderCenterHomePath();
-  if (hasPermission(permissions, 'USE_WEBPOS', false)) return '/merchant/pos';
-  if (hasPermission(permissions, 'MANAGE_TABLES', false)) return '/merchant/waiter';
-  return backOfficeHomePath(permissions, false);
-}
 
 const StaffSwitchButton = forwardRef<StaffSwitchButtonHandle, Props>(function StaffSwitchButton(
   { className = '', variant = 'button', showTrigger = true, onOpen },
@@ -109,9 +94,14 @@ const StaffSwitchButton = forwardRef<StaffSwitchButtonHandle, Props>(function St
           }
           setOpen(false);
           toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
-          const dest = staffSwitchHomePath(permissions);
+          const dest = homePathAfterStaffPin({
+            permissions,
+            loginHome: normalizeStaffLoginHome(staff.loginHome),
+          });
           if (dest === '/merchant/pos' || dest === '/merchant/waiter') {
             window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+          } else {
+            window.dispatchEvent(new CustomEvent('webpos:show-panel'));
           }
           navigate(dest, { replace: true });
         }}

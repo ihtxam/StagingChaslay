@@ -97,6 +97,7 @@ export default function WebPosPinModal({
     roleId: string;
     roleName: string;
     permissions: string[];
+    loginHome?: string;
     accessToken?: string;
     preferredTerminalId?: string | null;
   }) => void;

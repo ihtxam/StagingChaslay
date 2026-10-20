@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { RefreshCw, Truck } from 'lucide-react';
 import api, { resolveApiOriginForBridge } from '@/lib/api';
@@ -604,6 +604,8 @@ import {
   type StaffRosterRow,
   type WebPosStaffSession,
 } from '@/lib/permissions';
+import { navigateTargetAfterStaffPin } from '@/lib/auth-home';
+import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
 import { openCashDrawerViaAgent } from '@/lib/print-agent';
@@ -816,6 +818,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const notifyPrintErrorRef = useRef(notifyPrintError);
   notifyPrintErrorRef.current = notifyPrintError;
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [deliveryHubOpen, setDeliveryHubOpen] = useState(false);
   const [deliveryHubMinimized, setDeliveryHubMinimized] = useState(false);
@@ -10217,6 +10220,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       roleId: string;
       roleName: string;
       permissions: string[];
+      loginHome?: string;
       accessToken?: string;
       preferredTerminalId?: string | null;
     },
@@ -10280,6 +10284,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       navigate(deliveryDriverHomePath(), { replace: true });
       return;
     }
+    const pinNav = navigateTargetAfterStaffPin(
+      {
+        permissions: session.permissions,
+        loginHome: normalizeStaffLoginHome(staff.loginHome),
+      },
+      location.pathname,
+      pinModalMode
+    );
+    if (pinNav) {
+      if (pinNav === '/merchant/pos' || pinNav === '/merchant/waiter') {
+        window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+      } else {
+        window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+      }
+      navigate(pinNav, { replace: true });
+      return;
+    }
     if (paymentConfig?.terminals?.length) {
       const terminalId = resolveActiveTerminalId(paymentConfig.terminals, {
         preferred: staff.preferredTerminalId,
@@ -10300,6 +10321,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     roleId: string;
     roleName: string;
     permissions: string[];
+    loginHome?: string;
     accessToken?: string;
     preferredTerminalId?: string | null;
   }) => {
