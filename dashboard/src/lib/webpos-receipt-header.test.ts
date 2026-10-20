@@ -204,4 +204,46 @@ const melimeloLines = getReceiptHeaderLines(
 );
 assert.equal(melimeloLines[0], 'MELIMELO');
 
+const lowercaseRue = getReceiptHeaderLines(
+  {
+    headerTitle: '',
+    header:
+      'Le Bistrot Voyageur 12 rue de la Gare 2000 Neuchâtel Tel: 032 000 00 00 VAT: CHE-111.222.333',
+    businessName: 'Le Bistrot Voyageur',
+    address: '12 rue de la Gare',
+    city: 'Neuchâtel',
+    phone: '032 000 00 00',
+    vatNumber: 'CHE-111.222.333',
+    headerAlign: 'center',
+  },
+  32,
+  { padLines: false }
+);
+assert.equal(lowercaseRue[0], 'Le Bistrot Voyageur');
+assert.ok(lowercaseRue.some((l) => /rue de la Gare/i.test(l)));
+assert.ok(lowercaseRue.some((l) => /Tel:\s*032/.test(l)));
+assert.equal(
+  lowercaseRue.some((l) => /tel/i.test(l) && /bistrot/i.test(l)),
+  false,
+  'store name and Tel must not share one line'
+);
+
+const longMashedBody = getReceiptHeaderLines(
+  {
+    headerTitle: 'POLACAFE',
+    header:
+      'Bahnhofstrasse 1 Zürich Tel: +41 79 000 00 00 VAT: CHE-123.321.432 MWST extra padding text to exceed width',
+    businessName: 'POLACAFE',
+    address: 'Bahnhofstrasse 1, Zürich',
+    phone: '+41 79 000 00 00',
+    vatNumber: 'CHE-123.321.432',
+    headerAlign: 'center',
+  },
+  32,
+  { padLines: false }
+);
+assert.equal(longMashedBody[0], 'POLACAFE');
+assert.ok(longMashedBody.some((l) => /Bahnhofstrasse/i.test(l)));
+assert.ok(longMashedBody.some((l) => /Tel:\s*\+41/.test(l)));
+
 console.log('webpos-receipt-header.test.ts ok');

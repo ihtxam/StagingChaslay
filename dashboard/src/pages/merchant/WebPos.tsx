@@ -6282,7 +6282,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const disc = payableFullTotals.discount || 0;
       const receiptPayload: WebPosReceipt = {
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         id: `prov-${Date.now()}`,
@@ -6749,7 +6750,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const text = generateGiftCardSaleReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         code: opts.code,
@@ -7539,7 +7541,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       try {
         const receiptPayload = posOrderToWebPosReceipt(orderForReceipt, {
           businessName: merchant?.name || APP_NAME,
-          address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+          address: merchant?.address || '',
+        city: merchant?.city || undefined,
           phone: merchant?.phone || undefined,
           vatNumber: merchant?.vatNumber || undefined,
           taxRate,
@@ -8027,13 +8030,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerTitle: printSettings?.receiptHeaderTitle,
       header: printSettings?.receiptHeader,
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         headerAlign: headerFmt.align,
       },
       lineWidthForPaper(paper === 58 ? 58 : 80),
-      { padLines: false }
+      { padLines: false, titleScale: headerFmt.textScale }
     );
     const headerNorm = normalizeReceiptHeaderFields({
       headerTitle: printSettings?.receiptHeaderTitle,
@@ -8200,13 +8204,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 headerTitle: printSettings?.receiptHeaderTitle,
                 header: printSettings?.receiptHeader,
                 businessName: merchant?.name || APP_NAME,
-                address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+                address: merchant?.address || '',
+        city: merchant?.city || undefined,
                 phone: merchant?.phone || undefined,
                 vatNumber: merchant?.vatNumber || undefined,
                 headerAlign: headerFmt.align,
               },
               lineWidthForPaper(paper === 58 ? 58 : 80),
-              { padLines: false }
+              { padLines: false, titleScale: headerFmt.textScale }
             )
           : [];
       const headerNorm = normalizeReceiptHeaderFields({
@@ -8454,7 +8459,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const printPosOrderReceipt = async (order: PosOrderForReceipt, splitLabel?: string | null) => {
     const receiptPayload = posOrderToWebPosReceipt(order, {
       businessName: merchant?.name || APP_NAME,
-      address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+      address: merchant?.address || '',
+      city: merchant?.city || undefined,
       phone: merchant?.phone || undefined,
       vatNumber: merchant?.vatNumber || undefined,
       taxRate,
@@ -8484,7 +8490,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const text = generateRefundReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         orderNumber: payload.order.orderNumber,
         orderDisplay: payload.order.ticketDisplay,
@@ -9279,7 +9286,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       undefined;
     const receiptPayload: WebPosReceipt = {
       businessName: merchant?.name || APP_NAME,
-      address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+      address: merchant?.address || '',
+      city: merchant?.city || undefined,
       phone: merchant?.phone || undefined,
       vatNumber: merchant?.vatNumber || undefined,
       id: clientId,
