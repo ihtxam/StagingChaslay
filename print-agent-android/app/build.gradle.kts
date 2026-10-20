@@ -35,7 +35,10 @@ android {
 
     if (hasAdyenSdk) {
         sourceSets {
-            getByName("main").java.directories.add("src/adyen/kotlin")
+            getByName("main") {
+                java.directories.add("src/adyen/kotlin")
+                manifest.srcFile("src/adyen/AndroidManifest.xml")
+            }
         }
     }
 

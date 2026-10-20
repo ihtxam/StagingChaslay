@@ -58,6 +58,7 @@ assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher
 assert.match(launcher, /recordBlockedStartInCrashLog/);
 assert.match(gradle, /versionName = "0\.4\.47"/);
 assert.match(gradle, /versionCode = 65/);
+assert.match(gradle, /manifest\.srcFile\("src\/adyen\/AndroidManifest\.xml"\)/);
 assert.match(manifest, /BLUETOOTH_ADMIN/);
 assert.match(attachActivity, /schedulePermissionPrompt/);
 assert.match(
