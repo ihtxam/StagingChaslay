@@ -10,6 +10,7 @@ object AdyenBootstrap {
 
     fun register(activity: AppCompatActivity) {
         try {
+            AdyenApplicationHooks.ensureInitialized(activity.application)
             TapToPayCallbackRouter.launcher = InPersonPayments.registerForPaymentResult(
                 activity,
                 PaymentCallback { result ->

@@ -58,6 +58,7 @@ class AdyenTapToPayEngine : TapToPayEngine {
         TapToPayConfig.authToken = params.authToken
 
         return try {
+            AdyenApplicationHooks.ensureInitialized(context.applicationContext as android.app.Application)
             withContext(Dispatchers.IO) { InPersonPayments.warmUp() }.getOrElse {
                 return TapToPayRegisterOutcome(ok = false, message = "Warm-up failed: ${it.message}")
             }
