@@ -139,6 +139,7 @@ jobs:
       - name: Update download manifest
         run: |
           BRIDGE_VERSION="$(grep -E 'versionName\s*=' print-agent-android/app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/' | head -1)"
+          cp -f backend/public/downloads/reborn-print-bridge.apk "backend/public/downloads/reborn-print-bridge-${BRIDGE_VERSION}.apk"
           python3 - <<PY
           import json, datetime
           from pathlib import Path
@@ -151,8 +152,12 @@ jobs:
           PY
 
       - name: Upload APK artifact
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: reborn-print-bridge-apk
-          path: backend/public/downloads/reborn-print-bridge.apk
+          path: |
+            backend/public/downloads/reborn-print-bridge.apk
+            backend/public/downloads/reborn-print-bridge-*.apk
+            backend/public/downloads/reborn-print-bridge.json
           retention-days: 30
