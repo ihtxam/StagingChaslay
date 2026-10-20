@@ -4,9 +4,14 @@ import axios from 'axios';
 export type ShopNavFlags = {
   showGiftCards: boolean;
   showReservations: boolean;
+  showCatering: boolean;
 };
 
-const DEFAULT_FLAGS: ShopNavFlags = { showGiftCards: false, showReservations: false };
+const DEFAULT_FLAGS: ShopNavFlags = {
+  showGiftCards: false,
+  showReservations: false,
+  showCatering: false,
+};
 
 /** Load gift-card / reservation flags for shop topbar when caller has no merchant payload. */
 export function useShopNavFlags(
@@ -20,18 +25,27 @@ export function useShopNavFlags(
       setFetched(DEFAULT_FLAGS);
       return;
     }
-    if (overrides?.showGiftCards !== undefined && overrides?.showReservations !== undefined) {
+    if (
+      overrides?.showGiftCards !== undefined &&
+      overrides?.showReservations !== undefined &&
+      overrides?.showCatering !== undefined
+    ) {
       return;
     }
     let cancelled = false;
-    axios
-      .get(`/api/shop/${shopKey}`)
-      .then((res) => {
+    Promise.all([
+      axios.get(`/api/shop/${shopKey}`),
+      axios.get(`/api/shop/${shopKey}/locations`).catch(() => ({ data: {} })),
+    ])
+      .then(([shopRes, locRes]) => {
         if (cancelled) return;
-        const m = res.data?.data;
+        const m = shopRes.data?.data;
         setFetched({
           showGiftCards: !!m?.giftCards?.enabled,
           showReservations: !!m?.reservationsEnabled,
+          showCatering:
+            overrides?.showCatering ??
+            (!!m?.cateringEnabled && !!locRes.data?.hasCatering),
         });
       })
       .catch(() => {
@@ -40,10 +54,11 @@ export function useShopNavFlags(
     return () => {
       cancelled = true;
     };
-  }, [shopKey, overrides?.showGiftCards, overrides?.showReservations]);
+  }, [shopKey, overrides?.showGiftCards, overrides?.showReservations, overrides?.showCatering]);
 
   return {
     showGiftCards: overrides?.showGiftCards ?? fetched.showGiftCards,
     showReservations: overrides?.showReservations ?? fetched.showReservations,
+    showCatering: overrides?.showCatering ?? fetched.showCatering,
   };
 }

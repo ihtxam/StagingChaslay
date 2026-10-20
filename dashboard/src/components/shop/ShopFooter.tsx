@@ -189,7 +189,7 @@ export default function ShopFooter({ shopKey, basePath: basePathProp }: Props) {
                 </a>
               ) : null}
               {info.cateringEnabled ? (
-                <Link to={`${basePath}/menu?mode=catering`.replace(/\/+/g, '/')} className="text-stone-200 hover:text-white hover:underline">
+                <Link to={`${basePath}/catering`.replace(/\/+/g, '/')} className="text-stone-200 hover:text-white hover:underline">
                   {t('cateringShopNav')}
                 </Link>
               ) : null}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Minus, Plus, Trash2, X, Users } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { ShopSelectedExtra } from '@/lib/shop-cart';
@@ -505,6 +505,14 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
     onConfirm({ comboSelections, selectedExtras: comboExtras, unitPrice, cateringGuestCount: cateringOn ? guestCount : undefined });
   };
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return (
     <>
       <div
@@ -512,7 +520,7 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
         onClick={onClose}
       >
         <div
-          className="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+          className="relative z-10 flex max-h-[92dvh] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="border-b border-stone-200">
@@ -630,7 +638,7 @@ export default function ShopComboWizard({ product, onClose, onConfirm, showImage
             </div>
           </div>
 
-          <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-4 touch-pan-y">
             {slots.map((slot) => {
               const max = slot.maxPick || 1;
               const picks = picksBySlot[slot.id] || [];

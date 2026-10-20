@@ -4,8 +4,9 @@ import axios from 'axios';
 import {
   resolveShopKey,
   resolveShopLocationSlug,
-  shopMenuLandingPath,
+  shopMenuPathAfterHub,
 } from '@/lib/shop-cart';
+import { loadShopLocationSession } from '@/lib/shop-location-session';
 import OrderingPage from './OrderingPage';
 import ChaslayShopHomePage from './ChaslayShopHomePage';
 import { useI18n } from '@/lib/i18n';
@@ -116,7 +117,8 @@ export default function ShopEntry() {
           merchantHasCatering={hasCatering}
           onComplete={(loc) => {
             setHubReady(true);
-            const target = shopMenuLandingPath(shopKey, loc.slug);
+            const session = loadShopLocationSession(shopKey);
+            const target = shopMenuPathAfterHub(shopKey, loc.slug, session?.orderMode);
             const current = location.pathname.replace(/\/+$/, '') || '/';
             const normalizedTarget = target.replace(/\/+$/, '') || '/';
             if (current !== normalizedTarget) {

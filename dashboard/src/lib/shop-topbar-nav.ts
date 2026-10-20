@@ -3,6 +3,7 @@ export type ShopNavLink = { label: string; to: string; onClick?: () => void };
 export type ShopTopbarNavLabels = {
   home: string;
   menu: string;
+  catering?: string;
   giftCard: string;
   reservations: string;
   contact: string;
@@ -13,6 +14,7 @@ export type ShopTopbarNavOptions = {
   basePath: string;
   showGiftCards?: boolean;
   showReservations?: boolean;
+  showCatering?: boolean;
   onStoreInfo?: () => void;
   labels: ShopTopbarNavLabels;
 };
@@ -33,6 +35,9 @@ export function buildShopTopbarNav(opts: ShopTopbarNavOptions): {
     { label: opts.labels.home, to: home },
     { label: opts.labels.menu, to: joinPath(home, 'menu') },
   ];
+  if (opts.showCatering && opts.labels.catering) {
+    topbarLinks.push({ label: opts.labels.catering, to: joinPath(home, 'catering') });
+  }
   if (opts.showGiftCards) {
     topbarLinks.push({ label: opts.labels.giftCard, to: joinPath(home, 'gift-cards') });
   }

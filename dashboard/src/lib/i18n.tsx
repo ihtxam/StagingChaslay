@@ -2246,6 +2246,12 @@ const en: Dict = {
   reviewsInboxNav: 'Reviews',
   listingsNapNav: 'Listings',
   cateringShopNav: 'Catering',
+  shopCateringLandingTitle: 'Catering for your event',
+  shopCateringLandingIntro:
+    'Plan group meals with guest counts, lead times, and package pricing — separate from our everyday menu.',
+  shopCateringLandingBulletGuests: 'Set guest counts; per-guest add-ons scale automatically.',
+  shopCateringLandingBulletLead: 'Lead times and minimums are shown before you checkout.',
+  shopCateringLandingOrderCta: 'Browse catering menu',
   posImageFirstTill: 'Image-first till',
   posImageFirstTillHint: 'Large photo tiles on the register, like SpotOn’s visual menu.',
   reservationsPromoteWaitlist: 'Promote from waitlist',
@@ -7152,6 +7158,13 @@ const fr: Dict = {
   reviewsInboxNav: 'Avis',
   listingsNapNav: 'Fiches',
   cateringShopNav: 'Traiteur',
+  shopCateringLandingTitle: 'Traiteur pour votre événement',
+  shopCateringLandingIntro:
+    'Organisez vos repas de groupe avec nombre de convives, délais et forfaits — à part du menu du quotidien.',
+  shopCateringLandingBulletGuests:
+    'Indiquez le nombre de convives ; les extras « par convive » s’ajustent automatiquement.',
+  shopCateringLandingBulletLead: 'Délais et minimums sont affichés avant le paiement.',
+  shopCateringLandingOrderCta: 'Voir le menu traiteur',
   posImageFirstTill: 'Caisse photos d’abord',
   posImageFirstTillHint: 'Grandes tuiles photo, comme le menu visuel SpotOn.',
   reservationsPromoteWaitlist: 'Promouvoir depuis la liste d’attente',
@@ -11985,6 +11998,13 @@ const de: Dict = {
   reviewsInboxNav: 'Bewertungen',
   listingsNapNav: 'Einträge',
   cateringShopNav: 'Catering',
+  shopCateringLandingTitle: 'Catering für Ihr Event',
+  shopCateringLandingIntro:
+    'Gruppenmenüs mit Gästezahl, Vorlaufzeit und Paketpreisen — getrennt von unserer Tageskarte.',
+  shopCateringLandingBulletGuests:
+    'Gästezahl festlegen; Add-ons « pro Gast » werden automatisch multipliziert.',
+  shopCateringLandingBulletLead: 'Vorlauf und Mindestmengen sehen Sie vor dem Checkout.',
+  shopCateringLandingOrderCta: 'Catering-Menü ansehen',
   posImageFirstTill: 'Bild-zuerst-Kasse',
   posImageFirstTillHint: 'Grosse Fotokacheln wie SpotOns visuelles Menü.',
   reservationsPromoteWaitlist: 'Von der Warteliste hochstufen',

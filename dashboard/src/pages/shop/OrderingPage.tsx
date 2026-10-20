@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   emptyDraft,
@@ -17,6 +17,7 @@ import {
   resolveShopMenuLocationSlug,
   saveCart,
   shopBasePath,
+  shopCateringHomePath,
   shopMenuApiPath,
   SHOP_CART_EVENT,
   type ShopCartItem,
@@ -88,7 +89,10 @@ import { isCateringProduct } from '@/lib/catering';
 import {
   applyShopLocationSessionToDraft,
   loadShopLocationSession,
+  saveShopLocationSession,
+  type ShopOrderMode,
 } from '@/lib/shop-location-session';
+import { useShopNavFlags } from '@/hooks/useShopNavFlags';
 import ShopCartFreeGiftPanel from '@/components/shop/ShopCartFreeGiftPanel';
 import ShopFreeGiftPickerModal from '@/components/shop/ShopFreeGiftPickerModal';
 import {
@@ -163,7 +167,12 @@ export default function OrderingPage() {
   const { t, setLocale, locale } = useI18n();
   const { merchantSlug, locationSlug } = useParams<{ merchantSlug: string; locationSlug?: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
+  const isCateringMenuRoute = useMemo(
+    () => /\/catering\/menu\/?$/.test(location.pathname.replace(/\/+$/, '')),
+    [location.pathname]
+  );
   const locSlugFromUrl = resolveShopLocationSlug({ locationSlug });
   const [locationSessionTick, setLocationSessionTick] = useState(0);
   const menuLocSlug = useMemo(() => {
@@ -173,6 +182,7 @@ export default function OrderingPage() {
   const basePath = useMemo(() => shopBasePath(shopKey, menuLocSlug), [shopKey, menuLocSlug]);
   const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
+  const navFlags = useShopNavFlags(shopKey);
 
   const [merchant, setMerchant] = useState<any>(null);
   const [menu, setMenu] = useState<Category[]>([]);
@@ -254,6 +264,22 @@ export default function OrderingPage() {
     const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, []);
+  useEffect(() => {
+    if (!shopKey) return;
+    if (searchParams.get('mode') === 'catering' && !isCateringMenuRoute) {
+      navigate(shopCateringHomePath(shopKey, menuLocSlug), { replace: true });
+    }
+  }, [shopKey, menuLocSlug, searchParams, isCateringMenuRoute, navigate]);
+
+  useEffect(() => {
+    if (!shopKey) return;
+    const orderMode: ShopOrderMode = isCateringMenuRoute ? 'catering' : 'menu';
+    const existing = loadShopLocationSession(shopKey);
+    if (existing?.fulfillmentConfirmed && existing.orderMode !== orderMode) {
+      saveShopLocationSession(shopKey, { ...existing, orderMode });
+    }
+  }, [shopKey, isCateringMenuRoute, locationSessionTick]);
+
   useEffect(() => {
     const onSession = (e: Event) => {
       const detail = (e as CustomEvent<{ shopKey?: string }>).detail;
@@ -630,10 +656,10 @@ export default function OrderingPage() {
     return mins.length ? Math.min(...mins) : 0;
   }, [channel, effectiveDeliveryInfo, deliveryZones]);
 
-  const shopOrderMode = useMemo(
-    () => loadShopLocationSession(shopKey)?.orderMode || 'menu',
-    [shopKey, menuLocSlug]
-  );
+  const shopOrderMode = useMemo((): ShopOrderMode => {
+    if (isCateringMenuRoute) return 'catering';
+    return 'menu';
+  }, [isCateringMenuRoute, locationSessionTick]);
 
   /** Category nav + sections: base list ignores dietary filters (toolbar stays usable). */
   const menuCategoryNav = useMemo(() => {
@@ -644,6 +670,15 @@ export default function OrderingPage() {
           ...cat,
           items: (cat.items || []).filter((p) =>
             isCateringProduct(p.productType, p.cateringConfig)
+          ),
+        }))
+        .filter((cat) => (cat.items?.length ?? 0) > 0);
+    } else {
+      cats = cats
+        .map((cat) => ({
+          ...cat,
+          items: (cat.items || []).filter(
+            (p) => !isCateringProduct(p.productType, p.cateringConfig)
           ),
         }))
         .filter((cat) => (cat.items?.length ?? 0) > 0);
@@ -1470,10 +1505,12 @@ export default function OrderingPage() {
     basePath: shopBasePath(shopKey, menuLocSlug),
     showGiftCards,
     showReservations,
+    showCatering: navFlags.showCatering,
     onStoreInfo: () => setInfoOpen(true),
     labels: {
       home: t('shopHome'),
       menu: t('shopMenu'),
+      catering: t('cateringShopNav'),
       giftCard: t('shopGiftCardNav'),
       reservations: t('shopReservations'),
       contact: t('shopContact'),
