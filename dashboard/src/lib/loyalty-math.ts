@@ -62,6 +62,21 @@ export function normalizeRfidUid(raw: string): string {
     .toUpperCase();
 }
 
+/**
+ * HID RFID / NFC membership cards typically emit 4–10 byte hex UIDs
+ * (optionally spaced or colon-separated). Exclude common retail barcode lengths
+ * so an unknown EAN/UPC still falls through to "product not found".
+ */
+export function looksLikeRfidUid(raw: string): boolean {
+  const n = normalizeRfidUid(raw);
+  if (n.length < 6 || n.length > 20) return false;
+  if (!/^[0-9A-F]+$/.test(n)) return false;
+  const allDigits = /^[0-9]+$/.test(n);
+  if (allDigits && (n.length === 8 || n.length === 12 || n.length === 13)) return false;
+  if (!allDigits) return true;
+  return n.length === 10 || n.length === 14 || n.length === 16 || n.length === 20;
+}
+
 export function computeEarnPoints(
   paidSubtotalChf: number,
   earnRate = DEFAULT_EARN_POINTS_PER_CHF

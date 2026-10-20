@@ -197,13 +197,26 @@ export function useBarcodeWedge({
   const onCaptureKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (!enabled) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTerminatorKey(e.key)) {
         e.preventDefault();
         submit(bufferRef.current || e.currentTarget.value);
         e.currentTarget.value = '';
+        return;
+      }
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        bufferRef.current = bufferRef.current.slice(0, -1);
+        return;
+      }
+      // Hidden capture is readOnly (no soft keyboard). Chrome then never
+      // fires onInput for HID wedges, so we must buffer printable keys here.
+      if (e.key.length === 1) {
+        e.preventDefault();
+        appendChar(e.key);
       }
     },
-    [enabled, submit]
+    [enabled, submit, appendChar]
   );
 
   useEffect(() => {
