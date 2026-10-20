@@ -22,7 +22,12 @@ import {
   RECEIPT_QR_ESCPOS_MODULE_SIZE,
   giftCardRedeemQrRasterPx,
 } from '@/lib/qr';
-import { escposCp850Encode, ESC_CODEPAGE_CP850 } from '@/lib/escpos-encode';
+import {
+  escposCp850Encode,
+  escposTextEncode,
+  ESC_CODEPAGE_CP850,
+  type EscPosTextEncoding,
+} from '@/lib/escpos-encode';
 import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { normalizePaymentMethod } from '@/lib/payment-breakdown';
@@ -1207,19 +1212,25 @@ export function getReceiptHeaderLines(
 
 export function buildReceiptHeaderEscPos(
   lines: string[],
-  opts: { align?: ReceiptHeaderAlign; bold?: boolean; textScale?: 1 | 2 | 3 }
+  opts: {
+    align?: ReceiptHeaderAlign;
+    bold?: boolean;
+    textScale?: 1 | 2 | 3;
+    textEncoding?: EscPosTextEncoding;
+  }
 ): Uint8Array {
   if (!lines.length) return new Uint8Array();
+  const encode = (s: string) => escposTextEncode(s, opts.textEncoding ?? 'cp850');
   const align = opts.align ?? 'center';
   const alignMode: 0 | 1 | 2 = align === 'right' ? 2 : align === 'center' ? 1 : 0;
   const scale = opts.textScale === 2 || opts.textScale === 3 ? opts.textScale : 1;
   const parts: Uint8Array[] = [escAlign(alignMode)];
   parts.push(escBold(opts.bold === true), escKitchenSize(scale));
-  parts.push(escposCp850Encode(`${lines[0]}\n`));
+  parts.push(encode(`${lines[0]}\n`));
   if (lines.length > 1) {
-    parts.push(escBold(false), escKitchenSize(1), escposCp850Encode('\n'));
+    parts.push(escBold(false), escKitchenSize(1), encode('\n'));
     for (let i = 1; i < lines.length; i++) {
-      parts.push(escposCp850Encode(`${lines[i]}\n`));
+      parts.push(encode(`${lines[i]}\n`));
     }
   }
   parts.push(escBold(false), escKitchenSize(1), escAlign(0));
@@ -1228,10 +1239,16 @@ export function buildReceiptHeaderEscPos(
     // One blank line between contact lines and the separator under them.
     parts.push(ESC_POS_FEED_ONE);
   } else {
-    parts.push(escposCp850Encode('\n\n'));
+    parts.push(encode('\n\n'));
   }
   return concatBytes(...parts);
 }
+
+const ESC_POS_RESET_TEXT_ATTRS = new Uint8Array([
+  0x1b, 0x45, 0x00,
+  0x1d, 0x21, 0x00,
+  0x1b, 0x61, 0x00,
+]);
 
 /** Paper width for receipt text + ESC/POS — prefer the configured receipt printer over global default. */
 export function resolveReceiptPaperWidthMm(
@@ -1297,9 +1314,8 @@ function stripPaddedReceiptHeaderFromText(
   }
   const padded = headerLines.map((line) => alignLine(line, width, align));
   for (const block of [`${padded.join('\n')}\n\n`, `${padded.join('\n')}\n`]) {
-    const idx = bodyText.indexOf(block);
-    if (idx >= 0) {
-      return bodyText.slice(0, idx) + bodyText.slice(idx + block.length);
+    if (block.length > 0 && bodyText.startsWith(block)) {
+      return bodyText.slice(block.length);
     }
   }
   return bodyText;
@@ -3350,32 +3366,35 @@ export function textToEscPos(
   barcodeLabel?: string,
   deliveryQrRaster?: Uint8Array | null,
   prefixAfterLogo?: Uint8Array | null,
-  postBodySections?: Uint8Array | null
+  postBodySections?: Uint8Array | null,
+  textEncoding: EscPosTextEncoding = 'cp850'
 ): Uint8Array {
+  const encode = (s: string) => escposTextEncode(s, textEncoding);
+  const codepage = textEncoding === 'utf8' ? new Uint8Array() : ESC_CODEPAGE_CP850;
   const hasQr = !!(qrRaster?.length || deliveryQrRaster?.length || postBodySections?.length);
-  const body = escposCp850Encode(hasQr ? text.replace(/\n+$/, '') + '\n' : text);
+  const body = encode(hasQr ? text.replace(/\n+$/, '') + '\n' : text);
   const init = new Uint8Array([0x1b, 0x40]);
   const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
-  const parts: Uint8Array[] = [init, ESC_CODEPAGE_CP850];
+  const parts: Uint8Array[] = [init, codepage];
   if (logoBytes?.length) {
     // Finish the raster, feed past the logo row, then re-init so text never prints beside the bitmap.
     parts.push(
       alignCenter,
       logoBytes,
-      escposCp850Encode('\n'),
+      encode('\n'),
       ESC_POS_BLANK_LINE,
       ESC_POS_BLANK_LINE,
       new Uint8Array([0x1b, 0x61, 0x00]),
       new Uint8Array([0x1b, 0x64, 0x04]),
       new Uint8Array([0x1b, 0x40]),
-      ESC_CODEPAGE_CP850
+      codepage
     );
   }
   if (prefixAfterLogo?.length) {
     parts.push(prefixAfterLogo);
   }
-  parts.push(alignLeft, body);
+  parts.push(ESC_POS_RESET_TEXT_ATTRS, alignLeft, body);
   if (qrRaster?.length) {
     parts.push(alignCenter, qrRaster, alignLeft);
   }
@@ -3385,7 +3404,7 @@ export function textToEscPos(
   if (barcodeData) {
     parts.push(escposCode128(barcodeData, 72, 2));
     if (barcodeLabel?.trim()) {
-      parts.push(alignCenter, escposCp850Encode(barcodeLabel.trim() + '\n'), alignLeft);
+      parts.push(alignCenter, encode(barcodeLabel.trim() + '\n'), alignLeft);
     }
   }
   if (postBodySections?.length) {
@@ -3417,6 +3436,8 @@ export async function buildReceiptEscPos(
     headerBold?: boolean;
     headerTextScale?: 1 | 2 | 3;
     soldGiftCards?: SoldGiftCardOnReceipt[];
+    titleBodyGap?: boolean;
+    textEncoding?: EscPosTextEncoding;
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
@@ -3499,7 +3520,7 @@ export async function buildReceiptEscPos(
   const headerLines = opts.headerLines ?? [];
   let bodyText = text;
   if (headerLines.length > 0) {
-    const titleBodyGap = headerLines.length > 1;
+    const titleBodyGap = opts.titleBodyGap ?? headerLines.length > 1;
     bodyText = stripPaddedReceiptHeaderFromText(
       bodyText,
       headerLines,
@@ -3508,12 +3529,14 @@ export async function buildReceiptEscPos(
       titleBodyGap
     );
   }
+  const textEncoding = opts.textEncoding ?? 'cp850';
   const headerEscPos =
     headerLines.length > 0
       ? buildReceiptHeaderEscPos(headerLines, {
           align: opts.headerAlign,
           bold: opts.headerBold,
           textScale: opts.headerTextScale,
+          textEncoding,
         })
       : null;
 
@@ -3527,7 +3550,8 @@ export async function buildReceiptEscPos(
     opts.barcodeLabel,
     undefined,
     headerEscPos,
-    giftCardEscPos
+    giftCardEscPos,
+    textEncoding
   );
 }
 

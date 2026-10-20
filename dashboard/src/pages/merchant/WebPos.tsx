@@ -38,6 +38,7 @@ import {
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
   getReceiptHeaderLines,
+  normalizeReceiptHeaderFields,
   resolveReceiptPaperWidthMm,
   receiptHeaderFormatFromSettings,
   receiptHeaderFieldsFromPrintSettings,
@@ -8052,6 +8053,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       lineWidthForPaper(paper === 58 ? 58 : 80),
       { padLines: false }
     );
+    const headerNorm = normalizeReceiptHeaderFields({
+      headerTitle: printSettings?.receiptHeaderTitle,
+      header: printSettings?.receiptHeader,
+    });
     const escpos = await buildReceiptEscPos(text, {
       qrData: qr,
       deliveryQrData: opts.deliveryQrUrl,
@@ -8067,6 +8072,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerBold: headerFmt.bold,
       headerTextScale: headerFmt.textScale,
       soldGiftCards: opts.soldGiftCards,
+      titleBodyGap: !!(headerNorm.title && headerNorm.body),
+      textEncoding: isAndroidWebPosTill() ? 'utf8' : 'cp850',
     });
     const dataBase64 = uint8ToBase64(escpos);
     lastReceiptEscPosBase64Ref.current = dataBase64;
@@ -8220,6 +8227,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               { padLines: false }
             )
           : [];
+      const headerNorm = normalizeReceiptHeaderFields({
+        headerTitle: printSettings?.receiptHeaderTitle,
+        header: printSettings?.receiptHeader,
+      });
       const escpos = await buildReceiptEscPos(text, {
         qrData: qr,
         deliveryQrData: opts.deliveryQrUrl,
@@ -8235,6 +8246,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerBold: headerFmt.bold,
         headerTextScale: headerFmt.textScale,
         soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
+        titleBodyGap: !!(headerNorm.title && headerNorm.body),
+        textEncoding: isAndroidWebPosTill() ? 'utf8' : 'cp850',
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {
