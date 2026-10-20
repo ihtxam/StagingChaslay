@@ -265,6 +265,7 @@ function MerchantsPage() {
     storekeeperAddonEnabled: false,
     growthAnalyticsAddonEnabled: false,
     guestCrmAddonEnabled: false,
+    cateringAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -284,6 +285,7 @@ function MerchantsPage() {
     storekeeperAddonEnabled: boolean;
     growthAnalyticsAddonEnabled: boolean;
     guestCrmAddonEnabled: boolean;
+    cateringAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
     id: string;
@@ -476,6 +478,7 @@ function MerchantsPage() {
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
         growthAnalyticsAddonEnabled: !!limitsFor.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!limitsFor.guestCrmAddonEnabled,
+        cateringAddonEnabled: !!limitsFor.cateringAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -918,6 +921,22 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!form.cateringAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, cateringAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">Catering</span>
+                <span className="text-xs text-stone-500">
+                  Prepackaged menus, guest counts, shop catering mode
+                </span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!form.kdsAddonEnabled}
                 onChange={(e) => setForm((f) => ({ ...f, kdsAddonEnabled: e.target.checked }))}
               />
@@ -1239,6 +1258,22 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!limitsFor.cateringAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, cateringAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">Catering</span>
+                <span className="text-xs text-stone-500">
+                  Prepackaged menus, guest counts, shop catering mode
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!limitsFor.kdsAddonEnabled}
                 onChange={(e) =>
                   setLimitsFor({ ...limitsFor, kdsAddonEnabled: e.target.checked })
@@ -1553,6 +1588,7 @@ function MerchantsPage() {
                     storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                     growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
                     guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
+                    cateringAddonEnabled: m.cateringAddonEnabled === true,
                   }),
               },
               {

@@ -263,6 +263,16 @@ async function seedDemoShop() {
   await seedDemoInventoryBundle(merchant.id);
   await seedDemoDeliveryStaff(merchant.id);
   await seedDemoPosLicense(merchant.id);
+
+  if (process.env.SEED_DEMO_CATERING !== "false") {
+    const { DemoCateringService } = await import("../services/demo-catering.service");
+    const catering = await DemoCateringService.importShowcase(merchant.id);
+    if (!catering.skipped) {
+      console.log("Demo catering showcase seeded (5 categories, all pricing modes)");
+    } else {
+      console.log("Demo catering showcase already present");
+    }
+  }
 }
 
 /** Default demo location (Demo Food Truck / main) should be retail, not restaurant bootstrap default. */
