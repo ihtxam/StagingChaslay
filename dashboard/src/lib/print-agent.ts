@@ -757,6 +757,20 @@ export function agentSupportsBtCutTrailer(health: PrintAgentHealth | null | unde
   return false;
 }
 
+/**
+ * Kitchen tickets already end with feed + GS V (KITCHEN_TICKET_CUT).
+ * Only legacy Bluetooth/COM paths need a separate cut job (dropped last packet).
+ * USB/LAN/Bridge BT must not get a second cut — wastes paper and double-beep.
+ */
+export function shouldSendKitchenCutFollowUp(
+  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint' | 'connectionType'> | string | null,
+  health?: PrintAgentHealth | null
+): boolean {
+  const isBt = looksLikeBluetoothOrComPrinter(printer);
+  if (!isBt) return false;
+  return !agentSupportsBtCutTrailer(health);
+}
+
 /** Android tablet (Bridge host) — wider than phone waiter layout. */
 export function isAndroidTabletDevice(): boolean {
   if (typeof navigator === 'undefined') return false;
