@@ -88,6 +88,46 @@ describe("scheduled-menu", () => {
     expect(fallback?.id).toBe("default");
   });
 
+  it("skips default menu when location has dedicated schedules but none active now", () => {
+    const kioskMenu = {
+      id: "kiosk-day",
+      isDefault: false,
+      sortOrder: 1,
+      channels: ["pos"],
+      locationIds: ["kiosk-loc"],
+      scheduleType: "weekly" as const,
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      timeRanges: [{ start: "08:00", end: "18:00" }],
+      isActive: true,
+    };
+    const defaultMenu = {
+      id: "default",
+      isDefault: true,
+      sortOrder: 0,
+      channels: ["pos"],
+      locationIds: [],
+      scheduleType: "daily" as const,
+      timeRanges: [{ start: "00:00", end: "23:59" }],
+      isActive: true,
+    };
+    const atNight = new Date("2026-03-02T20:00:00+01:00");
+    const kioskPick = pickActiveScheduledMenu([defaultMenu, kioskMenu], {
+      channel: "pos",
+      locationId: "kiosk-loc",
+      at: atNight,
+      timezone: "Europe/Zurich",
+    });
+    expect(kioskPick).toBeNull();
+
+    const otherLoc = pickActiveScheduledMenu([defaultMenu, kioskMenu], {
+      channel: "pos",
+      locationId: "bar-loc",
+      at: atNight,
+      timezone: "Europe/Zurich",
+    });
+    expect(otherLoc?.id).toBe("default");
+  });
+
   it("uniform pricing fixed and percent", () => {
     expect(applyUniformPricing(10, { mode: "fixed", value: 2.5 })).toBe(12.5);
     expect(applyUniformPricing(10, { mode: "fixed", value: -3 })).toBe(7);

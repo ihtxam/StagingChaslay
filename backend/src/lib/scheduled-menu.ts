@@ -140,6 +140,20 @@ export function isMenuScheduleActive(
   return ranges.some((r) => isHmInWindow(cur, r.start, r.end));
 }
 
+/** Location has at least one non-default scheduled menu assigned (not the global default catalog). */
+export function locationHasDedicatedScheduledMenus(
+  menus: ScheduledMenuLike[],
+  locationId: string
+): boolean {
+  const loc = String(locationId || "").trim();
+  if (!loc) return false;
+  return menus.some((m) => {
+    if (m.isActive === false || m.isDefault) return false;
+    const locIds = Array.isArray(m.locationIds) ? m.locationIds : [];
+    return locIds.includes(loc);
+  });
+}
+
 export function pickActiveScheduledMenu<T extends ScheduledMenuLike>(
   menus: T[],
   opts: {
@@ -155,12 +169,18 @@ export function pickActiveScheduledMenu<T extends ScheduledMenuLike>(
     .filter((m) => m.isActive !== false)
     .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
 
+  const dedicatedForLocation = locationHasDedicatedScheduledMenus(active, opts.locationId);
+
   const nonDefault = active.filter((m) => !m.isDefault);
   for (const menu of nonDefault) {
     if (!menuIncludesCatalogChannel(menu.channels, opts.channel as CatalogChannel)) continue;
     const locIds = Array.isArray(menu.locationIds) ? menu.locationIds : [];
     if (locIds.length && !locIds.includes(opts.locationId)) continue;
     if (isMenuScheduleActive(menu, at, timezone)) return menu;
+  }
+
+  if (dedicatedForLocation) {
+    return null;
   }
 
   const defaultMenu = active.find((m) => m.isDefault);

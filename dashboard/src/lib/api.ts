@@ -7,6 +7,10 @@ import {
   notifyDeployBlip,
   shouldSkipDeployToastForRequest,
 } from '@/lib/deploy-blip';
+import {
+  getWebPosTerminalLocationId,
+  isWebPosFloorPath,
+} from '@/lib/webpos-terminal-location';
 
 installDeployToastGuard();
 
@@ -55,6 +59,20 @@ const api: AxiosInstance = axios.create({
   },
 });
 
+const PANEL_LOCATION_STORAGE_KEY = 'manupos_selected_location';
+
+function resolveApiLocationId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    if (isWebPosFloorPath(window.location.pathname)) {
+      return getWebPosTerminalLocationId();
+    }
+    return localStorage.getItem(PANEL_LOCATION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /** Unauthenticated client for public pages (digital receipts). */
 export const publicApi: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -102,7 +120,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   try {
-    const locationId = localStorage.getItem('manupos_selected_location');
+    const locationId = resolveApiLocationId();
     if (locationId) {
       config.headers['X-Location-Id'] = locationId;
     }
@@ -135,7 +153,11 @@ api.interceptors.response.use(
       (locCode === 'LOCATION_ACCESS_DENIED' || /location not found/i.test(locMsg))
     ) {
       try {
-        localStorage.removeItem('manupos_selected_location');
+        if (typeof window !== 'undefined' && isWebPosFloorPath(window.location.pathname)) {
+          sessionStorage.removeItem('webpos_terminal_location_id');
+        } else {
+          localStorage.removeItem(PANEL_LOCATION_STORAGE_KEY);
+        }
       } catch {
         /* ignore */
       }
