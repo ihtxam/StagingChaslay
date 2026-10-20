@@ -607,13 +607,7 @@ import {
 import { navigateTargetAfterStaffPin } from '@/lib/auth-home';
 import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore } from '@/store/auth';
-import LocationPickerModal from '@/components/merchant/LocationPicker';
-import type { MerchantLocation } from '@/store/location';
-import {
-  getWebPosTerminalLocationId,
-  setWebPosTerminalLocationId,
-  syncWebPosTerminalLocationFromUrl,
-} from '@/lib/webpos-terminal-location';
+import { useLocationStore } from '@/store/location';
 import { openCashDrawerViaAgent } from '@/lib/print-agent';
 
 type Channel = PosChannel;
@@ -862,11 +856,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const logout = useAuthStore((s) => s.logout);
-  const [posLocationId, setPosLocationIdState] = useState<string | null>(() =>
-    syncWebPosTerminalLocationFromUrl()
-  );
-  const [merchantLocations, setMerchantLocations] = useState<MerchantLocation[]>([]);
-  const [terminalLocationPickerOpen, setTerminalLocationPickerOpen] = useState(false);
+  const posLocationId = useLocationStore((s) => s.locationId);
+  const loadLocations = useLocationStore((s) => s.load);
+  const setPosLocationId = useLocationStore((s) => s.setLocationId);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -2992,32 +2984,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
-    syncWebPosTerminalLocationFromUrl();
-    setPosLocationIdState(getWebPosTerminalLocationId());
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .get('/merchant/locations')
-      .then((res) => {
-        if (cancelled) return;
-        const locations: MerchantLocation[] = res.data?.locations || [];
-        setMerchantLocations(locations);
-        let terminalId = getWebPosTerminalLocationId();
-        if (!terminalId && locations.length === 1) {
-          terminalId = locations[0]!.id;
-          setWebPosTerminalLocationId(terminalId);
-          setPosLocationIdState(terminalId);
-        } else if (!terminalId && locations.length > 1) {
-          setTerminalLocationPickerOpen(true);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void loadLocations();
+  }, [loadLocations]);
 
   useEffect(() => {
     if (!posLocationId) {
@@ -3041,6 +3009,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     },
     [posLocationId, t]
   );
+
+  /** Branch staff: default POS catalog to their assigned location(s). */
+  useEffect(() => {
+    const staffId = authUser?.staffId;
+    if (!staffId || authUser?.role !== 'staff') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.get(`/merchant/locations/staff/${staffId}`);
+        if (cancelled) return;
+        const ids: string[] = Array.isArray(res.data?.locationIds) ? res.data.locationIds : [];
+        if (!ids.length) return;
+        const stored = localStorage.getItem('manupos_selected_location');
+        if (stored && ids.includes(stored)) return;
+        setPosLocationId(ids[0]!);
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.staffId, authUser?.role, setPosLocationId]);
 
   useEffect(() => {
     void load().catch(() => undefined);
@@ -7186,7 +7177,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const loadOrderIntoRegister = (order: MerchantOrder): boolean => {
     if (isPaidOrder(order)) {
-      toastOrderAlreadyPaid(order);
+      toast.error(
+        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
+      );
       return false;
     }
     const lines = orderItemsToCartLines(order.items || []);
@@ -7287,25 +7280,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const splitBillActive = () => splitQueue.length > 0 || !!splitMasterIdRef.current;
 
-  const lastAlreadyPaidToastRef = useRef<{ key: string; at: number } | null>(null);
-  const toastOrderAlreadyPaid = useCallback(
-    (order: MerchantOrder) => {
-      const key = order.id || orderDisplayLabel(order);
-      const now = Date.now();
-      if (
-        lastAlreadyPaidToastRef.current?.key === key &&
-        now - lastAlreadyPaidToastRef.current.at < 5000
-      ) {
-        return;
-      }
-      lastAlreadyPaidToastRef.current = { key, at: now };
-      toast.error(
-        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
-      );
-    },
-    [t]
-  );
-
   /** Drop stale cart when the same ticket was paid on another till / orders tab. */
   const releasePaidCartSession = (order?: MerchantOrder | null) => {
     if (splitBillActive()) return;
@@ -7366,7 +7340,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       if (guard.action === 'blocked') {
         releasePaidCartSession(guard.order);
-        toastOrderAlreadyPaid(guard.order);
+        toast.error(
+          t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
+        );
         return false;
       }
       if (guard.action === 'collect') {
@@ -7395,7 +7371,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!orderMatchesCartLink(order, currentCartOrderLink())) return;
       if (!isPaidOrder(order)) return;
       releasePaidCartSession(order);
-      toastOrderAlreadyPaid(order);
+      toast.error(
+        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
+      );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot link fields only
     [
@@ -7407,7 +7385,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ticketOrderNumber,
       collectOrderRef,
       splitQueue.length,
-      toastOrderAlreadyPaid,
+      t,
     ]
   );
 
@@ -7432,7 +7410,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         if (guard.action === 'blocked') {
           releasePaidCartSession(guard.order);
-          toastOrderAlreadyPaid(guard.order);
+          toast.error(
+            t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
+          );
           return;
         }
       } catch {
@@ -7470,7 +7450,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const order = (res.data?.order || res.data) as MerchantOrder;
         if (!order?.id) throw new Error('Order not found');
         if (isPaidOrder(order)) {
-          toastOrderAlreadyPaid(order);
+          toast.error(
+            t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
+          );
           setHighlightOrderId(order.id);
           setPosTab('orders');
           setPosView('orders');
@@ -8220,6 +8202,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               { padLines: false }
             )
           : [];
+      const headerNorm = normalizeReceiptHeaderFields({
+        headerTitle: printSettings?.receiptHeaderTitle,
+        header: printSettings?.receiptHeader,
+      });
       const escpos = await buildReceiptEscPos(text, {
         qrData: qr,
         deliveryQrData: opts.deliveryQrUrl,
@@ -8235,6 +8221,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerBold: headerFmt.bold,
         headerTextScale: headerFmt.textScale,
         soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
+        titleBodyGap: !!(headerNorm.title && headerNorm.body),
+        textEncoding: isAndroidWebPosTill() ? 'utf8' : 'cp850',
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {
@@ -9137,22 +9125,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             'warn'
           );
         } else {
-          const errMsg = String(err.response?.data?.error || err.message || '');
-          if (/was already paid/i.test(errMsg)) {
-            logWebPosEvent(
-              'payment',
-              `Sale push deduped (already paid) method=${method} clientId=${clientId}`,
-              'warn'
-            );
-            pushRes = {
-              data: {
-                results: [{ clientId, orderId: '', created: false }],
-              },
-            };
-          } else {
-            logWebPosError('payment', `Sale push failed method=${method}`, err, { autoSend: true });
-            throw err;
-          }
+          logWebPosError('payment', `Sale push failed method=${method}`, err, { autoSend: true });
+          throw err;
         }
       }
     }
@@ -10878,7 +10852,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 /* gate cannot be dismissed without PIN */
               }}
               onSuccess={onStaffPinSuccess}
-              terminalLocationId={posLocationId}
               onLeave={
                 canJwtReturnToPanel(
                   authUser?.permissions as Permission[] | undefined,
@@ -12569,7 +12542,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onStaffPinSuccess}
-        terminalLocationId={posLocationId}
         onLogout={() => void handlePosLogout()}
         productName={merchant?.name || merchant?.businessName}
         logoUrl={
@@ -12577,16 +12549,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           merchant?.shopLogoUrl ||
           paymentConfig?.shopLogoUrl
         }
-      />
-
-      <LocationPickerModal
-        open={terminalLocationPickerOpen}
-        lockWebPosTerminal
-        onClose={() => setTerminalLocationPickerOpen(false)}
-        onSelect={(loc) => {
-          setPosLocationIdState(loc.id);
-          void load();
-        }}
       />
 
       <WebPosStationPickerModal
