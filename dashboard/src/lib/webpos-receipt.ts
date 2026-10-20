@@ -898,6 +898,8 @@ const RECEIPT_GLUED_PHONE_SPLIT_RE =
   /(?<=[\wäöüÄÖÜßà-ÿ])(?=(?:Tel|Tél|Telephone|Téléphone|Phone)\s*:)/i;
 /** VAT label glued after phone digits (e.g. 00 00VAT:). */
 const RECEIPT_GLUED_VAT_SPLIT_RE = /(?<=[\w\d)])(?=(?:VAT|UID|TVA|MwSt|MWST)\s*:)/i;
+/** Street number glued to city (e.g. Rue … 2Neuchâtel). */
+const RECEIPT_GLUED_NUMBER_CITY_RE = /(?<=\d)(?=[A-Za-zÀ-ÿ]{2,})/;
 
 function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   const text = String(line || '').replace(/\s+/g, ' ').trim();
@@ -918,6 +920,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
   for (const re of [
     RECEIPT_GLUED_VAT_SPLIT_RE,
     RECEIPT_GLUED_PHONE_SPLIT_RE,
+    RECEIPT_GLUED_NUMBER_CITY_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
     RECEIPT_TAX_SPLIT_RE,
     RECEIPT_COUNTRY_SPLIT_RE,
@@ -1217,26 +1220,43 @@ export function buildReceiptHeaderEscPos(
     bold?: boolean;
     textScale?: 1 | 2 | 3;
     textEncoding?: EscPosTextEncoding;
+    /** Receipt line width (32 for 58 mm, 48 for 80 mm). */
+    lineWidth?: number;
   }
 ): Uint8Array {
   if (!lines.length) return new Uint8Array();
   const encode = (s: string) => escposTextEncode(s, opts.textEncoding ?? 'cp850');
   const align = opts.align ?? 'center';
   const alignMode: 0 | 1 | 2 = align === 'right' ? 2 : align === 'center' ? 1 : 0;
-  const scale = opts.textScale === 2 || opts.textScale === 3 ? opts.textScale : 1;
-  const parts: Uint8Array[] = [escAlign(alignMode)];
-  parts.push(escBold(opts.bold === true), escKitchenSize(scale));
-  parts.push(encode(`${lines[0]}\n`));
-  if (lines.length > 1) {
-    parts.push(escBold(false), escKitchenSize(1), encode('\n'));
-    for (let i = 1; i < lines.length; i++) {
-      parts.push(encode(`${lines[i]}\n`));
+  const width = opts.lineWidth ?? 48;
+  let scale = opts.textScale === 2 || opts.textScale === 3 ? opts.textScale : 1;
+  // Sunmi 58 mm + UTF-8: double-width×height on a long title prints as a vertical column.
+  if (opts.textEncoding === 'utf8' && width <= 32 && scale > 1) {
+    scale = 1;
+  }
+  const parts: Uint8Array[] = [];
+  const resetAttrs = () => {
+    parts.push(escBold(false), escKitchenSize(1), escAlign(alignMode));
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const lineScale = i === 0 ? scale : 1;
+    const wrapWidth =
+      lineScale > 1 ? Math.max(12, Math.floor(width / (lineScale === 3 ? 2 : lineScale))) : width;
+    const segments =
+      lineScale > 1 ? wrapReceiptHeaderLine(lines[i], wrapWidth) : [lines[i]];
+    for (const seg of segments) {
+      parts.push(
+        escAlign(alignMode),
+        escBold(i === 0 && opts.bold === true && lineScale > 1),
+        escKitchenSize(lineScale),
+        encode(`${seg}\n`)
+      );
+      resetAttrs();
     }
   }
-  parts.push(escBold(false), escKitchenSize(1), escAlign(0));
+  parts.push(escAlign(0));
   const lastLine = lines[lines.length - 1] || '';
   if (isReceiptTelephoneLine(lastLine) || isReceiptVatLine(lastLine)) {
-    // One blank line between contact lines and the separator under them.
     parts.push(ESC_POS_FEED_ONE);
   } else {
     parts.push(encode('\n\n'));
@@ -3530,6 +3550,7 @@ export async function buildReceiptEscPos(
     );
   }
   const textEncoding = opts.textEncoding ?? 'cp850';
+  const receiptLineWidth = lineWidthForPaper(paper);
   const headerEscPos =
     headerLines.length > 0
       ? buildReceiptHeaderEscPos(headerLines, {
@@ -3537,6 +3558,7 @@ export async function buildReceiptEscPos(
           bold: opts.headerBold,
           textScale: opts.headerTextScale,
           textEncoding,
+          lineWidth: receiptLineWidth,
         })
       : null;
 
