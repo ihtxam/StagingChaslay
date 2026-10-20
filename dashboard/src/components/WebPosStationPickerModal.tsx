@@ -51,31 +51,26 @@ export default function WebPosStationPickerModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center overflow-hidden bg-black/55 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[200] flex items-end justify-center overflow-hidden bg-black/70 p-0 sm:items-center sm:p-4"
       onClick={onCancel}
       role="presentation"
     >
       <div
-        className="flex max-h-[min(92dvh,32rem)] w-full max-w-md min-h-0 flex-col overflow-hidden rounded-t-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--surface))] text-[var(--webpos-text,var(--text,#1c1917))] shadow-xl sm:rounded-2xl"
+        className="relative z-10 flex max-h-[min(92dvh,32rem)] w-full max-w-md min-h-0 flex-col overflow-hidden rounded-t-2xl border border-stone-200 bg-white text-stone-900 shadow-2xl sm:rounded-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="pos-station-picker-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-[var(--webpos-border,var(--border))] px-5 py-4 sm:px-6">
-          <h2
-            id="pos-station-picker-title"
-            className="text-lg font-semibold text-[var(--webpos-text,var(--text,#1c1917))]"
-          >
+        <div className="shrink-0 border-b border-stone-200 bg-white px-5 py-4 sm:px-6">
+          <h2 id="pos-station-picker-title" className="text-lg font-semibold text-stone-900">
             {t('posStationPickerTitle')}
           </h2>
-          <p className="mt-1.5 text-sm leading-snug text-stone-600 dark:text-stone-300">
-            {t('posStationPickerHint')}
-          </p>
+          <p className="mt-1.5 text-sm leading-snug text-stone-600">{t('posStationPickerHint')}</p>
         </div>
 
         <div
-          className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-5 py-4 touch-pan-y sm:px-6"
+          className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-white px-5 py-4 touch-pan-y sm:px-6"
           role="listbox"
           aria-label={t('posStationPickerTitle')}
         >
@@ -89,19 +84,19 @@ export default function WebPosStationPickerModal({
               onClick={() => setSelectedId(s.id)}
               className={`w-full text-left rounded-xl border px-4 py-3 transition ${
                 selectedId === s.id
-                  ? 'border-sky-600 bg-sky-100 text-stone-900 dark:border-sky-500 dark:bg-sky-950/60 dark:text-sky-50'
-                  : 'border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface-2,var(--bg-muted))] text-[var(--webpos-text,var(--text))] hover:border-sky-400'
+                  ? 'border-sky-600 bg-sky-50 text-stone-900 ring-1 ring-sky-600/30'
+                  : 'border-stone-200 bg-white text-stone-900 hover:border-sky-400 hover:bg-stone-50'
               }`}
             >
               <div className="font-medium">{s.name}</div>
               {s.isDefault ? (
-                <div className="text-xs text-stone-600 dark:text-stone-400">{t('default')}</div>
+                <div className="text-xs text-stone-500">{t('default')}</div>
               ) : null}
             </button>
           ))}
         </div>
 
-        <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--border)] px-5 py-4 sm:px-6">
+        <div className="flex shrink-0 justify-end gap-2 border-t border-stone-200 bg-white px-5 py-4 sm:px-6">
           {onCancel ? (
             <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>
               {t('cancel')}
