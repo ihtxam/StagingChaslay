@@ -56,7 +56,7 @@ object UsbPermissionUi {
     fun launchAttachActivityForUsbPermission(context: Context, device: UsbDevice): Boolean {
         val app = context.applicationContext
         val intent = Intent(app, UsbPrinterAttachActivity::class.java).apply {
-            action = ACTION_REQUEST_USB_PRINTER_PERMISSION
+            action = UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION
             putExtra(UsbBootPermissionNotifier.EXTRA_USB_DEVICE_ID, device.deviceId)
             putExtra(UsbBootPermissionNotifier.EXTRA_USB_VID, device.vendorId)
             putExtra(UsbBootPermissionNotifier.EXTRA_USB_PID, device.productId)
