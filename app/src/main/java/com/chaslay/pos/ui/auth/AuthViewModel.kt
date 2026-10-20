@@ -8,10 +8,12 @@ import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.LoginResult
 import com.chaslay.pos.domain.model.STAFF_PIN_MAX_LENGTH
 import com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH
+import com.chaslay.pos.data.preferences.SyncApiKeyStore
 import com.chaslay.pos.sync.MenuSyncMode
 import com.chaslay.pos.sync.MenuSyncRepository
 import com.chaslay.pos.sync.PosSessionRepository
 import com.chaslay.pos.sync.SyncService
+import com.chaslay.pos.sync.TerminalSyncRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +38,9 @@ class AuthViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val menuSyncRepository: MenuSyncRepository,
     private val syncService: SyncService,
-    private val posSessionRepository: PosSessionRepository
+    private val posSessionRepository: PosSessionRepository,
+    private val terminalSyncRepository: TerminalSyncRepository,
+    private val syncApiKeyStore: SyncApiKeyStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -201,13 +205,17 @@ class AuthViewModel @Inject constructor(
             posSessionRepository.registerAfterLogin(session.user.id.toString(), session.user.name, access)
         }
         posSessionRepository.startHeartbeat(viewModelScope)
-        _uiState.update { AuthUiState(isLoggedIn = true) }
+        if (syncApiKeyStore.hasKey()) {
+            runCatching { terminalSyncRepository.syncTerminals() }
+                .onFailure { Log.w("AuthViewModel", "Pre-login checkout sync failed", it) }
+        }
         if (pullCloudMenu) {
             runCatching {
                 menuSyncRepository.syncMenu(MenuSyncMode.REPLACE)
                 syncService.syncAll(force = true)
             }.onFailure { Log.w("AuthViewModel", "Post-login menu sync failed", it) }
         }
+        _uiState.update { AuthUiState(isLoggedIn = true) }
     }
 
     fun logout() {

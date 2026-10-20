@@ -94,3 +94,16 @@ export function posModeForModule(module: BusinessModule): 'retail' | 'restaurant
 export function moduleLabelKey(module: BusinessModule): string {
   return module === 'retail' ? 'businessModuleRetail' : 'businessModuleRestaurant';
 }
+
+/** Merchant panel + Android sync: locked category, else POS checkout mode. */
+export function businessModuleFromMerchantSettings(settings?: {
+  businessCategory?: string | null;
+  posCheckoutSettings?: { posMode?: string | null } | null;
+} | null): BusinessModule | null {
+  const locked = normalizeBusinessModule(settings?.businessCategory);
+  if (locked) return locked;
+  const mode = String(settings?.posCheckoutSettings?.posMode || '').trim().toLowerCase();
+  if (mode === 'retail') return 'retail';
+  if (mode === 'restaurant') return 'restaurant';
+  return null;
+}

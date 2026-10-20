@@ -134,7 +134,11 @@ import {
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
 import type { BusinessModule } from '@/lib/business-module';
-import { isRestaurantModule, normalizeBusinessModule } from '@/lib/business-module';
+import {
+  businessModuleFromMerchantSettings,
+  isRestaurantModule,
+  normalizeBusinessModule,
+} from '@/lib/business-module';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
@@ -405,7 +409,10 @@ function MerchantShell() {
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
-      setBusinessModule(normalizeBusinessModule(settings?.businessCategory));
+      setBusinessModule(
+        businessModuleFromMerchantSettings(settings) ??
+          normalizeBusinessModule(settings?.businessCategory)
+      );
       setShopEnabled(!!settings?.shopEnabled);
       setMaxPosPosts(Math.max(0, Number(settings?.maxPosPosts) || 0));
       setOrderCenterEnabled(settings?.orderCenterEnabled !== false);

@@ -431,7 +431,6 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'reservations',
   'pos',
   'payments',
-  'receipt',
   'kds',
   'ods',
   'customerDisplay',
@@ -454,7 +453,7 @@ const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }>
   {
     id: 'service',
     labelKey: 'settingsGroupService',
-    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'kiosk', 'signage', 'delivery', 'phone'],
+    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'kiosk', 'signage', 'delivery', 'phone'],
   },
   { id: 'guest', labelKey: 'settingsGroupGuest', ids: ['shop', 'email', 'delivery-map'] },
   { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting', 'como'] },
@@ -491,7 +490,7 @@ function parseSettingsTabFromSearch(search: string): TabId {
     const section = params.get('section');
     if (section === 'settings' || section === 'layout' || section === 'qr') return 'tables';
     if (q === 'taxes') return 'taxes';
-    if (q === 'pos' || q === 'operations') return 'pos';
+    if (q === 'pos' || q === 'operations' || q === 'receipt') return 'pos';
     if (q === 'shop') return 'shop';
     if (q === 'delivery') return 'delivery';
     if (q === 'hours') return 'hours';
@@ -622,10 +621,12 @@ function SettingsPosPostsBlock({
   hint,
   maxPosPosts,
   maxWaiterPosts,
+  showWaiterPosts = true,
 }: {
   hint: string;
   maxPosPosts: number;
   maxWaiterPosts: number;
+  showWaiterPosts?: boolean;
 }) {
   if (typeof PosPostsSection !== 'function') {
     return (
@@ -640,6 +641,7 @@ function SettingsPosPostsBlock({
       hint={hint}
       maxPosPosts={maxPosPosts}
       maxWaiterPosts={maxWaiterPosts}
+      showWaiterPosts={showWaiterPosts}
     />
   );
 }
@@ -817,7 +819,6 @@ export default function Settings() {
         { id: 'reservations' as const, label: t('settingsReservations'), navLabel: t('settingsNavReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), navLabel: t('settingsNavPos'), icon: Monitor },
         { id: 'payments' as const, label: t('settingsPayments'), navLabel: t('settingsNavPayments'), icon: CreditCard },
-        { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: Printer },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
         {
@@ -1264,7 +1265,7 @@ export default function Settings() {
   }, [tab, loadPaymentsData]);
 
   useEffect(() => {
-    if (tab === 'receipt') void loadReceiptCatalog();
+    if (tab === 'pos') void loadReceiptCatalog();
   }, [tab, loadReceiptCatalog]);
 
   useEffect(() => {
@@ -1422,7 +1423,7 @@ export default function Settings() {
   }, [t]);
 
   useEffect(() => {
-    if (tab !== 'receipt') return;
+    if (tab !== 'pos') return;
     void refreshPrintAgentPrinters();
     void refreshScalePorts();
   }, [tab, printAgentManifest?.version, printBridgeManifest?.version, refreshPrintAgentPrinters, refreshScalePorts]);
@@ -3214,9 +3215,11 @@ export default function Settings() {
                 <a href="/merchant/pos" className="btn-secondary mt-3 inline-flex">
                   {t('openWebPos')}
                 </a>
-                <a href="/merchant/waiter" className="btn-secondary mt-3 ml-2 inline-flex">
-                  {t('waiterAppTitle')}
-                </a>
+                {!isRetailMerchant ? (
+                  <a href="/merchant/waiter" className="btn-secondary mt-3 ml-2 inline-flex">
+                    {t('waiterAppTitle')}
+                  </a>
+                ) : null}
               </Section>
 
               <Section
@@ -3231,6 +3234,7 @@ export default function Settings() {
                   hint={t('posPostsAgencyHint')}
                   maxPosPosts={Math.max(0, Number(settings.maxPosPosts) || 0)}
                   maxWaiterPosts={Math.max(0, Number(settings.maxWaiterPosts) || 0)}
+                  showWaiterPosts={!isRetailMerchant}
                 />
               </Section>
 
@@ -4241,7 +4245,7 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'receipt' && (
+          {tab === 'pos' && (
             <form className="space-y-5" onSubmit={saveReceiptPrint}>
               <SettingsPageHeader
                 title={t('settingsReceipt')}
@@ -4253,7 +4257,14 @@ export default function Settings() {
                   </button>
                 }
               />
-              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsReceipt')} description={t('settingsReceiptHint')}>
+              <Section
+                id="pos-receipt-print"
+                icon={Printer}
+                accent={settingsDash.accent}
+                title={t('settingsReceipt')}
+                description={t('settingsReceiptHint')}
+                highlight={isSectionHighlight('pos-receipt-print')}
+              >
                 <Field label={t('receiptLanguage')}>
                   <select
                     className="input"

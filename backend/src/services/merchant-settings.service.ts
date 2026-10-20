@@ -384,7 +384,16 @@ export class MerchantSettingsService {
       shopLanguage: merchant.shopLanguage || merchant.panelLanguage || "en",
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
       tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
-      posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
+      posCheckoutSettings: (() => {
+        let checkout = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+        const locked = normalizeBusinessModule(
+          (merchant as { businessCategory?: string | null }).businessCategory
+        );
+        if (locked) {
+          checkout = { ...checkout, posMode: posModeForModule(locked) };
+        }
+        return checkout;
+      })(),
       customerDisplaySettings: await (async () => {
         try {
           const { CdsService } = await import("@/services/cds.service");
