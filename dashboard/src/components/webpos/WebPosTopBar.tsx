@@ -18,6 +18,7 @@ import {
   UserCircle2,
   Vault,
   ArrowDownUp,
+  Nfc,
 } from 'lucide-react';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
 import { useFullscreenActive } from '@/hooks/useFullscreenActive';
@@ -596,6 +597,8 @@ export function WebPosSettingsDropdown({
   posStations = [],
   deviceDefaultStationId = '',
   onDeviceDefaultStationChange,
+  tapToPayWizardVisible = false,
+  onOpenTapToPayWizard,
 }: {
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
@@ -646,6 +649,9 @@ export function WebPosSettingsDropdown({
   posStations?: Array<{ id: string; name: string }>;
   deviceDefaultStationId?: string;
   onDeviceDefaultStationChange?: (stationId: string) => void;
+  /** Android WebPOS + merchant Tap to Pay enabled */
+  tapToPayWizardVisible?: boolean;
+  onOpenTapToPayWizard?: () => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -1010,6 +1016,23 @@ export function WebPosSettingsDropdown({
             </select>
           </label>
           <p className="text-[10px] leading-snug text-stone-500">{t('posStationDeviceDefaultHint')}</p>
+        </div>
+      ) : null}
+
+      {tapToPayWizardVisible && onOpenTapToPayWizard ? (
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('tapToPaySettings')}
+          </p>
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 py-2 text-xs font-bold text-teal-900 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
+            onClick={onOpenTapToPayWizard}
+          >
+            <Nfc size={16} />
+            {t('tapToPayWizardOpen')}
+          </button>
+          <p className="text-[10px] leading-snug text-stone-500">{t('tapToPayWizardGearHint')}</p>
         </div>
       ) : null}
 

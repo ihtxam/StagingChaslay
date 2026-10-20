@@ -4416,6 +4416,41 @@ const en: Dict = {
     'Update Bridge Reborn from Settings → Printing — install the latest APK (Tap to Pay build).',
   webPosTapToPaySetupStepActivate: 'Activate Tap to Pay on this device (one tap below)',
   webPosTapToPaySetupLater: 'Remind me later',
+  tapToPayWizardOpen: 'Tap to Pay setup wizard',
+  tapToPayWizardGearHint: 'Install Bridge, enable NFC in the panel, and register this tablet.',
+  tapToPayWizardIntro:
+    'Follow these steps on this Sunmi or Android tablet. Bridge Reborn runs locally; WebPOS stays in Chrome.',
+  tapToPayWizardStepInstall: 'Install or update Bridge Reborn',
+  tapToPayWizardStepRunning: 'Bridge Reborn running',
+  tapToPayWizardStepPanel: 'Tap to Pay enabled in merchant panel',
+  tapToPayWizardStepRegister: 'Register this tablet with Adyen',
+  tapToPayWizardStepReady: 'Warm-up and readiness',
+  tapToPayWizardStepTest: 'Optional test payment',
+  tapToPayWizardHintInstall:
+    'Download the latest APK (~5 MB print stub vs full Tap to Pay build with Adyen SDK). Uninstall old Bridge if install fails.',
+  tapToPayWizardHintRunning:
+    'Open Bridge once after reboot so localhost:9101 responds. WebPOS connects automatically.',
+  tapToPayWizardHintPanel:
+    'Settings → Payments: Adyen credentials, webhook, and “Enable Tap to Pay” must be on.',
+  tapToPayWizardHintRegister:
+    'One-time activation on this device (warmUp + installation ID). Stay signed in to WebPOS.',
+  tapToPayWizardHintReady: 'Bridge /health should report tapToPayReady when registration succeeded.',
+  tapToPayWizardHintTest: 'Charge CHF 1.00 on a test card, or skip when you are ready to sell.',
+  tapToPayWizardRefresh: 'Refresh status',
+  tapToPayWizardOpenBridge: 'Open Bridge Reborn',
+  tapToPayWizardOpenPanel: 'Open payment settings',
+  tapToPayWizardAllReady: 'Tap to Pay is ready on this tablet.',
+  tapToPayWizardTestPayment: 'Test CHF 1.00 tap',
+  tapToPayWizardTestOk: 'Test payment approved — Tap to Pay is working.',
+  tapToPayWizardSdkNote:
+    'Print-only Bridge APKs are smaller; Tap to Pay requires the full Bridge build with hasAdyenSdk.',
+  tapToPayWizardInstalledVersion: 'Installed v{v}',
+  tapToPayWizardLatestVersion: 'Latest v{v}',
+  tapToPayWizardAndroidOnly: 'Open WebPOS on an Android tablet to run the Tap to Pay wizard.',
+  tapToPayErrAuthService:
+    'Google Play services authentication failed (AuthenticationServiceNotFound). Update Google Play services on the tablet and retry.',
+  tapToPayErrPlayServices: 'Google Play services are missing or outdated — required for Adyen Tap to Pay.',
+  tapToPayErrNfcOff: 'Turn on NFC in Android settings and ensure this device has an NFC reader.',
   adyenLiveRegion: 'Live region',
   settingsFiscal: 'Fiscal (Fiskaly)',
   settingsNavFiscal: 'Fiscal',
@@ -9309,6 +9344,40 @@ const fr: Dict = {
   tapToPayEnabled: 'Activer Tap to Pay',
   tapToPayEnabledHint:
     'Si activé avec les identifiants, WebPOS sur tablette Android et l’app POS native peuvent accepter les paiements NFC.',
+  tapToPayWizardOpen: 'Assistant Tap to Pay',
+  tapToPayWizardGearHint: 'Bridge, activation panel et enregistrement de cette tablette.',
+  tapToPayWizardIntro:
+    'Sur cette tablette Android : Bridge Reborn en local, WebPOS dans Chrome.',
+  tapToPayWizardStepInstall: 'Installer ou mettre à jour Bridge Reborn',
+  tapToPayWizardStepRunning: 'Bridge Reborn démarré',
+  tapToPayWizardStepPanel: 'Tap to Pay activé dans le panel',
+  tapToPayWizardStepRegister: 'Enregistrer cette tablette (Adyen)',
+  tapToPayWizardStepReady: 'Préparation et disponibilité',
+  tapToPayWizardStepTest: 'Paiement test (optionnel)',
+  tapToPayWizardHintInstall:
+    'Téléchargez le dernier APK (version légère impression ou build complet Tap to Pay avec SDK Adyen).',
+  tapToPayWizardHintRunning: 'Ouvrez Bridge une fois après redémarrage (localhost:9101).',
+  tapToPayWizardHintPanel:
+    'Paramètres → Paiements : identifiants Adyen, webhook et « Activer Tap to Pay ».',
+  tapToPayWizardHintRegister:
+    'Activation unique sur cet appareil. Restez connecté à WebPOS.',
+  tapToPayWizardHintReady: 'Bridge doit indiquer tapToPayReady après enregistrement.',
+  tapToPayWizardHintTest: 'Tester CHF 1.00 ou ignorer si vous êtes prêt.',
+  tapToPayWizardRefresh: 'Actualiser',
+  tapToPayWizardOpenBridge: 'Ouvrir Bridge Reborn',
+  tapToPayWizardOpenPanel: 'Ouvrir les paiements',
+  tapToPayWizardAllReady: 'Tap to Pay est prêt sur cette tablette.',
+  tapToPayWizardTestPayment: 'Test CHF 1.00',
+  tapToPayWizardTestOk: 'Paiement test approuvé.',
+  tapToPayWizardSdkNote:
+    'Les APK « impression seule » sont plus petits ; Tap to Pay nécessite le build complet (hasAdyenSdk).',
+  tapToPayWizardInstalledVersion: 'Installé v{v}',
+  tapToPayWizardLatestVersion: 'Dernier v{v}',
+  tapToPayWizardAndroidOnly: 'Ouvrez WebPOS sur une tablette Android pour l’assistant.',
+  tapToPayErrAuthService:
+    'Échec d’authentification Google Play (AuthenticationServiceNotFound). Mettez à jour les services Google Play.',
+  tapToPayErrPlayServices: 'Services Google Play manquants ou obsolètes — requis pour Tap to Pay.',
+  tapToPayErrNfcOff: 'Activez le NFC dans les paramètres Android.',
   adyenLiveRegion: 'Région live',
   settingsFiscal: 'Fiscal (Fiskaly)',
   settingsNavFiscal: 'Fiscal',
@@ -14181,6 +14250,40 @@ const de: Dict = {
   tapToPayEnabled: 'Tap to Pay aktivieren',
   tapToPayEnabledHint:
     'Wenn aktiviert und Zugangsdaten gesetzt sind, können WebPOS auf Android-Tablets und die native POS-App NFC-Zahlungen annehmen.',
+  tapToPayWizardOpen: 'Tap-to-Pay-Einrichtungsassistent',
+  tapToPayWizardGearHint: 'Bridge installieren, im Panel aktivieren und dieses Tablet registrieren.',
+  tapToPayWizardIntro:
+    'Auf diesem Android-Tablet: Bridge Reborn lokal, WebPOS in Chrome.',
+  tapToPayWizardStepInstall: 'Bridge Reborn installieren oder aktualisieren',
+  tapToPayWizardStepRunning: 'Bridge Reborn läuft',
+  tapToPayWizardStepPanel: 'Tap to Pay im Händler-Panel aktiviert',
+  tapToPayWizardStepRegister: 'Dieses Tablet bei Adyen registrieren',
+  tapToPayWizardStepReady: 'Aufwärmen und Bereitschaft',
+  tapToPayWizardStepTest: 'Optionaler Testzahlung',
+  tapToPayWizardHintInstall:
+    'Neuestes APK laden (kleines Druck-Build vs. volles Tap-to-Pay-Build mit Adyen SDK).',
+  tapToPayWizardHintRunning: 'Bridge einmal nach Neustart öffnen (localhost:9101).',
+  tapToPayWizardHintPanel:
+    'Einstellungen → Zahlungen: Adyen, Webhook und „Tap to Pay aktivieren“.',
+  tapToPayWizardHintRegister:
+    'Einmalige Aktivierung auf diesem Gerät. In WebPOS angemeldet bleiben.',
+  tapToPayWizardHintReady: 'Bridge /health sollte tapToPayReady melden.',
+  tapToPayWizardHintTest: 'CHF 1.00 testen oder überspringen.',
+  tapToPayWizardRefresh: 'Status aktualisieren',
+  tapToPayWizardOpenBridge: 'Bridge Reborn öffnen',
+  tapToPayWizardOpenPanel: 'Zahlungseinstellungen',
+  tapToPayWizardAllReady: 'Tap to Pay ist auf diesem Tablet bereit.',
+  tapToPayWizardTestPayment: 'Test CHF 1.00',
+  tapToPayWizardTestOk: 'Testzahlung genehmigt.',
+  tapToPayWizardSdkNote:
+    'Nur-Druck-APKs sind kleiner; Tap to Pay braucht das volle Bridge-Build (hasAdyenSdk).',
+  tapToPayWizardInstalledVersion: 'Installiert v{v}',
+  tapToPayWizardLatestVersion: 'Neueste v{v}',
+  tapToPayWizardAndroidOnly: 'WebPOS auf einem Android-Tablet öffnen für den Assistenten.',
+  tapToPayErrAuthService:
+    'Google-Play-Authentifizierung fehlgeschlagen (AuthenticationServiceNotFound). Google Play Services aktualisieren.',
+  tapToPayErrPlayServices: 'Google Play Services fehlen oder sind veraltet.',
+  tapToPayErrNfcOff: 'NFC in den Android-Einstellungen aktivieren.',
   adyenLiveRegion: 'Live-Region',
   settingsFiscal: 'Fiscal (Fiskaly)',
   settingsNavFiscal: 'Fiscal',
