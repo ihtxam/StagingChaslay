@@ -1068,7 +1068,8 @@ class MainActivity : AppCompatActivity() {
             raw.contains("socket", ignoreCase = true) && raw.contains("closed", ignoreCase = true) ->
                 getString(R.string.test_print_socket_closed)
             raw.contains("BLUETOOTH_SCAN", ignoreCase = true) ||
-                raw.contains("BLUETOOTH_CONNECT", ignoreCase = true) ->
+                raw.contains("BLUETOOTH_CONNECT", ignoreCase = true) ||
+                raw.contains("BLUETOOTH_ADMIN", ignoreCase = true) ->
                 getString(R.string.test_print_bluetooth_permission_denied)
             raw.contains("Bluetooth", ignoreCase = true) ->
                 getString(R.string.test_print_bluetooth_failed, raw)

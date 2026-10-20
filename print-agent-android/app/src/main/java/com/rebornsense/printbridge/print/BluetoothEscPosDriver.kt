@@ -51,7 +51,7 @@ class BluetoothEscPosDriver : PrinterDriver {
         val device = adapter.bondedDevices?.firstOrNull { it.address == address }
             ?: return Result.failure(IllegalStateException("Bluetooth printer not paired"))
         return try {
-            adapter.cancelDiscovery()
+            adapter.safeCancelDiscovery()
             evictStaleSockets()
             val socket = reuseOrOpen(address, device)
             try {

@@ -56,8 +56,9 @@ assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
 assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
 assert.match(launcher, /recordBlockedStartInCrashLog/);
-assert.match(gradle, /versionName = "0\.4\.46"/);
-assert.match(gradle, /versionCode = 64/);
+assert.match(gradle, /versionName = "0\.4\.47"/);
+assert.match(gradle, /versionCode = 65/);
+assert.match(manifest, /BLUETOOTH_ADMIN/);
 assert.match(attachActivity, /schedulePermissionPrompt/);
 assert.match(
   mainActivity,
