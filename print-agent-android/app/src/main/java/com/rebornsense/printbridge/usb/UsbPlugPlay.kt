@@ -44,11 +44,13 @@ object UsbPlugPlay {
             Log.d(TAG, "No missing USB printer permission to prompt for")
             return false
         }
-        Log.i(TAG, "Prompt USB permission for ${device.vendorId}:${device.productId} foreground=$allowForegroundActivity")
+        Log.i(
+            TAG,
+            "Prompt USB permission for ${device.vendorId}:${device.productId} foreground=$allowForegroundActivity user=$userInitiated",
+        )
+        val minimizeAfter = userInitiated || allowForegroundActivity
         if (
-            allowForegroundActivity &&
-            UsbForegroundPromptGate.launchMainActivity(userInitiated) &&
-            UsbPermissionUi.launchMainActivityForUsbPermission(app, device, minimizeAfter = userInitiated)
+            UsbPermissionUi.launchImmediateUsbPrompt(app, device, minimizeAfter = minimizeAfter)
         ) {
             UsbAttachPromptGuard.markPromptIssued(app, device)
             return true

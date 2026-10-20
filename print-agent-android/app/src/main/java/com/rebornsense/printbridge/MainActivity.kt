@@ -241,13 +241,11 @@ class MainActivity : AppCompatActivity() {
                 }
                 return@post
             }
+            UsbHostPermissions.clearStalePendingRequest(usb, maxAgeMs = 0L)
             if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
-                UsbBootPermissionNotifier.postPermissionNotificationForDevice(this, device)
-            }
-            if (usbPermissionThenMinimize) {
-                window.decorView.postDelayed({
-                    if (!isFinishing && !isDestroyed) moveTaskToBack(true)
-                }, 500L)
+                if (!UsbHostPermissions.isRequestPending()) {
+                    UsbBootPermissionNotifier.postPermissionNotificationForDevice(this, device)
+                }
             }
         }
     }

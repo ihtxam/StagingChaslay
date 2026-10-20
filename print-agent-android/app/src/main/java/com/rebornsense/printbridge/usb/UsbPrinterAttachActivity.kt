@@ -98,12 +98,19 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             intent?.action == UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION ||
                 UsbPermissionUi.isPermissionPromptAction(intent?.action)
         if (userTappedAllow || systemHotPlug) {
-            Log.i(TAG, "USB permission missing — showing system allow dialog (user-facing)")
+            Log.i(TAG, "USB permission missing — MainActivity USB allow dialog (Nebullus/Ojavana)")
+            if (UsbPermissionUi.launchMainActivityForUsbPermission(this, device, minimizeAfter = true)) {
+                finish()
+                return
+            }
+            Log.i(TAG, "USB permission missing — fallback attach activity prompt")
             schedulePermissionPrompt(device, systemHotPlug)
             return
         }
-        Log.i(TAG, "USB permission missing — post notification (background)")
-        UsbPlugPlay.promptForMissingPrinter(this, device, allowForegroundActivity = false)
+        Log.i(TAG, "USB permission missing — immediate foreground prompt")
+        if (!UsbPermissionUi.launchImmediateUsbPrompt(this, device, minimizeAfter = true)) {
+            UsbPlugPlay.promptForMissingPrinter(this, device, allowForegroundActivity = true)
+        }
         finish()
     }
 

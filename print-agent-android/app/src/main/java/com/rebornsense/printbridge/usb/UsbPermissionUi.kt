@@ -26,12 +26,53 @@ object UsbPermissionUi {
     }
 
     fun launchPermissionPrompt(context: Context, device: UsbDevice): Boolean {
-        return launchMainActivityForUsbPermission(context, device, minimizeAfter = true)
+        return launchImmediateUsbPrompt(context, device, minimizeAfter = true)
     }
 
-    /** Background-safe: notification only — never start MainActivity. */
+    /**
+     * Bring Bridge to the foreground and show the system USB allow dialog (Ojavana-style).
+     * Falls back to [UsbPrinterAttachActivity], then a high-priority notification.
+     */
+    fun launchImmediateUsbPrompt(
+        context: Context,
+        device: UsbDevice,
+        minimizeAfter: Boolean = true,
+    ): Boolean {
+        if (!BridgeUserUnlock.isCredentialStorageReady(context)) {
+            Log.d(TAG, "Skip USB prompt — credential storage locked")
+            return false
+        }
+        if (launchMainActivityForUsbPermission(context, device, minimizeAfter)) {
+            return true
+        }
+        return launchAttachActivityForUsbPermission(context, device)
+    }
+
+    /** Last resort when activity launch is blocked by the OEM. */
     fun promptViaNotificationOnly(context: Context, device: UsbDevice) {
         UsbBootPermissionNotifier.postPermissionNotificationForDevice(context.applicationContext, device)
+    }
+
+    fun launchAttachActivityForUsbPermission(context: Context, device: UsbDevice): Boolean {
+        val app = context.applicationContext
+        val intent = Intent(app, UsbPrinterAttachActivity::class.java).apply {
+            action = ACTION_REQUEST_USB_PRINTER_PERMISSION
+            putExtra(UsbBootPermissionNotifier.EXTRA_USB_DEVICE_ID, device.deviceId)
+            putExtra(UsbBootPermissionNotifier.EXTRA_USB_VID, device.vendorId)
+            putExtra(UsbBootPermissionNotifier.EXTRA_USB_PID, device.productId)
+            putExtra(UsbManager.EXTRA_DEVICE, device)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            )
+        }
+        return runCatching {
+            app.startActivity(intent)
+            true
+        }.onFailure { error ->
+            Log.w(TAG, "Could not launch UsbPrinterAttachActivity for ${device.deviceId}", error)
+        }.getOrDefault(false)
     }
 
     fun launchMainActivityForUsbPermission(

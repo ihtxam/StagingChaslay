@@ -56,8 +56,8 @@ assert.match(http, /NanoHTTPD\("127\.0\.0\.1"/);
 
 assert.match(application, /runWithBootReceiverStart \{[\s\S]*PrintBridgeLauncher\.startIfEnabled/);
 assert.match(launcher, /recordBlockedStartInCrashLog/);
-assert.match(gradle, /versionName = "0\.4\.47"/);
-assert.match(gradle, /versionCode = 65/);
+assert.match(gradle, /versionName = "0\.4\.49"/);
+assert.match(gradle, /versionCode = 67/);
 assert.match(gradle, /manifest\.srcFile\("src\/adyen\/AndroidManifest\.xml"\)/);
 assert.match(manifest, /BLUETOOTH_ADMIN/);
 assert.match(attachActivity, /schedulePermissionPrompt/);
@@ -68,9 +68,13 @@ assert.match(
 assert.match(mainActivity, /EXTRA_REQUEST_USB_PERMISSION/);
 assert.match(readFileSync(join(src, 'usb/UsbPlugPlay.kt'), 'utf8'), /allowForegroundActivity/);
 assert.doesNotMatch(boot, /scheduleUsbPermissionPrompts/);
-assert.doesNotMatch(
+assert.match(
   readFileSync(join(src, 'usb/UsbBootPermissionNotifier.kt'), 'utf8'),
   /setFullScreenIntent/,
+);
+assert.match(
+  readFileSync(join(src, 'usb/UsbPermissionUi.kt'), 'utf8'),
+  /launchImmediateUsbPrompt/,
 );
 assert.match(manifest, /showWhenLocked="true"/);
 assert.match(attachActivity, /clearStalePendingRequest\(usb, maxAgeMs = 3_000L\)/);
