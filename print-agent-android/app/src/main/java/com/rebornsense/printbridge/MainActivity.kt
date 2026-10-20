@@ -226,7 +226,7 @@ class MainActivity : AppCompatActivity() {
 
     /** WebPOS / boot / hot-plug — show the system USB allow dialog on this visible activity. */
     private fun tryRunUsbPermissionLaunch() {
-        if (!usbPermissionLaunchPending || !runtimePermissionsResolved) return
+        if (!usbPermissionLaunchPending) return
         usbPermissionLaunchPending = false
         window.decorView.post {
             if (isFinishing || isDestroyed) return@post
@@ -297,8 +297,8 @@ class MainActivity : AppCompatActivity() {
         dropUnpluggedUsbFromList()
         if (runtimePermissionsResolved) {
             refreshServiceStatusReadOnly(scanPrinters = true)
-            tryRunUsbPermissionLaunch()
         }
+        tryRunUsbPermissionLaunch()
     }
 
     override fun onDestroy() {
