@@ -16,6 +16,8 @@ type Props = {
   /** When true, limits are read-only (agency-assigned). Session kick still works. */
   readOnly?: boolean;
   hint?: string;
+  /** Retail merchants have no waiter handheld posts. */
+  showWaiterPosts?: boolean;
 };
 
 function platformLabel(platform: string, t: (k: string) => string) {
@@ -78,6 +80,7 @@ export default function PosPostsSection({
   onMaxWaiterPostsChange,
   readOnly = false,
   hint,
+  showWaiterPosts = true,
 }: Props) {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -127,7 +130,9 @@ export default function PosPostsSection({
   return (
     <div className="space-y-4">
       {hint ? <p className="text-sm muted">{hint}</p> : null}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div
+        className={`grid grid-cols-1 gap-4 ${showWaiterPosts ? 'sm:grid-cols-2' : ''}`}
+      >
         {readOnly ? (
           <>
             <div className="block text-sm">
@@ -136,12 +141,14 @@ export default function PosPostsSection({
                 {limitLabel(maxPosPosts, t)}
               </p>
             </div>
-            <div className="block text-sm">
-              <span className="font-medium">{t('posPostsMaxWaiter')}</span>
-              <p className="mt-1 rounded-md border border-[var(--border)] px-3 py-2 bg-stone-50">
-                {limitLabel(maxWaiterPosts, t)}
-              </p>
-            </div>
+            {showWaiterPosts ? (
+              <div className="block text-sm">
+                <span className="font-medium">{t('posPostsMaxWaiter')}</span>
+                <p className="mt-1 rounded-md border border-[var(--border)] px-3 py-2 bg-stone-50">
+                  {limitLabel(maxWaiterPosts, t)}
+                </p>
+              </div>
+            ) : null}
           </>
         ) : (
           <>
@@ -157,20 +164,22 @@ export default function PosPostsSection({
               />
               <span className="text-xs muted">{t('posPostsUnlimited')} = 0</span>
             </label>
-            <label className="block text-sm">
-              <span className="font-medium">{t('posPostsMaxWaiter')}</span>
-              <input
-                type="number"
-                min={0}
-                max={99}
-                value={maxWaiterPosts}
-                onChange={(e) =>
-                  onMaxWaiterPostsChange?.(Math.max(0, Number(e.target.value) || 0))
-                }
-                className="mt-1 w-full rounded-md border border-[var(--border)] px-3 py-2"
-              />
-              <span className="text-xs muted">{t('posPostsUnlimited')} = 0</span>
-            </label>
+            {showWaiterPosts ? (
+              <label className="block text-sm">
+                <span className="font-medium">{t('posPostsMaxWaiter')}</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  value={maxWaiterPosts}
+                  onChange={(e) =>
+                    onMaxWaiterPostsChange?.(Math.max(0, Number(e.target.value) || 0))
+                  }
+                  className="mt-1 w-full rounded-md border border-[var(--border)] px-3 py-2"
+                />
+                <span className="text-xs muted">{t('posPostsUnlimited')} = 0</span>
+              </label>
+            ) : null}
           </>
         )}
       </div>
@@ -182,8 +191,12 @@ export default function PosPostsSection({
       </div>
       <SessionList rows={main} onKick={(id) => void kick(id)} kickingId={kickingId} t={t} />
 
-      <div className="text-sm font-medium">{t('posPostsActiveWaiter')}</div>
-      <SessionList rows={waiter} onKick={(id) => void kick(id)} kickingId={kickingId} t={t} />
+      {showWaiterPosts ? (
+        <>
+          <div className="text-sm font-medium">{t('posPostsActiveWaiter')}</div>
+          <SessionList rows={waiter} onKick={(id) => void kick(id)} kickingId={kickingId} t={t} />
+        </>
+      ) : null}
     </div>
   );
 }

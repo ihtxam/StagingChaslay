@@ -613,7 +613,14 @@ export class ChaslayCompatService {
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
-    const posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+    const { normalizeBusinessModule, posModeForModule } = await import("@/lib/business-module");
+    let posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+    const lockedModule = normalizeBusinessModule(
+      (merchant as { businessCategory?: string | null }).businessCategory
+    );
+    if (lockedModule) {
+      posCheckoutSettings = { ...posCheckoutSettings, posMode: posModeForModule(lockedModule) };
+    }
 
     return {
       adyen: {

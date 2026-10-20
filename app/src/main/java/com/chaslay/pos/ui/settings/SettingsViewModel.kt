@@ -169,7 +169,9 @@ data class SettingsUiState(
     val cloudLoginEmail: String = "",
     val cloudLoginPassword: String = "",
     val isCloudLoggingIn: Boolean = false,
-    val cloudLoginError: String? = null
+    val cloudLoginError: String? = null,
+    /** When set, POS mode follows merchant panel sync (retail vs restaurant). */
+    val posModeManagedByCloud: Boolean = false
 )
 
 @HiltViewModel
@@ -211,6 +213,11 @@ class SettingsViewModel @Inject constructor(
             if (localVat != rawVat) {
                 settings = settings.copy(vatIncludedInPrice = localVat)
                 settingsRepository.saveSettings(settings)
+            }
+            val cloudMerchant = !syncPreferences.getMerchantId().isNullOrBlank()
+            if (cloudMerchant) {
+                runCatching { terminalSyncRepository.syncTerminals() }
+                settings = settingsRepository.getSettings()
             }
             currentSettings = settings
             val sessionLanguage = sessionManager.appLanguage.first()
@@ -278,6 +285,7 @@ class SettingsViewModel @Inject constructor(
                     logoUri = settings.logoUri,
                     receiptTemplateName = settings.receiptTemplateName,
                     posMode = settings.posMode,
+                    posModeManagedByCloud = cloudMerchant || settings.paymentMethodsManagedByCloud,
                     coursesEnabled = settings.coursesEnabled,
                     tablesEnabled = settings.tablesEnabled,
                     retailDineInEnabled = settings.retailDineInEnabled,
