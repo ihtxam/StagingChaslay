@@ -4,6 +4,9 @@ import {
   isAndroidWebPosTill,
   isPrintAgentAvailable,
   isUnsuitableRawPrinter,
+  listNormalizedLiveAgentPrinters,
+  resolveLiveEscPosTargetNames,
+  syncWebPosLocalPrinterName,
   unsuitableRawPrinterMessage,
 } from '@/lib/print-agent';
 import {
@@ -59,10 +62,23 @@ async function printReceiptText(
   }
 ): Promise<void> {
   const targets = printersForRole(opts.printSettings, 'receipt');
-  const names =
+  const configuredNames =
     targets.length > 0
       ? targets.map((x) => x.name)
       : [opts.fallbackPrinterName || localStorage.getItem('manupos_webpos_printer') || ''];
+  const livePrinters = await listNormalizedLiveAgentPrinters();
+  if (livePrinters.length) {
+    syncWebPosLocalPrinterName(livePrinters);
+  }
+  const profileHints = new Map(
+    (opts.printSettings?.printers || []).map((p) => [
+      String(p.name || '').trim(),
+      { portName: p.portName, matchHint: p.matchHint },
+    ])
+  );
+  const names = resolveLiveEscPosTargetNames(configuredNames, livePrinters, (configured) =>
+    profileHints.get(configured)
+  );
   const named = names.map((n) => (n || '').trim()).filter(Boolean);
   if (named.length > 0 && named.every((n) => isUnsuitableRawPrinter(n))) {
     throw new Error(
@@ -125,7 +141,7 @@ async function printReceiptText(
       text,
       jobKind: 'receipt',
       jobLabel: 'receipt',
-      skipRetarget: true,
+      skipRetarget: !livePrinters.length,
     });
   }
 }

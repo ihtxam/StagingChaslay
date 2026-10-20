@@ -232,6 +232,16 @@ function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
   const suitable = printers.filter(
     (p) => isEscPosTicketPrinterName(p.name) && !isStaleUsbEthernetPrinterName(p.name)
   );
+  if (isAndroidWebPosTill()) {
+    return (
+      suitable.find((p) => p.connectionType === 'sunmi-internal') ||
+      suitable.find((p) => p.isDefault) ||
+      suitable.find((p) => p.connectionType === 'usb') ||
+      suitable.find((p) => looksLikeThermal80mm(p.name)) ||
+      suitable[0] ||
+      null
+    );
+  }
   return (
     suitable.find((p) => p.isDefault) ||
     suitable.find((p) => p.connectionType === 'usb') ||
@@ -304,6 +314,51 @@ export function resolveEscPosPrinterName(
     return isEscPosTicketPrinterName(want) ? want : null;
   }
   return defaultLivePrinter(livePrinters)?.name || null;
+}
+
+/** Live Bridge / Print Agent list, normalized and stale USB/LAN rows removed. */
+export async function listNormalizedLiveAgentPrinters(): Promise<AgentPrinter[]> {
+  try {
+    if (!(await isPrintAgentAvailable())) return [];
+    return normalizeAgentPrinterList(await listAgentPrinters());
+  } catch {
+    return [];
+  }
+}
+
+export type ResolveLiveEscPosHintsFn = (
+  configuredName: string
+) => PrinterResolutionHints | undefined;
+
+/**
+ * Map saved receipt/kitchen targets to names present on the live agent list.
+ * Drops stale queues; dedupes; falls back to agent default (Sunmi internal on Android till).
+ */
+export function resolveLiveEscPosTargetNames(
+  configuredNames: string[],
+  livePrinters: AgentPrinter[],
+  hintsForName?: ResolveLiveEscPosHintsFn
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (name: string | null | undefined) => {
+    const n = String(name || '').trim();
+    if (!n || seen.has(n)) return;
+    if (livePrinters.length > 0 && !printerNameInList(n, livePrinters)) return;
+    seen.add(n);
+    out.push(n);
+  };
+
+  for (const raw of configuredNames) {
+    const configured = String(raw || '').trim();
+    const hints = hintsForName?.(configured);
+    add(resolveEscPosPrinterName(configured, livePrinters, hints));
+  }
+
+  if (!out.length) {
+    add(resolveEscPosPrinterName('', livePrinters, hintsForName?.('')));
+  }
+  return out;
 }
 
 const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
