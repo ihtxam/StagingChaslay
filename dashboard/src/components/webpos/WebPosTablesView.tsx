@@ -195,19 +195,18 @@ export default function WebPosTablesView({
                 <button
                   type="button"
                   onClick={() => onSelectTable?.({ id: table.id, label: table.label })}
-                  className={`flex h-full w-full flex-col items-center justify-center border-2 text-xs font-bold transition hover:brightness-95 ${
+                  className={`flex h-full w-full flex-col items-center justify-center border-2 text-xs font-bold text-stone-900 transition hover:brightness-95 ${
                     table.shape === 'round' ? 'rounded-full' : 'rounded-lg'
                   } ${selected ? 'ring-4 ring-[var(--webpos-accent-ring)] ring-offset-2' : ''} ${
                     isReserved && !hasDraft ? 'ring-4 ring-amber-400 ring-offset-1' : ''
                   }`}
                   style={{
-                    backgroundColor: `${statusColor}22`,
+                    backgroundColor: `${statusColor}33`,
                     borderColor: statusColor,
-                    color: 'var(--webpos-text)',
                   }}
                 >
-                  <span>{table.label}</span>
-                  <span className="max-w-full truncate px-1 text-[10px] font-normal opacity-80">
+                  <span className="text-stone-900">{table.label}</span>
+                  <span className="max-w-full truncate px-1 text-[10px] font-medium text-stone-700">
                     {subLabel}
                   </span>
                 </button>

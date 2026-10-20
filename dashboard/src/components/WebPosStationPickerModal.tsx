@@ -31,6 +31,15 @@ export default function WebPosStationPickerModal({
     setBusy(false);
   }, [open, initialStationId, stations]);
 
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   if (!open || !stations.length) return null;
 
   const confirm = () => {
@@ -41,38 +50,58 @@ export default function WebPosStationPickerModal({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 p-4">
+    <div
+      className="fixed inset-0 z-[200] flex items-end justify-center overflow-hidden bg-black/55 p-0 sm:items-center sm:p-4"
+      onClick={onCancel}
+      role="presentation"
+    >
       <div
-        className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-xl"
+        className="flex max-h-[min(92dvh,32rem)] w-full max-w-md min-h-0 flex-col overflow-hidden rounded-t-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--surface))] text-[var(--webpos-text,var(--text,#1c1917))] shadow-xl sm:rounded-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="pos-station-picker-title"
+        onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="pos-station-picker-title" className="text-lg font-semibold mb-1">
-          {t('posStationPickerTitle')}
-        </h2>
-        <p className="text-sm text-[var(--text-muted)] mb-4">{t('posStationPickerHint')}</p>
-        <div className="space-y-2 mb-6 max-h-[50vh] overflow-y-auto">
+        <div className="shrink-0 border-b border-[var(--webpos-border,var(--border))] px-5 py-4 sm:px-6">
+          <h2
+            id="pos-station-picker-title"
+            className="text-lg font-semibold text-[var(--webpos-text,var(--text,#1c1917))]"
+          >
+            {t('posStationPickerTitle')}
+          </h2>
+          <p className="mt-1.5 text-sm leading-snug text-stone-600 dark:text-stone-300">
+            {t('posStationPickerHint')}
+          </p>
+        </div>
+
+        <div
+          className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-5 py-4 touch-pan-y sm:px-6"
+          role="listbox"
+          aria-label={t('posStationPickerTitle')}
+        >
           {stations.map((s) => (
             <button
               key={s.id}
               type="button"
               disabled={busy}
+              role="option"
+              aria-selected={selectedId === s.id}
               onClick={() => setSelectedId(s.id)}
               className={`w-full text-left rounded-xl border px-4 py-3 transition ${
                 selectedId === s.id
-                  ? 'border-sky-600 bg-sky-50 dark:bg-sky-950/40'
-                  : 'border-[var(--border)] hover:border-sky-400'
+                  ? 'border-sky-600 bg-sky-100 text-stone-900 dark:border-sky-500 dark:bg-sky-950/60 dark:text-sky-50'
+                  : 'border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface-2,var(--bg-muted))] text-[var(--webpos-text,var(--text))] hover:border-sky-400'
               }`}
             >
               <div className="font-medium">{s.name}</div>
               {s.isDefault ? (
-                <div className="text-xs text-[var(--text-muted)]">{t('default')}</div>
+                <div className="text-xs text-stone-600 dark:text-stone-400">{t('default')}</div>
               ) : null}
             </button>
           ))}
         </div>
-        <div className="flex gap-2 justify-end">
+
+        <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--border)] px-5 py-4 sm:px-6">
           {onCancel ? (
             <button type="button" className="btn-secondary" disabled={busy} onClick={onCancel}>
               {t('cancel')}
