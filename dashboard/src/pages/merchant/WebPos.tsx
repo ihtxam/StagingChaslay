@@ -11220,6 +11220,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             posStations={posStations}
             deviceDefaultStationId={deviceDefaultStationId}
             onDeviceDefaultStationChange={changeDeviceDefaultStation}
+            tapToPayWizardVisible={
+              isAndroidWebPosTill() &&
+              paymentConfig?.tapToPayEnabled === true &&
+              paymentConfig?.adyenConfigured === true
+            }
+            onOpenTapToPayWizard={() => {
+              setSettingsOpen(false);
+              setTapToPaySetupOpen(true);
+            }}
           />
           )
         }
