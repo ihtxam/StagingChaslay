@@ -180,4 +180,28 @@ assert.ok(polacafe.some((l) => l.includes('Bahnhofstrasse 1')));
 assert.ok(polacafe.some((l) => /Tel:\s*\+41/.test(l)));
 assert.ok(polacafe.some((l) => /VAT:\s*CHE-123/.test(l)));
 
+const melimelo = splitReceiptHeaderDetailLine(
+  'MELIMELORue Jaquet-Droz 2Neuchâtel Tel: 0793150600VAT: CHE-123.456.789'
+);
+assert.equal(melimelo[0], 'MELIMELO');
+assert.ok(melimelo.some((l) => l.includes('Rue Jaquet-Droz')));
+assert.ok(melimelo.some((l) => /Neuch/i.test(l)));
+assert.ok(melimelo.some((l) => /Tel:\s*079/.test(l)));
+
+const melimeloLines = getReceiptHeaderLines(
+  {
+    headerTitle: 'MELIMELO',
+    header: 'Rue Jaquet-Droz 2\nNeuchâtel',
+    businessName: 'MELIMELO',
+    address: 'Rue Jaquet-Droz 2',
+    city: 'Neuchâtel',
+    phone: '0793150600',
+    vatNumber: 'CHE-123.456.789',
+    headerAlign: 'center',
+  },
+  32,
+  { padLines: false, titleScale: 3 }
+);
+assert.equal(melimeloLines[0], 'MELIMELO');
+
 console.log('webpos-receipt-header.test.ts ok');
