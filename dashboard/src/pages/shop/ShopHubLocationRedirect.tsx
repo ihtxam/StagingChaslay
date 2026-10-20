@@ -3,6 +3,8 @@ import { Navigate, useLocation, useParams } from 'react-router-dom';
 import {
   isShopPathHubRouting,
   resolveShopKey,
+  shopCateringHomePath,
+  shopCateringMenuPath,
   shopMenuLandingPath,
 } from '@/lib/shop-cart';
 import {
@@ -24,6 +26,8 @@ export default function ShopHubLocationRedirect() {
   const shopKey = resolveShopKey(merchantSlug);
   const loc = String(locationSlug || '').trim();
   const wantsCheckout = location.pathname.includes('/checkout');
+  const wantsCateringMenu = location.pathname.includes('/catering/menu');
+  const wantsCateringHome = /\/catering\/?$/.test(location.pathname.replace(/\/+$/, ''));
 
   useEffect(() => {
     if (!shopKey || !loc) return;
@@ -53,7 +57,11 @@ export default function ShopHubLocationRedirect() {
   const menuTarget = shopMenuLandingPath(shopKey, loc);
   const target = wantsCheckout
     ? menuTarget.replace(/\/menu$/, '/checkout')
-    : menuTarget;
+    : wantsCateringMenu
+      ? shopCateringMenuPath(shopKey, loc)
+      : wantsCateringHome
+        ? shopCateringHomePath(shopKey, loc)
+        : menuTarget;
 
   return <Navigate to={target} replace />;
 }

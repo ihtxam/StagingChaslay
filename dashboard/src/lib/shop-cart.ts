@@ -478,6 +478,28 @@ export function shopMenuLandingPath(shopKey: string, locationSlug?: string | nul
   return `${shopBasePath(shopKey, null)}/menu`;
 }
 
+/** Catering marketing / info page (not the product grid). */
+export function shopCateringHomePath(shopKey: string, locationSlug?: string | null): string {
+  const base = shopBasePath(shopKey, locationSlug);
+  return `${base}/catering`.replace(/\/+/g, '/');
+}
+
+/** Catering-only shop menu (no regular retail / café items). */
+export function shopCateringMenuPath(shopKey: string, locationSlug?: string | null): string {
+  const base = shopBasePath(shopKey, locationSlug);
+  return `${base}/catering/menu`.replace(/\/+/g, '/');
+}
+
+/** After location hub, route to the correct menu surface. */
+export function shopMenuPathAfterHub(
+  shopKey: string,
+  locationSlug: string | null | undefined,
+  orderMode?: 'menu' | 'catering'
+): string {
+  if (orderMode === 'catering') return shopCateringMenuPath(shopKey, locationSlug);
+  return shopMenuLandingPath(shopKey, locationSlug);
+}
+
 /** Resolve menu/catalog location: URL segment, then hub session, then optional fallback. */
 export function resolveShopMenuLocationSlug(
   shopKey: string,
