@@ -582,7 +582,7 @@ export function buildSettingsSearchIndex(
     },
     {
       id: 'receipt-print',
-      tab: 'pos',
+      tab: 'receipt',
       keywords: [
         'receipt',
         'printer',
@@ -596,7 +596,7 @@ export function buildSettingsSearchIndex(
     },
     {
       id: 'barcode-labels',
-      tab: 'pos',
+      tab: 'receipt',
       keywords: ['barcode', 'label', 'code128', t('barcodeLabelsTitle')],
     },
     {
