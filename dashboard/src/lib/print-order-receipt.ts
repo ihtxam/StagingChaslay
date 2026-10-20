@@ -1,6 +1,7 @@
 import { APP_NAME } from '@/lib/brand';
 import { lineWidthForPaper } from '@/lib/receipt-labels';
 import {
+  isAndroidWebPosTill,
   isPrintAgentAvailable,
   isUnsuitableRawPrinter,
   unsuitableRawPrinterMessage,
@@ -10,6 +11,7 @@ import {
   generateRefundReceiptText,
   generateWebPosReceiptText,
   getReceiptHeaderLines,
+  normalizeReceiptHeaderFields,
   resolveReceiptPaperWidthMm,
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
@@ -92,6 +94,10 @@ async function printReceiptText(
     lineWidthForPaper(paper === 58 ? 58 : 80),
     { padLines: false, titleScale: headerFmt.textScale }
   );
+  const headerNorm = normalizeReceiptHeaderFields({
+    headerTitle: opts.printSettings?.receiptHeaderTitle,
+    header: opts.printSettings?.receiptHeader,
+  });
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,
     deliveryQrData: opts.deliveryQrUrl,
@@ -104,6 +110,8 @@ async function printReceiptText(
     headerAlign: headerFmt.align,
     headerBold: headerFmt.bold,
     headerTextScale: headerFmt.textScale,
+    titleBodyGap: !!(headerNorm.title && headerNorm.body),
+    textEncoding: isAndroidWebPosTill() ? 'utf8' : 'cp850',
   });
   const dataBase64 = uint8ToBase64(escpos);
   for (const name of names) {
