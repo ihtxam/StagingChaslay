@@ -173,7 +173,7 @@ jobs:
           PY
 
       - name: Publish Bridge APK to production downloads (SCP)
-        if: ${{ secrets.REBORN_HETZNER_HOST != '' && ((github.event_name == 'workflow_dispatch' && inputs.deploy_production) || github.event_name == 'push') }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_production) }}
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.REBORN_HETZNER_HOST }}
@@ -185,7 +185,7 @@ jobs:
           overwrite: true
 
       - name: Verify production Bridge JSON
-        if: ${{ secrets.REBORN_HETZNER_HOST != '' && ((github.event_name == 'workflow_dispatch' && inputs.deploy_production) || github.event_name == 'push') }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_production) }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.REBORN_HETZNER_HOST }}
