@@ -630,6 +630,9 @@ export type WebPosStaffSession = {
   permissions: Permission[];
   /** Short-lived staff JWT from PIN verify — used to scope EOD/reports server-side. */
   accessToken?: string;
+  /** Active floor register for this waiter shift (multi-station locations). */
+  stationId?: string;
+  stationName?: string;
 };
 
 const WEBPOS_STAFF_KEY = 'webpos_staff_session';

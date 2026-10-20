@@ -189,6 +189,15 @@ import WebPosComboModal, {
 } from '@/components/webpos/WebPosComboModal';
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import WebPosStationPickerModal from '@/components/WebPosStationPickerModal';
+import {
+  fetchPosStations,
+  getDeviceDefaultStationId,
+  needsStationPicker,
+  pickStationForLogin,
+  setDeviceDefaultStationId,
+  type PosStation,
+} from '@/lib/pos-station';
 import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
 import {
   BARCODE_WEDGE_IDLE_MS,
@@ -1215,6 +1224,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
+  const [posStations, setPosStations] = useState<PosStation[]>([]);
+  const [stationPickerOpen, setStationPickerOpen] = useState(false);
+  const [deviceDefaultStationId, setDeviceDefaultStationIdState] = useState(() =>
+    getDeviceDefaultStationId(posLocationId)
+  );
+  const [pendingPinStaff, setPendingPinStaff] = useState<{
+    id: string;
+    name: string;
+    roleId: string;
+    roleName: string;
+    permissions: string[];
+    accessToken?: string;
+    preferredTerminalId?: string | null;
+  } | null>(null);
   const [posAuthAlert, setPosAuthAlert] = useState<{
     title?: string;
     message: string;
@@ -1410,6 +1433,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       platform: 'webpos',
       staffId: webposStaff?.id || null,
       staffName: webposStaff?.name || null,
+      locationId: posLocationId,
+      stationId: webposStaff?.stationId || null,
     })
       .then((result) => {
         if (result.ok && result.kickedSessionIds.length > 0) {
@@ -1417,7 +1442,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
       })
       .catch(() => undefined);
-  }, [staffPinsKnown, pinGateRequired, webposStaff?.id, webposStaff?.name, t]);
+  }, [
+    staffPinsKnown,
+    pinGateRequired,
+    webposStaff?.id,
+    webposStaff?.name,
+    webposStaff?.stationId,
+    posLocationId,
+    t,
+  ]);
 
   useEffect(() => {
     const onKicked = () => {
@@ -2950,6 +2983,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     void loadLocations();
   }, [loadLocations]);
+
+  useEffect(() => {
+    if (!posLocationId) {
+      setPosStations([]);
+      return;
+    }
+    void fetchPosStations(posLocationId)
+      .then(setPosStations)
+      .catch(() => setPosStations([]));
+  }, [posLocationId]);
+
+  useEffect(() => {
+    setDeviceDefaultStationIdState(getDeviceDefaultStationId(posLocationId));
+  }, [posLocationId]);
+
+  const changeDeviceDefaultStation = useCallback(
+    (stationId: string) => {
+      setDeviceDefaultStationId(posLocationId, stationId || null);
+      setDeviceDefaultStationIdState(stationId || '');
+      toast.success(t('posStationDeviceDefaultSaved'));
+    },
+    [posLocationId, t]
+  );
 
   /** Branch staff: default POS catalog to their assigned location(s). */
   useEffect(() => {
@@ -5626,6 +5682,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cartJson,
       staffId: webposStaff?.id,
       staffName: webposStaff?.name,
+      stationId: webposStaff?.stationId,
       sendToKitchen,
     });
     const savedId = (res.data?.held as { id?: string } | undefined)?.id;
@@ -8490,6 +8547,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderedAt: Date.now(),
       scheduledFor,
       userName,
+      posStationName: webposStaff?.stationName || null,
       orderSource: 'WEBPOS' as const,
       itemTextScale: printSettings?.kitchenItemTextScale ?? 1,
       headerTextScale: printSettings?.kitchenHeaderTextScale ?? 1,
@@ -8766,6 +8824,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : null;
     return {
       clientId,
+      locationId: posLocationId || undefined,
+      stationId: webposStaff?.stationId || undefined,
       orderNumber,
       paymentMethod: resolvedMethod,
       paymentBreakdown:
@@ -10150,15 +10210,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const onStaffPinSuccess = async (staff: {
-    id: string;
-    name: string;
-    roleId: string;
-    roleName: string;
-    permissions: string[];
-    accessToken?: string;
-    preferredTerminalId?: string | null;
-  }) => {
+  const finalizeStaffLogin = async (
+    staff: {
+      id: string;
+      name: string;
+      roleId: string;
+      roleName: string;
+      permissions: string[];
+      accessToken?: string;
+      preferredTerminalId?: string | null;
+    },
+    station: PosStation | null
+  ) => {
     const session: WebPosStaffSession = {
       id: staff.id,
       name: staff.name,
@@ -10166,6 +10229,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       roleName: staff.roleName,
       permissions: staff.permissions as Permission[],
       accessToken: staff.accessToken,
+      stationId: station?.id,
+      stationName: station?.name,
     };
     setPosAuthAlert(null);
     clearPosSessionLocal();
@@ -10180,6 +10245,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         platform: 'webpos',
         staffId: session.id,
         staffName: session.name,
+        locationId: posLocationId,
+        stationId: station?.id || null,
       });
     } finally {
       window.setTimeout(() => {
@@ -10225,6 +10292,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     void refreshCurrentShift();
+  };
+
+  const onStaffPinSuccess = async (staff: {
+    id: string;
+    name: string;
+    roleId: string;
+    roleName: string;
+    permissions: string[];
+    accessToken?: string;
+    preferredTerminalId?: string | null;
+  }) => {
+    if (needsStationPicker(posStations)) {
+      setPendingPinStaff(staff);
+      setStationPickerOpen(true);
+      return;
+    }
+    const station = pickStationForLogin(
+      posStations,
+      getDeviceDefaultStationId(posLocationId)
+    );
+    await finalizeStaffLogin(staff, station);
   };
 
   const openSwitchUserPin = () => {
@@ -11094,6 +11182,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             terminals={activeTerminals}
             selectedTerminalId={selectedTerminalId}
             onTerminalChange={(id) => void changePosTerminal(id)}
+            posStations={posStations}
+            deviceDefaultStationId={deviceDefaultStationId}
+            onDeviceDefaultStationChange={changeDeviceDefaultStation}
           />
           )
         }
@@ -12430,6 +12521,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           merchant?.shopLogoUrl ||
           paymentConfig?.shopLogoUrl
         }
+      />
+
+      <WebPosStationPickerModal
+        open={stationPickerOpen}
+        stations={posStations}
+        initialStationId={
+          getDeviceDefaultStationId(posLocationId) || webposStaff?.stationId || null
+        }
+        onCancel={() => {
+          setStationPickerOpen(false);
+          setPendingPinStaff(null);
+          setPinModalOpen(true);
+        }}
+        onConfirm={(station) => {
+          const staff = pendingPinStaff;
+          setStationPickerOpen(false);
+          setPendingPinStaff(null);
+          if (!staff) return;
+          void finalizeStaffLogin(staff, station);
+        }}
       />
 
       <WebPosPaymentModal

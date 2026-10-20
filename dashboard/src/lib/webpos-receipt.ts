@@ -1975,6 +1975,8 @@ export type KitchenTicketOpts = {
   customerPhone?: string | null;
   /** Staff or customer name at footer */
   userName?: string | null;
+  /** Floor register name (multi-station locations) */
+  posStationName?: string | null;
   /** Origin of the order / print */
   orderSource?: KitchenOrderSource | string | null;
   itemTextScale?: 1 | 2 | 3;
@@ -2253,6 +2255,12 @@ function buildKitchenTicketLines(
     { kind: 'center', text: title },
     { kind: 'center', text: ticketNo },
   ];
+  const stationLabel = (opts.posStationName || '').trim();
+  if (stationLabel) {
+    for (const w of wrapKitchenWords(stationLabel, headerWidth)) {
+      lines.push({ kind: 'header', text: w });
+    }
+  }
   for (const w of formatKitchenChannelWhenLines(
     L,
     opts.channel,

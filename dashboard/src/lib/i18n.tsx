@@ -819,6 +819,19 @@ const en: Dict = {
   locationSetDefault: 'Default location',
   addLocation: 'Add location',
   editLocation: 'Edit location',
+  posStationsTitle: 'POS registers (floors)',
+  posStationsHint:
+    'Optional registers under one location — shared menu and one end-of-day. Waiters pick a register at PIN login; keep each tablet on its floor.',
+  posStationName: 'Register name',
+  posStationNamePlaceholder: 'e.g. Floor 1',
+  posStationAdd: 'Add register',
+  posStationPickerTitle: 'Which register?',
+  posStationPickerHint:
+    'Choose the floor or till you are working on. You can use another tablet and pick a different register when you sign in.',
+  posStationDeviceDefault: 'This tablet’s default register',
+  posStationDeviceDefaultHint:
+    'Set once per device so PIN login pre-selects the right floor. Ask staff not to move tablets between floors.',
+  posStationDeviceDefaultSaved: 'Default register saved for this tablet.',
   businessType: 'Business type',
   restaurant: 'Restaurant',
   retail: 'Retail',

@@ -370,7 +370,13 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS shop_schedule jsonb NOT NULL DEFAULT '{}'::jsonb",
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
   orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
+  orders_station_id:
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS station_id uuid REFERENCES pos_stations(id) ON DELETE SET NULL",
+  held_orders_station_id:
+    "ALTER TABLE held_orders ADD COLUMN IF NOT EXISTS station_id uuid REFERENCES pos_stations(id) ON DELETE SET NULL",
   pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",
+  pos_sessions_station_id:
+    "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS station_id uuid REFERENCES pos_stations(id) ON DELETE SET NULL",
   pos_sessions_print_agent_online:
     "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS print_agent_online boolean",
   hq_menus_category_ids:
@@ -722,6 +728,21 @@ const TABLE_PATCHES: string[] = [
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_id_idx ON pos_sessions(merchant_id)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_merchant_device_idx ON pos_sessions(merchant_id, device_id, session_kind)`,
   `CREATE INDEX IF NOT EXISTS pos_sessions_active_idx ON pos_sessions(merchant_id, session_kind, last_heartbeat)`,
+  `CREATE TABLE IF NOT EXISTS pos_stations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    location_id uuid NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    name varchar(120) NOT NULL,
+    sort_order integer NOT NULL DEFAULT 0,
+    is_default boolean NOT NULL DEFAULT false,
+    status varchar(20) NOT NULL DEFAULT 'active',
+    settings jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS pos_stations_merchant_id_idx ON pos_stations(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS pos_stations_location_id_idx ON pos_stations(location_id)`,
+  `CREATE INDEX IF NOT EXISTS pos_stations_location_sort_idx ON pos_stations(location_id, sort_order)`,
   `CREATE TABLE IF NOT EXISTS kds_stations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -1775,6 +1796,7 @@ export async function ensureLocationsSchema(): Promise<void> {
   }
   await runPatch("orders_location_id");
   await runPatch("pos_sessions_location_id");
+  await ensurePosStationsSchema();
   await runPatch("hq_menus_category_ids");
   await runPatch("hq_menus_schedule_type");
   await runPatch("hq_menus_days_of_month");
@@ -1788,6 +1810,21 @@ export async function ensureLocationsSchema(): Promise<void> {
 }
 
 const REQUIRED_POS_SESSIONS_COLUMNS = ["location_id", "print_agent_online"];
+
+/** Floor/register stations under a location (shared menu). */
+export async function ensurePosStationsSchema(): Promise<void> {
+  for (const statement of TABLE_PATCHES) {
+    if (!statement.includes("pos_stations")) continue;
+    try {
+      await execSql(statement);
+    } catch (err) {
+      console.warn("[schema] pos_stations patch failed:", err);
+    }
+  }
+  await runPatch("orders_station_id");
+  await runPatch("held_orders_station_id");
+  await runPatch("pos_sessions_station_id");
+}
 
 /** Add columns that drizzle-kit often skips on pos_sessions (OOM / old CREATE TABLE). */
 export async function ensurePosSessionsSchema(): Promise<void> {
