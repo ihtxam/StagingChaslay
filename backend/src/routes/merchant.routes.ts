@@ -707,6 +707,14 @@ router.post("/products", async (req: Request, res: Response) => {
 
     const { BarcodeService } = await import("@/services/barcode.service");
     const normalizedBarcode = BarcodeService.normalizeForSave(barcode);
+    if (normalizedBarcode) {
+      const existingBarcode = await ProductService.getProductByBarcode(merchantId, normalizedBarcode);
+      if (existingBarcode) {
+        return res.status(400).json({
+          error: `A product with barcode ${normalizedBarcode} already exists`,
+        });
+      }
+    }
 
     const product = await ProductService.createProduct(
       merchantId,

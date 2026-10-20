@@ -7186,9 +7186,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const loadOrderIntoRegister = (order: MerchantOrder): boolean => {
     if (isPaidOrder(order)) {
-      toast.error(
-        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
-      );
+      toastOrderAlreadyPaid(order);
       return false;
     }
     const lines = orderItemsToCartLines(order.items || []);
@@ -7289,6 +7287,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const splitBillActive = () => splitQueue.length > 0 || !!splitMasterIdRef.current;
 
+  const lastAlreadyPaidToastRef = useRef<{ key: string; at: number } | null>(null);
+  const toastOrderAlreadyPaid = useCallback(
+    (order: MerchantOrder) => {
+      const key = order.id || orderDisplayLabel(order);
+      const now = Date.now();
+      if (
+        lastAlreadyPaidToastRef.current?.key === key &&
+        now - lastAlreadyPaidToastRef.current.at < 5000
+      ) {
+        return;
+      }
+      lastAlreadyPaidToastRef.current = { key, at: now };
+      toast.error(
+        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
+      );
+    },
+    [t]
+  );
+
   /** Drop stale cart when the same ticket was paid on another till / orders tab. */
   const releasePaidCartSession = (order?: MerchantOrder | null) => {
     if (splitBillActive()) return;
@@ -7349,9 +7366,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       if (guard.action === 'blocked') {
         releasePaidCartSession(guard.order);
-        toast.error(
-          t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
-        );
+        toastOrderAlreadyPaid(guard.order);
         return false;
       }
       if (guard.action === 'collect') {
@@ -7380,9 +7395,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!orderMatchesCartLink(order, currentCartOrderLink())) return;
       if (!isPaidOrder(order)) return;
       releasePaidCartSession(order);
-      toast.error(
-        t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
-      );
+      toastOrderAlreadyPaid(order);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot link fields only
     [
@@ -7394,7 +7407,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ticketOrderNumber,
       collectOrderRef,
       splitQueue.length,
-      t,
+      toastOrderAlreadyPaid,
     ]
   );
 
@@ -7419,9 +7432,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         if (guard.action === 'blocked') {
           releasePaidCartSession(guard.order);
-          toast.error(
-            t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
-          );
+          toastOrderAlreadyPaid(guard.order);
           return;
         }
       } catch {
@@ -7459,9 +7470,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const order = (res.data?.order || res.data) as MerchantOrder;
         if (!order?.id) throw new Error('Order not found');
         if (isPaidOrder(order)) {
-          toast.error(
-            t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
-          );
+          toastOrderAlreadyPaid(order);
           setHighlightOrderId(order.id);
           setPosTab('orders');
           setPosView('orders');
@@ -9128,8 +9137,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             'warn'
           );
         } else {
-          logWebPosError('payment', `Sale push failed method=${method}`, err, { autoSend: true });
-          throw err;
+          const errMsg = String(err.response?.data?.error || err.message || '');
+          if (/was already paid/i.test(errMsg)) {
+            logWebPosEvent(
+              'payment',
+              `Sale push deduped (already paid) method=${method} clientId=${clientId}`,
+              'warn'
+            );
+            pushRes = {
+              data: {
+                results: [{ clientId, orderId: '', created: false }],
+              },
+            };
+          } else {
+            logWebPosError('payment', `Sale push failed method=${method}`, err, { autoSend: true });
+            throw err;
+          }
         }
       }
     }

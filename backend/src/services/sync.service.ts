@@ -556,9 +556,22 @@ export class SyncService {
           tableId: sale.tableId,
         });
         if (dup) {
-          throw new Error(
-            `Ticket ${sale.ticketDisplay || sale.tabNumber || "unknown"} was already paid`
+          const { FiskalyService } = await import("@/services/fiskaly.service");
+          const dupRow = await db.query.orders.findFirst({
+            where: eq(schema.orders.id, dup.id),
+            columns: { fiskalySignature: true },
+          });
+          const fiskaly = FiskalyService.toPushResponse(
+            (dupRow?.fiskalySignature as import("@/lib/fiskaly-settings").FiskalySignature | null) ||
+              null
           );
+          results.push({
+            clientId: sale.clientId,
+            orderId: dup.id,
+            created: false,
+            fiskaly,
+          });
+          continue;
         }
       }
 
