@@ -884,6 +884,9 @@ const RECEIPT_COUNTRY_SPLIT_RE =
   /(?:\s+|(?<=[a-zà-ÿ]))(?=(?:Suisse|Switzerland|Schweiz|France|Deutschland|Italy|Italia|Österreich|Austria)\b)/i;
 const RECEIPT_STREET_SPLIT_RE =
   /\s+(?=(?:Rue|Rue des|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\s+)/i;
+/** Lowercase or mixed-case street labels (legacy headers often omit capital Rue). */
+const RECEIPT_STREET_SPLIT_CI_RE =
+  /\s+(?=(?:rue|rue des|route|avenue|av\.|chemin|place|boulevard|bd\.?|rte)\s+)/i;
 /** Store name glued to DE/CH street (e.g. POLACAFEBahnhofstrasse) — prefix word required so we do not split inside "…strasse". */
 const RECEIPT_DE_CH_STREET_SPLIT_RE =
   /(?<=[A-Za-zÀ-ÿäöüÄÖÜß])(?=(?:Bahnhof|Haupt|Markt|Neu|Alte|Obere|Untere)[A-Za-zÀ-ÿäöüÄÖÜß-]*(?:strasse|straße|Strasse|Straße|gasse|Gasse|weg|We|platz|Platz|allee|Allee)\b)/i;
@@ -927,6 +930,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
     RECEIPT_DE_CH_STREET_SPLIT_RE,
     RECEIPT_DE_STREET_SPACED_RE,
     RECEIPT_STREET_SPLIT_RE,
+    RECEIPT_STREET_SPLIT_CI_RE,
     RECEIPT_PLZ_SPLIT_RE,
   ]) {
     parts = parts.flatMap((p) => splitReceiptHeaderSegment(p, re));
@@ -1161,14 +1165,45 @@ export function getReceiptHeaderLines(
       lines.push(padLines ? alignLine(part, width, align) : part);
     }
   };
-  const { title, body } = normalizeReceiptHeaderFields({
+  let { title, body } = normalizeReceiptHeaderFields({
     headerTitle: tx.headerTitle,
     header: tx.header,
   });
+  const businessName = String(tx.businessName || '').trim();
+  if (businessName && title) {
+    const fromName = splitTitleFromBusinessName(title, businessName);
+    if (fromName.extra) {
+      title = fromName.title;
+      body = [fromName.extra, body].filter(Boolean).join('\n');
+    }
+  }
   const lines: string[] = [];
   const addressParts = splitMerchantAddressLines(tx.address || '', tx.city).filter(
     (part) => !isReceiptTelephoneLine(part) && !isReceiptVatLine(part)
   );
+  const pushDetailLine = (line: string) => {
+    const raw = String(line || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return;
+    if (isReceiptTelephoneLine(raw) || isReceiptVatLine(raw)) {
+      if (!headerHasDedicatedLine(lines, raw)) push(lines, raw);
+      return;
+    }
+    if (headerHasDedicatedLine(lines, raw)) return;
+    const shouldExpand =
+      raw.length > width || (RECEIPT_CONTACT_LABEL_RE.test(raw) && raw.length > width);
+    if (shouldExpand) {
+      const expanded = expandReceiptHeaderDetailLines(raw);
+      if (expanded.length > 1) {
+        for (const part of expanded) pushDetailLine(part);
+        return;
+      }
+    }
+    const alreadyAddress = addressParts.some(
+      (part) => compactHeaderKey(part) === compactHeaderKey(raw)
+    );
+    if (alreadyAddress) return;
+    push(lines, raw);
+  };
   if (title || body) {
     const peeledTitle = expandReceiptHeaderDetailLines(title);
     const peeledBody = expandReceiptHeaderDetailLines(body);
@@ -1191,19 +1226,24 @@ export function getReceiptHeaderLines(
     const splitName = splitTitleFromBusinessName(titleLine, tx.businessName || '');
     titleLine = splitName.title;
     if (splitName.extra) leftover.unshift(splitName.extra);
-    if (titleLine) push(lines, titleLine, titleWidth);
-    for (const line of [...leftover, ...peeledBody]) {
-      if (isReceiptTelephoneLine(line) || isReceiptVatLine(line)) {
-        if (!headerHasDedicatedLine(lines, line)) push(lines, line);
-        continue;
+    if (titleLine) {
+      const compactTitle = titleLine.replace(/\s+/g, ' ').trim();
+      const titleLooksMashed =
+        compactTitle.length > titleWidth ||
+        (RECEIPT_CONTACT_LABEL_RE.test(compactTitle) && compactTitle.length > 12);
+      if (titleLooksMashed) {
+        const expanded = expandReceiptHeaderDetailLines(compactTitle);
+        if (expanded.length > 1) {
+          titleLine = expanded[0]!;
+          for (let j = expanded.length - 1; j >= 1; j--) {
+            leftover.unshift(expanded[j]!);
+          }
+        }
       }
-      if (headerHasDedicatedLine(lines, line)) continue;
-      if (RECEIPT_CONTACT_LABEL_RE.test(line) && line.length > width * 2) continue;
-      const alreadyAddress = addressParts.some(
-        (part) => compactHeaderKey(part) === compactHeaderKey(line)
-      );
-      if (alreadyAddress) continue;
-      push(lines, line);
+      push(lines, titleLine, titleWidth);
+    }
+    for (const line of [...leftover, ...peeledBody]) {
+      pushDetailLine(line);
     }
     appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
     return lines;
@@ -1242,8 +1282,13 @@ export function buildReceiptHeaderEscPos(
     const lineScale = i === 0 ? scale : 1;
     const wrapWidth =
       lineScale > 1 ? Math.max(12, Math.floor(width / (lineScale === 3 ? 2 : lineScale))) : width;
+    const rawLine = lines[i] || '';
     const segments =
-      lineScale > 1 ? wrapReceiptHeaderLine(lines[i], wrapWidth) : [lines[i]];
+      lineScale > 1
+        ? wrapReceiptHeaderLine(rawLine, wrapWidth)
+        : rawLine.length > width
+          ? wrapReceiptHeaderLine(rawLine, width)
+          : [rawLine];
     for (const seg of segments) {
       parts.push(
         escAlign(alignMode),
