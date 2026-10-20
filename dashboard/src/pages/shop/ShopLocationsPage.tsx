@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
+import { resolveShopKey, shopMenuLandingPath } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { customerShopError } from '@/lib/shop-public-error';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
@@ -75,7 +75,7 @@ export default function ShopLocationsPage() {
           locations={locations}
           merchantHasCatering={hasCatering}
           onComplete={(loc) => {
-            navigate(`${shopBasePath(shopKey, loc.slug)}/menu`, { replace: true });
+            navigate(shopMenuLandingPath(shopKey, loc.slug), { replace: true });
           }}
         />
       </div>

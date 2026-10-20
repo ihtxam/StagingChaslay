@@ -14,6 +14,7 @@ import {
   cartLineQuantityCap,
   resolveShopKey,
   resolveShopLocationSlug,
+  resolveShopMenuLocationSlug,
   saveCart,
   shopBasePath,
   shopMenuApiPath,
@@ -163,8 +164,13 @@ export default function OrderingPage() {
   const { merchantSlug, locationSlug } = useParams<{ merchantSlug: string; locationSlug?: string }>();
   const [searchParams] = useSearchParams();
   const shopKey = useMemo(() => resolveShopKey(merchantSlug), [merchantSlug]);
-  const locSlug = resolveShopLocationSlug({ locationSlug });
-  const basePath = useMemo(() => shopBasePath(shopKey, locSlug), [shopKey, locSlug]);
+  const locSlugFromUrl = resolveShopLocationSlug({ locationSlug });
+  const [locationSessionTick, setLocationSessionTick] = useState(0);
+  const menuLocSlug = useMemo(() => {
+    const session = loadShopLocationSession(shopKey);
+    return resolveShopMenuLocationSlug(shopKey, locSlugFromUrl, session?.locationSlug);
+  }, [shopKey, locSlugFromUrl, locationSessionTick]);
+  const basePath = useMemo(() => shopBasePath(shopKey, menuLocSlug), [shopKey, menuLocSlug]);
   const { theme: cmsTheme, site: shopSite } = useShopCmsTheme(shopKey);
   const navigate = useNavigate();
 
@@ -249,6 +255,16 @@ export default function OrderingPage() {
     return () => window.clearInterval(id);
   }, []);
   useEffect(() => {
+    const onSession = (e: Event) => {
+      const detail = (e as CustomEvent<{ shopKey?: string }>).detail;
+      if (!detail?.shopKey || detail.shopKey === shopKey) {
+        setLocationSessionTick((n) => n + 1);
+      }
+    };
+    window.addEventListener('shop:location-session', onSession);
+    return () => window.removeEventListener('shop:location-session', onSession);
+  }, [shopKey]);
+  useEffect(() => {
     if (!shopKey) {
       setLoading(false);
       setError(t('shopNotFound'));
@@ -259,12 +275,12 @@ export default function OrderingPage() {
     const locSession = loadShopLocationSession(shopKey);
     if (stored) {
       let next = stored;
-      if (locSession && (!locSlug || locSession.locationSlug === locSlug)) {
+      if (locSession && (!menuLocSlug || locSession.locationSlug === menuLocSlug)) {
         next = applyShopLocationSessionToDraft(stored, locSession);
       }
       setDraft(next);
       if (next.deliveryInfo) setDeliveryInfo(next.deliveryInfo);
-    } else if (locSession && (!locSlug || locSession.locationSlug === locSlug)) {
+    } else if (locSession && (!menuLocSlug || locSession.locationSlug === menuLocSlug)) {
       const next = applyShopLocationSessionToDraft(emptyDraft(), locSession);
       setDraft(next);
       if (next.deliveryInfo) setDeliveryInfo(next.deliveryInfo);
@@ -275,7 +291,7 @@ export default function OrderingPage() {
         const token = loadCustomerToken(shopKey);
         const [shopRes, menuRes] = await Promise.all([
           axios.get(`/api/shop/${shopKey}`),
-          axios.get(shopMenuApiPath(shopKey, locSlug)),
+          axios.get(shopMenuApiPath(shopKey, menuLocSlug)),
         ]);
         const data = shopRes.data.data;
         setMerchant(data);
@@ -382,7 +398,7 @@ export default function OrderingPage() {
       }
     };
     void load();
-  }, [shopKey]);
+  }, [shopKey, menuLocSlug]);
 
   useEffect(() => {
     if (!shopKey || loading) return;
@@ -616,7 +632,7 @@ export default function OrderingPage() {
 
   const shopOrderMode = useMemo(
     () => loadShopLocationSession(shopKey)?.orderMode || 'menu',
-    [shopKey, locSlug]
+    [shopKey, menuLocSlug]
   );
 
   /** Category nav + sections: base list ignores dietary filters (toolbar stays usable). */
@@ -1171,7 +1187,7 @@ export default function OrderingPage() {
       next.scheduledFor = '';
     }
     saveCart(shopKey, next);
-    navigate(`${shopBasePath(shopKey, locSlug)}/checkout`);
+    navigate(`${shopBasePath(shopKey, menuLocSlug)}/checkout`);
   };
 
   const nextOpen = useMemo(() => {
@@ -1443,7 +1459,7 @@ export default function OrderingPage() {
   const showCategoryBanners = merchant?.menuShowCategoryBanners !== false;
   const loyaltyEnabled = !!merchant?.loyalty?.enabled;
   const unlockedRewards = loyaltyRewards.filter((r) => r.unlocked);
-  const accountPath = `${shopBasePath(shopKey, locSlug)}/account`;
+  const accountPath = `${shopBasePath(shopKey, menuLocSlug)}/account`;
   const vacationActive = !!merchant?.vacation?.active;
   const ordersPaused = merchant?.acceptingOrders === false;
   const storeOrderingBlocked = orderingBlockHeader.blocked;
@@ -1451,7 +1467,7 @@ export default function OrderingPage() {
   const showReservations = !!merchant?.reservationsEnabled;
   const showGiftCards = !!merchant?.giftCards?.enabled;
   const shopNav = buildShopTopbarNav({
-    basePath: shopBasePath(shopKey, locSlug),
+    basePath: shopBasePath(shopKey, menuLocSlug),
     showGiftCards,
     showReservations,
     onStoreInfo: () => setInfoOpen(true),
@@ -1785,7 +1801,7 @@ export default function OrderingPage() {
         <ChaslayStorefrontNavbar
           key={`nav-${locale}`}
           shopKey={shopKey}
-          basePath={shopBasePath(shopKey, locSlug)}
+          basePath={shopBasePath(shopKey, menuLocSlug)}
           locale={locale === 'fr' || locale === 'de' ? locale : 'en'}
           defaultLanguage={String(merchant?.language || 'en').toLowerCase().slice(0, 2)}
           onPresence={setHasCmsNav}
@@ -1794,7 +1810,7 @@ export default function OrderingPage() {
           <header className="relative border-b border-stone-200 bg-white">
             <div className="shop-page-content flex h-14 items-center justify-between gap-2 shop-navbar-mobile-row">
               <Link
-                to={shopBasePath(shopKey, locSlug) || '/'}
+                to={shopBasePath(shopKey, menuLocSlug) || '/'}
                 className="shop-navbar-logo-row flex min-w-0 flex-1 items-center gap-2 sm:flex-none sm:max-w-[40%]"
                 aria-label={merchant?.name || t('shopBackToMenu')}
               >
@@ -1907,7 +1923,7 @@ export default function OrderingPage() {
                   )}
                 </div>
                 <Link
-                  to={`${shopBasePath(shopKey, locSlug)}#gallery`}
+                  to={`${shopBasePath(shopKey, menuLocSlug)}#gallery`}
                   className="shrink-0 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
                 >
                   {t('shopGallery')}

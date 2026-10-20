@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { resolveShopKey, resolveShopLocationSlug, shopBasePath } from '@/lib/shop-cart';
+import {
+  resolveShopKey,
+  resolveShopLocationSlug,
+  shopMenuLandingPath,
+} from '@/lib/shop-cart';
 import OrderingPage from './OrderingPage';
 import ChaslayShopHomePage from './ChaslayShopHomePage';
 import { useI18n } from '@/lib/i18n';
@@ -57,7 +61,8 @@ export default function ShopEntry() {
         setLocations(list);
         setHasCatering(!!locRes.data?.hasCatering);
         const sessionOk = isShopLocationSessionReady(shopKey, locSlug);
-        setHubReady(sessionOk || list.length === 0);
+        // Single-store shops use the channel popup on the menu — no location hub wizard.
+        setHubReady(sessionOk || list.length <= 1);
 
         if (data?.cmsHomepageEnabled) {
           try {
@@ -88,10 +93,7 @@ export default function ShopEntry() {
   }
 
   const showHubWizard =
-    mode === 'menu' &&
-    shopKey &&
-    locations.length > 0 &&
-    !hubReady;
+    mode === 'menu' && shopKey && locations.length > 1 && !hubReady;
 
   if (mode === 'loading') {
     return (
@@ -114,16 +116,16 @@ export default function ShopEntry() {
           merchantHasCatering={hasCatering}
           onComplete={(loc) => {
             setHubReady(true);
-            const target = `${shopBasePath(shopKey, loc.slug)}/menu`;
-            if (location.pathname.includes('/menu')) {
-              window.location.assign(target);
-            } else {
+            const target = shopMenuLandingPath(shopKey, loc.slug);
+            const current = location.pathname.replace(/\/+$/, '') || '/';
+            const normalizedTarget = target.replace(/\/+$/, '') || '/';
+            if (current !== normalizedTarget) {
               navigate(target, { replace: true });
             }
           }}
         />
       ) : null}
-      {!showHubWizard ? <OrderingPage /> : null}
+      <OrderingPage />
     </ShopThemeShell>
   );
 }

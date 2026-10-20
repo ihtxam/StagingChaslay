@@ -55,6 +55,7 @@ import { activateWaitingServiceWorker, reloadIfDeployedBuildChanged } from '@/li
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ShopLocationsPage = lazy(() => import('@/pages/shop/ShopLocationsPage'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
+const ShopHubLocationRedirect = lazy(() => import('@/pages/shop/ShopHubLocationRedirect'));
 
 function LegacyReceiptRedirect() {
   const { saleId } = useParams();
@@ -557,6 +558,30 @@ function App() {
               <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/superadmin/*" element={<PanelLoginRedirect />} />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <ShopHubLocationRedirect />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <ShopHubLocationRedirect />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
               <Route
                 path="/:merchantSlug/menu"
                 element={
