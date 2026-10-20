@@ -182,6 +182,7 @@ jobs:
           port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
           source: "backend/public/downloads/reborn-print-bridge.apk,backend/public/downloads/reborn-print-bridge.json,backend/public/downloads/reborn-print-bridge-${{ steps.bridge_verify.outputs.version }}.apk"
           target: ${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}/backend/public/downloads/
+          strip_components: 3
           overwrite: true
 
       - name: Verify production Bridge JSON
@@ -195,8 +196,10 @@ jobs:
           script: |
             set -euo pipefail
             VER="${{ steps.bridge_verify.outputs.version }}"
-            APK="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}/backend/public/downloads/reborn-print-bridge.apk"
+            DOWN="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}/backend/public/downloads"
+            APK="$DOWN/reborn-print-bridge.apk"
             test -f "$APK"
             head -c 2 "$APK" | grep -q PK
-            curl -sf "https://app.rebornsense.com/downloads/reborn-print-bridge.json" | grep -q "\"version\": \"${VER}\""
-            echo "Production Bridge v${VER} published OK"
+            LIVE_VER="$(curl -sf "https://app.rebornsense.com/downloads/reborn-print-bridge.json" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version",""))')"
+            test "$LIVE_VER" = "$VER"
+            echo "Production Bridge v${VER} published OK (live JSON version=${LIVE_VER})"
