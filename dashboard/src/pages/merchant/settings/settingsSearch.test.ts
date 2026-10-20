@@ -37,6 +37,7 @@ const allTabs = new Set(
     'reservations',
     'pos',
     'payments',
+    'receipt',
     'kds',
     'ods',
     'customerDisplay',
@@ -177,7 +178,7 @@ test('second word that matches another tab still keeps current tab (kitchen prin
     openContext()
   );
   assert.ok(first.some((entry) => entry.tab === 'pos'));
-  assert.ok(second.some((entry) => entry.tab === 'pos'));
+  assert.ok(second.some((entry) => entry.tab === 'receipt'));
   assert.ok(!second.some((entry) => entry.id === 'pos-courses'));
   assert.equal(resolveSettingsContentTab('pos', 'kitchen', first), 'pos');
   assert.equal(resolveSettingsContentTab('pos', 'kitchen printer', second), 'pos');
@@ -213,20 +214,20 @@ test('pos tab with only off-tab matches still shows POS (no auto-jump)', () => {
 });
 
 test('pickSettingsSearchMatch does not invent tab=pos for receipt/payments hits', () => {
-  const receipt = { id: 'receipt-print', tab: 'pos' as const, keywords: ['printer'] };
+  const receipt = { id: 'receipt-print', tab: 'receipt' as const, keywords: ['printer'] };
   const payments = { id: 'payments-adyen', tab: 'payments' as const, keywords: ['adyen'] };
-  assert.equal(pickSettingsSearchMatch([receipt, payments], 'pos')?.tab, 'pos');
+  assert.equal(pickSettingsSearchMatch([receipt, payments], 'pos')?.tab, 'receipt');
   assert.equal(pickSettingsSearchMatch([payments], 'pos')?.tab, 'payments');
 });
 
 test('planSettingsSearchResultClick uses the clicked row tab, never forces pos', () => {
-  const receipt = { id: 'receipt-print', tab: 'pos' as const, keywords: ['printer'] };
+  const receipt = { id: 'receipt-print', tab: 'receipt' as const, keywords: ['printer'] };
   const payments = { id: 'payments-adyen', tab: 'payments' as const, keywords: ['adyen'] };
   const posCheckout = { id: 'pos-checkout', tab: 'pos' as const, keywords: ['express'] };
   assert.deepEqual(planSettingsSearchResultClick(receipt, 'pos'), {
-    tab: 'pos',
+    tab: 'receipt',
     highlightId: 'receipt-print',
-    shouldSwitchTab: false,
+    shouldSwitchTab: true,
   });
   assert.deepEqual(planSettingsSearchResultClick(payments, 'pos'), {
     tab: 'payments',
