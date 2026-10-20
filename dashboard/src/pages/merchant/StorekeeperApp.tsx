@@ -59,6 +59,7 @@ type MenuProduct = {
   id: string;
   name: string;
   price: number;
+  cost?: number | null;
   imageUrl?: string | null;
   stock?: number;
 };
@@ -173,6 +174,7 @@ export default function StorekeeperApp() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [defaultCategoryId, setDefaultCategoryId] = useState('');
   const [salePrice, setSalePrice] = useState('');
+  const [buyingPrice, setBuyingPrice] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoSource, setPhotoSource] = useState<'upload' | 'online' | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -304,6 +306,8 @@ export default function StorekeeperApp() {
           setCategoryId(item.categoryId || defaultCategoryId || '');
           setCurrentMenuPhoto(menu?.imageUrl || null);
           if (menu?.price != null && menu.price > 0) setSalePrice(String(menu.price));
+          if (item.cost != null && Number(item.cost) > 0) setBuyingPrice(String(item.cost));
+          else if (menu?.cost != null && Number(menu.cost) > 0) setBuyingPrice(String(menu.cost));
           setExistingAction('stock');
           toast(t('storekeeperProductExists'), { icon: 'ℹ️' });
           return;
@@ -331,6 +335,7 @@ export default function StorekeeperApp() {
           setCategoryId(defaultCategoryId || '');
           setQty('1');
           if (menu.price > 0) setSalePrice(String(menu.price));
+          if (menu.cost != null && Number(menu.cost) > 0) setBuyingPrice(String(menu.cost));
           if (onlinePhoto) {
             setPhotoUrl(onlinePhoto);
             setPhotoSource('online');
@@ -341,6 +346,7 @@ export default function StorekeeperApp() {
           setCategoryId(defaultCategoryId || '');
           setQty('1');
           setSalePrice('');
+          setBuyingPrice('');
           toast(t('storekeeperOnlineNotFound'), { icon: 'ℹ️' });
         }
       } catch {
@@ -386,6 +392,7 @@ export default function StorekeeperApp() {
     setQty('1');
     setExpiryDate('');
     setSalePrice('');
+    setBuyingPrice('');
     setPhotoUrl(null);
     setPhotoSource(null);
     setCurrentMenuPhoto(null);
@@ -463,6 +470,7 @@ export default function StorekeeperApp() {
     setQty('1');
     setExpiryDate('');
     setSalePrice('');
+    setBuyingPrice('');
     setPhotoUrl(null);
     setPhotoSource(null);
     setCurrentMenuPhoto(null);
@@ -560,6 +568,7 @@ export default function StorekeeperApp() {
     setBusy(true);
     try {
       const priceNum = salePrice.trim() ? Number(salePrice) : undefined;
+      const costNum = buyingPrice.trim() ? Number(buyingPrice) : undefined;
       const chosenImageUrl = photoUrl;
       const editingEntry = editingSessionId
         ? sessionEntries.find((e) => e.sessionId === editingSessionId)
@@ -618,6 +627,7 @@ export default function StorekeeperApp() {
           categoryId: categoryId || null,
           qty: photoOnly ? 0 : q,
           expiryDate: expiryDate || null,
+          cost: costNum != null && Number.isFinite(costNum) ? costNum : undefined,
           salePrice: priceNum != null && Number.isFinite(priceNum) ? priceNum : undefined,
           imageUrl: chosenImageUrl,
           updateImageUrl:
@@ -1070,6 +1080,20 @@ export default function StorekeeperApp() {
                   />
                 </div>
               ) : null}
+              <div className={existingItem ? 'col-span-2 sm:col-span-1' : undefined}>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
+                  {t('storekeeperBuyingPrice')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.05"
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-base text-[var(--text)]"
+                  value={buyingPrice}
+                  onChange={(e) => setBuyingPrice(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
               <div className={existingItem ? 'col-span-2' : undefined}>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide muted">
                     {t('storekeeperQty')}

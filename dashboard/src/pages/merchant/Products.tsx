@@ -39,6 +39,7 @@ import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import { BarcodePreview } from '@/components/BarcodePreview';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
+import BuyingPricesModal from '@/components/products/BuyingPricesModal';
 import ProductImportProgressModal from '@/components/ProductImportProgressModal';
 import { importCatalogWithProgress, type CatalogImportProgress } from '@/lib/catalog-import-stream';
 import { bulkDeleteByIds } from '@/lib/bulk-delete';
@@ -112,6 +113,7 @@ interface Product {
   name: string;
   description?: string | null;
   price: string | number;
+  cost?: string | number | null;
   stock: number;
   sku?: string | null;
   barcode?: string | null;
@@ -157,6 +159,8 @@ type FormState = {
   name: string;
   description: string;
   price: string;
+  /** Buying / purchase price (stored as product cost). */
+  cost: string;
   stock: string;
   sku: string;
   barcode: string;
@@ -204,6 +208,7 @@ const emptyForm = (): FormState => ({
   name: '',
   description: '',
   price: '',
+  cost: '',
   stock: '0',
   sku: '',
   barcode: '',
@@ -420,6 +425,7 @@ export default function Products() {
   const [importingPhotos, setImportingPhotos] = useState(false);
   const [productPage, setProductPage] = useState(1);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const [buyingPricesOpen, setBuyingPricesOpen] = useState(false);
   const [importProgressOpen, setImportProgressOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<CatalogImportProgress | null>(null);
   const [importFileName, setImportFileName] = useState('');
@@ -754,6 +760,7 @@ export default function Products() {
         name: full.name,
         description: full.description || '',
         price: String(full.price ?? ''),
+        cost: full.cost != null && full.cost !== '' ? String(full.cost) : '',
         stock: String(full.stock ?? 0),
         sku: full.sku || '',
         barcode: full.barcode || '',
@@ -872,6 +879,7 @@ export default function Products() {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       price,
+      cost: form.cost.trim() ? parseMoney(form.cost) : null,
       stock: Math.max(0, Math.floor(Number(form.stock) || 0)),
       sku: form.sku.trim() || undefined,
       barcode: form.barcode.trim() || null,
@@ -1410,6 +1418,15 @@ export default function Products() {
                       {deletingDemoCatalog ? t('deleteDemoProductsLoading') : t('deleteDemoProducts')}
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)]"
+                    onClick={() => runMoreAction(() => setBuyingPricesOpen(true))}
+                  >
+                    <Package size={14} aria-hidden />
+                    {t('productsBuyingPricesMenu')}
+                  </button>
                   <button
                     type="button"
                     role="menuitem"
@@ -2565,6 +2582,26 @@ export default function Products() {
 
               {moreOpen && (
                 <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  <Field label={t('productBuyingPrice')}>
+                    <div className="flex max-w-xs min-w-0 items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
+                      <input
+                        className="field-input money-input min-w-0 flex-1 border-0 !shadow-none focus:!ring-0"
+                        type="text"
+                        inputMode="decimal"
+                        value={form.cost}
+                        onChange={(e) => {
+                          const cost = normalizeMoneyInput(e.target.value);
+                          if (moneyDigitCount(cost) > MAX_MONEY_DIGITS) return;
+                          setForm({ ...form, cost });
+                        }}
+                        placeholder="0.00"
+                      />
+                      <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
+                        CHF
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs muted">{t('productBuyingPriceHint')}</p>
+                  </Field>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <Field label={t('productCode')}>
                       <input
@@ -3315,6 +3352,14 @@ export default function Products() {
         open={importProgressOpen}
         progress={importProgress}
         fileName={importFileName}
+      />
+
+      <BuyingPricesModal
+        open={buyingPricesOpen}
+        onClose={() => {
+          setBuyingPricesOpen(false);
+          void load();
+        }}
       />
 
       <BulkDeleteConfirmModal

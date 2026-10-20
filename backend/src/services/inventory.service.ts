@@ -869,6 +869,7 @@ export class InventoryService {
         barcode,
         name: String(input.name || item.name).trim(),
         salePrice: input.salePrice,
+        buyingPrice: input.cost,
         qty,
         imageUrl: input.imageUrl,
         updateImageUrl: input.updateImageUrl === true,
@@ -885,6 +886,7 @@ export class InventoryService {
       barcode: string;
       name: string;
       salePrice?: number;
+      buyingPrice?: number;
       qty: number;
       imageUrl?: string | null;
       updateImageUrl?: boolean;
@@ -906,6 +908,9 @@ export class InventoryService {
       if (input.salePrice != null && Number.isFinite(input.salePrice)) {
         patch.price = price.toString();
       }
+      if (input.buyingPrice != null && Number.isFinite(input.buyingPrice)) {
+        patch.cost = Math.max(0, input.buyingPrice).toString();
+      }
       if (
         input.imageUrl &&
         (input.updateImageUrl || !existing.imageUrl)
@@ -922,6 +927,10 @@ export class InventoryService {
       columns: { id: true },
     });
 
+    const buying =
+      input.buyingPrice != null && Number.isFinite(input.buyingPrice)
+        ? Math.max(0, input.buyingPrice)
+        : undefined;
     const created = await ProductService.createProduct(
       merchantId,
       input.name,
@@ -929,7 +938,7 @@ export class InventoryService {
       defaultCategory?.id,
       undefined,
       input.barcode,
-      undefined,
+      buying,
       stockAdd,
       true,
       undefined,

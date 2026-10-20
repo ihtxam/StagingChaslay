@@ -2392,6 +2392,48 @@ router.put(
  * GET /api/merchant/reports/sales-mix
  * Sales mix & advanced analytics (Growth Analytics add-on).
  */
+/**
+ * GET /api/merchant/reports/profit-margin
+ * Profit & margin from product buying prices (products.cost).
+ */
+router.get(
+  "/reports/profit-margin",
+  requirePermission("VIEW_REPORTS", "END_OF_DAY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import("@/lib/report-sales-scope");
+      const actor = resolveReportActor(req);
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({ error: "Own-sales reports require a staff PIN session" });
+      }
+      const preset = String(req.query.preset || "today") as import("@/services/pos-reports.service").ReportPreset;
+      const { ProfitMarginService } = await import("@/services/profit-margin.service");
+      const report = await ProfitMarginService.getProfitMarginReport(merchantId, {
+        preset,
+        from: req.query.from ? String(req.query.from) : undefined,
+        to: req.query.to ? String(req.query.to) : undefined,
+        granularity: req.query.granularity ? String(req.query.granularity) : undefined,
+        staffId: scope.viewAll ? (req.query.staffId ? String(req.query.staffId) : null) : scope.staffId,
+        locationId:
+          req.query.scope === "location"
+            ? (req.locationId as string | undefined) || undefined
+            : req.query.locationId
+              ? String(req.query.locationId)
+              : undefined,
+      });
+      res.json({ success: true, report });
+    } catch (error) {
+      console.error("Profit margin report failed:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load profit margin report",
+      });
+    }
+  }
+);
+
 router.get(
   "/reports/sales-mix",
   requirePermission("VIEW_REPORTS", "END_OF_DAY"),

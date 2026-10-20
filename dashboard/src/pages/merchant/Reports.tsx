@@ -33,6 +33,7 @@ import {
 } from '@/components/reports/CashDrawerBreakdown';
 import ReportsRevenuePanel from '@/components/reports/ReportsRevenuePanel';
 import SalesMixPanel from '@/components/reports/SalesMixPanel';
+import ProfitMarginPanel from '@/components/reports/ProfitMarginPanel';
 import AiCoachPanel from '@/components/growth/AiCoachPanel';
 import ReportCollapsibleSection from '@/components/reports/ReportCollapsibleSection';
 
@@ -80,13 +81,20 @@ type EodReport = {
   refundRows?: Array<{ method: string; total: number }>;
   channelRows: Array<{ channel: string; count: number; total: number }>;
   orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
-  productsSold: Array<{ name: string; quantity: number; total: number }>;
+  productsSold: Array<{
+    name: string;
+    quantity: number;
+    total: number;
+    cogs?: number;
+    profit?: number;
+    marginPct?: number | null;
+  }>;
   userPerformance?: Array<{ name: string; salesCount: number; total: number }>;
   shiftCash?: EodShiftCash[];
 };
 
 type Preset = 'today' | 'yesterday' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months' | 'custom';
-type Tab = 'eod' | 'sales' | 'products' | 'users' | 'revenue' | 'mix' | 'coach';
+type Tab = 'eod' | 'sales' | 'products' | 'users' | 'revenue' | 'mix' | 'profit' | 'coach';
 
 type ReportEmailSettings = {
   language: 'en' | 'fr' | 'de';
@@ -391,6 +399,7 @@ export default function ReportsPage() {
     { id: 'sales', label: t('reportsTabSales') },
     { id: 'revenue', label: t('reportsTabRevenue') },
     { id: 'mix', label: t('reportsTabSalesMix') },
+    { id: 'profit', label: t('reportsTabProfit') },
     ...(aiCoachLicensed ? [{ id: 'coach' as const, label: 'AI coach' }] : []),
     { id: 'products', label: t('reportsTabProducts') },
     ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
@@ -553,6 +562,32 @@ export default function ReportsPage() {
         <ReportsRevenuePanel />
       ) : tab === 'coach' ? (
         <AiCoachPanel />
+      ) : tab === 'profit' ? (
+        <>
+          {preset === 'custom' && (
+            <div className="flex flex-wrap gap-3 items-end">
+              <label className="text-sm space-y-1">
+                <span className="muted">{t('reportsFrom')}</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+              </label>
+              <label className="text-sm space-y-1">
+                <span className="muted">{t('reportsTo')}</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
+          <ProfitMarginPanel preset={preset} from={from} to={to} />
+        </>
       ) : tab === 'mix' ? (
         <>
           {preset === 'custom' && (
@@ -861,12 +896,14 @@ export default function ReportsPage() {
                       <th className="px-3 py-2 font-medium">{t('reportsProduct')}</th>
                       <th className="px-3 py-2 font-medium">{t('reportsQty')}</th>
                       <th className="px-3 py-2 font-medium text-right">{t('reportsRevenue')}</th>
+                      <th className="px-3 py-2 font-medium text-right">{t('reportsProfit')}</th>
+                      <th className="px-3 py-2 font-medium text-right">{t('reportsMargin')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {report.productsSold.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-3 py-3 muted">
+                        <td colSpan={5} className="px-3 py-3 muted">
                           {t('reportsEmpty')}
                         </td>
                       </tr>
@@ -876,6 +913,12 @@ export default function ReportsPage() {
                           <td className="px-3 py-2">{p.name}</td>
                           <td className="px-3 py-2 tabular-nums">{p.quantity}</td>
                           <td className="px-3 py-2 tabular-nums text-right">{money(p.total)}</td>
+                          <td className="px-3 py-2 tabular-nums text-right">
+                            {p.profit != null ? money(p.profit) : '—'}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-right">
+                            {p.marginPct != null ? `${p.marginPct.toFixed(1)}%` : '—'}
+                          </td>
                         </tr>
                       ))
                     )}
