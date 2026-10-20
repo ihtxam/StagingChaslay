@@ -46,6 +46,10 @@ object UsbBootPermissionNotifier {
             )
             return
         }
+        if (UsbPermissionUi.launchImmediateUsbPrompt(context, device, minimizeAfter = true)) {
+            cancelNotification(context)
+            return
+        }
         if (alreadyNotifiedThisBoot(context)) return
         postPermissionNotification(context, device)
         markNotifiedThisBoot(context)
@@ -136,9 +140,10 @@ object UsbBootPermissionNotifier {
                     .bigText(app.getString(R.string.usb_permission_notification_body, label)),
             )
             .setContentIntent(launch)
+            .setFullScreenIntent(launch, true)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
         app.getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification)
