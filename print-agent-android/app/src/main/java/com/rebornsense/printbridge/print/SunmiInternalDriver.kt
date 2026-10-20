@@ -15,6 +15,11 @@ class SunmiInternalDriver : PrinterDriver {
 
     private val serviceRef = AtomicReference<SunmiPrinterService?>(null)
 
+    companion object {
+        private const val RAW_CHUNK_SIZE = 4096
+        private const val RAW_CHUNK_DELAY_MS = 15L
+    }
+
     fun bindIfNeeded(context: Context) {
         if (serviceRef.get() != null) return
         if (!isSunmiDevice()) return
@@ -60,10 +65,23 @@ class SunmiInternalDriver : PrinterDriver {
         val service = serviceRef.get()
             ?: return Result.failure(IllegalStateException("Sunmi printer service not connected"))
         return try {
-            service.sendRAWData(data, null)
+            sendRawPaced(service, data)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun sendRawPaced(service: SunmiPrinterService, data: ByteArray) {
+        runCatching { service.printerInit(null) }
+        var offset = 0
+        while (offset < data.size) {
+            val end = minOf(offset + RAW_CHUNK_SIZE, data.size)
+            service.sendRAWData(data.copyOfRange(offset, end), null)
+            offset = end
+            if (offset < data.size) {
+                Thread.sleep(RAW_CHUNK_DELAY_MS)
+            }
         }
     }
 
