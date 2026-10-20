@@ -140,6 +140,7 @@
     <string name="sending">Sending…</string>
     <string name="skip_receipt">Skip</string>
     <string name="tap_to_pay">Tap card or phone to pay</string>
+    <string name="tap_to_pay_method">Tap to Pay</string>
     <string name="waiting_terminal">Waiting for terminal�</string>
 
     <!-- Settings -->
@@ -650,6 +651,8 @@
     <string name="payment_terminal">Accept Terminal</string>
     <string name="checkout_terminal_subtitle">Pay on Adyen terminal</string>
     <string name="payment_methods">Payment methods</string>
+    <string name="payment_methods_manage_locally">Manage on this device</string>
+    <string name="payment_methods_manage_locally_hint">Payment methods follow this device instead of the merchant panel.</string>
     <string name="payment_methods_managed_by_panel">Payment methods are managed in the Reborn merchant panel and sync to this device.</string>
     <string name="printer_roles">Printer Job Assignment</string>
     <string name="print_receipts">Receipts</string>

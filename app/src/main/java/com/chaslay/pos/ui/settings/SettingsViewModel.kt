@@ -832,6 +832,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
     fun updateReceiptTemplateName(value: String) = _uiState.update { it.copy(receiptTemplateName = value) }
+    /**
+     * Take payment methods off panel control for this device, or hand them back.
+     * The individual payment switches are disabled while the panel owns them, so
+     * this is the only way to set them locally.
+     */
+    fun updatePaymentMethodsLocalOverride(enabled: Boolean) = _uiState.update {
+        it.copy(paymentMethodsManagedByCloud = !enabled)
+    }
+
     fun updateTapToPay(enabled: Boolean) = _uiState.update {
         it.copy(tapToPayEnabled = enabled, paymentMethodsManagedByCloud = false)
     }

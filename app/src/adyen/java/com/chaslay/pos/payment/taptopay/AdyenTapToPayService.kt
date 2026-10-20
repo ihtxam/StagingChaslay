@@ -10,6 +10,8 @@ import androidx.activity.ComponentActivity
 import androidx.startup.AppInitializer
 import com.adyen.ipp.api.InPersonPayments
 import com.adyen.ipp.api.InPersonPaymentsInitializer
+import com.adyen.ipp.api.InPersonPaymentsTools
+import com.adyen.ipp.api.initialization.InitializationState
 import com.adyen.ipp.api.payment.PaymentCallback
 import com.adyen.ipp.api.payment.PaymentInterfaceType
 import com.adyen.ipp.api.payment.TransactionRequest
@@ -20,6 +22,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -89,14 +92,21 @@ class AdyenTapToPayService @Inject constructor(
         TapToPayConfig.apiBaseUrl = BuildConfig.LICENSE_API_BASE_URL.trimEnd('/')
         TapToPayConfig.authToken = authToken
         return try {
-            withContext(Dispatchers.IO) { InPersonPayments.warmUp() }.getOrElse {
-                return TapToPayRegisterResult(ok = false, message = "Warm-up failed: ${it.message}")
+            // Warm-up is an optimisation, never a gate. On SDK 2.16.0-live it can throw
+            // IppNotInitializedException while the SDK's own state reads
+            // SuccessfulInitialization and its :ipp service is bound, so treating it as
+            // fatal blocks activation on a device that is actually fine. Attestation
+            // below is the real check.
+            withContext(Dispatchers.IO) { InPersonPayments.warmUp() }.onFailure { cause ->
+                Log.w(TAG, "Tap to Pay warm-up failed, continuing to attestation (live=${liveState()})", cause)
             }
             val installationId = withContext(Dispatchers.IO) { InPersonPayments.getInstallationId() }
-                .getOrElse {
+                .getOrElse { cause ->
+                    val reason = initializationFailure()
+                    Log.e(TAG, "Tap to Pay attestation failed (live=${liveState()}, queried=$reason)", cause)
                     return TapToPayRegisterResult(
                         ok = false,
-                        message = "Activation failed: ${it.message}",
+                        message = describe("Activation failed", cause, reason),
                     )
                 }
             syncPreferences.setTapToPayRegistered(true)
@@ -113,6 +123,32 @@ class AdyenTapToPayService @Inject constructor(
     }
 
     /**
+     * The SDK's own account of why it could not start, as a comma-separated list of
+     * InitializationFailure names, or null when it reports none.
+     *
+     * warmUp() and getInstallationId() fail with a bare exception whose message is
+     * frequently null, which leaves both the cashier and the log with nothing to act
+     * on. The names here distinguish the cases that need different fixes:
+     * AuthenticationServiceNotFound (manifest/DI), UnsupportedDeviceOS and
+     * HardwareBackedAttestationNotAvailable (device), BindingFailure (service bind).
+     */
+    private suspend fun initializationFailure(): String? = runCatching {
+        // getInitializationState() suspends until the SDK leaves its awaiting state,
+        // so it must be bounded: a stuck SDK is exactly the case being diagnosed.
+        val state = withTimeoutOrNull(3_000) {
+            withContext(Dispatchers.IO) { InPersonPaymentsTools.getInitializationState() }
+        } ?: return@runCatching "still initializing after 3s"
+        if (state is InitializationState.SuccessfulInitialization) null else stateLabel(state)
+    }.getOrNull()
+
+    /** Builds a message that names something actionable even when [cause] has none. */
+    private fun describe(prefix: String, cause: Throwable, reason: String?): String = buildString {
+        append(prefix).append(": ")
+        append(cause.message?.takeIf { it.isNotBlank() } ?: cause::class.java.simpleName)
+        if (reason != null) append(" (").append(reason).append(')')
+    }
+
+    /**
      * Force the SDK's androidx.startup initializer to run now so its
      * applicationContext is ready before any Activity invokes the SDK. Done
      * programmatically rather than via a manifest <meta-data> entry, so that
@@ -120,12 +156,56 @@ class AdyenTapToPayService @Inject constructor(
      */
     override fun initialize(application: Application) {
         try {
+            Log.i(TAG, "init: before initializeComponent, state=${liveState()}")
             AppInitializer.getInstance(application)
                 .initializeComponent(InPersonPaymentsInitializer::class.java)
+            Log.i(TAG, "init: after initializeComponent, state=${liveState()}")
         } catch (t: Throwable) {
             Log.e(TAG, "Tap to Pay init failed", t)
         }
     }
+
+    /**
+     * The SDK's current state read straight off its StateFlow. Unlike
+     * getInitializationState() this never suspends, so it is safe to log even
+     * when the SDK is wedged in its awaiting state.
+     */
+    private fun liveState(): String = runCatching {
+        stateLabel(InPersonPayments.initialized.value)
+    }.getOrElse { "unreadable: ${it::class.java.simpleName}" }
+
+    /**
+     * Finish initialization now that an activity is on screen.
+     *
+     * The SDK binds to a service that may only be bound from the foreground, so the
+     * androidx.startup initializer that runs at process start cannot complete on its
+     * own. Until this runs, every SDK call fails with IppNotInitializedException.
+     */
+    override suspend fun initializeWhileVisible(activity: ComponentActivity): Boolean {
+        Log.i(TAG, "foreground init: starting, state=${liveState()}")
+        val state = runCatching {
+            withTimeoutOrNull(20_000) { InPersonPaymentsTools.initializeManually(activity) }
+        }.getOrElse { cause ->
+            Log.e(TAG, "Tap to Pay initialization threw (state=${liveState()})", cause)
+            return false
+        }
+        if (state == null) {
+            Log.e(TAG, "Tap to Pay initialization did not finish in 20s, state=${liveState()}")
+            return false
+        }
+        Log.i(TAG, "foreground init: finished as ${stateLabel(state)}")
+        return state is InitializationState.SuccessfulInitialization
+    }
+
+    /** Human-readable name for an initialization state, listing failure reasons. */
+    private fun stateLabel(state: InitializationState): String =
+        if (state is InitializationState.FailedInitialization) {
+            state.failureReasons
+                .joinToString { it::class.java.simpleName }
+                .takeIf { it.isNotBlank() } ?: "FailedInitialization"
+        } else {
+            state::class.java.simpleName
+        }
 
     /**
      * Register the result listener before the activity reaches RESUMED. The

@@ -202,12 +202,14 @@ class DatabaseCallback(
                 id, businessName, vatNumber, address, phone, email, website,
                 defaultCurrency, currencySymbol, defaultLanguage,
                 tapToPayEnabled, adyenTerminalEnabled, adyenTerminalId, adyenApiKey, adyenMerchantAccount,
+                paymentMethodsManagedByCloud,
                 dineInVatRate, takeawayVatRate, defaultServiceType, posMode,
                 receiptBaseUrl, receiptHeader, receiptFooter, kitchenTicketHeader, kitchenTicketFooter
             ) VALUES (
                 1, '${q("Sushi Sake")}', '', '${q("17 Rue Cheneau-de-Bourg, 1003 Lausanne")}', '+41 79 621 39 37', 'noreply@rebornsense.com', '',
                 'CHF', 'CHF', 'fr',
                 0, 0, '', '', '',
+                1,
                 8.1, 2.6, 'TAKEAWAY', 'RESTAURANT',
                 'https://pay.rebornsense.com/receipt',
                 '${q("Sushi Sake")}', '${q("Merci!")}', '', ''

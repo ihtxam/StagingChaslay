@@ -34,7 +34,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.chaslay.pos"
+        // Install identity, deliberately not the Kotlin namespace above: the code
+        // package stays com.chaslay.pos so imports are untouched. Any change here
+        // must be re-registered with Adyen (Customer Area > Devices > Tap to Pay &
+        // card readers), which keys app integrity on package name + signing cert.
+        applicationId = "com.reborn.pos"
         // Adyen Tap to Pay (In-Person Payments SDK) requires Android 8.0 (API 26).
         minSdk = 26
         targetSdk = 35

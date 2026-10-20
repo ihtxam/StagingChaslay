@@ -72,6 +72,18 @@ interface TapToPayEngine {
     fun initialize(application: Application)
 
     /**
+     * Completes SDK initialization while [activity] is RESUMED, returning true once
+     * the SDK reports itself ready.
+     *
+     * The Adyen SDK binds to a service that the system only allows while the app is
+     * in the foreground, so initialization started from Application.onCreate() never
+     * finishes: the SDK stays in its awaiting state and every later call fails with
+     * "needs to be initialized with an Application". Callers must therefore drive
+     * this from a RESUMED activity, not from startup.
+     */
+    suspend fun initializeWhileVisible(activity: ComponentActivity): Boolean
+
+    /**
      * Registers the SDK's activity-result listener. Must be called before the
      * activity reaches RESUMED, because sale results are delivered through it.
      */

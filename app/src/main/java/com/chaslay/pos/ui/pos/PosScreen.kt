@@ -251,6 +251,9 @@ fun PosScreen(
             cashEnabled = state.settings.cashEnabled,
             cardEnabled = state.settings.cardEnabled,
             terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
+            tapToPayEnabled = state.settings.tapToPayEnabled,
+            tapToPayReady = state.tapToPayReady,
+            tapToPayStatus = state.tapToPayStatus,
             tipsEnabled = state.settings.tipsEnabled,
             allowCustomTip = state.settings.allowCustomTip,
             tipPresetsPercent = state.settings.tipPresetsPercentCsv

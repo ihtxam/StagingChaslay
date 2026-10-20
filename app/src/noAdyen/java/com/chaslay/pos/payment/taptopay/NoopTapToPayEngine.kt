@@ -26,6 +26,8 @@ class NoopTapToPayEngine @Inject constructor() : TapToPayEngine {
 
     override fun initialize(application: Application) = Unit
 
+    override suspend fun initializeWhileVisible(activity: ComponentActivity): Boolean = false
+
     override fun registerForPaymentResult(activity: ComponentActivity) = Unit
 
     override suspend fun warmUp() = Unit

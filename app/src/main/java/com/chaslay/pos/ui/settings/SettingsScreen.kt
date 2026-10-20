@@ -565,6 +565,16 @@ fun SettingsScreen(
                 color = colors.textSecondary
             )
         }
+        SettingSwitch(
+            stringResource(R.string.payment_methods_manage_locally),
+            !state.paymentMethodsManagedByCloud,
+            viewModel::updatePaymentMethodsLocalOverride
+        )
+        Text(
+            stringResource(R.string.payment_methods_manage_locally_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textSecondary
+        )
         Spacer(modifier = Modifier.height(8.dp))
         Text(stringResource(R.string.default_rounding), color = colors.textPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

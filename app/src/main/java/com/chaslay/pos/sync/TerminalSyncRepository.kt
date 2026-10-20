@@ -142,22 +142,23 @@ class TerminalSyncRepository @Inject constructor(
             merged = merged.copy(adyenTerminalId = first.terminal_id)
         }
 
-        config.methods?.let { methods ->
-            merged = merged.copy(
-                expressEnabled = methods.express,
-                cashEnabled = methods.cash,
-                cardEnabled = methods.card,
-                terminalEnabled = methods.terminal,
-                adyenTerminalEnabled = methods.terminal,
-                paymentMethodsManagedByCloud = true
-            )
+        // Payment methods follow the merchant panel only while this device has not
+        // opted out via POS Settings > Payments > "Manage on this device". Applying
+        // them unconditionally - and re-asserting paymentMethodsManagedByCloud below -
+        // silently reverted that choice on the next pull, so a tender enabled on the
+        // device never survived a sync or a restart.
+        if (settings.paymentMethodsManagedByCloud) {
+            config.methods?.let { methods ->
+                merged = merged.copy(
+                    expressEnabled = methods.express,
+                    cashEnabled = methods.cash,
+                    cardEnabled = methods.card,
+                    terminalEnabled = methods.terminal,
+                    adyenTerminalEnabled = methods.terminal
+                )
+            }
+            merged = merged.copy(tapToPayEnabled = config.tapToPayEnabled)
         }
-
-        // Tap to Pay: merchant panel toggle syncs to device (Chaslay cloud sync).
-        merged = merged.copy(
-            tapToPayEnabled = config.tapToPayEnabled,
-            paymentMethodsManagedByCloud = true
-        )
 
         // coursesEnabled is managed in POS Settings ? General (not overwritten by panel sync).
 

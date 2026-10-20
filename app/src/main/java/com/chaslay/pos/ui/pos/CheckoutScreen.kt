@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Contactless
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.LocalAtm
 import androidx.compose.material.icons.filled.Payments
@@ -101,6 +103,9 @@ fun CheckoutScreen(
     cashEnabled: Boolean = true,
     cardEnabled: Boolean = true,
     terminalEnabled: Boolean = true,
+    tapToPayEnabled: Boolean = false,
+    tapToPayReady: Boolean = true,
+    tapToPayStatus: String? = null,
     tipsEnabled: Boolean = true,
     allowCustomTip: Boolean = true,
     tipPresetsPercent: List<Double> = listOf(0.0, 5.0, 10.0, 15.0),
@@ -291,6 +296,26 @@ fun CheckoutScreen(
                     selected = checkoutState.method == PaymentMethod.CARD,
                     accent = Color(0xFF3B82F6),
                     onClick = { selectCardOrSplit() }
+                )
+            }
+            if (tapToPayEnabled) {
+                CheckoutMethodButton(
+                    title = stringResource(R.string.tap_to_pay_method),
+                    icon = Icons.Default.Contactless,
+                    selected = checkoutState.method == PaymentMethod.TAP_TO_PAY,
+                    accent = Color(0xFF6366F1),
+                    enabled = tapToPayReady,
+                    subtitle = tapToPayStatus?.takeIf { !tapToPayReady },
+                    onClick = {
+                        if (cashApplied > 0.001 && remaining > 0.001) {
+                            onApplyCardRemainder(remaining)
+                            onSelectMethod(PaymentMethod.TAP_TO_PAY)
+                        } else {
+                            tenderBuffer = ""
+                            onTenderAmount(0.0)
+                            onSelectMethod(PaymentMethod.TAP_TO_PAY)
+                        }
+                    }
                 )
             }
             if (terminalEnabled) {
@@ -665,24 +690,53 @@ private fun CheckoutMethodButton(
     icon: ImageVector,
     selected: Boolean,
     accent: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    subtitle: String? = null
 ) {
-    val border = if (selected) accent else Color(0xFFD4D4D8)
-    val bg = if (selected) accent.copy(alpha = 0.10f) else Color(0xFFF8FAFC)
+    // A disabled tender stays visible and states why: a cashier who cannot find
+    // the button learns nothing, whereas a greyed button with a reason sends them
+    // to Settings instead of to the customer with an unexplained failure.
+    val border = when {
+        !enabled -> Color(0xFFE4E4E7)
+        selected -> accent
+        else -> Color(0xFFD4D4D8)
+    }
+    val bg = when {
+        !enabled -> Color(0xFFF4F4F5)
+        selected -> accent.copy(alpha = 0.10f)
+        else -> Color(0xFFF8FAFC)
+    }
+    val contentAlpha = if (enabled) 1f else 0.45f
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
             .border(1.5.dp, border, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(22.dp))
-        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = accent.copy(alpha = contentAlpha),
+            modifier = Modifier.size(22.dp)
+        )
+        Column {
+            Text(
+                title,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                color = Color(0xFF18181B).copy(alpha = contentAlpha)
+            )
+            subtitle?.let {
+                Text(it, fontSize = 12.sp, color = Color(0xFF71717A))
+            }
+        }
     }
 }
 

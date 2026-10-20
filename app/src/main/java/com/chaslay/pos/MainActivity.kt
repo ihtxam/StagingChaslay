@@ -19,7 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.LicenseRepository
 import com.chaslay.pos.payment.taptopay.TapToPayEngine
@@ -60,6 +62,14 @@ class MainActivity : AppCompatActivity() {
         // RESUMED, because sale results are delivered through it. Inert in builds
         // without the Adyen SDK.
         tapToPayEngine.registerForPaymentResult(this)
+
+        // The Adyen SDK can only bind its service from the foreground, so finish
+        // initialization once this activity is RESUMED rather than at app startup.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                tapToPayEngine.initializeWhileVisible(this@MainActivity)
+            }
+        }
 
         lifecycleScope.launch {
             runCatching { licenseRepository.ensureInitialized() }
