@@ -274,8 +274,6 @@ const WEBPOS_GRID_MOBILE_COLS_KEY = 'webpos.grid.mobileCols';
 type MobileGridLayoutStep = 0 | 1 | 2;
 const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
 const WEBPOS_SET_PIN_HINT_KEY = 'webpos_set_pin_hint_dismissed';
-/** RFID tapped on PIN screen — processed after staff logs in. */
-const WEBPOS_PENDING_RFID_SCAN_KEY = 'webpos_pending_rfid_scan';
 const WEBPOS_TERMINAL_KEY = 'manupos_webpos_terminal';
 
 function terminalStorageKey(staffId?: string | null) {
@@ -484,7 +482,6 @@ import {
   maxRedeemablePoints,
   normalizeLoyaltyProgram,
   normalizeRfidUid,
-  looksLikeRfidUid,
   redeemThresholdPoints,
   type AttachedGiftCard,
   type AttachedMembership,
@@ -610,7 +607,13 @@ import {
 import { navigateTargetAfterStaffPin } from '@/lib/auth-home';
 import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore } from '@/store/auth';
-import { useLocationStore } from '@/store/location';
+import LocationPickerModal from '@/components/merchant/LocationPicker';
+import type { MerchantLocation } from '@/store/location';
+import {
+  getWebPosTerminalLocationId,
+  setWebPosTerminalLocationId,
+  syncWebPosTerminalLocationFromUrl,
+} from '@/lib/webpos-terminal-location';
 import { openCashDrawerViaAgent } from '@/lib/print-agent';
 
 type Channel = PosChannel;
@@ -859,9 +862,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const logout = useAuthStore((s) => s.logout);
-  const posLocationId = useLocationStore((s) => s.locationId);
-  const loadLocations = useLocationStore((s) => s.load);
-  const setPosLocationId = useLocationStore((s) => s.setLocationId);
+  const [posLocationId, setPosLocationIdState] = useState<string | null>(() =>
+    syncWebPosTerminalLocationFromUrl()
+  );
+  const [merchantLocations, setMerchantLocations] = useState<MerchantLocation[]>([]);
+  const [terminalLocationPickerOpen, setTerminalLocationPickerOpen] = useState(false);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -1162,7 +1167,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
-  const [pendingRfidUid, setPendingRfidUid] = useState<string | null>(null);
   const [provisionalPrinted, setProvisionalPrinted] = useState(false);
   const [cancelModal, setCancelModal] = useState<{
     scope: CancelScope;
@@ -2988,8 +2992,32 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, []);
 
   useEffect(() => {
-    void loadLocations();
-  }, [loadLocations]);
+    syncWebPosTerminalLocationFromUrl();
+    setPosLocationIdState(getWebPosTerminalLocationId());
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .get('/merchant/locations')
+      .then((res) => {
+        if (cancelled) return;
+        const locations: MerchantLocation[] = res.data?.locations || [];
+        setMerchantLocations(locations);
+        let terminalId = getWebPosTerminalLocationId();
+        if (!terminalId && locations.length === 1) {
+          terminalId = locations[0]!.id;
+          setWebPosTerminalLocationId(terminalId);
+          setPosLocationIdState(terminalId);
+        } else if (!terminalId && locations.length > 1) {
+          setTerminalLocationPickerOpen(true);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!posLocationId) {
@@ -3013,29 +3041,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     },
     [posLocationId, t]
   );
-
-  /** Branch staff: default POS catalog to their assigned location(s). */
-  useEffect(() => {
-    const staffId = authUser?.staffId;
-    if (!staffId || authUser?.role !== 'staff') return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await api.get(`/merchant/locations/staff/${staffId}`);
-        if (cancelled) return;
-        const ids: string[] = Array.isArray(res.data?.locationIds) ? res.data.locationIds : [];
-        if (!ids.length) return;
-        const stored = localStorage.getItem('manupos_selected_location');
-        if (stored && ids.includes(stored)) return;
-        setPosLocationId(ids[0]!);
-      } catch {
-        /* best-effort */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser?.staffId, authUser?.role, setPosLocationId]);
 
   useEffect(() => {
     void load().catch(() => undefined);
@@ -6285,8 +6290,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const disc = payableFullTotals.discount || 0;
       const receiptPayload: WebPosReceipt = {
         businessName: merchant?.name || APP_NAME,
-        address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         id: `prov-${Date.now()}`,
@@ -6753,8 +6757,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const text = generateGiftCardSaleReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
-        address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         code: opts.code,
@@ -6963,25 +6966,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     lastGiftInjectRef.current = null;
   };
 
-  const selectCustomerFromCard = (membership: AttachedMembership) => {
-    if (!membership.customerId) return;
-    const displayName = membership.customerName?.trim() || '';
-    const parts = displayName.split(/\s+/).filter(Boolean);
-    setSelectedCustomer((prev) => {
-      if (prev?.id === membership.customerId) return prev;
-      return {
-        id: membership.customerId,
-        firstName: parts[0] || displayName || t('webPosCustomer'),
-        lastName: parts.slice(1).join(' ') || '',
-        email: null,
-        phone: null,
-      } as WebPosCustomer;
-    });
-  };
-
   const attachMembershipCard = (membership: AttachedMembership) => {
     const displayName = membership.customerName?.trim();
-    selectCustomerFromCard(membership);
+    if (displayName) {
+      setSelectedCustomer((prev) => {
+        if (prev?.id && membership.customerId && prev.id === membership.customerId) {
+          return prev;
+        }
+        if (membership.customerId) {
+          const parts = displayName.split(/\s+/);
+          return {
+            id: membership.customerId,
+            firstName: parts[0] || displayName,
+            lastName: parts.slice(1).join(' ') || '',
+            email: null,
+            phone: null,
+          } as WebPosCustomer;
+        }
+        return prev;
+      });
+    }
     const disc = membershipDiscountPercent(membership);
     if (disc > 0) {
       setBillDiscount((prev) =>
@@ -7064,7 +7068,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const applyScannedGiftCard = (card: AttachedMembership) => {
-    selectCustomerFromCard(card);
     const next: AttachedGiftCard = {
       cardId: card.cardId,
       cardNumber: card.cardNumber,
@@ -7080,57 +7083,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       t('webPosGiftCardAttached').replace('{amount}', next.balance.toFixed(2))
     );
   };
-
-  const bindRfidToCustomer = async (rawUid: string, customer: WebPosCustomer) => {
-    const rfid = normalizeRfidUid(rawUid);
-    if (!rfid || !customer.id) return false;
-    const holder =
-      [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim() || undefined;
-    try {
-      await api.post('/gift-cards', {
-        cardNumber: rfid,
-        cardMediaType: 'physical',
-        membershipEnabled: true,
-        customerId: customer.id,
-        holderName: holder,
-        holderEmail: customer.email || undefined,
-        holderPhone: customer.phone || undefined,
-      });
-      toast.success(t('webPosRfidBound'));
-      return true;
-    } catch (e: any) {
-      const status = e.response?.status;
-      if (status === 403) {
-        toast.error(t('webPosRfidBindFailed'));
-        return false;
-      }
-      toast.error(e.response?.data?.error || e.message || t('webPosRfidBindFailed'));
-      return false;
-    }
-  };
-
-  const promptUnknownRfidCustomer = (rawCode: string) => {
-    const rfid = normalizeRfidUid(rawCode);
-    if (!rfid) return;
-    setPendingPayMethod(null);
-    setPendingRfidUid(rfid);
-    setCustomerOpen(true);
-  };
-
-  const handlePinGateRfidScan = useCallback(
-    (rawCode: string) => {
-      const code = sanitizeScanCode(rawCode);
-      if (!code || !looksLikeRfidUid(code)) return;
-      const rfid = normalizeRfidUid(code) || code;
-      try {
-        sessionStorage.setItem(WEBPOS_PENDING_RFID_SCAN_KEY, rfid);
-      } catch {
-        /* ignore quota / private mode */
-      }
-      toast.success(t('webPosRfidTapAfterPin'));
-    },
-    [t]
-  );
 
   const saleMerchandiseTotal = (lines: CartLine[]) => {
     const merchLines = lines.filter(
@@ -7595,8 +7547,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       try {
         const receiptPayload = posOrderToWebPosReceipt(orderForReceipt, {
           businessName: merchant?.name || APP_NAME,
-          address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+          address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
           phone: merchant?.phone || undefined,
           vatNumber: merchant?.vatNumber || undefined,
           taxRate,
@@ -8084,14 +8035,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerTitle: printSettings?.receiptHeaderTitle,
       header: printSettings?.receiptHeader,
         businessName: merchant?.name || APP_NAME,
-        address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         headerAlign: headerFmt.align,
       },
       lineWidthForPaper(paper === 58 ? 58 : 80),
-      { padLines: false, titleScale: headerFmt.textScale }
+      { padLines: false }
     );
     const escpos = await buildReceiptEscPos(text, {
       qrData: qr,
@@ -8252,14 +8202,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 headerTitle: printSettings?.receiptHeaderTitle,
                 header: printSettings?.receiptHeader,
                 businessName: merchant?.name || APP_NAME,
-                address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+                address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
                 phone: merchant?.phone || undefined,
                 vatNumber: merchant?.vatNumber || undefined,
                 headerAlign: headerFmt.align,
               },
               lineWidthForPaper(paper === 58 ? 58 : 80),
-              { padLines: false, titleScale: headerFmt.textScale }
+              { padLines: false }
             )
           : [];
       const escpos = await buildReceiptEscPos(text, {
@@ -8501,8 +8450,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const printPosOrderReceipt = async (order: PosOrderForReceipt, splitLabel?: string | null) => {
     const receiptPayload = posOrderToWebPosReceipt(order, {
       businessName: merchant?.name || APP_NAME,
-      address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+      address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
       phone: merchant?.phone || undefined,
       vatNumber: merchant?.vatNumber || undefined,
       taxRate,
@@ -8532,8 +8480,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const text = generateRefundReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
-        address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
         phone: merchant?.phone || undefined,
         orderNumber: payload.order.orderNumber,
         orderDisplay: payload.order.ticketDisplay,
@@ -9328,8 +9275,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       undefined;
     const receiptPayload: WebPosReceipt = {
       businessName: merchant?.name || APP_NAME,
-      address: merchant?.address || undefined,
-        city: merchant?.city || undefined,
+      address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
       phone: merchant?.phone || undefined,
       vatNumber: merchant?.vatNumber || undefined,
       id: clientId,
@@ -10475,7 +10421,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ) {
         return;
       }
-      if (!isWebPosCurrentlyOffline() && giftCardsEditionOk) {
+      if (!isWebPosCurrentlyOffline()) {
         try {
           const found = await lookupPosCard(code);
           if (found) {
@@ -10488,19 +10434,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             return;
           }
         } catch (e: any) {
-          const status = e.response?.status;
-          if (status !== 404 && status !== 403) {
+          if (e.response?.status !== 404) {
             toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
             return;
           }
         }
       }
       if (onCheckout) {
-        if (looksLikeRfidUid(code)) {
-          promptUnknownRfidCustomer(code);
-          setSearch('');
-          return;
-        }
         toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
         setSearch('');
         return;
@@ -10509,11 +10449,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (product) {
         setSearch('');
         onProductClick(product, { fromScan: true });
-        return;
-      }
-      if (looksLikeRfidUid(code)) {
-        promptUnknownRfidCustomer(code);
-        setSearch('');
         return;
       }
       const tableQr = parseTableQrPayload(code);
@@ -10556,7 +10491,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       expressSuccessOpen,
       findProductByScanCode,
       tablesUiEnabled,
-      giftCardsEditionOk,
       switchToTableOrder,
       t,
     ]
@@ -10592,29 +10526,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       enabled: barcodeWedgeEnabled,
       onScan: handlePosScan,
     });
-
-  const pinGateWedgeEnabled = pinGateRequired && !isWebPosCurrentlyOffline();
-  const {
-    onCaptureInput: onPinGateCaptureInput,
-    onCaptureKeyDown: onPinGateCaptureKeyDown,
-  } = useBarcodeWedge({
-    enabled: pinGateWedgeEnabled,
-    onScan: handlePinGateRfidScan,
-  });
-
-  useEffect(() => {
-    if (pinGateRequired || loading) return;
-    let pending: string | null = null;
-    try {
-      pending = sessionStorage.getItem(WEBPOS_PENDING_RFID_SCAN_KEY);
-      if (pending) sessionStorage.removeItem(WEBPOS_PENDING_RFID_SCAN_KEY);
-    } catch {
-      pending = null;
-    }
-    if (!pending?.trim()) return;
-    const id = window.setTimeout(() => void handlePosScan(pending), 150);
-    return () => window.clearTimeout(id);
-  }, [pinGateRequired, loading, handlePosScan]);
 
   useEffect(() => {
     if (!barcodeWedgeEnabled || !retailPreferScannerWedge || posView !== 'register') return;
@@ -10675,9 +10586,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const code = mergeRetailScanBuffer(retailScanBufferRef.current, cleaned).trim();
       const isScanInput =
         code.length >= BARCODE_WEDGE_MIN_LENGTH &&
-        (looksLikeRetailBarcodeInput(code) ||
-          looksLikeRfidUid(code) ||
-          !!findProductByScanCode(code));
+        (looksLikeRetailBarcodeInput(code) || !!findProductByScanCode(code));
       if (isScanInput) {
         // Keep the grid on the current category; submit after the scanner finishes typing.
         retailScanBufferRef.current = code;
@@ -10931,11 +10840,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           </div>
         ) : (
           <>
-            <BarcodeWedgeCapture
-              active={pinGateWedgeEnabled}
-              onInput={onPinGateCaptureInput}
-              onKeyDown={onPinGateCaptureKeyDown}
-            />
             <WebPosBlockingAlert
               open={!!posAuthAlert}
               title={posAuthAlert?.title}
@@ -10951,6 +10855,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 /* gate cannot be dismissed without PIN */
               }}
               onSuccess={onStaffPinSuccess}
+              terminalLocationId={posLocationId}
               onLeave={
                 canJwtReturnToPanel(
                   authUser?.permissions as Permission[] | undefined,
@@ -12641,6 +12546,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onStaffPinSuccess}
+        terminalLocationId={posLocationId}
         onLogout={() => void handlePosLogout()}
         productName={merchant?.name || merchant?.businessName}
         logoUrl={
@@ -12648,6 +12554,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           merchant?.shopLogoUrl ||
           paymentConfig?.shopLogoUrl
         }
+      />
+
+      <LocationPickerModal
+        open={terminalLocationPickerOpen}
+        lockWebPosTerminal
+        onClose={() => setTerminalLocationPickerOpen(false)}
+        onSelect={(loc) => {
+          setPosLocationIdState(loc.id);
+          void load();
+        }}
       />
 
       <WebPosStationPickerModal
@@ -12871,20 +12787,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
       <WebPosCustomerPicker
         open={customerOpen}
-        pendingRfidUid={pendingRfidUid}
         onClose={() => {
           setCustomerOpen(false);
-          setPendingRfidUid(null);
           setPendingPayMethod(null);
         }}
         onSelect={(c) => {
-          const rfid = pendingRfidUid;
           setSelectedCustomer(c);
           setCustomerOpen(false);
-          setPendingRfidUid(null);
-          if (rfid && giftCardsEditionOk) {
-            void bindRfidToCustomer(rfid, c);
-          }
           if (pendingPayMethod) {
             const m = pendingPayMethod;
             setPendingPayMethod(null);

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
 import { StaffService } from "@/services/staff.service";
+import { LocationsService } from "@/services/locations.service";
 import { ALL_PERMISSIONS, normalizePermissions } from "@/lib/permissions";
 
 const router = Router();
@@ -143,8 +144,24 @@ router.post("/staff/verify-pin", async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId!;
     await StaffService.ensureMerchantHasStaff(merchantId);
-    const { pin } = req.body;
+    const { pin, locationId: terminalLocationId } = req.body as {
+      pin?: string;
+      locationId?: string;
+    };
     const staff = await StaffService.verifyPin(merchantId, String(pin || ""));
+    const locId = String(
+      terminalLocationId || req.headers["x-location-id"] || ""
+    ).trim();
+    if (locId) {
+      const resolved = await LocationsService.resolveLocationIdOrNull(merchantId, locId);
+      if (!resolved) {
+        return res.status(404).json({ error: "Location not found" });
+      }
+      await LocationsService.assertStaffAccess(merchantId, resolved, {
+        staffId: staff.id,
+        isOwner: req.user?.role === "merchant",
+      });
+    }
     res.json({ success: true, staff });
   } catch (error) {
     // 403 (not 401): invalid PIN must not clear the merchant dashboard JWT.

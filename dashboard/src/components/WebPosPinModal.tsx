@@ -86,6 +86,7 @@ export default function WebPosPinModal({
   onLogout,
   productName,
   logoUrl,
+  terminalLocationId,
 }: {
   open: boolean;
   /** `gate` = fullscreen unlock before register; `switch` = compact switch-user modal */
@@ -109,6 +110,8 @@ export default function WebPosPinModal({
   productName?: string | null;
   /** Merchant shop logo for the top-right header. Footer always uses the Reborn wordmark. */
   logoUrl?: string | null;
+  /** Locked WebPOS location — PIN must be valid for this branch (does not change panel location). */
+  terminalLocationId?: string | null;
 }) {
   const { t, locale } = useI18n();
   const [pin, setPin] = useState('');
@@ -180,7 +183,10 @@ export default function WebPosPinModal({
     setBusy(true);
     setError('');
     try {
-      const res = await api.post('/merchant/staff/verify-pin', { pin: value });
+      const res = await api.post('/merchant/staff/verify-pin', {
+        pin: value,
+        locationId: terminalLocationId || undefined,
+      });
       onSuccess(res.data.staff);
       if (!isGate) onClose();
     } catch (e: unknown) {

@@ -61,7 +61,8 @@ export class CatalogLocationService {
     products: T[],
     allowedIds: Set<string> | null
   ): T[] {
-    if (!allowedIds || allowedIds.size === 0) return products;
+    if (allowedIds === null) return products;
+    if (allowedIds.size === 0) return [];
     return products.filter((p) => allowedIds.has(p.id));
   }
 

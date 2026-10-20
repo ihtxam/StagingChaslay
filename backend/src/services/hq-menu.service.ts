@@ -4,6 +4,7 @@ import type { CatalogChannel } from "@/lib/catalog-visibility";
 import { normalizeMenuCatalogChannels } from "@/lib/catalog-visibility";
 import {
   applyMenuProductPrices,
+  locationHasDedicatedScheduledMenus,
   normalizeProductPrices,
   normalizeTimeRanges,
   pickActiveScheduledMenu,
@@ -290,7 +291,12 @@ export class HqMenuService {
       timezone,
     });
     if (!picked) {
-      return { menu: null, productIds: null, productPrices: {} };
+      const strictEmpty = locationHasDedicatedScheduledMenus(menus, locationId);
+      return {
+        menu: null,
+        productIds: strictEmpty ? new Set<string>() : null,
+        productPrices: {},
+      };
     }
 
     const productIds = await resolveMenuProductIds(merchantId, picked);

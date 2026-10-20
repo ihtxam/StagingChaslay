@@ -161,7 +161,8 @@ import ScheduledMenusPage from './ScheduledMenusPage';
 import PizzaBuilderPage from './PizzaBuilderPage';
 import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
 import OrderCenterApp from './OrderCenterApp';
-import { useLocationStore } from '@/store/location';
+import { getSelectedLocationId, useLocationStore } from '@/store/location';
+import { buildWebPosLaunchPath } from '@/lib/webpos-terminal-location';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
@@ -663,7 +664,10 @@ function MerchantShell() {
     [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
-  const { locations, limits } = useLocationStore();
+  const { locations, limits, locationId: panelLocationId } = useLocationStore();
+  const posLaunchPath = buildWebPosLaunchPath(
+    panelLocationId || getSelectedLocationId() || ''
+  );
   const showHq =
     hqLicensed ||
     isMultiLocationLicensed({ maxLocations: limits?.maxLocations }) ||
@@ -1248,7 +1252,7 @@ function MerchantShell() {
                 !kioskRestricted &&
                 !orderCenterRestricted &&
                 showWebPosQuickAction
-                  ? { label: t('sidebarPos'), path: '/merchant/pos' }
+                  ? { label: t('sidebarPos'), path: posLaunchPath }
                   : null
               }
               language={locale}
@@ -1292,7 +1296,7 @@ function MerchantShell() {
                 !kioskRestricted &&
                 !orderCenterRestricted &&
                 showWebPosQuickAction
-                  ? { label: t('sidebarPos'), path: '/merchant/pos' }
+                  ? { label: t('sidebarPos'), path: posLaunchPath }
                   : null
               }
               language={locale}

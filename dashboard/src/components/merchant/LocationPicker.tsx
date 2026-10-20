@@ -3,15 +3,24 @@ import { Building2, Check, MapPin } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { shouldShowLocationSwitcher } from '@/lib/pos-hub-visibility';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
+import { setWebPosTerminalLocationId } from '@/lib/webpos-terminal-location';
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onSelect?: (location: MerchantLocation) => void;
   title?: string;
+  /** When set, confirm only locks this browser tab's WebPOS — not the admin panel location. */
+  lockWebPosTerminal?: boolean;
 };
 
-export default function LocationPickerModal({ open, onClose, onSelect, title }: Props) {
+export default function LocationPickerModal({
+  open,
+  onClose,
+  onSelect,
+  title,
+  lockWebPosTerminal,
+}: Props) {
   const { t } = useI18n();
   const { locations, locationId, setLocationId, load, loading } = useLocationStore();
   const [picked, setPicked] = useState(locationId || '');
@@ -29,7 +38,11 @@ export default function LocationPickerModal({ open, onClose, onSelect, title }: 
   const confirm = () => {
     const loc = locations.find((l) => l.id === picked);
     if (!loc) return;
-    setLocationId(loc.id);
+    if (lockWebPosTerminal) {
+      setWebPosTerminalLocationId(loc.id);
+    } else {
+      setLocationId(loc.id);
+    }
     onSelect?.(loc);
     onClose();
   };
