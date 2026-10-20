@@ -1172,6 +1172,18 @@ export class MerchantSettingsService {
     return this.updateMerchantSettings(merchantId, businessInfo);
   }
 
+  static async updatePanelNavHidden(merchantId: string, hidden: unknown) {
+    const db = getDb();
+    const panelNavHidden = normalizePanelNavHidden(hidden);
+    await db
+      .update(schema.merchants)
+      .set({ panelNavHidden, updatedAt: new Date() })
+      .where(eq(schema.merchants.id, merchantId));
+    const row = await loadMerchantRowById(merchantId);
+    if (!row) throw new Error("Merchant not found");
+    return this.getMerchantSettings(merchantId);
+  }
+
   static async resolveByShopHost(hostOrSlug: string) {
     const db = getDb();
     const raw = hostOrSlug.toLowerCase().trim();

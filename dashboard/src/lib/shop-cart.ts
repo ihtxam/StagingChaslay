@@ -421,7 +421,12 @@ export function resolveShopKey(paramSlug?: string) {
   if (label && !RESERVED_SUBDOMAINS.has(label)) return label;
   if (label === 'shop') {
     const seg = window.location.pathname.split('/').filter(Boolean)[0];
-    if (seg && !['checkout', 'order', 'account', 'menu', 'table', 'api', 'assets'].includes(seg)) return seg;
+    if (
+      seg &&
+      !['checkout', 'order', 'account', 'menu', 'table', 'api', 'assets', 'catering', 'locations', 'pages', 'gift-cards', 'reservations', 'register', 'forgot-password'].includes(seg)
+    ) {
+      return seg;
+    }
   }
   const host = window.location.hostname.toLowerCase();
   const main = publicDomain();

@@ -2355,6 +2355,33 @@ router.put("/settings", async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /api/merchant/settings/panel-nav
+ * Owner / manager: hide sidebar sections for this merchant (same keys as reseller).
+ */
+router.put(
+  "/settings/panel-nav",
+  requirePermission("MANAGE_SETTINGS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) {
+        return res.status(400).json({ error: "Merchant ID is required" });
+      }
+      const { hidden, panelNavHidden } = req.body || {};
+      const settings = await MerchantSettingsService.updatePanelNavHidden(
+        merchantId,
+        panelNavHidden ?? hidden ?? []
+      );
+      res.json({ success: true, settings });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to update panel menu",
+      });
+    }
+  }
+);
+
+/**
  * GET /api/merchant/reports/eod
  * End-of-day / sales report (POS + synced sales in orders table)
  * Query: preset=today|yesterday|last_week|last_month|last_3_months|custom&from=&to=

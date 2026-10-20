@@ -3753,6 +3753,8 @@ const en: Dict = {
   posPostsLimitsSaved: 'POS station limits saved',
   panelNavManage: 'Panel menu visibility',
   panelNavManageHint: 'Checked items are hidden from this merchant’s sidebar. They can still be a Manager — only the menu entry is removed.',
+  panelNavManageMerchantHint:
+    'Checked items are hidden from your team’s sidebar (Settings gear menu list). Managers with permission can still open direct URLs if they know them.',
   panelNavSaved: 'Panel menu visibility saved',
   panelNavHideCms: 'CMS (entire section)',
   panelNavHideCustomers: 'Customers (entire section)',
@@ -8639,6 +8641,8 @@ const fr: Dict = {
   posPostsLimitsSaved: 'Limites de postes enregistrées',
   panelNavManage: 'Visibilité du menu',
   panelNavManageHint: 'Les éléments cochés sont masqués dans la barre latérale du commerçant.',
+  panelNavManageMerchantHint:
+    'Les éléments cochés sont masqués dans le menu latéral de votre équipe (liste du menu Paramètres).',
   panelNavSaved: 'Visibilité du menu enregistrée',
   panelNavHideCms: 'CMS (section entière)',
   panelNavHideCustomers: 'Clients (section entière)',
@@ -13479,6 +13483,8 @@ const de: Dict = {
   posPostsLimitsSaved: 'Kassenplatz-Limits gespeichert',
   panelNavManage: 'Menü-Sichtbarkeit',
   panelNavManageHint: 'Angehakte Einträge werden in der Händler-Seitenleiste ausgeblendet.',
+  panelNavManageMerchantHint:
+    'Angehakte Einträge werden in der Seitenleiste Ihres Teams ausgeblendet (Einstellungsmenü).',
   panelNavSaved: 'Menü-Sichtbarkeit gespeichert',
   panelNavHideCms: 'CMS (ganzer Bereich)',
   panelNavHideCustomers: 'Kunden (ganzer Bereich)',

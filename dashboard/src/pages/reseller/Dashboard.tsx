@@ -32,12 +32,8 @@ import {
 } from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
-import {
-  PANEL_NAV_HIDE_OPTIONS,
-  isPanelNavOptionChecked,
-  parsePanelNavHidden,
-  togglePanelNavOption,
-} from '@/lib/panel-nav-hidden';
+import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
+import PanelNavManageModal from '@/components/panel/PanelNavManageModal';
 import {
   handleLimitNumberInputChange,
   limitNumberInputDisplay,
@@ -1387,48 +1383,17 @@ function MerchantsPage() {
         </div>
       ) : null}
 
-      {panelNavFor ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold">{t('panelNavManage')}</h2>
-            <p className="text-sm text-stone-600">{panelNavFor.name}</p>
-            <p className="text-xs text-stone-500">{t('panelNavManageHint')}</p>
-            <div className="space-y-2">
-              {PANEL_NAV_HIDE_OPTIONS.map((opt) => {
-                const checked = isPanelNavOptionChecked(opt.key, panelNavFor.hidden);
-                return (
-                  <label key={opt.key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        setPanelNavFor({
-                          ...panelNavFor,
-                          hidden: togglePanelNavOption(panelNavFor.hidden, opt.key, e.target.checked),
-                        });
-                      }}
-                    />
-                    {t(opt.labelKey as any)}
-                  </label>
-                );
-              })}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary text-sm" onClick={() => setPanelNavFor(null)}>
-                {t('cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn-primary text-sm"
-                disabled={savingPanelNav}
-                onClick={() => void savePanelNav()}
-              >
-                {savingPanelNav ? '…' : t('save')}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <PanelNavManageModal
+        open={!!panelNavFor}
+        merchantName={panelNavFor?.name || ''}
+        hidden={panelNavFor?.hidden || []}
+        saving={savingPanelNav}
+        onClose={() => setPanelNavFor(null)}
+        onChange={(hidden) => {
+          if (panelNavFor) setPanelNavFor({ ...panelNavFor, hidden });
+        }}
+        onSave={() => void savePanelNav()}
+      />
 
       {shopBillFor ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">

@@ -6,7 +6,7 @@ const PANEL_PREFIXES = ['app.', 'admin.', 'api.', 'pay.', 'status.'];
 const PLATFORM_SUBDOMAINS = new Set(['app', 'admin', 'api', 'order', 'shop', 'pay', 'status', 'www']);
 
 const SHOP_CUSTOMER_SEGMENTS =
-  'menu|checkout|order|account|gift-cards|gift|reservations|table|register|forgot-password|pages';
+  'menu|checkout|order|account|gift-cards|gift|reservations|table|register|forgot-password|pages|catering';
 
 /** Panel routes reuse shop segment names (e.g. /merchant/sales/reservations). */
 export function isMerchantPanelPath(pathname: string): boolean {

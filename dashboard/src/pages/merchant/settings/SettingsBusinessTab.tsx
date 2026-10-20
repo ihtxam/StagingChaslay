@@ -22,6 +22,8 @@ import {
   SettingsReportCard,
   SettingsToggleRow,
 } from '@/components/settings/SettingsReportUi';
+import PanelNavVisibilityCard from '@/components/panel/PanelNavVisibilityCard';
+import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
 
 type LocalizedMap = { en?: string | null; fr?: string | null; de?: string | null };
 
@@ -108,6 +110,9 @@ interface SettingsBusinessTabProps<T extends BusinessSettingsSlice> {
   saving: boolean;
   vacationImageInputRef: RefObject<HTMLInputElement | null>;
   highlightId?: string | null;
+  showPanelNavEditor?: boolean;
+  panelNavHidden?: string[];
+  onPanelNavSaved?: (hidden: string[]) => void;
 }
 
 function formatLocation(city?: string | null, country?: string | null) {
@@ -132,6 +137,9 @@ export default function SettingsBusinessTab<T extends BusinessSettingsSlice>({
   saving,
   vacationImageInputRef,
   highlightId = null,
+  showPanelNavEditor = false,
+  panelNavHidden = [],
+  onPanelNavSaved,
 }: SettingsBusinessTabProps<T>) {
   const { t } = useI18n();
   const vacationPeriodCount = settings.vacationSettings?.periods?.length ?? 0;
@@ -564,6 +572,13 @@ export default function SettingsBusinessTab<T extends BusinessSettingsSlice>({
           )}
         </div>
       </SettingsReportCard>
+
+      {showPanelNavEditor ? (
+        <PanelNavVisibilityCard
+          hidden={parsePanelNavHidden(panelNavHidden)}
+          onSaved={(hidden) => onPanelNavSaved?.(hidden)}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]/30 px-4 py-3">
         <p className="text-xs text-[var(--text-muted)]">
