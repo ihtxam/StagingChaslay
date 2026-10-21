@@ -3,7 +3,8 @@ package com.chaslay.pos.payment
 import android.app.Activity
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.domain.model.PaymentMethod
-import com.chaslay.pos.payment.taptopay.AdyenTapToPayService
+import com.chaslay.pos.payment.taptopay.TapToPayEngine
+import com.chaslay.pos.payment.taptopay.TapToPayReadiness
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,16 +37,10 @@ class PaymentOrchestrator @Inject constructor(
         activity: Activity?,
         amount: Double,
         currencyCode: String,
-        settings: BusinessSettingsEntity
+        settings: BusinessSettingsEntity,
+        reference: String? = null
     ): PaymentResult {
         return when {
-            settings.tapToPayEnabled -> {
-                if (activity == null) {
-                    PaymentResult.Failure("Tap to Pay requires an active checkout screen.")
-                } else {
-                    tapToPayService.processPayment(activity, amount, currencyCode)
-                }
-            }
             settings.cardEnabled -> {
                 PaymentResult.Success(
                     reference = "CARD-${System.currentTimeMillis()}",
@@ -55,22 +50,49 @@ class PaymentOrchestrator @Inject constructor(
             else -> PaymentResult.Failure("No card payment method configured. Enable card payments in Settings.")
         }
     }
+
+    /**
+     * Runs a contactless sale on this phone's NFC reader.
+     *
+     * Separate from [processCardPayment] because CARD and TAP_TO_PAY are distinct
+     * tenders at the till: the cashier picks one deliberately, and the sale is
+     * recorded under the method they chose.
+     */
+    suspend fun processTapToPayPayment(
+        activity: Activity?,
+        amount: Double,
+        currencyCode: String,
+        reference: String? = null
+    ): PaymentResult {
+        if (activity == null) {
+            return PaymentResult.Failure("Tap to Pay requires an active checkout screen.")
+        }
+        return tapToPayService.processPayment(activity, amount, currencyCode, reference)
+    }
 }
 
 @Singleton
 class TapToPayService @Inject constructor(
-    private val adyenTapToPayService: AdyenTapToPayService
+    private val tapToPayEngine: TapToPayEngine
 ) {
     /** True when the device has NFC. Real attestation is enforced by the SDK at run time. */
-    fun isSupported(): Boolean = adyenTapToPayService.isSupported()
+    fun isSupported(): Boolean = tapToPayEngine.isSupported()
+
+    /** Why this device cannot take a tap payment, or READY. */
+    suspend fun readiness(): TapToPayReadiness = tapToPayEngine.readiness()
 
     /**
      * Runs an Adyen Tap to Pay on Android (SoftPOS) sale — the phone's NFC reader
      * acts as the card terminal. Requires a Play-Integrity-compliant device and
      * Adyen SoftPOS enablement; returns [PaymentResult.Failure] otherwise.
      */
-    suspend fun processPayment(activity: Activity, amount: Double, currencyCode: String): PaymentResult =
-        adyenTapToPayService.processPayment(activity, amount, currencyCode)
+    suspend fun processPayment(
+        activity: Activity,
+        amount: Double,
+        currencyCode: String,
+        reference: String? = null
+    ): PaymentResult =
+        tapToPayEngine.processPayment(activity, amount, currencyCode, reference)
 }
 
 @Singleton

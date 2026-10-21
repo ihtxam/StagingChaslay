@@ -19,12 +19,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import com.adyen.ipp.api.InPersonPayments
-import com.adyen.ipp.api.payment.PaymentCallback
+import androidx.lifecycle.repeatOnLifecycle
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.LicenseRepository
-import com.chaslay.pos.payment.taptopay.TapToPayCallbackRouter
+import com.chaslay.pos.payment.taptopay.TapToPayEngine
 import com.chaslay.pos.domain.model.LicenseGateState
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.sync.FloorSyncCoordinator
@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var licenseRepository: LicenseRepository
     @Inject lateinit var floorSyncCoordinator: FloorSyncCoordinator
     @Inject lateinit var posSessionRepository: PosSessionRepository
+    @Inject lateinit var tapToPayEngine: TapToPayEngine
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -59,23 +60,17 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
 
-        // Register the Adyen Tap to Pay result listener before this activity reaches
-        // RESUMED. The returned launcher is handed to InPersonPayments.performTransaction
-        // for each sale. Wrapped in try/catch: SDK init lives in ChaslayPosApp, and if
-        // that failed we must not crash the activity on launch (Tap to Pay just stays off).
-        try {
-            TapToPayCallbackRouter.launcher = InPersonPayments.registerForPaymentResult(
-                this,
-                PaymentCallback { result ->
-                    @Suppress("UNCHECKED_CAST")
-                    (result as Result<com.adyen.ipp.api.payment.PaymentResult>).fold(
-                        onSuccess = { paymentResult -> TapToPayCallbackRouter.onSuccess(paymentResult) },
-                        onFailure = { error -> TapToPayCallbackRouter.onFailure(error) },
-                    )
-                },
-            )
-        } catch (t: Throwable) {
-            Log.e("MainActivity", "Tap to Pay launcher registration failed", t)
+        // Register the Tap to Pay result listener before this activity reaches
+        // RESUMED, because sale results are delivered through it. Inert in builds
+        // without the Adyen SDK.
+        tapToPayEngine.registerForPaymentResult(this)
+
+        // The Adyen SDK can only bind its service from the foreground, so finish
+        // initialization once this activity is RESUMED rather than at app startup.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                tapToPayEngine.initializeWhileVisible(this@MainActivity)
+            }
         }
 
         lifecycleScope.launch {

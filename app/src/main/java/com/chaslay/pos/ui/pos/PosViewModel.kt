@@ -62,6 +62,7 @@ import com.chaslay.pos.payment.CashPaymentService
 import com.chaslay.pos.payment.PaymentOrchestrator
 import com.chaslay.pos.payment.PaymentResult
 import com.chaslay.pos.payment.TapToPayService
+import com.chaslay.pos.payment.taptopay.TapToPayReadiness
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.sync.FloorSyncRepository
 import com.chaslay.pos.sync.FloorSyncEvents
@@ -187,6 +188,8 @@ data class PosUiState(
     val terminalPaymentPhase: TerminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
     val terminalPaymentAmount: Double = 0.0,
     val terminalPaymentMessage: String? = null,
+    val tapToPayReady: Boolean = true,
+    val tapToPayStatus: String? = null,
     val showGuestCountDialog: Boolean = false,
     val guestCountTableName: String = "",
     val guestCountSeatCapacity: Int = 4,
@@ -416,6 +419,8 @@ class PosViewModel @Inject constructor(
             showWeighedProductDialog = extras.showWeighedProductDialog,
             scaleReading = extras.scaleReading,
             showTerminalPaymentModal = extras.showTerminalPaymentModal,
+            tapToPayReady = extras.tapToPayReady,
+            tapToPayStatus = extras.tapToPayStatus,
             terminalPaymentPhase = extras.terminalPaymentPhase,
             terminalPaymentAmount = extras.terminalPaymentAmount,
             terminalPaymentMessage = extras.terminalPaymentMessage,
@@ -2421,6 +2426,7 @@ class PosViewModel @Inject constructor(
     fun openCheckout(method: PaymentMethod = PaymentMethod.CASH, fromSplit: Boolean = false) {
         val checkoutState = buildExpressCheckoutState(method) ?: return
         cartManager.ensureWalkInTicket()
+        refreshTapToPayReadiness()
         updateExtras {
             it.copy(
                 showCheckoutScreen = true,
@@ -2433,6 +2439,29 @@ class PosViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Refreshes why Tap to Pay is or is not usable, for the checkout tender button.
+     *
+     * Read when checkout opens rather than per sale: attestation state changes only
+     * in Settings, and the cashier needs the reason before choosing the tender, not
+     * after the customer has already presented a card.
+     */
+    private fun refreshTapToPayReadiness() {
+        if (!cachedSettings.tapToPayEnabled) return
+        viewModelScope.launch {
+            val readiness = runCatching { tapToPayService.readiness() }.getOrNull()
+            val message = when (readiness) {
+                null, TapToPayReadiness.READY -> null
+                TapToPayReadiness.NO_SDK -> appContext.getString(R.string.tap_to_pay_status_no_sdk)
+                TapToPayReadiness.NO_NFC -> appContext.getString(R.string.tap_to_pay_status_no_nfc)
+                TapToPayReadiness.OS_TOO_OLD -> appContext.getString(R.string.tap_to_pay_status_os_too_old)
+                TapToPayReadiness.NOT_SIGNED_IN -> appContext.getString(R.string.tap_to_pay_status_not_signed_in)
+                TapToPayReadiness.NOT_REGISTERED -> appContext.getString(R.string.tap_to_pay_status_not_registered)
+            }
+            updateExtras { it.copy(tapToPayReady = message == null, tapToPayStatus = message) }
+        }
+    }
+
     private fun resolveCheckoutMethod(
         preferred: PaymentMethod?,
         settings: BusinessSettingsEntity = cachedSettings
@@ -2442,6 +2471,7 @@ class PosViewModel @Inject constructor(
         val enabled = buildList {
             if (settings.cashEnabled) add(PaymentMethod.CASH)
             if (settings.cardEnabled) add(PaymentMethod.CARD)
+            if (settings.tapToPayEnabled) add(PaymentMethod.TAP_TO_PAY)
             if (settings.isAdyenTerminalCheckoutEnabled()) add(PaymentMethod.ADYEN_TERMINAL)
         }
         val fallback = preferred
@@ -4389,7 +4419,14 @@ class PosViewModel @Inject constructor(
 
             val saleCartForPayment = if (fullCart.splitCount > 1 && !fullCart.splitByItems) fullCart else payable
             var pendingTransactionId: String? = null
-            if (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) {
+            // Both Adyen paths publish the order before taking payment. Adyen reports the
+            // result asynchronously on the AUTHORISATION webhook, which reconciles by
+            // matching merchantReference against orders.client_id — so the order has to
+            // exist first, or the backend drops the payment with nothing to attach it to.
+            val needsPendingReceipt =
+                (method == PaymentMethod.ADYEN_TERMINAL && settings.adyenTerminalEnabled) ||
+                    (method == PaymentMethod.TAP_TO_PAY && settings.tapToPayEnabled)
+            if (needsPendingReceipt) {
                 pendingTransactionId = UUID.randomUUID().toString()
                 if (isDeviceOnline()) {
                     runCatching {
@@ -4489,21 +4526,19 @@ class PosViewModel @Inject constructor(
                         )
                     }
                 }
-                method == PaymentMethod.CARD -> {
-                    val cardCharge = resolveCardCharge(checkout, roundedTotal)
-                    updateExtras {
-                        it.copy(
-                            showTerminalPaymentModal = true,
-                            terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
-                            terminalPaymentAmount = cardCharge,
-                            terminalPaymentMessage = if (settings.tapToPayEnabled) {
-                                appContext.getString(R.string.tap_to_pay)
-                            } else {
-                                null
-                            }
-                        )
-                    }
-                    if (settings.tapToPayEnabled) {
+                method == PaymentMethod.TAP_TO_PAY -> {
+                    if (!settings.tapToPayEnabled) {
+                        PaymentResult.Failure("Enable Tap to Pay in Settings")
+                    } else {
+                        val cardCharge = resolveCardCharge(checkout, roundedTotal)
+                        updateExtras {
+                            it.copy(
+                                showTerminalPaymentModal = true,
+                                terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+                                terminalPaymentAmount = cardCharge,
+                                terminalPaymentMessage = appContext.getString(R.string.tap_to_pay)
+                            )
+                        }
                         when {
                             syncPreferences.getDashboardToken().isNullOrBlank() -> {
                                 PaymentResult.Failure(
@@ -4516,22 +4551,32 @@ class PosViewModel @Inject constructor(
                                 )
                             }
                             else -> {
-                                paymentOrchestrator.processCardPayment(
+                                paymentOrchestrator.processTapToPayPayment(
                                     activity,
                                     cardCharge,
                                     settings.defaultCurrency,
-                                    settings
+                                    reference = pendingTransactionId
                                 )
                             }
                         }
-                    } else {
-                        paymentOrchestrator.processCardPayment(
-                            activity,
-                            cardCharge,
-                            settings.defaultCurrency,
-                            settings
+                    }
+                }
+                method == PaymentMethod.CARD -> {
+                    val cardCharge = resolveCardCharge(checkout, roundedTotal)
+                    updateExtras {
+                        it.copy(
+                            showTerminalPaymentModal = true,
+                            terminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
+                            terminalPaymentAmount = cardCharge,
+                            terminalPaymentMessage = null
                         )
                     }
+                    paymentOrchestrator.processCardPayment(
+                        activity,
+                        cardCharge,
+                        settings.defaultCurrency,
+                        settings
+                    )
                 }
                 else -> PaymentResult.Failure("Unsupported payment method")
             }
@@ -4544,6 +4589,7 @@ class PosViewModel @Inject constructor(
                         redeemedGiftCardAmount > 0 && roundedTotal <= 0.001 -> PaymentMethod.GIFT_CARD
                         method == PaymentMethod.CASH -> PaymentMethod.CASH
                         method == PaymentMethod.ADYEN_TERMINAL -> PaymentMethod.ADYEN_TERMINAL
+                        method == PaymentMethod.TAP_TO_PAY -> PaymentMethod.TAP_TO_PAY
                         else -> paymentResult.method
                     }
                     val cashTender = checkout.tenderAmount.takeIf { it > 0.001 }
@@ -4689,12 +4735,18 @@ class PosViewModel @Inject constructor(
                     }
                     val splitIndex = if (isEqualSplit) equalSplitPaid else null
                     val splitTotal = if (isEqualSplit) fullCart.splitCount else null
-                    val adyenCustomerReceipt = if (resolvedMethod == PaymentMethod.ADYEN_TERMINAL) {
+                    // Tap to Pay returns the same Terminal API receipt blocks as the
+                    // networked terminal, so both carry the card-scheme detail a card
+                    // receipt needs. Printing and reprints read these from the stored
+                    // transaction and are method-agnostic; this was the only gate.
+                    val carriesAdyenReceipt = resolvedMethod == PaymentMethod.ADYEN_TERMINAL ||
+                        resolvedMethod == PaymentMethod.TAP_TO_PAY
+                    val adyenCustomerReceipt = if (carriesAdyenReceipt) {
                         paymentResult.adyenCustomerReceipt
                     } else {
                         null
                     }
-                    val adyenCashierReceipt = if (resolvedMethod == PaymentMethod.ADYEN_TERMINAL) {
+                    val adyenCashierReceipt = if (carriesAdyenReceipt) {
                         paymentResult.adyenCashierReceipt
                     } else {
                         null
@@ -5580,6 +5632,8 @@ class PosViewModel @Inject constructor(
         val showWeighedProductDialog: Boolean = false,
         val scaleReading: com.chaslay.pos.scale.AclasScaleReading? = null,
         val showTerminalPaymentModal: Boolean = false,
+        val tapToPayReady: Boolean = true,
+        val tapToPayStatus: String? = null,
         val terminalPaymentPhase: TerminalPaymentPhase = TerminalPaymentPhase.PROCESSING,
         val terminalPaymentAmount: Double = 0.0,
         val terminalPaymentMessage: String? = null,

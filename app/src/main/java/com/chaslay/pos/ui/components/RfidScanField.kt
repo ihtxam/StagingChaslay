@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
@@ -29,6 +30,7 @@ private const val SCAN_GAP_MS = 100L
  * Captures HID keyboard-wedge RFID readers (rapid key burst + Enter), matching WebPOS [RfidScanInput].
  * Rapid bursts are buffered locally; [onValueChange] is not called until Enter or manual typing.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun RfidScanField(
     value: String,

@@ -53,9 +53,12 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
-            <meta-data
-                android:name="com.adyen.ipp.api.InPersonPaymentsInitializer"
-                android:value="androidx.startup" />
+            <!--
+                The Adyen InPersonPaymentsInitializer is deliberately NOT listed here.
+                It is absent from builds without the SDK, and InitializationProvider
+                resolves every listed initializer at startup. TapToPayEngine.initialize()
+                runs it programmatically instead.
+            -->
         </provider>
 
         <activity
@@ -83,7 +86,11 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.RebornPOS" />
 
-        <!-- Adyen Tap to Pay: SDK auto-detects this to obtain SoftPOS auth sessions. -->
+        <!--
+            Adyen Tap to Pay: SDK auto-detects this to obtain SoftPOS auth sessions.
+            The class only exists in builds that include the SDK; a declared service
+            whose class is absent stays inert because nothing binds to it.
+        -->
         <service
             android:name=".payment.taptopay.ChaslayMerchantAuthenticationService"
             android:exported="false" />

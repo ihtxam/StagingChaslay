@@ -30,6 +30,7 @@ class SyncPreferences @Inject constructor(
     private val dashboardUserJsonKey = stringPreferencesKey("dashboard_user_json")
     private val dashboardUrlKey = stringPreferencesKey("dashboard_url")
     private val reservedTableIdsKey = stringPreferencesKey("reserved_table_ids")
+    private val tapToPayRegisteredKey = booleanPreferencesKey("tap_to_pay_registered")
 
     suspend fun getReservedTableIds(): Set<String> =
         context.syncDataStore.data.map { prefs ->
@@ -132,6 +133,17 @@ class SyncPreferences @Inject constructor(
         }
     }
 
+    /**
+     * True once Adyen device attestation has succeeded on this device. Attestation is
+     * slow on first run, so it is done from Settings rather than inside a sale.
+     */
+    suspend fun isTapToPayRegistered(): Boolean =
+        context.syncDataStore.data.map { it[tapToPayRegisteredKey] ?: false }.first()
+
+    suspend fun setTapToPayRegistered(registered: Boolean) {
+        context.syncDataStore.edit { prefs -> prefs[tapToPayRegisteredKey] = registered }
+    }
+
     suspend fun getDashboardToken(): String? =
         context.syncDataStore.data.map { it[dashboardTokenKey] }.first()?.takeIf { it.isNotBlank() }
 
@@ -142,6 +154,7 @@ class SyncPreferences @Inject constructor(
         }
         if (token.isNullOrBlank()) {
             com.chaslay.pos.payment.taptopay.TapToPayConfig.clear()
+            context.syncDataStore.edit { prefs -> prefs[tapToPayRegisteredKey] = false }
         }
     }
 
