@@ -40,6 +40,11 @@ assert.deepEqual(
 const normLines = normalizePosPrintSettings({
   receiptHeader: "pola pola\nrue des saars 115\n2000 Neuchâtel",
 });
+const normLiteral = normalizePosPrintSettings({
+  receiptHeader: "Shop\\nRue 1\\n2000 City",
+});
+assert.deepEqual(normLiteral.receiptHeaderLines, ["Shop", "Rue 1", "2000 City"]);
+
 assert.deepEqual(normLines.receiptHeaderLines, [
   "pola pola",
   "rue des saars 115",

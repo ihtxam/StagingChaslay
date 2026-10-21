@@ -274,8 +274,12 @@ export function parseReceiptHeaderLines(
   }
   const text = String(fallbackText ?? "").replace(/\r\n/g, "\n");
   if (!text.trim()) return [];
-  return text
-    .split("\n")
+  const segments = text.includes("\n")
+    ? text.split("\n")
+    : /\\n/.test(text)
+      ? text.split(/\\n/)
+      : [text];
+  return segments
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 24)

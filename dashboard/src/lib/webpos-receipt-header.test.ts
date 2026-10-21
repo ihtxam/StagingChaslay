@@ -5,6 +5,7 @@ import {
   healLegacyMashedReceiptHeaderFields,
   receiptHeaderLinesFromPrintSettings,
   receiptHeaderTxFromPrintSettings,
+  splitReceiptHeaderTextToLines,
   splitMerchantAddressLines,
   splitReceiptHeaderDetailLine,
   splitStreetAndLocality,
@@ -166,6 +167,17 @@ const polaFromArray = getReceiptHeaderLines(
   { padLines: false }
 );
 assert.deepEqual(polaFromArray, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
+
+assert.deepEqual(
+  splitReceiptHeaderTextToLines('Line A\\nLine B\\nLine C'),
+  ['Line A', 'Line B', 'Line C']
+);
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeader: 'Shop\\nStreet 1\\nCity',
+  }),
+  ['Shop', 'Street 1', 'City']
+);
 
 const polaLiteral = getReceiptHeaderLines(
   {

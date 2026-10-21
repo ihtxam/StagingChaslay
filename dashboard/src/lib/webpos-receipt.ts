@@ -1192,6 +1192,23 @@ export function healLegacyMashedReceiptHeaderFields(
   return { headerTitle: titleTrim, header: bodyTrim };
 }
 
+/** One settings textarea row → one printed line (real newlines or legacy literal `\\n`). */
+export function splitReceiptHeaderTextToLines(text: string): string[] {
+  const raw = String(text ?? '').replace(/\r\n/g, '\n');
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  const segments = raw.includes('\n')
+    ? raw.split('\n')
+    : /\\n/.test(raw)
+      ? raw.split(/\\n/)
+      : [raw];
+  return segments
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 24)
+    .map((line) => line.slice(0, 200));
+}
+
 /** Split settings into explicit receipt header rows (preserves line breaks). */
 export function receiptHeaderLinesFromPrintSettings(
   printSettings?: Pick<
@@ -1213,12 +1230,23 @@ export function receiptHeaderLinesFromPrintSettings(
   );
   const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
   if (!combined.trim()) return [];
-  return combined
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 24)
-    .map((line) => line.slice(0, 200));
+  return splitReceiptHeaderTextToLines(combined);
+}
+
+/** Heal legacy blobs and keep `receiptHeader` + `receiptHeaderLines` in sync (Settings / WebPOS load). */
+export function normalizeClientReceiptHeaderPrintSettings<
+  T extends Pick<
+    PosPrintSettingsClient,
+    'receiptHeaderTitle' | 'receiptHeader' | 'receiptHeaderLines'
+  >,
+>(ps: T): T {
+  const tx = receiptHeaderTxFromPrintSettings(ps);
+  return {
+    ...ps,
+    receiptHeaderTitle: '',
+    receiptHeader: tx.headerLines.length ? tx.headerLines.join('\n') : tx.header,
+    receiptHeaderLines: tx.headerLines,
+  };
 }
 
 export function receiptHeaderTxFromPrintSettings(

@@ -54,7 +54,9 @@ import {
   buildPrinterTestEscPos,
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
+  normalizeClientReceiptHeaderPrintSettings,
   receiptHeaderCombinedText,
+  splitReceiptHeaderTextToLines,
 } from '@/lib/webpos-receipt';
 import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
 import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
@@ -1146,15 +1148,7 @@ export default function Settings() {
           posPrintSettings: s.posPrintSettings
             ? (() => {
                 const ps = s.posPrintSettings as NonNullable<SettingsData['posPrintSettings']>;
-                const combined = receiptHeaderCombinedText(
-                  ps.receiptHeaderTitle,
-                  ps.receiptHeader
-                );
-                return {
-                  ...ps,
-                  receiptHeaderTitle: '',
-                  receiptHeader: combined,
-                };
+                return normalizeClientReceiptHeaderPrintSettings(ps);
               })()
             : s.posPrintSettings,
         });
@@ -1650,12 +1644,7 @@ export default function Settings() {
         ps.receiptHeaderTitle,
         ps.receiptHeader
       ).slice(0, 2000);
-      const receiptHeaderLines = receiptHeader
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .slice(0, 24)
-        .map((line) => line.slice(0, 200));
+      const receiptHeaderLines = splitReceiptHeaderTextToLines(receiptHeader);
       return {
         receiptHeaderTitle: '',
         receiptHeader,
