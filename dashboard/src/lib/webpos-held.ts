@@ -133,6 +133,18 @@ export function localHeldRowsFromSession(): ReturnType<typeof draftToHeldRow>[] 
   return rows;
 }
 
+/** Drop browser-persisted cart drafts for a held/kitchen ticket (after cancel or server close). */
+export function clearLocalHeldDraftForRow(row: Pick<HeldOrderRow, 'id' | 'cartJson'>): void {
+  const meta = parseHeldCartJson(row.cartJson);
+  const id = String(row.id || '');
+  removeLocalHeldDraft({
+    localId: id.startsWith('local:') ? id : null,
+    ticketDisplay: meta.ticketDisplay,
+    tableId: meta.tableId,
+    tabNumber: meta.tabNumber,
+  });
+}
+
 export function removeLocalHeldDraft(ident: {
   ticketDisplay?: string | null;
   tableId?: string | null;
