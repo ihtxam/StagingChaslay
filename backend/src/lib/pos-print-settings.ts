@@ -216,6 +216,47 @@ export function parseReceiptChfToEurRate(value: unknown): number | null {
   return Math.round(n * 10000) / 10000;
 }
 
+function sanitizeReceiptHeaderField(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim();
+}
+
+/** Drop legacy one-line mashed demo headers so cleared settings print the shop name only. */
+export function healLegacyMashedReceiptHeader(
+  title: string,
+  body: string
+): { receiptHeaderTitle: string; receiptHeader: string } {
+  const titleTrim = sanitizeReceiptHeaderField(title);
+  const bodyTrim = sanitizeReceiptHeaderField(body);
+  const combined = [titleTrim, bodyTrim].filter(Boolean).join("\n").trim();
+  if (!combined) {
+    return { receiptHeaderTitle: "", receiptHeader: "" };
+  }
+  if (!combined.includes("\n") && combined.length > 36) {
+    const one = combined.replace(/\s+/g, " ");
+    if (
+      /POLACAFE/i.test(one) &&
+      /Bahnhofstrasse/i.test(one) &&
+      /(Tel|Tél)\s*:/i.test(one)
+    ) {
+      return { receiptHeaderTitle: "", receiptHeader: "" };
+    }
+    if (/pola\s+pola/i.test(one) && /rue\s+des\s+saars/i.test(one)) {
+      return { receiptHeaderTitle: "", receiptHeader: "" };
+    }
+  }
+  if (
+    /pola\s+pola/i.test(titleTrim) &&
+    bodyTrim &&
+    !bodyTrim.includes("\n") &&
+    /rue\s+des\s+saars/i.test(bodyTrim)
+  ) {
+    return { receiptHeaderTitle: "", receiptHeader: "" };
+  }
+  return { receiptHeaderTitle: titleTrim, receiptHeader: bodyTrim };
+}
+
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const paper = Number(src.paperWidthMm) === 58 ? 58 : 80;
@@ -323,9 +364,14 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     kitchenBoldText = false;
   }
 
+  const healedHeader = healLegacyMashedReceiptHeader(
+    String(src.receiptHeaderTitle ?? ""),
+    String(src.receiptHeader ?? "")
+  );
+
   return {
-    receiptHeaderTitle: String(src.receiptHeaderTitle ?? "").slice(0, 500),
-    receiptHeader: String(src.receiptHeader ?? "").slice(0, 2000),
+    receiptHeaderTitle: healedHeader.receiptHeaderTitle.slice(0, 500),
+    receiptHeader: healedHeader.receiptHeader.slice(0, 2000),
     receiptFooter: String(src.receiptFooter ?? DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
     receiptHeaderAlign,
     receiptHeaderBold: src.receiptHeaderBold === true,

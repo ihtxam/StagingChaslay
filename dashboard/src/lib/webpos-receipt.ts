@@ -1127,6 +1127,14 @@ function appendMerchantHeaderContactLines(
   }
 }
 
+/** True when merchant configured a non-empty receipt header (ignores whitespace). */
+export function isReceiptHeaderConfigured(
+  headerTitle?: string | null,
+  header?: string | null
+): boolean {
+  return !!receiptHeaderCombinedText(headerTitle, header).trim();
+}
+
 /** Merge store-name + details fields into one multiline receipt header (settings / legacy DB). */
 export function receiptHeaderCombinedText(
   headerTitle?: string | null,
@@ -1145,15 +1153,51 @@ export function receiptHeaderCombinedText(
   return body.replace(/^\n+|\n+$/g, '');
 }
 
+/** Drop legacy one-line mashed demo headers (matches backend pos-print-settings heal). */
+export function healLegacyMashedReceiptHeaderFields(
+  headerTitle?: string | null,
+  header?: string | null
+): { headerTitle: string; header: string } {
+  const titleTrim = String(headerTitle ?? '').replace(/\r\n/g, '\n').trim();
+  const bodyTrim = String(header ?? '').replace(/\r\n/g, '\n').trim();
+  const combined = [titleTrim, bodyTrim].filter(Boolean).join('\n').trim();
+  if (!combined) {
+    return { headerTitle: '', header: '' };
+  }
+  if (!combined.includes('\n') && combined.length > 36) {
+    const one = combined.replace(/\s+/g, ' ');
+    if (
+      /POLACAFE/i.test(one) &&
+      /Bahnhofstrasse/i.test(one) &&
+      /(Tel|Tél)\s*:/i.test(one)
+    ) {
+      return { headerTitle: '', header: '' };
+    }
+    if (/pola\s+pola/i.test(one) && /rue\s+des\s+saars/i.test(one)) {
+      return { headerTitle: '', header: '' };
+    }
+  }
+  if (
+    /pola\s+pola/i.test(titleTrim) &&
+    bodyTrim &&
+    !bodyTrim.includes('\n') &&
+    /rue\s+des\s+saars/i.test(bodyTrim)
+  ) {
+    return { headerTitle: '', header: '' };
+  }
+  return { headerTitle: titleTrim, header: bodyTrim };
+}
+
 export function receiptHeaderTxFromPrintSettings(
   printSettings?: Pick<PosPrintSettingsClient, 'receiptHeaderTitle' | 'receiptHeader'> | null
 ): { headerTitle: string; header: string } {
+  const healed = healLegacyMashedReceiptHeaderFields(
+    printSettings?.receiptHeaderTitle,
+    printSettings?.receiptHeader
+  );
   return {
     headerTitle: '',
-    header: receiptHeaderCombinedText(
-      printSettings?.receiptHeaderTitle,
-      printSettings?.receiptHeader
-    ),
+    header: receiptHeaderCombinedText(healed.headerTitle, healed.header),
   };
 }
 
@@ -1206,7 +1250,7 @@ export function getReceiptHeaderLines(
     }
   };
   const combinedHeader = receiptHeaderCombinedText(tx.headerTitle, tx.header);
-  const hasCustomReceiptHeader = !!combinedHeader.trim();
+  const hasCustomReceiptHeader = isReceiptHeaderConfigured(tx.headerTitle, tx.header);
   const lines: string[] = [];
   if (hasCustomReceiptHeader) {
     const rawLines = combinedHeader.split(/\r?\n/);
@@ -1302,8 +1346,10 @@ export function getReceiptHeaderLines(
     }
     return lines;
   }
-  push(lines, (tx.businessName || APP_NAME).toUpperCase(), titleWidth);
-  appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
+  const storeName = String(tx.businessName || APP_NAME).trim();
+  if (storeName) {
+    push(lines, storeName, titleWidth);
+  }
   return lines;
 }
 
