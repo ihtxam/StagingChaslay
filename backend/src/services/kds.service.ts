@@ -607,7 +607,7 @@ export class KdsService {
     const pending = await db.query.kdsTickets.findMany({
       where: and(
         eq(schema.kdsTickets.merchantId, merchantId),
-        eq(schema.kdsTickets.status, "pending")
+        inArray(schema.kdsTickets.status, ["pending", "in_progress", "preparing"])
       ),
     });
     const matches = pending.filter((t) => {

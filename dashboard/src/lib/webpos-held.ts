@@ -1,5 +1,4 @@
 import { loadPersistedWebPosCarts, savePersistedWebPosCarts } from '@/lib/webpos-cart-persist';
-import api from '@/lib/api';
 import type { CartLine, OpenCartDraft, PosChannel } from '@/components/webpos/types';
 
 export { ticketQueryMatches, ticketSearchTokens } from '@/lib/webpos-ticket-search';
@@ -215,6 +214,97 @@ function normHeldTicket(value?: string | null): string {
   return raw ? `#${raw}` : '';
 }
 
+const CANCELLED_TICKETS_SESSION_KEY = 'reborn_cancelled_kitchen_tickets_v1';
+
+export function ticketFromHeldLabel(label?: string | null): string {
+  const m = String(label || '').match(/#(\d{1,6})\b/);
+  return m ? `#${m[1]}` : '';
+}
+
+export function heldRowTicketKey(row: Pick<HeldOrderRow, 'label' | 'cartJson'>): string {
+  const meta = parseHeldCartJson(row.cartJson);
+  return normHeldTicket(
+    meta.ticketDisplay || meta.kitchenTicketKey || ticketFromHeldLabel(row.label)
+  );
+}
+
+/** Remember a kitchen ticket cancelled on this device (hides stale Actives until refresh). */
+export function rememberCancelledKitchenTicket(ticketDisplay?: string | null): void {
+  const key = normHeldTicket(ticketDisplay || '');
+  if (!key || typeof sessionStorage === 'undefined') return;
+  try {
+    const raw = sessionStorage.getItem(CANCELLED_TICKETS_SESSION_KEY);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    const bare = key.replace(/^#/, '');
+    const next = new Set(list.map((t) => normHeldTicket(t)));
+    next.add(key);
+    next.add(bare);
+    sessionStorage.setItem(CANCELLED_TICKETS_SESSION_KEY, JSON.stringify([...next]));
+  } catch {
+    /* ignore */
+  }
+}
+
+function isRememberedCancelledKitchenTicket(ticketKey: string): boolean {
+  if (!ticketKey || typeof sessionStorage === 'undefined') return false;
+  try {
+    const raw = sessionStorage.getItem(CANCELLED_TICKETS_SESSION_KEY);
+    if (!raw) return false;
+    const list: string[] = JSON.parse(raw);
+    const bare = ticketKey.replace(/^#/, '');
+    return list.some((t) => {
+      const n = normHeldTicket(t);
+      return n === ticketKey || n.replace(/^#/, '') === bare;
+    });
+  } catch {
+    return false;
+  }
+}
+
+function cancelledOrderMatchesTicket(
+  o: {
+    status?: string | null;
+    paymentStatus?: string | null;
+    notes?: string | null;
+    ticketDisplay?: string | null;
+  },
+  ticketKey: string
+): boolean {
+  const status = String(o.status || '').toLowerCase();
+  const pay = String(o.paymentStatus || '').toLowerCase();
+  if (status !== 'cancelled' && pay !== 'cancelled') return false;
+  const bare = ticketKey.replace(/^#/, '');
+  const notes = String(o.notes || '');
+  if (
+    notes.includes(`[ticket:${ticketKey}]`) ||
+    notes.includes(`[ticket:#${bare}]`) ||
+    notes.includes(`[ticket:${bare}]`)
+  ) {
+    return true;
+  }
+  const td = normHeldTicket(o.ticketDisplay);
+  return td === ticketKey || td.replace(/^#/, '') === bare;
+}
+
+/** Drop held rows that were cancelled (server CXL or this-session cancel). */
+export function filterActiveHeldRows<T extends HeldOrderRow>(
+  rows: T[],
+  orders: Array<{
+    status?: string | null;
+    paymentStatus?: string | null;
+    notes?: string | null;
+    ticketDisplay?: string | null;
+  }>
+): T[] {
+  return rows.filter((row) => {
+    const ticketKey = heldRowTicketKey(row);
+    if (!ticketKey) return true;
+    if (isRememberedCancelledKitchenTicket(ticketKey)) return false;
+    if (orders.some((o) => cancelledOrderMatchesTicket(o, ticketKey))) return false;
+    return true;
+  });
+}
+
 export function heldCartQuantity(cart: CartLine[]): number {
   return cart.reduce((s, l) => s + (Number(l.quantity) || 0), 0);
 }
@@ -317,6 +407,7 @@ export async function releaseHeldOrder(ident: HeldReleaseIdent): Promise<void> {
     ident.tabNumber?.trim();
   if (!hasIdent) return;
   try {
+    const { default: api } = await import('@/lib/api');
     await api.post('/merchant/pos/held/release', {
       heldId: ident.heldId || undefined,
       ticketDisplay: ident.ticketDisplay || undefined,

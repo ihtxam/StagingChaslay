@@ -32,6 +32,7 @@ import {
   OPEN_TICKET_STATUSES,
   type TicketCloseReason,
 } from "@/lib/pos-open-ticket";
+import { KdsService } from "@/services/kds.service";
 
 
 const COMPLETED_STATUSES = new Set(["completed", "paid", "partially_refunded"]);
@@ -240,6 +241,61 @@ function openHeldWhere(merchantId: string) {
     inArray(schema.heldOrders.status, [...OPEN_TICKET_STATUSES]),
     isNull(schema.heldOrders.closedAt)
   );
+}
+
+/** Drop open held rows whose kitchen ticket already has a cancelled POS sale (CXL-*). */
+async function dropHeldRowsCancelledOnServer(
+  merchantId: string,
+  rows: Array<(typeof schema.heldOrders)["$inferSelect"]>
+) {
+  const keys = [
+    ...new Set(
+      rows
+        .map((r) => normalizeHeldTicket(heldIdentity(r.cartJson).ticketDisplay || r.label))
+        .filter(Boolean)
+    ),
+  ];
+  if (!keys.length) return rows;
+  const noteFilters = keys.flatMap((key) => {
+    const bare = key.replace(/^#/, "");
+    return [
+      ilike(schema.orders.notes, `%[ticket:${key}]%`),
+      ilike(schema.orders.notes, `%[ticket:${bare}]%`),
+      ilike(schema.orders.notes, `%[ticket:#${bare}]%`),
+    ];
+  });
+  const cancelledSales = await getDb()
+    .select({ notes: schema.orders.notes })
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.merchantId, merchantId),
+        or(eq(schema.orders.status, "cancelled"), eq(schema.orders.paymentStatus, "cancelled")),
+        or(...noteFilters)
+      )
+    );
+  const cancelledKeys = new Set<string>();
+  for (const row of cancelledSales) {
+    const match = String(row.notes || "").match(/\[ticket:([^\]]+)\]/i);
+    const key = normalizeHeldTicket(match?.[1]);
+    if (key) cancelledKeys.add(key);
+  }
+  if (!cancelledKeys.size) return rows;
+  const kept: typeof rows = [];
+  for (const row of rows) {
+    const key = normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay || row.label);
+    if (key && cancelledKeys.has(key)) {
+      await closeHeldRow(merchantId, row.id, "cancelled");
+      console.info("[pos-held] closed held row — ticket already cancelled on server", {
+        merchantId,
+        id: row.id,
+        ticket: key,
+      });
+      continue;
+    }
+    kept.push(row);
+  }
+  return kept;
 }
 
 async function closeHeldRow(
@@ -1281,10 +1337,11 @@ export class PosOrdersService {
     const db = getDb();
     await this.restoreHeldFromOpenKitchen(merchantId);
     await this.closeStaleKitchenHeldTickets(merchantId);
-    const rows = await db.query.heldOrders.findMany({
+    let rows = await db.query.heldOrders.findMany({
       where: openHeldWhere(merchantId),
       orderBy: [desc(schema.heldOrders.updatedAt)],
     });
+    rows = await dropHeldRowsCancelledOnServer(merchantId, rows);
     console.info("[pos-held] list", {
       merchantId,
       count: rows.length,
@@ -1551,8 +1608,21 @@ export class PosOrdersService {
     if (!reasonText) throw new Error("Cancel reason is required");
 
     const { lines, channel, tableLabel, notes } = parseHeldCart(existing.cartJson);
+    const ident = heldIdentity(existing.cartJson);
     if (!lines.length) {
       await closeHeldRow(merchantId, id, "cancelled");
+      const ticketKey = normalizeHeldTicket(ident.ticketDisplay);
+      if (ticketKey) {
+        try {
+          await KdsService.dismissTicketsByKey(merchantId, ticketKey);
+        } catch (err) {
+          console.warn("[pos-held] kds dismiss after empty cancel failed", {
+            merchantId,
+            ticketKey,
+            err,
+          });
+        }
+      }
       return { ok: true, order: null, heldStatus: existing.status };
     }
 
@@ -1567,7 +1637,6 @@ export class PosOrdersService {
       .toUpperCase()}`.slice(0, 50);
     const clientId = `cancel-held-${existing.id}`.slice(0, 64);
     const now = new Date();
-    const ident = heldIdentity(existing.cartJson);
     const ticketTag = ident.ticketDisplay?.trim()
       ? `[ticket:${ident.ticketDisplay.trim()}]`
       : "";
@@ -1621,6 +1690,14 @@ export class PosOrdersService {
     }
 
     await closeHeldRow(merchantId, id, "cancelled");
+    const ticketKey = normalizeHeldTicket(ident.ticketDisplay);
+    if (ticketKey) {
+      try {
+        await KdsService.dismissTicketsByKey(merchantId, ticketKey);
+      } catch (err) {
+        console.warn("[pos-held] kds dismiss after cancel failed", { merchantId, ticketKey, err });
+      }
+    }
     return { ok: true, order, heldStatus: existing.status, cancelReason: reasonText };
     });
   }
