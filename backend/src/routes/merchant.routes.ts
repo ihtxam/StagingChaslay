@@ -54,15 +54,17 @@ function wantsPosLocationCatalog(req: Request): boolean {
   return raw === "1" || raw.toLowerCase() === "true";
 }
 
-/** POS catalog APIs: isolate by terminal when WebPOS sends X-Location-Id or posLocationCatalog=1. */
+/**
+ * Strict terminal menu isolation applies only to WebPOS (posLocationCatalog=1).
+ * HQ/Admin requests often send X-Location-Id for reports but must see the full master catalog.
+ */
 function usesPosLocationCatalog(req: Request): boolean {
-  if (wantsPosLocationCatalog(req)) return true;
-  return String(req.headers["x-location-id"] || "").trim().length > 0;
+  return wantsPosLocationCatalog(req);
 }
 
 function posCatalogLocationId(req: Request): string | undefined {
   if (!usesPosLocationCatalog(req)) return undefined;
-  if (req.locationFromHeader && !req.locationId) return undefined;
+  if (!req.locationId) return undefined;
   return req.locationId;
 }
 
