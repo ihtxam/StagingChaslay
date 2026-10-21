@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { and, desc, eq, gte, ilike, isNull, lte, inArray, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, lt, lte, inArray, or } from "drizzle-orm";
 import {
   openPosBoardOrdersWhere,
   shouldFetchOpenBoardExtras,
@@ -1238,10 +1238,49 @@ export class PosOrdersService {
     }
   }
 
+  /** Kitchen tickets left open for days with no KDS row — auto-close so Actives stays truthful. */
+  static async closeStaleKitchenHeldTickets(merchantId: string, maxAgeHours = 48) {
+    const db = getDb();
+    const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
+    const stale = await db.query.heldOrders.findMany({
+      where: and(
+        eq(schema.heldOrders.merchantId, merchantId),
+        eq(schema.heldOrders.status, "sent_to_kitchen"),
+        isNull(schema.heldOrders.closedAt),
+        lt(schema.heldOrders.updatedAt, cutoff)
+      ),
+    });
+    for (const row of stale) {
+      const ident = heldIdentity(row.cartJson);
+      const ticketKey = normalizeHeldTicket(ident.ticketDisplay || row.label);
+      if (ticketKey) {
+        const openKds = await db.query.kdsTickets.findFirst({
+          where: and(
+            eq(schema.kdsTickets.merchantId, merchantId),
+            inArray(schema.kdsTickets.status, ["pending", "in_progress", "preparing"]),
+            or(
+              ilike(schema.kdsTickets.orderNumber, `%${ticketKey.replace(/^#/, "")}%`),
+              ilike(schema.kdsTickets.ticketKey, `%${ticketKey}%`)
+            )
+          ),
+        });
+        if (openKds) continue;
+      }
+      await closeHeldRow(merchantId, row.id, "superseded");
+      console.info("[pos-held] auto-closed stale kitchen ticket", {
+        merchantId,
+        id: row.id,
+        label: row.label,
+        ticket: ident.ticketDisplay,
+      });
+    }
+  }
+
   static async listHeld(merchantId: string) {
     return withMerchantSchemaRetry(async () => {
     const db = getDb();
     await this.restoreHeldFromOpenKitchen(merchantId);
+    await this.closeStaleKitchenHeldTickets(merchantId);
     const rows = await db.query.heldOrders.findMany({
       where: openHeldWhere(merchantId),
       orderBy: [desc(schema.heldOrders.updatedAt)],
@@ -1528,6 +1567,11 @@ export class PosOrdersService {
       .toUpperCase()}`.slice(0, 50);
     const clientId = `cancel-held-${existing.id}`.slice(0, 64);
     const now = new Date();
+    const ident = heldIdentity(existing.cartJson);
+    const ticketTag = ident.ticketDisplay?.trim()
+      ? `[ticket:${ident.ticketDisplay.trim()}]`
+      : "";
+    const noteParts = [ticketTag, notes || existing.notes || ""].filter(Boolean);
 
     const [order] = await db
       .insert(schema.orders)
@@ -1545,7 +1589,7 @@ export class PosOrdersService {
         total: subtotal.toFixed(2),
         paymentMethod: null,
         paymentStatus: "cancelled",
-        notes: notes || existing.notes || null,
+        notes: noteParts.length ? noteParts.join(" ").slice(0, 2000) : null,
         tableLabel: tableLabel || null,
         staffName: existing.staffName || null,
         clientId,
