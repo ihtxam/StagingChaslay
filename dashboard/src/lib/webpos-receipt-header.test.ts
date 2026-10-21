@@ -3,7 +3,9 @@ import {
   expandReceiptHeaderDetailLines,
   getReceiptHeaderLines,
   healLegacyMashedReceiptHeaderFields,
+  receiptHeaderLinesFromPrintSettings,
   receiptHeaderTxFromPrintSettings,
+  splitReceiptHeaderTextToLines,
   splitMerchantAddressLines,
   splitReceiptHeaderDetailLine,
   splitStreetAndLocality,
@@ -145,6 +147,37 @@ const polaCustom = getReceiptHeaderLines(
   { padLines: false }
 );
 assert.deepEqual(polaCustom, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
+
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeaderLines: ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+  }),
+  ['pola pola', 'rue des saars 115', '2000 Neuchâtel']
+);
+
+const polaFromArray = getReceiptHeaderLines(
+  {
+    headerTitle: '',
+    header: '',
+    headerLines: ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+    businessName: 'KABUL',
+    headerAlign: 'center',
+  },
+  48,
+  { padLines: false }
+);
+assert.deepEqual(polaFromArray, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
+
+assert.deepEqual(
+  splitReceiptHeaderTextToLines('Line A\\nLine B\\nLine C'),
+  ['Line A', 'Line B', 'Line C']
+);
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeader: 'Shop\\nStreet 1\\nCity',
+  }),
+  ['Shop', 'Street 1', 'City']
+);
 
 const polaLiteral = getReceiptHeaderLines(
   {

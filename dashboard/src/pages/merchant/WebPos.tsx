@@ -42,6 +42,7 @@ import {
   resolveReceiptPaperWidthMm,
   receiptHeaderFormatFromSettings,
   receiptHeaderFieldsFromPrintSettings,
+  normalizeClientReceiptHeaderPrintSettings,
   receiptHeaderTxFromPrintSettings,
   encodeOrderMetaNotes,
   parseOrderMetaNotes,
@@ -2854,12 +2855,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (cfg.posPrintSettings || merch?.posPrintSettings) {
           const merchantPs = merch?.posPrintSettings || {};
           const cfgPs = cfg.posPrintSettings || {};
-          nextPrintSettings = {
+          nextPrintSettings = normalizeClientReceiptHeaderPrintSettings({
             ...cfgPs,
             ...merchantPs,
             receiptHeaderTitle: merchantPs.receiptHeaderTitle ?? cfgPs.receiptHeaderTitle,
             receiptHeader: merchantPs.receiptHeader ?? cfgPs.receiptHeader,
-          };
+            receiptHeaderLines:
+              merchantPs.receiptHeaderLines?.length
+                ? merchantPs.receiptHeaderLines
+                : cfgPs.receiptHeaderLines,
+          });
           setPrintSettings(nextPrintSettings);
           cacheMerchantAutoPrintSettings(nextPrintSettings);
         }

@@ -271,6 +271,8 @@ export type PosPrintSettingsClient = {
   receiptHeaderTitle?: string;
   /** Address and other details printed below store name at normal size. */
   receiptHeader?: string;
+  /** One printed row per string (preferred). */
+  receiptHeaderLines?: string[];
   receiptFooter?: string;
   /** Receipt header alignment when custom header or business block is printed. */
   receiptHeaderAlign?: 'left' | 'center' | 'right';
@@ -419,6 +421,8 @@ export type WebPosReceipt = {
   headerTitle?: string;
   /** Address/details lines below store name. */
   header?: string;
+  /** Explicit header rows (overrides header/headerTitle when set). */
+  headerLines?: string[];
   footer?: string;
   headerAlign?: ReceiptHeaderAlign;
   headerBold?: boolean;
@@ -1188,16 +1192,74 @@ export function healLegacyMashedReceiptHeaderFields(
   return { headerTitle: titleTrim, header: bodyTrim };
 }
 
-export function receiptHeaderTxFromPrintSettings(
-  printSettings?: Pick<PosPrintSettingsClient, 'receiptHeaderTitle' | 'receiptHeader'> | null
-): { headerTitle: string; header: string } {
+/** One settings textarea row → one printed line (real newlines or legacy literal `\\n`). */
+export function splitReceiptHeaderTextToLines(text: string): string[] {
+  const raw = String(text ?? '').replace(/\r\n/g, '\n');
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  const segments = raw.includes('\n')
+    ? raw.split('\n')
+    : /\\n/.test(raw)
+      ? raw.split(/\\n/)
+      : [raw];
+  return segments
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 24)
+    .map((line) => line.slice(0, 200));
+}
+
+/** Split settings into explicit receipt header rows (preserves line breaks). */
+export function receiptHeaderLinesFromPrintSettings(
+  printSettings?: Pick<
+    PosPrintSettingsClient,
+    'receiptHeaderTitle' | 'receiptHeader' | 'receiptHeaderLines'
+  > | null
+): string[] {
+  const fromArray = Array.isArray(printSettings?.receiptHeaderLines)
+    ? printSettings!.receiptHeaderLines!
+        .map((line) => String(line ?? '').replace(/\r\n/g, '\n').trim())
+        .filter(Boolean)
+    : [];
+  if (fromArray.length) {
+    return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
+  }
   const healed = healLegacyMashedReceiptHeaderFields(
     printSettings?.receiptHeaderTitle,
     printSettings?.receiptHeader
   );
+  const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
+  if (!combined.trim()) return [];
+  return splitReceiptHeaderTextToLines(combined);
+}
+
+/** Heal legacy blobs and keep `receiptHeader` + `receiptHeaderLines` in sync (Settings / WebPOS load). */
+export function normalizeClientReceiptHeaderPrintSettings<
+  T extends Pick<
+    PosPrintSettingsClient,
+    'receiptHeaderTitle' | 'receiptHeader' | 'receiptHeaderLines'
+  >,
+>(ps: T): T {
+  const tx = receiptHeaderTxFromPrintSettings(ps);
+  return {
+    ...ps,
+    receiptHeaderTitle: '',
+    receiptHeader: tx.headerLines.length ? tx.headerLines.join('\n') : tx.header,
+    receiptHeaderLines: tx.headerLines,
+  };
+}
+
+export function receiptHeaderTxFromPrintSettings(
+  printSettings?: Pick<
+    PosPrintSettingsClient,
+    'receiptHeaderTitle' | 'receiptHeader' | 'receiptHeaderLines'
+  > | null
+): { headerTitle: string; header: string; headerLines: string[] } {
+  const headerLines = receiptHeaderLinesFromPrintSettings(printSettings);
   return {
     headerTitle: '',
-    header: receiptHeaderCombinedText(healed.headerTitle, healed.header),
+    header: headerLines.join('\n'),
+    headerLines,
   };
 }
 
@@ -1249,15 +1311,24 @@ export function getReceiptHeaderLines(
       lines.push(padLines ? alignLine(part, width, align) : part);
     }
   };
+  const explicitLines = Array.isArray(tx.headerLines)
+    ? tx.headerLines.map((line) => String(line || '').trim()).filter(Boolean)
+    : [];
   const combinedHeader = receiptHeaderCombinedText(tx.headerTitle, tx.header);
-  const hasCustomReceiptHeader = isReceiptHeaderConfigured(tx.headerTitle, tx.header);
+  const configuredLines =
+    explicitLines.length > 0
+      ? explicitLines
+      : combinedHeader.trim()
+        ? combinedHeader
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+        : [];
+  const hasCustomReceiptHeader = configuredLines.length > 0;
   const lines: string[] = [];
   if (hasCustomReceiptHeader) {
-    const rawLines = combinedHeader.split(/\r?\n/);
-    for (let i = 0; i < rawLines.length; i++) {
-      const line = rawLines[i]!.trim();
-      if (!line) continue;
-      push(lines, line, i === 0 ? titleWidth : width);
+    for (let i = 0; i < configuredLines.length; i++) {
+      push(lines, configuredLines[i]!, i === 0 ? titleWidth : width);
     }
     return lines;
   }
@@ -3554,8 +3625,9 @@ export function textToEscPos(
       encode('\n'),
       ESC_POS_BLANK_LINE,
       ESC_POS_BLANK_LINE,
+      ESC_POS_BLANK_LINE,
       new Uint8Array([0x1b, 0x61, 0x00]),
-      new Uint8Array([0x1b, 0x64, 0x04]),
+      new Uint8Array([0x1b, 0x64, 0x06]),
       new Uint8Array([0x1b, 0x40]),
       codepage
     );
