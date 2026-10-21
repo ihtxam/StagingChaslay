@@ -60,3 +60,16 @@ export function buildWebPosLaunchPath(locationId: string, base = '/merchant/pos'
   const sep = base.includes('?') ? '&' : '?';
   return `${base}${sep}loc_id=${encodeURIComponent(id)}`;
 }
+
+/**
+ * On POS entry: honor `?loc_id=`, else seed terminal scope from the panel branch (not HQ).
+ */
+export function bootstrapWebPosLocationFromPanel(panelBranchId: string | null | undefined): string | null {
+  syncWebPosTerminalLocationFromUrl();
+  const fromTerminal = getWebPosTerminalLocationId();
+  if (fromTerminal) return fromTerminal;
+  const branch = String(panelBranchId || '').trim();
+  if (!branch) return null;
+  setWebPosTerminalLocationId(branch);
+  return branch;
+}

@@ -97,8 +97,8 @@ assert.equal(
 );
 assert.equal(
   shouldShowLocationSwitcher({ locationCount: 2, maxLocations: 1 }),
-  false,
-  'unlicensed multi-location rows stay hidden'
+  true,
+  'existing multi-branch merchants always get the switcher'
 );
 assert.equal(
   shouldShowLocationSwitcher({ locationCount: 2, maxLocations: 0 }),

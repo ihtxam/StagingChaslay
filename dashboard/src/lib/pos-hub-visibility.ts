@@ -44,13 +44,19 @@ export function shouldShowPosOptionChooser(
   return true;
 }
 
-/** Location switcher: more than one location and multi-location addon. */
+/** Location switcher: 2+ branches, or licensed HQ addon with room to add another branch. */
 export function shouldShowLocationSwitcher(input: {
   locationCount: number;
   maxLocations?: number | null;
   maxPosPosts?: number | null;
 }): boolean {
+  const count = Number(input.locationCount) || 0;
+  if (count > 1) {
+    const maxPosts = Number(input.maxPosPosts);
+    if (Number.isFinite(maxPosts) && maxPosts === 1) return false;
+    return true;
+  }
   if (!shouldShowPosOptionChooser(input.locationCount, input.maxPosPosts)) return false;
-  if (input.maxLocations == null) return true;
+  if (input.maxLocations == null) return false;
   return isMultiLocationLicensed({ maxLocations: input.maxLocations });
 }

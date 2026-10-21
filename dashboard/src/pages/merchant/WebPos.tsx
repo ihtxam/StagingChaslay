@@ -198,6 +198,7 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosStationPickerModal from '@/components/WebPosStationPickerModal';
+import LocationPickerModal from '@/components/merchant/LocationPicker';
 import {
   fetchPosStations,
   getDeviceDefaultStationId,
@@ -619,6 +620,10 @@ import { navigateTargetAfterStaffPin } from '@/lib/auth-home';
 import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
+import {
+  bootstrapWebPosLocationFromPanel,
+  setWebPosTerminalLocationId,
+} from '@/lib/webpos-terminal-location';
 import { openCashDrawerViaAgent } from '@/lib/print-agent';
 
 type Channel = PosChannel;
@@ -867,9 +872,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const logout = useAuthStore((s) => s.logout);
-  const posLocationId = useLocationStore((s) => s.locationId);
+  const panelBranchId = useLocationStore((s) => s.locationId);
   const loadLocations = useLocationStore((s) => s.load);
-  const setPosLocationId = useLocationStore((s) => s.setLocationId);
+  const storeLocations = useLocationStore((s) => s.locations);
+  const [posLocationId, setPosLocationId] = useState<string | null>(() =>
+    bootstrapWebPosLocationFromPanel(useLocationStore.getState().locationId)
+  );
+  const [posBranchPickerOpen, setPosBranchPickerOpen] = useState(false);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -3018,6 +3027,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [loadLocations]);
 
   useEffect(() => {
+    setPosLocationId(bootstrapWebPosLocationFromPanel(panelBranchId));
+  }, [panelBranchId]);
+
+  useEffect(() => {
+    if (!storeLocations.length) return;
+    if (posLocationId) return;
+    if (storeLocations.length === 1) {
+      const only = storeLocations[0]!.id;
+      setWebPosTerminalLocationId(only);
+      setPosLocationId(only);
+      return;
+    }
+    setPosBranchPickerOpen(true);
+  }, [storeLocations, posLocationId]);
+
+  useEffect(() => {
     if (!posLocationId) {
       setPosStations([]);
       return;
@@ -3053,7 +3078,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (!ids.length) return;
         const stored = localStorage.getItem('manupos_selected_location');
         if (stored && ids.includes(stored)) return;
-        setPosLocationId(ids[0]!);
+        const branchId = ids[0]!;
+        setWebPosTerminalLocationId(branchId);
+        setPosLocationId(branchId);
       } catch {
         /* best-effort */
       }
@@ -3061,7 +3088,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [authUser?.staffId, authUser?.role, setPosLocationId]);
+  }, [authUser?.staffId, authUser?.role]);
 
   useEffect(() => {
     void load().catch(() => undefined);
@@ -10936,6 +10963,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 merchant?.shopLogoUrl ||
                 paymentConfig?.shopLogoUrl
               }
+              terminalLocationId={posLocationId}
             />
           </>
         )}
@@ -12626,6 +12654,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           merchant?.shopLogoUrl ||
           paymentConfig?.shopLogoUrl
         }
+        terminalLocationId={posLocationId}
+      />
+
+      <LocationPickerModal
+        open={posBranchPickerOpen}
+        onClose={() => setPosBranchPickerOpen(false)}
+        branchOnly
+        lockWebPosTerminal
+        title={t('locationPickerTitle')}
+        onSelect={(loc) => {
+          if (loc?.id) setPosLocationId(loc.id);
+        }}
       />
 
       <WebPosStationPickerModal
