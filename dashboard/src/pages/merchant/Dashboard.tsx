@@ -167,6 +167,11 @@ import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
 import OrderCenterApp from './OrderCenterApp';
 import { getSelectedLocationId, useLocationStore } from '@/store/location';
 import { buildWebPosLaunchPath } from '@/lib/webpos-terminal-location';
+import {
+  shouldRedirectFromHqPanelPath,
+  shouldShowHqPanelNav,
+  shouldShowPanelPosQuickAction,
+} from '@/lib/panel-scope-nav';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
@@ -672,6 +677,14 @@ function MerchantShell() {
   );
 
   const { locations, limits, locationId: panelLocationId, isHqView } = useLocationStore();
+  const panelScopeNavInput = useMemo(
+    () => ({
+      locationCount: locations.length,
+      maxLocations: limits?.maxLocations,
+      isHqView,
+    }),
+    [locations.length, limits?.maxLocations, isHqView]
+  );
   const posLaunchPath = isHqView
     ? '/merchant/pos'
     : buildWebPosLaunchPath(panelLocationId || getSelectedLocationId() || '');
@@ -679,14 +692,31 @@ function MerchantShell() {
     hqLicensed ||
     isMultiLocationLicensed({ maxLocations: limits?.maxLocations }) ||
     locations.length > 1;
+  const showHqNav = shouldShowHqPanelNav({ ...panelScopeNavInput, hqNavLicensed: showHq });
   const allowHq = useCallback(
     (path: string) =>
-      showHq &&
+      showHqNav &&
       !isPanelNavHidden(path, panelNavHidden) &&
       !isPanelNavGroupHidden('hq', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [showHq, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
+    [showHqNav, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
+
+  useEffect(() => {
+    if (jwtOwnerBypass || isPosLikeRoute) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (
+      shouldRedirectFromHqPanelPath(path, panelScopeNavInput)
+    ) {
+      navigate('/merchant', { replace: true });
+    }
+  }, [
+    jwtOwnerBypass,
+    isPosLikeRoute,
+    location.pathname,
+    navigate,
+    panelScopeNavInput,
+  ]);
 
   // Block direct URL access to panel pages the role may not open.
   useEffect(() => {
@@ -885,9 +915,13 @@ function MerchantShell() {
 
   const showWebPosQuickAction = useMemo(
     () =>
-      hasPos &&
-      canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
-    [hasPos, jwtIsOwner, user?.permissions]
+      shouldShowPanelPosQuickAction({
+        ...panelScopeNavInput,
+        baseAllowed:
+          hasPos &&
+          canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
+      }),
+    [hasPos, jwtIsOwner, user?.permissions, panelScopeNavInput]
   );
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
@@ -979,7 +1013,7 @@ function MerchantShell() {
       id: 'hq',
       label: t('navHq'),
       icon: '🏢',
-      children: showHq
+      children: showHqNav
         ? [
             { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
             { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },

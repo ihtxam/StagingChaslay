@@ -35,6 +35,10 @@ import {
   type CateringPricingMode,
 } from '@/lib/catering';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import {
+  panelCatalogListParams,
+  shouldShowHqCatalogBadges,
+} from '@/lib/panel-scope-nav';
 import { useLocationStore } from '@/store/location';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
@@ -360,7 +364,14 @@ type ProductTypeUi = 'standard' | 'combo' | 'open_price' | 'weighed';
 
 export default function Products() {
   const { t } = useI18n();
-  const { locationId } = useLocationStore();
+  const { locationId, isHqView, locations, limits } = useLocationStore();
+  const panelScopeNavInput = {
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+    isHqView,
+  };
+  const catalogListParams = panelCatalogListParams(panelScopeNavInput);
+  const showHqCatalogBadges = shouldShowHqCatalogBadges(panelScopeNavInput);
   const [hqProductIds, setHqProductIds] = useState<Set<string>>(new Set());
   const productTypeLabel = (product: Product) => {
     if (product.productType === 'combo' || (product.comboItems && product.comboItems.length)) {
@@ -484,7 +495,9 @@ export default function Products() {
         let total = 0;
         let limitInfo: typeof productLimit = null;
         for (;;) {
-          const res = await api.get('/merchant/products', { params: { limit: pageSize, page } });
+          const res = await api.get('/merchant/products', {
+            params: { limit: pageSize, page, ...catalogListParams },
+          });
           const batch = (res.data.products || []) as Product[];
           all = all.concat(batch);
           total = Number(res.data.pagination?.total) || all.length;
@@ -570,10 +583,10 @@ export default function Products() {
         setEditionFeatures(Array.isArray(feats) ? feats : null);
       })
       .catch(() => undefined);
-  }, []);
+  }, [locationId, isHqView, locations.length, limits?.maxLocations]);
 
   useEffect(() => {
-    if (!locationId) {
+    if (!showHqCatalogBadges || !locationId) {
       setHqProductIds(new Set());
       return;
     }
@@ -587,7 +600,7 @@ export default function Products() {
         setHqProductIds(ids);
       })
       .catch(() => setHqProductIds(new Set()));
-  }, [locationId]);
+  }, [locationId, showHqCatalogBadges]);
 
   const categoryName = (categoryId?: string | null) =>
     categories.find((c) => c.id === categoryId)?.name || t('uncategorized');
@@ -1715,7 +1728,9 @@ export default function Products() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="truncate font-semibold text-lg text-[var(--text)]">{product.name}</h3>
-                      <HqCatalogBadge fromHq={hqProductIds.has(product.id)} />
+                      <HqCatalogBadge
+                        fromHq={showHqCatalogBadges && hqProductIds.has(product.id)}
+                      />
                       <span className="rounded-full bg-[var(--bg-muted)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                         {productTypeLabel(product)}
                       </span>
