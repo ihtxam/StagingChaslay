@@ -5,6 +5,8 @@ export type PanelScopeNavInput = {
   maxLocations?: number | null;
   maxPosPosts?: number | null;
   isHqView: boolean;
+  /** Active branch id when scope is branch (for catalog API query fallback). */
+  locationId?: string | null;
 };
 
 export function isPanelLocationSwitcherActive(input: {
@@ -50,8 +52,20 @@ export function shouldUseBranchCatalogPanel(input: PanelScopeNavInput): boolean 
 
 export function panelCatalogListParams(
   input: PanelScopeNavInput
-): { posLocationCatalog: '1' } | Record<string, never> {
-  return shouldUseBranchCatalogPanel(input) ? { posLocationCatalog: '1' } : {};
+): { posLocationCatalog: '1'; locationId?: string } | Record<string, never> {
+  if (!shouldUseBranchCatalogPanel(input)) return {};
+  const locationId = String(input.locationId || '').trim();
+  return locationId
+    ? { posLocationCatalog: '1', locationId }
+    : { posLocationCatalog: '1' };
+}
+
+/** Branch panel: scope reports to X-Location-Id; HQ aggregate leaves reports org-wide. */
+export function panelOverviewScopeParams(
+  input: Pick<PanelScopeNavInput, 'locationCount' | 'isHqView'>
+): { scope: 'location' } | Record<string, never> {
+  if (!isPanelLocationSwitcherActive(input)) return {};
+  return input.isHqView ? {} : { scope: 'location' };
 }
 
 /** HQ push badges only make sense in HQ overview, not in an isolated branch view. */

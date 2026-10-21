@@ -908,6 +908,7 @@ export class PosReportsService {
         refundAmount: true,
         status: true,
         paymentStatus: true,
+        guestCount: true,
       },
     });
     const locations = await db.query.locations.findMany({
@@ -919,28 +920,39 @@ export class PosReportsService {
       locations.find((l) => l.isDefault)?.id ?? locations[0]?.id ?? null;
 
     const completed = orders.filter((o) => isCountableSale(o));
-    const byLoc = new Map<string, { revenue: number; orders: number }>();
+    const byLoc = new Map<string, { revenue: number; orders: number; customers: number }>();
+    for (const loc of locations) {
+      byLoc.set(loc.id, { revenue: 0, orders: 0, customers: 0 });
+    }
     for (const o of completed) {
       let key = o.locationId;
       if (!key || !nameById.has(key)) {
         key = defaultLocationId ?? key ?? "unknown";
       }
-      const cur = byLoc.get(key) || { revenue: 0, orders: 0 };
+      if (!byLoc.has(key)) {
+        byLoc.set(key, { revenue: 0, orders: 0, customers: 0 });
+      }
+      const cur = byLoc.get(key)!;
       cur.revenue += netTaxableSale(
         Number(o.total || 0),
         Number(o.tipAmount || 0),
         Number(o.refundAmount || 0)
       );
       cur.orders += 1;
+      const guests = Number(o.guestCount) || 0;
+      cur.customers += guests > 0 ? guests : 1;
       byLoc.set(key, cur);
     }
     const defaultName = defaultLocationId ? nameById.get(defaultLocationId) : null;
-    return [...byLoc.entries()].map(([locationId, stats]) => ({
-      locationId,
-      name: nameById.get(locationId) || defaultName || "Unknown",
-      revenue: round2(stats.revenue),
-      orders: stats.orders,
-    }));
+    return [...byLoc.entries()]
+      .map(([locationId, stats]) => ({
+        locationId,
+        name: nameById.get(locationId) || defaultName || "Unknown",
+        revenue: round2(stats.revenue),
+        orders: stats.orders,
+        customers: stats.customers,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** HQ dashboard — org-wide summary with per-location breakdown. */

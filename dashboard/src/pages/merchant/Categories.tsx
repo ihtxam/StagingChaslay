@@ -54,6 +54,7 @@ export default function Categories() {
     locationCount: locations.length,
     maxLocations: limits?.maxLocations,
     isHqView,
+    locationId,
   };
   const catalogListParams = panelCatalogListParams(panelScopeNavInput);
   const showHqCatalogBadges = shouldShowHqCatalogBadges(panelScopeNavInput);

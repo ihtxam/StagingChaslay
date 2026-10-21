@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   isHqPanelPath,
   panelCatalogListParams,
+  panelOverviewScopeParams,
   shouldRedirectFromHqPanelPath,
   shouldShowHqCatalogBadges,
   shouldShowHqPanelNav,
@@ -30,7 +31,15 @@ assert.equal(shouldUseBranchCatalogPanel(multiHq), false);
 assert.equal(shouldUseBranchCatalogPanel(single), false);
 
 assert.deepEqual(panelCatalogListParams(multi), { posLocationCatalog: '1' });
+assert.deepEqual(panelCatalogListParams({ ...multi, locationId: 'kiosk-1' }), {
+  posLocationCatalog: '1',
+  locationId: 'kiosk-1',
+});
 assert.deepEqual(panelCatalogListParams(multiHq), {});
+
+assert.deepEqual(panelOverviewScopeParams(multi), { scope: 'location' });
+assert.deepEqual(panelOverviewScopeParams(multiHq), {});
+assert.deepEqual(panelOverviewScopeParams(single), {});
 
 assert.equal(shouldShowHqCatalogBadges(multi), false);
 assert.equal(shouldShowHqCatalogBadges(multiHq), true);

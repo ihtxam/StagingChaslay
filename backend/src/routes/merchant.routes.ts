@@ -62,10 +62,15 @@ function usesPosLocationCatalog(req: Request): boolean {
   return wantsPosLocationCatalog(req);
 }
 
-function posCatalogLocationId(req: Request): string | undefined {
+async function posCatalogLocationId(
+  req: Request,
+  merchantId: string
+): Promise<string | undefined> {
   if (!usesPosLocationCatalog(req)) return undefined;
-  if (!req.locationId) return undefined;
-  return req.locationId;
+  const raw = String(req.query.locationId ?? req.locationId ?? "").trim();
+  if (!raw) return undefined;
+  const { LocationsService } = await import("@/services/locations.service");
+  return (await LocationsService.resolveLocationIdOrNull(merchantId, raw)) ?? undefined;
 }
 
 const imageUpload = multer({
@@ -459,7 +464,7 @@ router.get("/products", async (req: Request, res: Response) => {
     ]);
     let pageList = products || [];
 
-    const catalogLocationId = posCatalogLocationId(req);
+    const catalogLocationId = await posCatalogLocationId(req, merchantId);
     if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
@@ -1199,7 +1204,7 @@ router.get("/categories", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    const catalogLocationId = posCatalogLocationId(req);
+    const catalogLocationId = await posCatalogLocationId(req, merchantId);
     if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
