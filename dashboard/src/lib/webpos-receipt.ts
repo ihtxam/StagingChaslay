@@ -903,6 +903,9 @@ const RECEIPT_GLUED_PHONE_SPLIT_RE =
 const RECEIPT_GLUED_VAT_SPLIT_RE = /(?<=[\w\d)])(?=(?:VAT|UID|TVA|MwSt|MWST)\s*:)/i;
 /** Street number glued to city (e.g. Rue … 2Neuchâtel). */
 const RECEIPT_GLUED_NUMBER_CITY_RE = /(?<=\d)(?=[A-Za-zÀ-ÿ]{2,})/;
+/** Country or city glued to street label (e.g. SuisseRue des Draizes). */
+const RECEIPT_GLUED_STREET_LABEL_RE =
+  /(?<=[a-zà-ÿäöü])(?=(?:Rue|Rua|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\b)/i;
 
 function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   const text = String(line || '').replace(/\s+/g, ' ').trim();
@@ -924,6 +927,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
     RECEIPT_GLUED_VAT_SPLIT_RE,
     RECEIPT_GLUED_PHONE_SPLIT_RE,
     RECEIPT_GLUED_NUMBER_CITY_RE,
+    RECEIPT_GLUED_STREET_LABEL_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
     RECEIPT_TAX_SPLIT_RE,
     RECEIPT_COUNTRY_SPLIT_RE,
@@ -1275,6 +1279,10 @@ export function buildReceiptHeaderEscPos(
     scale = 1;
   }
   const parts: Uint8Array[] = [];
+  const encoding = opts.textEncoding ?? 'cp850';
+  if (encoding !== 'utf8') {
+    parts.push(ESC_CODEPAGE_CP850);
+  }
   const resetAttrs = () => {
     parts.push(escBold(false), escKitchenSize(1), escAlign(alignMode));
   };

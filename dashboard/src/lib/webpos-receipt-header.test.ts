@@ -133,6 +133,15 @@ assert.equal(
   'overflow wraps to the next line instead of slicing'
 );
 
+const novaGluedNoSpaces = splitReceiptHeaderDetailLine(
+  'Rue des Draizes 22SuisseRue des Draizes 44NeuchâtelTel: 032 558 45 65VAT: CHE-131.903.128'
+);
+assert.ok(novaGluedNoSpaces.some((l) => /Rue des Draizes 22/i.test(l)));
+assert.ok(novaGluedNoSpaces.some((l) => /Tel:\s*032/.test(l)));
+assert.ok(novaGluedNoSpaces.some((l) => /VAT:\s*CHE-131/.test(l)));
+assert.ok(novaGluedNoSpaces.includes('Suisse'));
+assert.ok(novaGluedNoSpaces.some((l) => /Rue des Draizes 44/i.test(l)));
+
 const nova = getReceiptHeaderLines(
   {
     headerTitle: 'NOVA PORTUGALIA',
