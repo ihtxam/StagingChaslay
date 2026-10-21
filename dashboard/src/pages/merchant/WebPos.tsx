@@ -42,6 +42,7 @@ import {
   resolveReceiptPaperWidthMm,
   receiptHeaderFormatFromSettings,
   receiptHeaderFieldsFromPrintSettings,
+  receiptHeaderTxFromPrintSettings,
   encodeOrderMetaNotes,
   parseOrderMetaNotes,
   nextWebPosTicketNumber,
@@ -4384,8 +4385,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       businessName: merchant?.name || APP_NAME,
       language: lang,
       paperWidthMm: printSettings?.paperWidthMm || 80,
-      headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
+      ...receiptHeaderTxFromPrintSettings(printSettings),
       footer: printSettings?.receiptFooter,
       ...receiptHeaderFieldsFromPrintSettings(printSettings),
       shiftCash:
@@ -4621,8 +4621,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         businessName: merchant?.name || APP_NAME,
         language: lang,
         paperWidthMm: printSettings?.paperWidthMm || 80,
-        headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
+        ...receiptHeaderTxFromPrintSettings(printSettings),
         footer: printSettings?.receiptFooter,
         ...receiptHeaderFieldsFromPrintSettings(printSettings),
         includeProductsSold,
@@ -6331,8 +6330,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         vatAfterDiscount,
         language: lang,
         paperWidthMm: printSettings?.paperWidthMm || 80,
-        headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
+        ...receiptHeaderTxFromPrintSettings(printSettings),
         footer: printSettings?.receiptFooter,
         ...receiptHeaderFieldsFromPrintSettings(printSettings),
         chfToEurRate: printSettings?.receiptChfToEurRate ?? null,
@@ -6778,8 +6776,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         holderName: opts.holderName,
         language: lang,
         paperWidthMm: printSettings?.paperWidthMm || 80,
-        headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
+        ...receiptHeaderTxFromPrintSettings(printSettings),
         footer: printSettings?.receiptFooter,
         ...receiptHeaderFieldsFromPrintSettings(printSettings),
       },
@@ -8039,8 +8036,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const headerFmt = receiptHeaderFormatFromSettings(printSettings);
     const headerLines = getReceiptHeaderLines(
       {
-        headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
+        ...receiptHeaderTxFromPrintSettings(printSettings),
         businessName: merchant?.name || APP_NAME,
         address: merchant?.address || '',
         city: merchant?.city || undefined,
@@ -8051,10 +8047,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       lineWidthForPaper(paper === 58 ? 58 : 80),
       { padLines: false, titleScale: headerFmt.textScale }
     );
-    const headerNorm = normalizeReceiptHeaderFields({
-      headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
-    });
+    const headerNorm = normalizeReceiptHeaderFields(
+      receiptHeaderTxFromPrintSettings(printSettings)
+    );
     const receiptTargets = printersForRole(printSettings, 'receipt');
     const primaryReceiptPrinter =
       receiptTargets[0]?.name ||
@@ -8224,8 +8219,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         opts.role === 'receipt'
           ? getReceiptHeaderLines(
               {
-                headerTitle: printSettings?.receiptHeaderTitle,
-                header: printSettings?.receiptHeader,
+                ...receiptHeaderTxFromPrintSettings(printSettings),
                 businessName: merchant?.name || APP_NAME,
                 address: merchant?.address || '',
         city: merchant?.city || undefined,
@@ -8237,10 +8231,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               { padLines: false, titleScale: headerFmt.textScale }
             )
           : [];
-      const headerNorm = normalizeReceiptHeaderFields({
-        headerTitle: printSettings?.receiptHeaderTitle,
-        header: printSettings?.receiptHeader,
-      });
+      const headerNorm = normalizeReceiptHeaderFields(
+        receiptHeaderTxFromPrintSettings(printSettings)
+      );
       const primaryReceiptPrinter = targets[0]?.name || fallbackName || '';
       let liveForEncoding = printers;
       if (!liveForEncoding.length) {
@@ -8537,8 +8530,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         staffName: payload.order.staffName,
         language: lang,
         paperWidthMm: printSettings?.paperWidthMm || 80,
-        headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
+        ...receiptHeaderTxFromPrintSettings(printSettings),
         footer: printSettings?.receiptFooter,
         ...receiptHeaderFieldsFromPrintSettings(printSettings),
       },
@@ -9394,8 +9386,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       staffName: webposStaff?.name,
       language: lang,
       paperWidthMm,
-      headerTitle: printSettings?.receiptHeaderTitle,
-      header: printSettings?.receiptHeader,
+      ...receiptHeaderTxFromPrintSettings(printSettings),
       footer: printSettings?.receiptFooter,
       ...receiptHeaderFieldsFromPrintSettings(printSettings),
       chfToEurRate: printSettings?.receiptChfToEurRate ?? null,

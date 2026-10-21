@@ -22,6 +22,7 @@ import {
   printersForRole,
   resolveReceiptLanguage,
   receiptHeaderFormatFromSettings,
+  receiptHeaderTxFromPrintSettings,
   buildReceiptEscPos,
   uint8ToBase64,
   type PosOrderForReceipt,
@@ -98,8 +99,7 @@ async function printReceiptText(
   const headerFmt = receiptHeaderFormatFromSettings(opts.printSettings);
   const headerLines = getReceiptHeaderLines(
     {
-      headerTitle: opts.printSettings?.receiptHeaderTitle,
-      header: opts.printSettings?.receiptHeader,
+      ...receiptHeaderTxFromPrintSettings(opts.printSettings),
       businessName: opts.merchantName || APP_NAME,
       address: opts.merchantAddress,
       city: opts.merchantCity,
@@ -110,10 +110,9 @@ async function printReceiptText(
     lineWidthForPaper(paper === 58 ? 58 : 80),
     { padLines: false, titleScale: headerFmt.textScale }
   );
-  const headerNorm = normalizeReceiptHeaderFields({
-    headerTitle: opts.printSettings?.receiptHeaderTitle,
-    header: opts.printSettings?.receiptHeader,
-  });
+  const headerNorm = normalizeReceiptHeaderFields(
+    receiptHeaderTxFromPrintSettings(opts.printSettings)
+  );
   const textEncoding = receiptEscPosTextEncodingForPrinter(
     named[0] || configuredNames[0],
     livePrinters

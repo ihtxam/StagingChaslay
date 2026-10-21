@@ -1127,6 +1127,36 @@ function appendMerchantHeaderContactLines(
   }
 }
 
+/** Merge store-name + details fields into one multiline receipt header (settings / legacy DB). */
+export function receiptHeaderCombinedText(
+  headerTitle?: string | null,
+  header?: string | null
+): string {
+  const title = String(headerTitle ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n+$/, '')
+    .trimEnd();
+  const body = String(header ?? '').replace(/\r\n/g, '\n');
+  const bodyTrimmed = body.trim();
+  if (title && bodyTrimmed) {
+    return `${title}\n${body.replace(/^\n+/, '')}`;
+  }
+  if (title) return title;
+  return body.replace(/^\n+|\n+$/g, '');
+}
+
+export function receiptHeaderTxFromPrintSettings(
+  printSettings?: Pick<PosPrintSettingsClient, 'receiptHeaderTitle' | 'receiptHeader'> | null
+): { headerTitle: string; header: string } {
+  return {
+    headerTitle: '',
+    header: receiptHeaderCombinedText(
+      printSettings?.receiptHeaderTitle,
+      printSettings?.receiptHeader
+    ),
+  };
+}
+
 /** Split legacy single-field receipt headers into store name + address/details. */
 export function normalizeReceiptHeaderFields(settings?: {
   receiptHeaderTitle?: string | null;
@@ -1134,17 +1164,16 @@ export function normalizeReceiptHeaderFields(settings?: {
   headerTitle?: string | null;
   header?: string | null;
 } | null): { title: string; body: string } {
-  const explicitTitle = String(settings?.receiptHeaderTitle ?? settings?.headerTitle ?? '').trim();
-  const rawBody = String(settings?.receiptHeader ?? settings?.header ?? '').trim();
-  if (explicitTitle) {
-    return { title: explicitTitle, body: rawBody };
-  }
-  if (!rawBody) {
+  const combined = receiptHeaderCombinedText(
+    settings?.receiptHeaderTitle ?? settings?.headerTitle,
+    settings?.receiptHeader ?? settings?.header
+  );
+  if (!combined.trim()) {
     return { title: '', body: '' };
   }
-  const lines = rawBody.split(/\r?\n/);
+  const lines = combined.split(/\r?\n/);
   if (lines.length <= 1) {
-    return { title: rawBody, body: '' };
+    return { title: combined.trim(), body: '' };
   }
   return {
     title: (lines[0] ?? '').trim(),
@@ -1176,6 +1205,18 @@ export function getReceiptHeaderLines(
       lines.push(padLines ? alignLine(part, width, align) : part);
     }
   };
+  const combinedHeader = receiptHeaderCombinedText(tx.headerTitle, tx.header);
+  const hasCustomReceiptHeader = !!combinedHeader.trim();
+  const lines: string[] = [];
+  if (hasCustomReceiptHeader) {
+    const rawLines = combinedHeader.split(/\r?\n/);
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i]!.trim();
+      if (!line) continue;
+      push(lines, line, i === 0 ? titleWidth : width);
+    }
+    return lines;
+  }
   let { title, body } = normalizeReceiptHeaderFields({
     headerTitle: tx.headerTitle,
     header: tx.header,
@@ -1188,9 +1229,6 @@ export function getReceiptHeaderLines(
       body = [fromName.extra, body].filter(Boolean).join('\n');
     }
   }
-  const lines: string[] = [];
-  const hasCustomReceiptHeader =
-    !!(String(tx.headerTitle || '').trim() || String(tx.header || '').trim());
   const addressParts = splitMerchantAddressLines(tx.address || '', tx.city).filter(
     (part) => !isReceiptTelephoneLine(part) && !isReceiptVatLine(part)
   );
@@ -4499,8 +4537,7 @@ export function posOrderToWebPosReceipt(
     staffName: order.staffName,
     language: lang,
     paperWidthMm,
-    headerTitle: ctx.printSettings?.receiptHeaderTitle,
-    header: ctx.printSettings?.receiptHeader,
+    ...receiptHeaderTxFromPrintSettings(ctx.printSettings),
     footer: ctx.printSettings?.receiptFooter,
     ...receiptHeaderFieldsFromPrintSettings(ctx.printSettings),
     showVat: ctx.printSettings?.receiptShowVatTable !== false,
