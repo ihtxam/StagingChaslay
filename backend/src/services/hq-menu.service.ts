@@ -4,6 +4,7 @@ import type { CatalogChannel } from "@/lib/catalog-visibility";
 import { normalizeMenuCatalogChannels } from "@/lib/catalog-visibility";
 import {
   applyMenuProductPrices,
+  locationHasDedicatedScheduledMenus,
   normalizeProductPrices,
   normalizeTimeRanges,
   pickActiveScheduledMenu,
@@ -35,6 +36,18 @@ function readMenuSelection(input: {
     productIds: stringArray(input.productIds ?? input.product_ids),
     categoryIds: stringArray(input.categoryIds ?? input.category_ids),
   };
+}
+
+function menuHasExplicitCatalogSelection(menu: {
+  productIds?: unknown;
+  categoryIds?: unknown;
+  hqVersionId?: string | null;
+}): boolean {
+  return (
+    stringArray(menu.productIds).length > 0 ||
+    stringArray(menu.categoryIds).length > 0 ||
+    !!menu.hqVersionId
+  );
 }
 
 async function resolveMenuProductIds(
@@ -274,7 +287,8 @@ export class HqMenuService {
     locationId: string,
     channel: CatalogChannel,
     at: Date = new Date(),
-    timezone = "Europe/Zurich"
+    timezone = "Europe/Zurich",
+    opts?: { terminalIsolation?: boolean }
   ): Promise<ResolvedHqMenu> {
     const db = getDb();
     await this.ensureDefaultMenu(merchantId);
@@ -283,17 +297,31 @@ export class HqMenuService {
       orderBy: [asc(schema.hqMenus.sortOrder)],
     });
 
+    const terminalIsolation = opts?.terminalIsolation === true;
     const picked = pickActiveScheduledMenu(menus, {
       channel,
       locationId,
       at,
       timezone,
+      terminalIsolation,
     });
     if (!picked) {
-      return { menu: null, productIds: null, productPrices: {} };
+      const strictEmpty = locationHasDedicatedScheduledMenus(menus, locationId);
+      return {
+        menu: null,
+        productIds: strictEmpty ? new Set<string>() : null,
+        productPrices: {},
+      };
     }
 
-    const productIds = await resolveMenuProductIds(merchantId, picked);
+    let productIds = await resolveMenuProductIds(merchantId, picked);
+    if (
+      productIds === null &&
+      terminalIsolation &&
+      menuHasExplicitCatalogSelection(picked)
+    ) {
+      productIds = new Set<string>();
+    }
     const productPrices = normalizeProductPrices(picked.productPrices);
     return { menu: picked, productIds, productPrices };
   }

@@ -17,6 +17,10 @@ import com.chaslay.pos.domain.model.UserPerformanceReport
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.domain.model.roundMoney
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
+import com.chaslay.pos.domain.model.PosPermission
+import com.chaslay.pos.util.PosLocalPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -79,11 +83,13 @@ data class ReportsUiState(
     val eodStaffOptions: List<EodStaffOption> = emptyList(),
     val selectedEodStaffId: Long? = null,
     val canViewAllSales: Boolean = true,
+    val eodIncludeProductsSold: Boolean = true,
     val message: String? = null
 )
 
 @HiltViewModel
 class ReportsViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val transactionRepository: TransactionRepository,
     private val settingsRepository: SettingsRepository,
     private val printerService: BluetoothPrinterService,
@@ -99,7 +105,15 @@ class ReportsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "CHF")
 
     init {
+        _uiState.update {
+            it.copy(eodIncludeProductsSold = PosLocalPrefs.readEodIncludeProductsSold(appContext))
+        }
         refresh()
+    }
+
+    fun setEodIncludeProductsSold(include: Boolean) {
+        PosLocalPrefs.writeEodIncludeProductsSold(appContext, include)
+        _uiState.update { it.copy(eodIncludeProductsSold = include) }
     }
 
     fun refresh() {
@@ -254,13 +268,14 @@ class ReportsViewModel @Inject constructor(
             }
             val settings = settingsRepository.getSettings()
             val report = _uiState.value.endOfDayReport
-            val printError = reportPrintGuard(settings)
+            val printError = eodPrintGuard(settings, access)
             if (printError != null) {
                 _uiState.update { it.copy(message = printError) }
                 return@launch
             }
+            val includeProducts = _uiState.value.eodIncludeProductsSold
             withContext(Dispatchers.IO) {
-                printerService.routeEndOfDayReport(settings, report)
+                printerService.routeEndOfDayReport(settings, report, includeProducts)
             }.onSuccess { _uiState.update { it.copy(message = "End of day report printed") } }
                 .onFailure { e -> _uiState.update { it.copy(message = e.message) } }
         }
@@ -284,6 +299,19 @@ class ReportsViewModel @Inject constructor(
 
     private suspend fun reportPrintGuard(settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity): String? {
         if (!settings.printerPrintReports) return "Enable report printing in Settings"
+        return null
+    }
+
+    private fun eodPrintGuard(
+        settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity,
+        access: com.chaslay.pos.domain.model.UserAccess?
+    ): String? {
+        val mayPrintEod = access?.has(PosPermission.END_OF_DAY) == true ||
+            access?.canAccessReports() == true
+        if (!mayPrintEod) return "You do not have permission to print end of day reports"
+        if (!settings.printerPrintReports && access?.has(PosPermission.END_OF_DAY) != true) {
+            return "Enable report printing in Settings"
+        }
         return null
     }
 }

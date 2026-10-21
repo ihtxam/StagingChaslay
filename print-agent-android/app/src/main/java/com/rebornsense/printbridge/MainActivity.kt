@@ -226,7 +226,7 @@ class MainActivity : AppCompatActivity() {
 
     /** WebPOS / boot / hot-plug — show the system USB allow dialog on this visible activity. */
     private fun tryRunUsbPermissionLaunch() {
-        if (!usbPermissionLaunchPending || !runtimePermissionsResolved) return
+        if (!usbPermissionLaunchPending) return
         usbPermissionLaunchPending = false
         window.decorView.post {
             if (isFinishing || isDestroyed) return@post
@@ -241,13 +241,11 @@ class MainActivity : AppCompatActivity() {
                 }
                 return@post
             }
+            UsbHostPermissions.clearStalePendingRequest(usb, maxAgeMs = 0L)
             if (!UsbHostPermissions.requestPermissionForDevice(this, device)) {
-                UsbBootPermissionNotifier.postPermissionNotificationForDevice(this, device)
-            }
-            if (usbPermissionThenMinimize) {
-                window.decorView.postDelayed({
-                    if (!isFinishing && !isDestroyed) moveTaskToBack(true)
-                }, 500L)
+                if (!UsbHostPermissions.isRequestPending()) {
+                    UsbBootPermissionNotifier.postPermissionNotificationForDevice(this, device)
+                }
             }
         }
     }
@@ -297,8 +295,8 @@ class MainActivity : AppCompatActivity() {
         dropUnpluggedUsbFromList()
         if (runtimePermissionsResolved) {
             refreshServiceStatusReadOnly(scanPrinters = true)
-            tryRunUsbPermissionLaunch()
         }
+        tryRunUsbPermissionLaunch()
     }
 
     override fun onDestroy() {
@@ -1068,7 +1066,8 @@ class MainActivity : AppCompatActivity() {
             raw.contains("socket", ignoreCase = true) && raw.contains("closed", ignoreCase = true) ->
                 getString(R.string.test_print_socket_closed)
             raw.contains("BLUETOOTH_SCAN", ignoreCase = true) ||
-                raw.contains("BLUETOOTH_CONNECT", ignoreCase = true) ->
+                raw.contains("BLUETOOTH_CONNECT", ignoreCase = true) ||
+                raw.contains("BLUETOOTH_ADMIN", ignoreCase = true) ->
                 getString(R.string.test_print_bluetooth_permission_denied)
             raw.contains("Bluetooth", ignoreCase = true) ->
                 getString(R.string.test_print_bluetooth_failed, raw)

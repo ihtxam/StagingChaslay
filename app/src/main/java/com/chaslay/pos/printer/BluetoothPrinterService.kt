@@ -42,6 +42,8 @@ import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class RefundReceiptLine(val label: String, val amount: Double)
+
 data class DiscoveredPrinter(
     val name: String,
     val address: String
@@ -338,7 +340,8 @@ class BluetoothPrinterService @Inject constructor(
 
     suspend fun routeEndOfDayReport(
         settings: BusinessSettingsEntity,
-        report: EndOfDayReport
+        report: EndOfDayReport,
+        includeProductsSold: Boolean = true
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val reportPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printEndOfDayReports && it.address.isNotBlank() }
@@ -346,19 +349,23 @@ class BluetoothPrinterService @Inject constructor(
             var last: Result<Unit> = Result.success(Unit)
             for (printer in reportPrinters) {
                 val lineWidth = lineWidthFor(printer.paperWidthMm)
-                val payload = buildEndOfDayReport(settings, report, lineWidth)
+                val payload = buildEndOfDayReport(settings, report, lineWidth, includeProductsSold)
                 last = sendBytes(printer.address, settings, payload, "End of day ${printer.name}")
             }
             return@withContext last
         }
         val legacyAddress = settings.printerMacAddress?.takeIf { it.isNotBlank() }
             ?: return@withContext Result.failure(IllegalStateException("No report printer configured. Add a printer with ENDOFDAY REPORTS enabled."))
-        val payload = buildEndOfDayReport(settings, report, LINE_WIDTH_80)
+        val payload = buildEndOfDayReport(settings, report, LINE_WIDTH_80, includeProductsSold)
         sendBytes(legacyAddress, settings, payload, "End of day report")
     }
 
-    suspend fun printEndOfDayReport(settings: BusinessSettingsEntity, report: EndOfDayReport): Result<Unit> =
-        routeEndOfDayReport(settings, report)
+    suspend fun printEndOfDayReport(
+        settings: BusinessSettingsEntity,
+        report: EndOfDayReport,
+        includeProductsSold: Boolean = true
+    ): Result<Unit> =
+        routeEndOfDayReport(settings, report, includeProductsSold)
 
     fun printKitchenTicket(
         settings: BusinessSettingsEntity,
@@ -636,6 +643,98 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
         last
+    }
+
+    /** Short proof-of-refund slip (WebPOS parity) with optional line items. */
+    suspend fun routeRefundReceipt(
+        settings: BusinessSettingsEntity,
+        transaction: TransactionEntity,
+        refundAmount: Double,
+        reason: String?,
+        lines: List<RefundReceiptLine> = emptyList()
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
+            .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
+        if (receiptPrinters.isEmpty()) {
+            val lineWidth = lineWidthFor(80)
+            val payload = buildRefundEscPosReceipt(
+                settings,
+                transaction,
+                refundAmount,
+                reason,
+                lines,
+                lineWidth
+            )
+            val address = settings.printerMacAddress?.trim().orEmpty()
+            if (address.isBlank()) {
+                return@withContext Result.failure(IllegalStateException("No receipt printer configured"))
+            }
+            return@withContext sendBytes(address, settings, payload, "Refund receipt")
+        }
+        var last: Result<Unit> = Result.success(Unit)
+        for (printer in receiptPrinters) {
+            val lineWidth = lineWidthFor(printer.paperWidthMm)
+            val payload = buildRefundEscPosReceipt(
+                settings,
+                transaction,
+                refundAmount,
+                reason,
+                lines,
+                lineWidth
+            )
+            last = sendBytes(printer.address, settings, payload, "Refund ${printer.name}")
+        }
+        last
+    }
+
+    private fun buildRefundEscPosReceipt(
+        settings: BusinessSettingsEntity,
+        transaction: TransactionEntity,
+        refundAmount: Double,
+        reason: String?,
+        lines: List<RefundReceiptLine>,
+        lineWidth: Int
+    ): ByteArray {
+        val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
+        val sep = "=".repeat(lineWidth.coerceAtMost(32))
+        val thin = "-".repeat(lineWidth)
+        val dateTimeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
+        val refundedAt = transaction.refundedAt ?: System.currentTimeMillis()
+        val sb = StringBuilder()
+        sb.appendLine(sep)
+        appendCenteredLines(sb, settings.businessName, lineWidth, bold = false)
+        sb.appendLine(center("REFUND", lineWidth))
+        sb.appendLine(sep)
+        val orderRef = com.chaslay.pos.util.OrderNumberFormat.displayForTransaction(transaction)
+        if (orderRef.isNotBlank()) {
+            sb.appendLine(leftRight("Order:", orderRef.take(lineWidth - 8), lineWidth))
+        }
+        sb.appendLine(leftRight("Date:", dateTimeFmt.format(Date(refundedAt)), lineWidth))
+        sb.appendLine(thin)
+        lines.forEach { line ->
+            sb.appendLine(
+                leftRight(
+                    line.label.take(lineWidth - 12),
+                    "-${formatMoney(line.amount, settings.currencySymbol)}",
+                    lineWidth
+                )
+            )
+        }
+        sb.appendLine(
+            leftRight(
+                labels.refunded,
+                formatMoney(refundAmount, settings.currencySymbol),
+                lineWidth
+            )
+        )
+        reason?.takeIf { it.isNotBlank() }?.let {
+            sb.appendLine(thin)
+            sb.appendLine("${labels.refundReason} ${it.take(lineWidth)}")
+        }
+        sb.appendLine(sep)
+        appendFooter(sb, settings.receiptFooter, lineWidth, settings.businessName)
+        sb.appendLine("\n\n\n")
+        return finalizePayload(sb.toString(), settings, lineWidth, receiptUrl = null)
     }
 
     /**
@@ -985,13 +1084,12 @@ class BluetoothPrinterService @Inject constructor(
                     )
                 )
             }
-            ReceiptVatCalculator.modifierSummary(item)?.let { mods ->
-                appendReceiptExtraLine(sb, "  ($mods)", settings)
+            item.cartModifierRows().forEach { row ->
+                val priceSuffix = row.price?.let { " ${formatMoney(it, settings.currencySymbol)}" }.orEmpty()
+                wrapText("  - ${row.label}$priceSuffix", lineWidth).forEach { sb.appendLine(it) }
             }
-            item.notes?.lines()?.filter { line ->
-                !Regex("^\\d+x\\s+").containsMatchIn(line.trim())
-            }?.map { it.trim() }?.filter { it.isNotBlank() }?.forEach { note ->
-                appendReceiptExtraLine(sb, "  ${labels.note} $note", settings)
+            item.freeformNotes()?.lines()?.map { it.trim() }?.filter { it.isNotBlank() }?.forEach { note ->
+                wrapText("  ${labels.note} $note", lineWidth).forEach { sb.appendLine(it) }
             }
         }
 
@@ -1118,9 +1216,12 @@ class BluetoothPrinterService @Inject constructor(
                     )
                 )
             }
-            ReceiptVatCalculator.modifierSummaryFromNotes(item.notes)?.let { mods ->
-                appendReceiptExtraLine(sb, "  ($mods)", settings)
-            }
+            ReceiptVatCalculator.modifierSummaryFromNotes(item.notes)?.split(", ")
+                ?.map { it.trim() }
+                ?.filter { it.isNotBlank() }
+                ?.forEach { name ->
+                    wrapText("  - $name", lineWidth).forEach { sb.appendLine(it) }
+                }
         }
 
         if (orderDiscount > 0.0) {
@@ -1152,6 +1253,22 @@ class BluetoothPrinterService @Inject constructor(
         val refundTotal = transaction.refundAmount.coerceAtLeast(0.0)
         val netPaid = (transaction.total - refundTotal).coerceAtLeast(0.0)
         if (refundTotal > 0.001) {
+            items.filter { it.refundedQuantity > 0 }.forEach { item ->
+                val unit = if (item.quantity > 0) item.lineTotal / item.quantity else 0.0
+                val lineRefund = unit * item.refundedQuantity.coerceAtLeast(0)
+                val label = buildString {
+                    append("${item.refundedQuantity}x ")
+                    append(item.productName)
+                    if (!item.variantName.isNullOrBlank()) append(" (${item.variantName})")
+                }
+                sb.appendLine(
+                    leftRight(
+                        label.take(lineWidth - 12),
+                        "-${formatMoney(lineRefund, settings.currencySymbol)}",
+                        lineWidth
+                    )
+                )
+            }
             sb.appendLine(
                 leftRight(
                     labels.refunded,
@@ -1253,7 +1370,8 @@ class BluetoothPrinterService @Inject constructor(
     private fun buildEndOfDayReport(
         settings: BusinessSettingsEntity,
         report: EndOfDayReport,
-        lineWidth: Int = LINE_WIDTH_80
+        lineWidth: Int = LINE_WIDTH_80,
+        includeProductsSold: Boolean = true
     ): ByteArray {
         val sym = settings.currencySymbol
         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
@@ -1370,7 +1488,7 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(dashes)
         sb.appendLine(leftRight("Total", formatMoney(report.orderTypeRows.sumOf { it.amount }, sym), lineWidth))
 
-        if (report.productsSold.isNotEmpty()) {
+        if (includeProductsSold && report.productsSold.isNotEmpty()) {
             sb.appendLine("")
             sb.appendLine(dashes)
             sb.appendLine(center("PRODUCTS SOLD", lineWidth))
@@ -1971,10 +2089,10 @@ class BluetoothPrinterService @Inject constructor(
     private fun appendReceiptExtraLine(
         sb: StringBuilder,
         text: String,
-        settings: BusinessSettingsEntity
+        settings: BusinessSettingsEntity,
+        lineWidth: Int = LINE_WIDTH_80
     ) {
-        val scale = effectiveKitchenItemScale(settings)
-        appendKitchenScaledLine(sb, text, scale, bold = false)
+        wrapText(text, lineWidth).forEach { sb.appendLine(it) }
     }
 
     private fun isKitchenDiscountNote(line: String): Boolean =

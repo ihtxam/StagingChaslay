@@ -620,9 +620,9 @@ class PosViewModel @Inject constructor(
         isRestaurantMode() && cachedSettings.tablesEnabled
 
     private fun shouldPickTableForDineIn(): Boolean =
-        cachedSettings.requireTableForDineIn &&
-            cachedSettings.tablesEnabled &&
-            (isRestaurantMode() || isRetailDineInEnabled())
+        isRestaurantMode() &&
+            cachedSettings.requireTableForDineIn &&
+            cachedSettings.tablesEnabled
 
     private fun ensureCounterDineInTicket(): String {
         val cart = cartManager.snapshot()
@@ -2425,6 +2425,7 @@ class PosViewModel @Inject constructor(
 
     fun openCheckout(method: PaymentMethod = PaymentMethod.CASH, fromSplit: Boolean = false) {
         val checkoutState = buildExpressCheckoutState(method) ?: return
+        cartManager.ensureWalkInTicket()
         refreshTapToPayReadiness()
         updateExtras {
             it.copy(
@@ -2832,11 +2833,17 @@ class PosViewModel @Inject constructor(
                 merged = merged.mergePosPrintSettings(print)
             }
             cfg.checkout?.let { checkout ->
-                merged = merged.mergePosCheckoutSettings(checkout)
+                merged = merged.mergePosCheckoutSettings(checkout, appContext)
             }
             if (current.paymentMethodsManagedByCloud) {
                 merged = merged.copy(giftCardsEnabled = cfg.methods?.giftCard == true)
             }
+            merged = merged.copy(
+                vatIncludedInPrice = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(
+                    appContext,
+                    merged.vatIncludedInPrice
+                )
+            )
             if (merged != current) {
                 settingsRepository.saveSettings(merged)
             }
@@ -3961,8 +3968,6 @@ class PosViewModel @Inject constructor(
                     loyaltyPointsEarned = _uiExtras.value.lastLoyaltyPointsEarned,
                     loyaltyPointsBalance = _uiExtras.value.lastLoyaltyPointsBalance
                 )
-            }.onSuccess {
-                updateExtras { it.copy(orderCompleteNotice = "Receipt printed") }
             }.onFailure { e ->
                 updateExtras {
                     it.copy(orderCompleteNotice = e.message ?: "No receipt printer configured")
@@ -3981,8 +3986,6 @@ class PosViewModel @Inject constructor(
             val settings = settingsRepository.getSettings()
             withContext(Dispatchers.IO) {
                 printerService.routeAdyenPaymentReceipt(settings, receipt)
-            }.onSuccess {
-                updateExtras { it.copy(orderCompleteNotice = "Customer card receipt printed") }
             }.onFailure { e ->
                 updateExtras {
                     it.copy(orderCompleteNotice = e.message ?: "Could not print customer card receipt")
@@ -4001,8 +4004,6 @@ class PosViewModel @Inject constructor(
             val settings = settingsRepository.getSettings()
             withContext(Dispatchers.IO) {
                 printerService.routeAdyenPaymentReceipt(settings, receipt)
-            }.onSuccess {
-                updateExtras { it.copy(orderCompleteNotice = "Merchant card receipt printed") }
             }.onFailure { e ->
                 updateExtras {
                     it.copy(orderCompleteNotice = e.message ?: "Could not print merchant card receipt")

@@ -22,6 +22,7 @@ import { CustomerService } from "@/services/customer.service";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { CatalogImportService, type ImportProgressEvent } from "@/services/catalog-import.service";
 import { DemoCatalogService } from "@/services/demo-catalog.service";
+import { DemoCateringService } from "@/services/demo-catering.service";
 import { ModifierService } from "@/services/modifier.service";
 import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
@@ -51,6 +52,20 @@ const FAVICON_EXTENSIONS = new Set([".png", ".ico", ".svg"]);
 function wantsPosLocationCatalog(req: Request): boolean {
   const raw = String(req.query.posLocationCatalog ?? req.query.locationCatalog ?? "").trim();
   return raw === "1" || raw.toLowerCase() === "true";
+}
+
+/**
+ * Strict terminal menu isolation applies only to WebPOS (posLocationCatalog=1).
+ * HQ/Admin requests often send X-Location-Id for reports but must see the full master catalog.
+ */
+function usesPosLocationCatalog(req: Request): boolean {
+  return wantsPosLocationCatalog(req);
+}
+
+function posCatalogLocationId(req: Request): string | undefined {
+  if (!usesPosLocationCatalog(req)) return undefined;
+  if (!req.locationId) return undefined;
+  return req.locationId;
 }
 
 const imageUpload = multer({
@@ -373,6 +388,29 @@ router.get(
  * DELETE /api/merchant/products/demo-data
  * Remove imported demo catalog products/categories only (clientId demo-* prefix).
  */
+/**
+ * POST /api/merchant/products/import-demo-catering
+ * Seed full catering showcase (categories + all pricing scenarios) for shop demos.
+ */
+router.post(
+  "/products/import-demo-catering",
+  requirePermission("MANAGE_PRODUCTS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const force = req.body?.force === true;
+      const result = await DemoCateringService.importShowcase(merchantId, { force });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error("Demo catering import failed:", error);
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Demo catering import failed",
+      });
+    }
+  }
+);
+
 router.delete(
   "/products/demo-data",
   requirePermission("MANAGE_PRODUCTS"),
@@ -421,14 +459,17 @@ router.get("/products", async (req: Request, res: Response) => {
     ]);
     let pageList = products || [];
 
-    if (wantsPosLocationCatalog(req) && req.locationId) {
+    const catalogLocationId = posCatalogLocationId(req);
+    if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
         merchantId,
-        req.locationId,
+        catalogLocationId,
         "pos"
       );
       pageList = catalog.products;
+    } else if (usesPosLocationCatalog(req)) {
+      pageList = [];
     }
 
     // Resolve combo option products that may not be on the current page
@@ -509,11 +550,11 @@ router.get("/products", async (req: Request, res: Response) => {
       success: true,
       products: withCatalog,
       pagination: {
-        page: wantsPosLocationCatalog(req) ? 1 : page,
-        limit: wantsPosLocationCatalog(req) ? pageList.length : limit,
-        total: wantsPosLocationCatalog(req) ? pageList.length : total,
+        page: usesPosLocationCatalog(req) ? 1 : page,
+        limit: usesPosLocationCatalog(req) ? pageList.length : limit,
+        total: usesPosLocationCatalog(req) ? pageList.length : total,
       },
-      locationId: wantsPosLocationCatalog(req) ? req.locationId : undefined,
+      locationId: catalogLocationId,
       productLimit: productLimit
         ? {
             maxProducts: productLimit.maxProducts,
@@ -683,6 +724,14 @@ router.post("/products", async (req: Request, res: Response) => {
 
     const { BarcodeService } = await import("@/services/barcode.service");
     const normalizedBarcode = BarcodeService.normalizeForSave(barcode);
+    if (normalizedBarcode) {
+      const existingBarcode = await ProductService.getProductByBarcode(merchantId, normalizedBarcode);
+      if (existingBarcode) {
+        return res.status(400).json({
+          error: `A product with barcode ${normalizedBarcode} already exists`,
+        });
+      }
+    }
 
     const product = await ProductService.createProduct(
       merchantId,
@@ -1150,17 +1199,25 @@ router.get("/categories", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    if (wantsPosLocationCatalog(req) && req.locationId) {
+    const catalogLocationId = posCatalogLocationId(req);
+    if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
         merchantId,
-        req.locationId,
+        catalogLocationId,
         "pos"
       );
       return res.json({
         success: true,
         categories: catalog.categories,
         locationId: catalog.locationId,
+      });
+    }
+    if (usesPosLocationCatalog(req)) {
+      return res.json({
+        success: true,
+        categories: [],
+        locationId: null,
       });
     }
 
@@ -2331,6 +2388,33 @@ router.put("/settings", async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /api/merchant/settings/panel-nav
+ * Owner / manager: hide sidebar sections for this merchant (same keys as reseller).
+ */
+router.put(
+  "/settings/panel-nav",
+  requirePermission("MANAGE_SETTINGS"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) {
+        return res.status(400).json({ error: "Merchant ID is required" });
+      }
+      const { hidden, panelNavHidden } = req.body || {};
+      const settings = await MerchantSettingsService.updatePanelNavHidden(
+        merchantId,
+        panelNavHidden ?? hidden ?? []
+      );
+      res.json({ success: true, settings });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to update panel menu",
+      });
+    }
+  }
+);
+
+/**
  * GET /api/merchant/reports/eod
  * End-of-day / sales report (POS + synced sales in orders table)
  * Query: preset=today|yesterday|last_week|last_month|last_3_months|custom&from=&to=
@@ -2341,6 +2425,48 @@ router.put("/settings", async (req: Request, res: Response) => {
  * GET /api/merchant/reports/sales-mix
  * Sales mix & advanced analytics (Growth Analytics add-on).
  */
+/**
+ * GET /api/merchant/reports/profit-margin
+ * Profit & margin from product buying prices (products.cost).
+ */
+router.get(
+  "/reports/profit-margin",
+  requirePermission("VIEW_REPORTS", "END_OF_DAY"),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      if (!merchantId) return res.status(400).json({ error: "Merchant ID is required" });
+      const { resolveReportActor, salesScopeForActor } = await import("@/lib/report-sales-scope");
+      const actor = resolveReportActor(req);
+      const scope = salesScopeForActor(actor);
+      if (!scope.viewAll && !scope.staffId) {
+        return res.status(403).json({ error: "Own-sales reports require a staff PIN session" });
+      }
+      const preset = String(req.query.preset || "today") as import("@/services/pos-reports.service").ReportPreset;
+      const { ProfitMarginService } = await import("@/services/profit-margin.service");
+      const report = await ProfitMarginService.getProfitMarginReport(merchantId, {
+        preset,
+        from: req.query.from ? String(req.query.from) : undefined,
+        to: req.query.to ? String(req.query.to) : undefined,
+        granularity: req.query.granularity ? String(req.query.granularity) : undefined,
+        staffId: scope.viewAll ? (req.query.staffId ? String(req.query.staffId) : null) : scope.staffId,
+        locationId:
+          req.query.scope === "location"
+            ? (req.locationId as string | undefined) || undefined
+            : req.query.locationId
+              ? String(req.query.locationId)
+              : undefined,
+      });
+      res.json({ success: true, report });
+    } catch (error) {
+      console.error("Profit margin report failed:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load profit margin report",
+      });
+    }
+  }
+);
+
 router.get(
   "/reports/sales-mix",
   requirePermission("VIEW_REPORTS", "END_OF_DAY"),

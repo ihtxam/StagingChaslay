@@ -6,6 +6,7 @@ import { MerchantService } from "@/services/merchant.service";
 import { attachLicenseRelations, LicenseAdminService } from "@/services/license-admin.service";
 import { ResellerBillingService } from "@/services/reseller-billing.service";
 import { isInventoryAddonEnabled } from "@/lib/inventory-addon";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isSignageAddonEnabled, normalizeSignageScreenLimit } from "@/lib/signage-addon";
 import { normalizePanelNavHidden } from "@/lib/panel-nav-hidden";
 
@@ -376,6 +377,7 @@ export class ResellerService {
         uberEatsAddonEnabled: schema.merchants.uberEatsAddonEnabled,
         panelNavHidden: schema.merchants.panelNavHidden,
         shopCommissionPercent: schema.merchants.shopCommissionPercent,
+        cateringEnabled: schema.merchants.cateringEnabled,
         createdAt: schema.merchants.createdAt,
       })
       .from(schema.merchants)
@@ -393,6 +395,7 @@ export class ResellerService {
       odsAddonEnabled: r.odsAddonEnabled === true,
       deliveryPlatformsAddonEnabled:
         r.justEatAddonEnabled === true || r.uberEatsAddonEnabled === true,
+      cateringAddonEnabled: isCateringAddonEnabled(r.cateringEnabled),
       panelNavHidden: normalizePanelNavHidden(r.panelNavHidden),
     }));
   }
@@ -429,6 +432,7 @@ export class ResellerService {
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      cateringAddonEnabled?: boolean;
     }
   ) {
     const reseller = await this.getById(resellerId);
@@ -480,6 +484,7 @@ export class ResellerService {
         odooAddonEnabled: input.odooAddonEnabled,
         growthAnalyticsAddonEnabled: input.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: input.guestCrmAddonEnabled,
+        cateringAddonEnabled: input.cateringAddonEnabled,
       }
     );
     return created;
@@ -504,6 +509,7 @@ export class ResellerService {
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      cateringAddonEnabled?: boolean;
     }
   ) {
     await this.assertOwnsMerchant(resellerId, merchantId);
@@ -524,6 +530,7 @@ export class ResellerService {
       odooAddonEnabled: limits.odooAddonEnabled,
       growthAnalyticsAddonEnabled: limits.growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled: limits.guestCrmAddonEnabled,
+      cateringAddonEnabled: limits.cateringAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);
   }

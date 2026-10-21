@@ -519,6 +519,27 @@ router.get("/merchants/:merchantId", async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /api/superadmin/merchants/:merchantId/panel-nav
+ * Hide sidebar menu groups from the merchant panel (same as reseller).
+ */
+router.put("/merchants/:merchantId/panel-nav", async (req: Request, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    const { hidden, panelNavHidden } = req.body || {};
+    const { MerchantSettingsService } = await import("@/services/merchant-settings.service");
+    const settings = await MerchantSettingsService.updatePanelNavHidden(
+      merchantId,
+      panelNavHidden ?? hidden ?? []
+    );
+    res.json({ success: true, settings });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to update panel menu",
+    });
+  }
+});
+
+/**
  * POST /api/superadmin/merchants/:merchantId/impersonate
  * Open merchant admin panel as that merchant (keeps superadmin session on client for return)
  */

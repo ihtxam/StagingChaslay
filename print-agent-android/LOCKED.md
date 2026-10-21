@@ -1,6 +1,8 @@
 # Bridge Reborn (`print-agent-android/`) — locked
 
-This Android companion app is **frozen** for routine product work. WebPOS, dashboard, and backend changes should not refactor Bridge UX, boot, FGS, or autostart unless explicitly approved.
+This Android companion app is **frozen** for routine product work. WebPOS, dashboard, and backend changes should not refactor Bridge UX, boot, FGS, USB plug-and-play, or autostart unless explicitly approved.
+
+**Stable baseline (2026-10-20):** `0.4.49` (versionCode 67) — Nebullus USB: foreground MainActivity allow dialog (Ojavana-style), not notification-only. Prior `0.4.47` (65) — adds `BLUETOOTH_ADMIN` for Sunmi/legacy BT print + safe `cancelDiscovery`. Prior `0.4.46` (64): USB ESC/POS pass-through, BT cut trailer, boot/offline-safe start. Treat this tree as locked; kitchen/receipt cut policy lives in dashboard `webpos-receipt.ts` + `webpos-print-relay.ts`, not in Bridge drivers.
 
 ## Allowed without escalation
 

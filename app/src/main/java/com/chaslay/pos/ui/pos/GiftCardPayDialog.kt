@@ -8,14 +8,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +33,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 import com.chaslay.pos.data.remote.dto.GiftCardDto
 import com.chaslay.pos.ui.components.RfidScanField
@@ -67,11 +73,32 @@ fun GiftCardPayDialog(
         }
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.gift_card_pay)) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .imePadding()
+                .padding(vertical = 24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    stringResource(R.string.gift_card_pay),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 if (media == null) {
                     Text(
                         stringResource(R.string.gift_card_choose_media),
@@ -158,26 +185,29 @@ fun GiftCardPayDialog(
                         }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            if (media != null) {
-                Button(
-                    onClick = {
-                        val card = lookedUpCard ?: return@Button
-                        val amount = amountText.toDoubleOrNull() ?: return@Button
-                        if (amount > 0.001) onConfirm(amount, card)
-                    },
-                    enabled = !busy && lookedUpCard != null && (amountText.toDoubleOrNull() ?: 0.0) > 0.001
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Text(stringResource(R.string.gift_card_apply_payment))
+                    OutlinedButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.close))
+                    }
+                    if (media != null) {
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        Button(
+                            onClick = {
+                                val card = lookedUpCard ?: return@Button
+                                val amount = amountText.toDoubleOrNull() ?: return@Button
+                                if (amount > 0.001) onConfirm(amount, card)
+                            },
+                            enabled = !busy && lookedUpCard != null && (amountText.toDoubleOrNull() ?: 0.0) > 0.001
+                        ) {
+                            Text(stringResource(R.string.gift_card_apply_payment))
+                        }
+                    }
                 }
             }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close))
-            }
         }
-    )
+    }
 }

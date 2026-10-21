@@ -14,6 +14,7 @@ export default function ShopMinimalHeader({
   loggedIn = false,
   showGiftCards,
   showReservations,
+  showCatering,
   onStoreInfo,
 }: {
   basePath: string;
@@ -23,6 +24,7 @@ export default function ShopMinimalHeader({
   loggedIn?: boolean;
   showGiftCards?: boolean;
   showReservations?: boolean;
+  showCatering?: boolean;
   onStoreInfo?: () => void;
 }) {
   const { t } = useI18n();
@@ -30,15 +32,17 @@ export default function ShopMinimalHeader({
   const isLoggedIn = shopKey ? sessionLoggedIn : loggedIn;
   const home = basePath || '/';
   const accountPath = `${home}/account`.replace(/\/+/g, '/');
-  const navFlags = useShopNavFlags(shopKey, { showGiftCards, showReservations });
+  const navFlags = useShopNavFlags(shopKey, { showGiftCards, showReservations, showCatering });
   const { topbarLinks, drawerLinks } = buildShopTopbarNav({
     basePath: home,
     showGiftCards: navFlags.showGiftCards,
     showReservations: navFlags.showReservations,
+    showCatering: navFlags.showCatering,
     onStoreInfo,
     labels: {
       home: t('shopHome'),
       menu: t('shopMenu'),
+      catering: t('cateringShopNav'),
       giftCard: t('shopGiftCardNav'),
       reservations: t('shopReservations'),
       contact: t('shopContact'),

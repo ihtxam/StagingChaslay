@@ -336,35 +336,43 @@ fun CheckoutScreen(
                     }
                 )
             }
-            CheckoutMethodButton(
-                title = stringResource(R.string.pay_later),
-                icon = Icons.Default.Schedule,
-                selected = checkoutState.method == PaymentMethod.PAY_LATER,
-                accent = Color(0xFFF59E0B),
-                onClick = {
-                    tenderBuffer = ""
-                    onTenderAmount(0.0)
-                    onSelectMethod(PaymentMethod.PAY_LATER)
-                }
-            )
-            CheckoutMethodButton(
-                title = stringResource(R.string.invoice),
-                icon = Icons.Default.Description,
-                selected = checkoutState.method == PaymentMethod.INVOICE,
-                accent = Color(0xFF0EA5E9),
-                onClick = {
-                    tenderBuffer = ""
-                    onTenderAmount(0.0)
-                    onSelectMethod(PaymentMethod.INVOICE)
-                }
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                CheckoutMethodButton(
+                    title = stringResource(R.string.pay_later),
+                    icon = Icons.Default.Schedule,
+                    selected = checkoutState.method == PaymentMethod.PAY_LATER,
+                    accent = Color(0xFFF59E0B),
+                    onClick = {
+                        tenderBuffer = ""
+                        onTenderAmount(0.0)
+                        onSelectMethod(PaymentMethod.PAY_LATER)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                CheckoutMethodButton(
+                    title = stringResource(R.string.invoice),
+                    icon = Icons.Default.Description,
+                    selected = checkoutState.method == PaymentMethod.INVOICE,
+                    accent = Color(0xFF0EA5E9),
+                    onClick = {
+                        tenderBuffer = ""
+                        onTenderAmount(0.0)
+                        onSelectMethod(PaymentMethod.INVOICE)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
             if (giftCardsEnabled) {
                 CheckoutMethodButton(
                     title = stringResource(R.string.gift_card_pay),
                     icon = Icons.Default.Redeem,
                     selected = checkoutState.payWithGiftCard && checkoutState.giftCardRedeemAmount > 0.001,
                     accent = CheckoutTeal,
-                    onClick = onGiftCardPay
+                    onClick = onGiftCardPay,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -692,7 +700,8 @@ private fun CheckoutMethodButton(
     accent: Color,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    subtitle: String? = null
+    subtitle: String? = null,
+    modifier: Modifier = Modifier
 ) {
     // A disabled tender stays visible and states why: a cashier who cannot find
     // the button learns nothing, whereas a greyed button with a reason sends them
@@ -709,7 +718,7 @@ private fun CheckoutMethodButton(
     }
     val contentAlpha = if (enabled) 1f else 0.45f
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(12.dp))

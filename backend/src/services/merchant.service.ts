@@ -450,6 +450,7 @@ export class MerchantService {
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      cateringAddonEnabled?: boolean;
       marketingAutomationAddonEnabled?: boolean;
       smartSegmentsAddonEnabled?: boolean;
       reservationCampaignsAddonEnabled?: boolean;
@@ -631,6 +632,9 @@ export class MerchantService {
       }
       if (options?.guestCrmAddonEnabled === true) {
         await writeGuestCrmAddonEnabled(created.id, true);
+      }
+      if (options?.cateringAddonEnabled === true) {
+        await writeCateringAddonEnabled(created.id, true);
       }
       if (options?.marketingAutomationAddonEnabled === true) {
         await writeMarketingAutomationAddonEnabled(created.id, true);

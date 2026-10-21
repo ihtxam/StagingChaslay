@@ -1,3 +1,4 @@
+# Deploy 2026-10-20T05:55:00Z — Bridge download manifest 0.4.46, canonical APK route fix
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
 # Last deploy request: 2026-09-23T14:10:00Z — POS delivery client toggle, receipt cut fix, cancelled orders filter, remove Reports from Sales nav
 # Deploy request: 2026-09-24T23:24:45Z — receipt header, cash modal, desktop hub basic settings
@@ -28,3 +29,7 @@
 # Deploy 2026-10-19T12:15:00Z — RebornPOS Android APK v1.0.23 binary
 
 # Deploy 2026-10-19T12:20:00Z — RebornPOS Android APK publish pipeline
+
+# Deploy 2026-10-20T09:30:00Z — WebPOS register picker solid white modal panel
+# Deploy 2026-10-20T08:05:00Z — shop catering nav/scroll, WebPOS register picker scroll + contrast, waiter table labels
+# Deploy 2026-10-20T05:35:00Z — POS floor stations, Bridge 0.4.46 USB permission, PIN loginHome routing, shop hub landing fix

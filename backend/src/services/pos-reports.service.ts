@@ -263,6 +263,16 @@ export class PosReportsService {
       }
     }
 
+    const productUnitCost = new Map<string, number>();
+    const costRows = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+      columns: { id: true, cost: true },
+    });
+    for (const p of costRows) {
+      const c = money(p.cost);
+      if (c > 0) productUnitCost.set(p.id, c);
+    }
+
     const resolveStaffName = (o: (typeof rows)[0]) => {
       const fromOrder = (o.staffName || "").trim();
       if (fromOrder) return fromOrder;
@@ -367,10 +377,12 @@ export class PosReportsService {
         const refundedQty = money((item as { refundedQuantity?: unknown }).refundedQuantity);
         const keptQty = Math.max(0, qty - refundedQty);
         if (keptQty <= 0.0005) continue;
-        const cur = products.get(key) || { name, qty: 0, total: 0 };
+        const unitCost = item.productId ? productUnitCost.get(item.productId) || 0 : 0;
+        const cur = products.get(key) || { name, qty: 0, total: 0, cogs: 0 };
         const unit = qty > 0 ? money(item.totalPrice) / qty : 0;
         cur.qty += keptQty;
         cur.total += unit * keptQty;
+        cur.cogs += unitCost * keptQty;
         products.set(key, cur);
       }
     }
@@ -435,11 +447,19 @@ export class PosReportsService {
     const productsSold = [...products.values()]
       .sort((a, b) => b.total - a.total)
       .slice(0, 100)
-      .map((p) => ({
-        name: p.name,
-        quantity: Math.round(p.qty * 1000) / 1000,
-        total: round2(p.total),
-      }));
+      .map((p) => {
+        const revenue = round2(p.total);
+        const cogs = round2(p.cogs || 0);
+        const profit = round2(revenue - cogs);
+        return {
+          name: p.name,
+          quantity: Math.round(p.qty * 1000) / 1000,
+          total: revenue,
+          cogs,
+          profit,
+          marginPct: revenue > 0.0005 ? round2((profit / revenue) * 100) : null,
+        };
+      });
 
     const userPerformance = [...staffMap.values()]
       .sort((a, b) => b.total - a.total)

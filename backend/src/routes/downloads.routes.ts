@@ -152,8 +152,8 @@ router.get("/reborn-pos-android-:version.apk", (req: Request, res: Response) => 
 });
 
 function sendPrintBridgeApk(res: Response) {
-  const filePath = downloadsFilePath(PRINT_BRIDGE_APK_FILE);
   const desc = describePrintBridgeApk();
+  const filePath = downloadsFilePath(desc.filename || PRINT_BRIDGE_APK_FILE);
   if (!fileMagicOk(filePath, "apk") || !desc.available) {
     return res
       .status(404)

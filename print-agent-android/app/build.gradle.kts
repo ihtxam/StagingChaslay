@@ -28,14 +28,17 @@ android {
         // Adyen Tap to Pay requires API 26+; print-only still works on API 24 when SDK absent.
         minSdk = if (hasAdyenSdk) 26 else 24
         targetSdk = 35
-        versionCode = 63
-        versionName = "0.4.45"
+        versionCode = 67
+        versionName = "0.4.49"
         buildConfigField("boolean", "HAS_ADYEN_SDK", hasAdyenSdk.toString())
     }
 
     if (hasAdyenSdk) {
         sourceSets {
-            getByName("main").java.directories.add("src/adyen/kotlin")
+            getByName("main") {
+                java.directories.add("src/adyen/kotlin")
+                manifest.srcFile("src/adyen/AndroidManifest.xml")
+            }
         }
     }
 

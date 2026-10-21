@@ -32,12 +32,8 @@ import {
 } from '@/lib/edition-features';
 import EditionFeatureChecklist from '@/components/EditionFeatureChecklist';
 import ShopCommissionSection from '@/components/merchant/ShopCommissionSection';
-import {
-  PANEL_NAV_HIDE_OPTIONS,
-  isPanelNavOptionChecked,
-  parsePanelNavHidden,
-  togglePanelNavOption,
-} from '@/lib/panel-nav-hidden';
+import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
+import PanelNavManageModal from '@/components/panel/PanelNavManageModal';
 import {
   handleLimitNumberInputChange,
   limitNumberInputDisplay,
@@ -265,6 +261,7 @@ function MerchantsPage() {
     storekeeperAddonEnabled: false,
     growthAnalyticsAddonEnabled: false,
     guestCrmAddonEnabled: false,
+    cateringAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
     id: string;
@@ -284,6 +281,7 @@ function MerchantsPage() {
     storekeeperAddonEnabled: boolean;
     growthAnalyticsAddonEnabled: boolean;
     guestCrmAddonEnabled: boolean;
+    cateringAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
     id: string;
@@ -476,6 +474,7 @@ function MerchantsPage() {
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
         growthAnalyticsAddonEnabled: !!limitsFor.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!limitsFor.guestCrmAddonEnabled,
+        cateringAddonEnabled: !!limitsFor.cateringAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
       setLimitsFor(null);
@@ -918,6 +917,22 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!form.cateringAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, cateringAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">Catering</span>
+                <span className="text-xs text-stone-500">
+                  Prepackaged menus, guest counts, shop catering mode
+                </span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!form.kdsAddonEnabled}
                 onChange={(e) => setForm((f) => ({ ...f, kdsAddonEnabled: e.target.checked }))}
               />
@@ -1239,6 +1254,22 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!limitsFor.cateringAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, cateringAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">Catering</span>
+                <span className="text-xs text-stone-500">
+                  Prepackaged menus, guest counts, shop catering mode
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!limitsFor.kdsAddonEnabled}
                 onChange={(e) =>
                   setLimitsFor({ ...limitsFor, kdsAddonEnabled: e.target.checked })
@@ -1352,48 +1383,17 @@ function MerchantsPage() {
         </div>
       ) : null}
 
-      {panelNavFor ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-lg rounded-2xl border bg-white p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold">{t('panelNavManage')}</h2>
-            <p className="text-sm text-stone-600">{panelNavFor.name}</p>
-            <p className="text-xs text-stone-500">{t('panelNavManageHint')}</p>
-            <div className="space-y-2">
-              {PANEL_NAV_HIDE_OPTIONS.map((opt) => {
-                const checked = isPanelNavOptionChecked(opt.key, panelNavFor.hidden);
-                return (
-                  <label key={opt.key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        setPanelNavFor({
-                          ...panelNavFor,
-                          hidden: togglePanelNavOption(panelNavFor.hidden, opt.key, e.target.checked),
-                        });
-                      }}
-                    />
-                    {t(opt.labelKey as any)}
-                  </label>
-                );
-              })}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary text-sm" onClick={() => setPanelNavFor(null)}>
-                {t('cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn-primary text-sm"
-                disabled={savingPanelNav}
-                onClick={() => void savePanelNav()}
-              >
-                {savingPanelNav ? '…' : t('save')}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <PanelNavManageModal
+        open={!!panelNavFor}
+        merchantName={panelNavFor?.name || ''}
+        hidden={panelNavFor?.hidden || []}
+        saving={savingPanelNav}
+        onClose={() => setPanelNavFor(null)}
+        onChange={(hidden) => {
+          if (panelNavFor) setPanelNavFor({ ...panelNavFor, hidden });
+        }}
+        onSave={() => void savePanelNav()}
+      />
 
       {shopBillFor ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
@@ -1553,6 +1553,7 @@ function MerchantsPage() {
                     storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                     growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
                     guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
+                    cateringAddonEnabled: m.cateringAddonEnabled === true,
                   }),
               },
               {

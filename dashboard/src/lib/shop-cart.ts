@@ -421,7 +421,12 @@ export function resolveShopKey(paramSlug?: string) {
   if (label && !RESERVED_SUBDOMAINS.has(label)) return label;
   if (label === 'shop') {
     const seg = window.location.pathname.split('/').filter(Boolean)[0];
-    if (seg && !['checkout', 'order', 'account', 'menu', 'table', 'api', 'assets'].includes(seg)) return seg;
+    if (
+      seg &&
+      !['checkout', 'order', 'account', 'menu', 'table', 'api', 'assets', 'catering', 'locations', 'pages', 'gift-cards', 'reservations', 'register', 'forgot-password'].includes(seg)
+    ) {
+      return seg;
+    }
   }
   const host = window.location.hostname.toLowerCase();
   const main = publicDomain();
@@ -458,6 +463,59 @@ export function shopMenuApiPath(shopKey: string, locationSlug?: string | null) {
 
 export function resolveShopLocationSlug(params?: { locationSlug?: string }) {
   return params?.locationSlug?.trim() || null;
+}
+
+/** Path-based shop hub (order.rebornsense.com/{slug}, shop.chaslay.com/{slug}). */
+export function isShopPathHubRouting(): boolean {
+  return subdomainLabel() === 'shop';
+}
+
+/**
+ * Customer menu URL after location hub or deep links.
+ * On path hubs, keep /{slug}/menu — location lives in sessionStorage, not the URL.
+ */
+export function shopMenuLandingPath(shopKey: string, locationSlug?: string | null): string {
+  if (isShopPathHubRouting()) {
+    return `${shopBasePath(shopKey, null)}/menu`;
+  }
+  const loc = String(locationSlug || '').trim();
+  if (loc) return `${shopBasePath(shopKey, loc)}/menu`;
+  return `${shopBasePath(shopKey, null)}/menu`;
+}
+
+/** Catering marketing / info page (not the product grid). */
+export function shopCateringHomePath(shopKey: string, locationSlug?: string | null): string {
+  const base = shopBasePath(shopKey, locationSlug);
+  return `${base}/catering`.replace(/\/+/g, '/');
+}
+
+/** Catering-only shop menu (no regular retail / café items). */
+export function shopCateringMenuPath(shopKey: string, locationSlug?: string | null): string {
+  const base = shopBasePath(shopKey, locationSlug);
+  return `${base}/catering/menu`.replace(/\/+/g, '/');
+}
+
+/** After location hub, route to the correct menu surface. */
+export function shopMenuPathAfterHub(
+  shopKey: string,
+  locationSlug: string | null | undefined,
+  orderMode?: 'menu' | 'catering'
+): string {
+  if (orderMode === 'catering') return shopCateringMenuPath(shopKey, locationSlug);
+  return shopMenuLandingPath(shopKey, locationSlug);
+}
+
+/** Resolve menu/catalog location: URL segment, then hub session, then optional fallback. */
+export function resolveShopMenuLocationSlug(
+  shopKey: string,
+  urlLocationSlug?: string | null,
+  sessionLocationSlug?: string | null
+): string | null {
+  const fromUrl = String(urlLocationSlug || '').trim();
+  if (fromUrl) return fromUrl;
+  const fromSession = String(sessionLocationSlug || '').trim();
+  if (fromSession) return fromSession;
+  return null;
 }
 
 const CUSTOMER_TOKEN_PREFIX = 'manupos_shop_customer:';

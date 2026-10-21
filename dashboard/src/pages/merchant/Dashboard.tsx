@@ -74,7 +74,8 @@ import PlatformMessagesProvider, {
   PlatformStatusBannerSlot,
 } from '@/components/platform/PlatformMessagesProvider';
 import { useAuthStore } from '@/store/auth';
-import { homePathForUser } from '@/lib/auth-home';
+import { homePathForUser, navigateTargetAfterStaffPin } from '@/lib/auth-home';
+import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import {
   allowOrderCenterRoute,
   resolveDeniedRouteFallback,
@@ -133,8 +134,11 @@ import {
 } from '@/lib/permissions';
 import type { EditionFeatureKey } from '@/lib/edition-features';
 import type { BusinessModule } from '@/lib/business-module';
-import { isRestaurantModule, normalizeBusinessModule } from '@/lib/business-module';
-import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
+import {
+  businessModuleFromMerchantSettings,
+  isRestaurantModule,
+  normalizeBusinessModule,
+} from '@/lib/business-module';
 import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
@@ -161,7 +165,8 @@ import ScheduledMenusPage from './ScheduledMenusPage';
 import PizzaBuilderPage from './PizzaBuilderPage';
 import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
 import OrderCenterApp from './OrderCenterApp';
-import { useLocationStore } from '@/store/location';
+import { getSelectedLocationId, useLocationStore } from '@/store/location';
+import { buildWebPosLaunchPath } from '@/lib/webpos-terminal-location';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
@@ -404,7 +409,10 @@ function MerchantShell() {
     } | null) => {
       const feats = settings?.editionFeatures;
       setEditionFeatures(Array.isArray(feats) ? feats : null);
-      setBusinessModule(normalizeBusinessModule(settings?.businessCategory));
+      setBusinessModule(
+        businessModuleFromMerchantSettings(settings) ??
+          normalizeBusinessModule(settings?.businessCategory)
+      );
       setShopEnabled(!!settings?.shopEnabled);
       setMaxPosPosts(Math.max(0, Number(settings?.maxPosPosts) || 0));
       setOrderCenterEnabled(settings?.orderCenterEnabled !== false);
@@ -663,7 +671,10 @@ function MerchantShell() {
     [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
-  const { locations, limits } = useLocationStore();
+  const { locations, limits, locationId: panelLocationId } = useLocationStore();
+  const posLaunchPath = buildWebPosLaunchPath(
+    panelLocationId || getSelectedLocationId() || ''
+  );
   const showHq =
     hqLicensed ||
     isMultiLocationLicensed({ maxLocations: limits?.maxLocations }) ||
@@ -835,6 +846,20 @@ function MerchantShell() {
     if (isOrderCenterOnlyStaff(perms, false)) {
       if (!isOrderCenterHomeLocation(location.pathname)) {
         navigate(orderCenterHomePath(), { replace: true });
+      }
+      return;
+    }
+    if (normalizeStaffLoginHome(user?.loginHome) === 'pos') {
+      if (!isAppShellRoute) {
+        const dest = homePathForUser({
+          role: 'staff',
+          permissions: perms,
+          isOwner: false,
+          loginHome: 'pos',
+        });
+        const path = location.pathname.replace(/\/$/, '') || '/merchant';
+        const normalizedDest = dest.replace(/\/$/, '') || '/merchant';
+        if (path !== normalizedDest) navigate(dest, { replace: true });
       }
       return;
     }
@@ -1150,6 +1175,7 @@ function MerchantShell() {
       roleId: string;
       roleName: string;
       permissions: string[];
+      loginHome?: string;
       accessToken?: string;
     }) => {
       const session = webPosSessionFromStaffProfile({
@@ -1163,8 +1189,22 @@ function MerchantShell() {
       saveWebPosStaffSession(session);
       setPinSession(session);
       notifyWebPosStaffSessionChanged();
+      const dest = navigateTargetAfterStaffPin(
+        {
+          permissions: staff.permissions as Permission[],
+          loginHome: normalizeStaffLoginHome(staff.loginHome),
+        },
+        location.pathname,
+        'gate'
+      );
+      if (dest) {
+        if (dest === '/merchant/pos' || dest === '/merchant/waiter') {
+          window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+        }
+        navigate(dest, { replace: true });
+      }
     },
-    []
+    [location.pathname, navigate]
   );
 
   const handlePanelPinLogout = useCallback(() => {
@@ -1219,7 +1259,7 @@ function MerchantShell() {
                 !kioskRestricted &&
                 !orderCenterRestricted &&
                 showWebPosQuickAction
-                  ? { label: t('sidebarPos'), path: '/merchant/pos' }
+                  ? { label: t('sidebarPos'), path: posLaunchPath }
                   : null
               }
               language={locale}
@@ -1263,7 +1303,7 @@ function MerchantShell() {
                 !kioskRestricted &&
                 !orderCenterRestricted &&
                 showWebPosQuickAction
-                  ? { label: t('sidebarPos'), path: '/merchant/pos' }
+                  ? { label: t('sidebarPos'), path: posLaunchPath }
                   : null
               }
               language={locale}

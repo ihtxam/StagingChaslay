@@ -74,8 +74,31 @@ class OrderHistoryViewModel @Inject constructor(
     private val sessionManager: SessionManager
 ) : ViewModel() {
 
+    private data class PendingRefundPrint(
+        val order: TransactionEntity,
+        val refundAmount: Double,
+        val reason: String?,
+        val lines: List<com.chaslay.pos.printer.RefundReceiptLine>
+    )
+
+    private var pendingRefundPrint: PendingRefundPrint? = null
+
     companion object {
         const val PAGE_SIZE = 25
+
+        /** One list row per split-bill master group (WebPOS-style). */
+        private fun collapseSplitOrdersForList(orders: List<TransactionEntity>): List<TransactionEntity> {
+            val seenMasters = mutableSetOf<String>()
+            return orders.filter { tx ->
+                val master = tx.masterOrderId?.trim()?.takeIf { it.isNotEmpty() }
+                if (master == null) true
+                else if (master in seenMasters) false
+                else {
+                    seenMasters.add(master)
+                    true
+                }
+            }
+        }
     }
 
     private val _uiState = MutableStateFlow(OrderHistoryUiState())
@@ -149,7 +172,7 @@ class OrderHistoryViewModel @Inject constructor(
                 .filterValues { it.size > 1 }
                 .mapValues { it.value.size }
 
-            filteredOrdersCache = orders
+            filteredOrdersCache = collapseSplitOrdersForList(orders)
             applyPagination(
                 tables = tables,
                 splitCounts = splitCounts,
@@ -440,13 +463,58 @@ class OrderHistoryViewModel @Inject constructor(
                 reason = reason
             )
             val detail = transactionRepository.getTransaction(orderId)
+            val updatedOrder = detail?.first
+            val updatedItems = detail?.second.orEmpty()
+            val receiptLines = buildRefundReceiptLines(
+                fullRefund = fullRefund,
+                itemRefunds = itemRefunds,
+                items = updatedItems,
+                refundAmount = refundAmount
+            )
+            if (updatedOrder != null) {
+                pendingRefundPrint = PendingRefundPrint(
+                    order = updatedOrder,
+                    refundAmount = refundAmount,
+                    reason = reason,
+                    lines = receiptLines
+                )
+            }
             _uiState.value = _uiState.value.copy(
-                selectedOrder = detail?.first,
-                selectedItems = detail?.second.orEmpty(),
-                message = if (fullRefund) "Full refund processed" else "Partial refund processed"
+                selectedOrder = updatedOrder,
+                selectedItems = updatedItems,
+                message = null
             )
             refresh()
         }
+    }
+
+    private fun buildRefundReceiptLines(
+        fullRefund: Boolean,
+        itemRefunds: List<Pair<Long, Int>>,
+        items: List<com.chaslay.pos.data.local.entity.TransactionItemEntity>,
+        refundAmount: Double
+    ): List<com.chaslay.pos.printer.RefundReceiptLine> {
+        if (fullRefund) {
+            return items.map { item ->
+                com.chaslay.pos.printer.RefundReceiptLine(
+                    label = "${item.quantity}x ${item.productName}",
+                    amount = item.lineTotal
+                )
+            }
+        }
+        if (itemRefunds.isNotEmpty()) {
+            return itemRefunds.mapNotNull { (itemId, qty) ->
+                val item = items.find { it.id == itemId } ?: return@mapNotNull null
+                val take = qty.coerceAtLeast(0)
+                if (take <= 0) return@mapNotNull null
+                val unit = if (item.quantity > 0) item.lineTotal / item.quantity else 0.0
+                com.chaslay.pos.printer.RefundReceiptLine(
+                    label = "${take}x ${item.productName}",
+                    amount = unit * take
+                )
+            }
+        }
+        return emptyList()
     }
 
     private fun parsePoiCardReference(ref: String?): Pair<String?, String?> {
@@ -542,6 +610,26 @@ class OrderHistoryViewModel @Inject constructor(
         printOrder(order, items, includeCustomerCardCopy = true)
     }
 
+    fun printLastRefundReceipt() {
+        val pending = pendingRefundPrint
+        if (pending == null) {
+            printSelectedOrder()
+            return
+        }
+        viewModelScope.launch {
+            val settings = settingsRepository.getSettings()
+            printerService.routeRefundReceipt(
+                settings = settings,
+                transaction = pending.order,
+                refundAmount = pending.refundAmount,
+                reason = pending.reason,
+                lines = pending.lines
+            ).onFailure { e ->
+                _uiState.value = _uiState.value.copy(message = e.message ?: "Print failed")
+            }
+        }
+    }
+
     fun printAdyenCustomerReceiptForSelected() {
         val order = _uiState.value.selectedOrder ?: return
         printAdyenReceipt(order, customerCopy = true)
@@ -604,9 +692,6 @@ class OrderHistoryViewModel @Inject constructor(
             }
             val published = publishBeforePrint(order, items, settings)
             printerService.routeReceipt(settings, published, items, customerCopy, null)
-                .onSuccess {
-                    _uiState.value = _uiState.value.copy(message = "Receipt printed")
-                }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(message = e.message ?: "Print failed")
                 }

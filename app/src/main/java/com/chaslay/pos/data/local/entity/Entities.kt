@@ -203,7 +203,7 @@ data class TransactionItemEntity(
 @Entity(tableName = "business_settings")
 data class BusinessSettingsEntity(
     @PrimaryKey val id: Int = 1,
-    val businessName: String = "Chaslay",
+    val businessName: String = "Reborn",
     val vatNumber: String = "",
     val address: String = "",
     val phone: String = "",

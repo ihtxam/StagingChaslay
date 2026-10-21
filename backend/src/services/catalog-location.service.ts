@@ -61,7 +61,8 @@ export class CatalogLocationService {
     products: T[],
     allowedIds: Set<string> | null
   ): T[] {
-    if (!allowedIds || allowedIds.size === 0) return products;
+    if (allowedIds === null) return products;
+    if (allowedIds.size === 0) return [];
     return products.filter((p) => allowedIds.has(p.id));
   }
 
@@ -127,21 +128,38 @@ export class CatalogLocationService {
       locId,
       channel,
       new Date(),
-      timezone
+      timezone,
+      { terminalIsolation: true }
     );
-    const visibleProducts = this.filterByHqMenuProductIds(
+    let visibleProducts = this.filterByHqMenuProductIds(
       filtered.products,
       activeMenu.productIds
     );
 
+    const menuCategoryIds = Array.isArray(activeMenu.menu?.categoryIds)
+      ? activeMenu.menu!.categoryIds!.map((id) => String(id || "").trim()).filter(Boolean)
+      : [];
+    if (menuCategoryIds.length > 0) {
+      const allowedCats = new Set(menuCategoryIds);
+      visibleProducts = visibleProducts.filter(
+        (p) => p.categoryId && allowedCats.has(String(p.categoryId))
+      );
+    }
+
     const categoryIdsWithProducts = new Set(
       visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
     );
-    const visibleCategories = filtered.categories.filter(
+    let visibleCategories = filtered.categories.filter(
       (c) =>
         categoryIdsWithProducts.has(c.id) ||
         !!(c as { isOffersCategory?: boolean }).isOffersCategory
     );
+    if (menuCategoryIds.length > 0) {
+      const allowedCats = new Set(menuCategoryIds);
+      visibleCategories = visibleCategories.filter(
+        (c) => allowedCats.has(c.id) || !!(c as { isOffersCategory?: boolean }).isOffersCategory
+      );
+    }
 
     const pricedProducts = HqMenuService.applyMenuPrices(
       visibleProducts,

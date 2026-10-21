@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { RefreshCw, Truck } from 'lucide-react';
 import api, { resolveApiOriginForBridge } from '@/lib/api';
@@ -38,6 +38,7 @@ import {
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
   getReceiptHeaderLines,
+  normalizeReceiptHeaderFields,
   resolveReceiptPaperWidthMm,
   receiptHeaderFormatFromSettings,
   receiptHeaderFieldsFromPrintSettings,
@@ -98,12 +99,15 @@ import {
   isPrinterDisconnectedError,
   isUnsuitableRawPrinter,
   listAgentPrinters,
+  listNormalizedLiveAgentPrinters,
   pairPrintAgentCloudRelay,
   printViaAgent,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
+  receiptEscPosTextEncodingForPrinter,
   resolveEscPosPrinterName,
+  resolveLiveEscPosTargetNames,
   resolveLivePrinterName,
   looksLikeLabelPrinterName,
   suggestPrinterAutoHeal,
@@ -189,6 +193,15 @@ import WebPosComboModal, {
 } from '@/components/webpos/WebPosComboModal';
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
+import WebPosStationPickerModal from '@/components/WebPosStationPickerModal';
+import {
+  fetchPosStations,
+  getDeviceDefaultStationId,
+  needsStationPicker,
+  pickStationForLogin,
+  setDeviceDefaultStationId,
+  type PosStation,
+} from '@/lib/pos-station';
 import BarcodeWedgeCapture from '@/components/BarcodeWedgeCapture';
 import {
   BARCODE_WEDGE_IDLE_MS,
@@ -595,6 +608,8 @@ import {
   type StaffRosterRow,
   type WebPosStaffSession,
 } from '@/lib/permissions';
+import { navigateTargetAfterStaffPin } from '@/lib/auth-home';
+import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
 import { openCashDrawerViaAgent } from '@/lib/print-agent';
@@ -807,6 +822,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const notifyPrintErrorRef = useRef(notifyPrintError);
   notifyPrintErrorRef.current = notifyPrintError;
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [deliveryHubOpen, setDeliveryHubOpen] = useState(false);
   const [deliveryHubMinimized, setDeliveryHubMinimized] = useState(false);
@@ -1215,6 +1231,20 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [recentOpen, setRecentOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinModalMode, setPinModalMode] = useState<'gate' | 'switch'>('gate');
+  const [posStations, setPosStations] = useState<PosStation[]>([]);
+  const [stationPickerOpen, setStationPickerOpen] = useState(false);
+  const [deviceDefaultStationId, setDeviceDefaultStationIdState] = useState(() =>
+    getDeviceDefaultStationId(posLocationId)
+  );
+  const [pendingPinStaff, setPendingPinStaff] = useState<{
+    id: string;
+    name: string;
+    roleId: string;
+    roleName: string;
+    permissions: string[];
+    accessToken?: string;
+    preferredTerminalId?: string | null;
+  } | null>(null);
   const [posAuthAlert, setPosAuthAlert] = useState<{
     title?: string;
     message: string;
@@ -1410,6 +1440,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       platform: 'webpos',
       staffId: webposStaff?.id || null,
       staffName: webposStaff?.name || null,
+      locationId: posLocationId,
+      stationId: webposStaff?.stationId || null,
     })
       .then((result) => {
         if (result.ok && result.kickedSessionIds.length > 0) {
@@ -1417,7 +1449,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }
       })
       .catch(() => undefined);
-  }, [staffPinsKnown, pinGateRequired, webposStaff?.id, webposStaff?.name, t]);
+  }, [
+    staffPinsKnown,
+    pinGateRequired,
+    webposStaff?.id,
+    webposStaff?.name,
+    webposStaff?.stationId,
+    posLocationId,
+    t,
+  ]);
 
   useEffect(() => {
     const onKicked = () => {
@@ -2950,6 +2990,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     void loadLocations();
   }, [loadLocations]);
+
+  useEffect(() => {
+    if (!posLocationId) {
+      setPosStations([]);
+      return;
+    }
+    void fetchPosStations(posLocationId)
+      .then(setPosStations)
+      .catch(() => setPosStations([]));
+  }, [posLocationId]);
+
+  useEffect(() => {
+    setDeviceDefaultStationIdState(getDeviceDefaultStationId(posLocationId));
+  }, [posLocationId]);
+
+  const changeDeviceDefaultStation = useCallback(
+    (stationId: string) => {
+      setDeviceDefaultStationId(posLocationId, stationId || null);
+      setDeviceDefaultStationIdState(stationId || '');
+      toast.success(t('posStationDeviceDefaultSaved'));
+    },
+    [posLocationId, t]
+  );
 
   /** Branch staff: default POS catalog to their assigned location(s). */
   useEffect(() => {
@@ -5626,6 +5689,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       cartJson,
       staffId: webposStaff?.id,
       staffName: webposStaff?.name,
+      stationId: webposStaff?.stationId,
       sendToKitchen,
     });
     const savedId = (res.data?.held as { id?: string } | undefined)?.id;
@@ -6221,7 +6285,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const disc = payableFullTotals.discount || 0;
       const receiptPayload: WebPosReceipt = {
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         id: `prov-${Date.now()}`,
@@ -6688,7 +6753,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const text = generateGiftCardSaleReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         code: opts.code,
@@ -7478,7 +7544,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       try {
         const receiptPayload = posOrderToWebPosReceipt(orderForReceipt, {
           businessName: merchant?.name || APP_NAME,
-          address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+          address: merchant?.address || '',
+        city: merchant?.city || undefined,
           phone: merchant?.phone || undefined,
           vatNumber: merchant?.vatNumber || undefined,
           taxRate,
@@ -7966,13 +8033,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerTitle: printSettings?.receiptHeaderTitle,
       header: printSettings?.receiptHeader,
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         vatNumber: merchant?.vatNumber || undefined,
         headerAlign: headerFmt.align,
       },
       lineWidthForPaper(paper === 58 ? 58 : 80),
-      { padLines: false }
+      { padLines: false, titleScale: headerFmt.textScale }
+    );
+    const headerNorm = normalizeReceiptHeaderFields({
+      headerTitle: printSettings?.receiptHeaderTitle,
+      header: printSettings?.receiptHeader,
+    });
+    const receiptTargets = printersForRole(printSettings, 'receipt');
+    const primaryReceiptPrinter =
+      receiptTargets[0]?.name ||
+      (printerName && !printerUsesLabelProtocol(printSettings, printerName) ? printerName : '');
+    const liveForEncoding = printers.length
+      ? printers
+      : await listNormalizedLiveAgentPrinters().catch(() => []);
+    const textEncoding = receiptEscPosTextEncodingForPrinter(
+      primaryReceiptPrinter,
+      liveForEncoding
     );
     const escpos = await buildReceiptEscPos(text, {
       qrData: qr,
@@ -7989,6 +8072,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerBold: headerFmt.bold,
       headerTextScale: headerFmt.textScale,
       soldGiftCards: opts.soldGiftCards,
+      titleBodyGap: !!(headerNorm.title && headerNorm.body),
+      textEncoding,
     });
     const dataBase64 = uint8ToBase64(escpos);
     lastReceiptEscPosBase64Ref.current = dataBase64;
@@ -8133,15 +8218,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 headerTitle: printSettings?.receiptHeaderTitle,
                 header: printSettings?.receiptHeader,
                 businessName: merchant?.name || APP_NAME,
-                address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+                address: merchant?.address || '',
+        city: merchant?.city || undefined,
                 phone: merchant?.phone || undefined,
                 vatNumber: merchant?.vatNumber || undefined,
                 headerAlign: headerFmt.align,
               },
               lineWidthForPaper(paper === 58 ? 58 : 80),
-              { padLines: false }
+              { padLines: false, titleScale: headerFmt.textScale }
             )
           : [];
+      const headerNorm = normalizeReceiptHeaderFields({
+        headerTitle: printSettings?.receiptHeaderTitle,
+        header: printSettings?.receiptHeader,
+      });
+      const primaryReceiptPrinter = targets[0]?.name || fallbackName || '';
+      let liveForEncoding = printers;
+      if (!liveForEncoding.length) {
+        liveForEncoding = await listNormalizedLiveAgentPrinters().catch(() => []);
+      }
+      const textEncoding = receiptEscPosTextEncodingForPrinter(
+        primaryReceiptPrinter,
+        liveForEncoding
+      );
       const escpos = await buildReceiptEscPos(text, {
         qrData: qr,
         deliveryQrData: opts.deliveryQrUrl,
@@ -8157,6 +8256,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerBold: headerFmt.bold,
         headerTextScale: headerFmt.textScale,
         soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
+        titleBodyGap: !!(headerNorm.title && headerNorm.body),
+        textEncoding,
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {
@@ -8175,21 +8276,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : opts.role === 'kitchen'
           ? t('webPosPrintJobKitchen')
           : lastReceiptOrderNumber || t('webPosPrintJobReceipt');
-    const targetsToPrint = names
-      .map((name) => {
-        const configured = (name || '').trim();
-        const label =
-          configured && printers.length > 0
-            ? resolveEscPosPrinterName(configured, printers) || ''
-            : configured;
-        return label;
-      })
-      .filter(Boolean)
-      .filter(
-        (label) =>
-          opts.role === 'eod' ||
-          (!looksLikeLabelPrinterName(label) && !printerUsesLabelProtocol(printSettings, label))
-      );
+    let livePrinters = printers;
+    if (!livePrinters.length) {
+      livePrinters = await listNormalizedLiveAgentPrinters();
+    }
+    const profileHints = new Map(
+      (printSettings?.printers || []).map((p) => [
+        String(p.name || '').trim(),
+        { portName: p.portName, matchHint: p.matchHint },
+      ])
+    );
+    const targetsToPrint = resolveLiveEscPosTargetNames(names, livePrinters, (configured) =>
+      profileHints.get(configured)
+    ).filter(
+      (label) =>
+        opts.role === 'eod' ||
+        (!looksLikeLabelPrinterName(label) && !printerUsesLabelProtocol(printSettings, label))
+    );
     for (const label of targetsToPrint) {
       if (label && isUnsuitableRawPrinter(label)) {
         if (opts.role === 'eod') {
@@ -8210,7 +8313,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             retryLocally: printRetryLocally,
             jobKind,
             jobLabel,
-            skipRetarget: true,
+            skipRetarget: !livePrinters.length,
           });
           return { ok: true as const, mode, label };
         } catch (e: unknown) {
@@ -8381,7 +8484,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const printPosOrderReceipt = async (order: PosOrderForReceipt, splitLabel?: string | null) => {
     const receiptPayload = posOrderToWebPosReceipt(order, {
       businessName: merchant?.name || APP_NAME,
-      address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+      address: merchant?.address || '',
+      city: merchant?.city || undefined,
       phone: merchant?.phone || undefined,
       vatNumber: merchant?.vatNumber || undefined,
       taxRate,
@@ -8411,7 +8515,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const text = generateRefundReceiptText(
       {
         businessName: merchant?.name || APP_NAME,
-        address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+        address: merchant?.address || '',
+        city: merchant?.city || undefined,
         phone: merchant?.phone || undefined,
         orderNumber: payload.order.orderNumber,
         orderDisplay: payload.order.ticketDisplay,
@@ -8490,6 +8595,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       orderedAt: Date.now(),
       scheduledFor,
       userName,
+      posStationName: webposStaff?.stationName || null,
       orderSource: 'WEBPOS' as const,
       itemTextScale: printSettings?.kitchenItemTextScale ?? 1,
       headerTextScale: printSettings?.kitchenHeaderTextScale ?? 1,
@@ -8766,6 +8872,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : null;
     return {
       clientId,
+      locationId: posLocationId || undefined,
+      stationId: webposStaff?.stationId || undefined,
       orderNumber,
       paymentMethod: resolvedMethod,
       paymentBreakdown:
@@ -9203,7 +9311,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       undefined;
     const receiptPayload: WebPosReceipt = {
       businessName: merchant?.name || APP_NAME,
-      address: [merchant?.address, merchant?.city].filter(Boolean).join(', '),
+      address: merchant?.address || '',
+      city: merchant?.city || undefined,
       phone: merchant?.phone || undefined,
       vatNumber: merchant?.vatNumber || undefined,
       id: clientId,
@@ -10150,15 +10259,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
   };
 
-  const onStaffPinSuccess = async (staff: {
-    id: string;
-    name: string;
-    roleId: string;
-    roleName: string;
-    permissions: string[];
-    accessToken?: string;
-    preferredTerminalId?: string | null;
-  }) => {
+  const finalizeStaffLogin = async (
+    staff: {
+      id: string;
+      name: string;
+      roleId: string;
+      roleName: string;
+      permissions: string[];
+      loginHome?: string;
+      accessToken?: string;
+      preferredTerminalId?: string | null;
+    },
+    station: PosStation | null
+  ) => {
     const session: WebPosStaffSession = {
       id: staff.id,
       name: staff.name,
@@ -10166,6 +10279,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       roleName: staff.roleName,
       permissions: staff.permissions as Permission[],
       accessToken: staff.accessToken,
+      stationId: station?.id,
+      stationName: station?.name,
     };
     setPosAuthAlert(null);
     clearPosSessionLocal();
@@ -10180,6 +10295,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         platform: 'webpos',
         staffId: session.id,
         staffName: session.name,
+        locationId: posLocationId,
+        stationId: station?.id || null,
       });
     } finally {
       window.setTimeout(() => {
@@ -10213,6 +10330,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       navigate(deliveryDriverHomePath(), { replace: true });
       return;
     }
+    const pinNav = navigateTargetAfterStaffPin(
+      {
+        permissions: session.permissions,
+        loginHome: normalizeStaffLoginHome(staff.loginHome),
+      },
+      location.pathname,
+      pinModalMode
+    );
+    if (pinNav) {
+      if (pinNav === '/merchant/pos' || pinNav === '/merchant/waiter') {
+        window.dispatchEvent(new CustomEvent('webpos:enter-app'));
+      } else {
+        window.dispatchEvent(new CustomEvent('webpos:show-panel'));
+      }
+      navigate(pinNav, { replace: true });
+      return;
+    }
     if (paymentConfig?.terminals?.length) {
       const terminalId = resolveActiveTerminalId(paymentConfig.terminals, {
         preferred: staff.preferredTerminalId,
@@ -10225,6 +10359,28 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     void refreshCurrentShift();
+  };
+
+  const onStaffPinSuccess = async (staff: {
+    id: string;
+    name: string;
+    roleId: string;
+    roleName: string;
+    permissions: string[];
+    loginHome?: string;
+    accessToken?: string;
+    preferredTerminalId?: string | null;
+  }) => {
+    if (needsStationPicker(posStations)) {
+      setPendingPinStaff(staff);
+      setStationPickerOpen(true);
+      return;
+    }
+    const station = pickStationForLogin(
+      posStations,
+      getDeviceDefaultStationId(posLocationId)
+    );
+    await finalizeStaffLogin(staff, station);
   };
 
   const openSwitchUserPin = () => {
@@ -11094,6 +11250,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             terminals={activeTerminals}
             selectedTerminalId={selectedTerminalId}
             onTerminalChange={(id) => void changePosTerminal(id)}
+            posStations={posStations}
+            deviceDefaultStationId={deviceDefaultStationId}
+            onDeviceDefaultStationChange={changeDeviceDefaultStation}
+            tapToPayWizardVisible={
+              isAndroidWebPosTill() &&
+              paymentConfig?.tapToPayEnabled === true &&
+              paymentConfig?.adyenConfigured === true
+            }
+            onOpenTapToPayWizard={() => {
+              setSettingsOpen(false);
+              setTapToPaySetupOpen(true);
+            }}
           />
           )
         }
@@ -12430,6 +12598,26 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           merchant?.shopLogoUrl ||
           paymentConfig?.shopLogoUrl
         }
+      />
+
+      <WebPosStationPickerModal
+        open={stationPickerOpen}
+        stations={posStations}
+        initialStationId={
+          getDeviceDefaultStationId(posLocationId) || webposStaff?.stationId || null
+        }
+        onCancel={() => {
+          setStationPickerOpen(false);
+          setPendingPinStaff(null);
+          setPinModalOpen(true);
+        }}
+        onConfirm={(station) => {
+          const staff = pendingPinStaff;
+          setStationPickerOpen(false);
+          setPendingPinStaff(null);
+          if (!staff) return;
+          void finalizeStaffLogin(staff, station);
+        }}
       />
 
       <WebPosPaymentModal

@@ -1,7 +1,7 @@
 import api from '@/lib/api';
 import {
-  agentSupportsBtCutTrailer,
   getPrintAgentHealth,
+  shouldSendKitchenCutFollowUp,
   isAndroidTabletDevice,
   isAndroidWebPosTill,
   isPrintAgentAvailable,
@@ -305,8 +305,8 @@ export async function printViaAgentOrQueue(opts: {
 }
 
 /**
- * Kitchen print, then a light feed+cut job on Bluetooth/COM so the blade runs
- * even when the last packet of the ticket was dropped.
+ * Kitchen print; optional legacy BT/COM cut follow-up when the agent does not
+ * pace a BT trailer (USB/LAN tickets already include KITCHEN_TICKET_CUT).
  */
 export async function printKitchenViaAgentOrQueue(
   opts: Parameters<typeof printViaAgentOrQueue>[0] & {
@@ -325,11 +325,10 @@ export async function printKitchenViaAgentOrQueue(
         p.name === opts.configuredName ||
         p.matchHint === opts.configuredName
     ) || opts.printers?.find((p) => p.name === printerName) || opts.configuredName || printerName;
-  const isBt = looksLikeBluetoothOrComPrinter(printerRef);
-  const agentHealth = isBt ? await getPrintAgentHealth().catch(() => ({ ok: false })) : null;
-  const skipCutFollowUp = isBt && agentSupportsBtCutTrailer(agentHealth);
-  if (!skipCutFollowUp) {
-    // USB/network and legacy BT: separate cut job so the blade runs after the ticket body.
+  const agentHealth = await getPrintAgentHealth().catch(() => ({ ok: false }));
+  const sendCutFollowUp = shouldSendKitchenCutFollowUp(printerRef, agentHealth);
+  if (sendCutFollowUp) {
+    // Legacy BT/COM only — ticket may have cut bytes but the last packet is often dropped.
     await new Promise((resolve) => setTimeout(resolve, 150));
     try {
     await printViaAgentOrQueue({
@@ -413,7 +412,7 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
       if (!(await isPrintAgentAvailable())) return { done: 0, remoteKitchenDone: 0, reservationDone: 0 };
       const localDeviceId = webPosDeviceId();
       const agentHealth = await getPrintAgentHealth().catch(() => ({ ok: false }));
-      const skipBtCutFollowUp = agentSupportsBtCutTrailer(agentHealth);
+      const agentHealthForDrain = agentHealth;
       let livePrinters: AgentPrinter[] = [];
       try {
         livePrinters = await listAgentPrinters();
@@ -515,8 +514,10 @@ export async function processPendingEscPosPrintJobs(): Promise<ProcessEscPosPrin
               alertKind === 'reservation' || alertKind === 'online_order';
             try {
               const livePrinter = resolvedPrinter || '';
-              const isBt = looksLikeBluetoothOrComPrinter(livePrinter);
-              if (!serverBuiltTicket && (!isBt || !skipBtCutFollowUp)) {
+              if (
+                !serverBuiltTicket &&
+                shouldSendKitchenCutFollowUp(livePrinter, agentHealthForDrain)
+              ) {
                 await new Promise((r) => setTimeout(r, 150));
                 await printViaAgent({
                   printerName: resolvedPrinter,

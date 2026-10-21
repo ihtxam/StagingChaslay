@@ -8,6 +8,7 @@ import {
 } from '@/lib/hardware/desktop-bridge';
 import { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
 import { isEscPosBase64 } from './escpos-payload';
+import type { EscPosTextEncoding } from './escpos-encode';
 
 export { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
 
@@ -232,6 +233,16 @@ function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
   const suitable = printers.filter(
     (p) => isEscPosTicketPrinterName(p.name) && !isStaleUsbEthernetPrinterName(p.name)
   );
+  if (isAndroidWebPosTill()) {
+    return (
+      suitable.find((p) => p.connectionType === 'sunmi-internal') ||
+      suitable.find((p) => p.isDefault) ||
+      suitable.find((p) => p.connectionType === 'usb') ||
+      suitable.find((p) => looksLikeThermal80mm(p.name)) ||
+      suitable[0] ||
+      null
+    );
+  }
   return (
     suitable.find((p) => p.isDefault) ||
     suitable.find((p) => p.connectionType === 'usb') ||
@@ -304,6 +315,72 @@ export function resolveEscPosPrinterName(
     return isEscPosTicketPrinterName(want) ? want : null;
   }
   return defaultLivePrinter(livePrinters)?.name || null;
+}
+
+/** Sunmi built-in thermal expects UTF-8 raw bytes; USB/BT ESC/POS needs CP850 + ESC t 2. */
+export function receiptEscPosTextEncodingForPrinter(
+  printerName?: string | null,
+  livePrinters?: AgentPrinter[] | null
+): EscPosTextEncoding {
+  const label = String(printerName || '').trim();
+  if (/sunmi\s+built-?in/i.test(label)) return 'utf8';
+  if (livePrinters?.length && label) {
+    const match = livePrinters.find((p) => printerNameInList(label, [p]));
+    const conn = String(match?.connectionType || '').toLowerCase();
+    const driver = String(match?.driver || match?.driverName || '').toLowerCase();
+    if (conn === 'sunmi-internal' || driver.includes('sunmi')) return 'utf8';
+  }
+  if (!label && livePrinters?.length === 1) {
+    const only = livePrinters[0]!;
+    const conn = String(only.connectionType || '').toLowerCase();
+    if (conn === 'sunmi-internal') return 'utf8';
+  }
+  return 'cp850';
+}
+
+/** Live Bridge / Print Agent list, normalized and stale USB/LAN rows removed. */
+export async function listNormalizedLiveAgentPrinters(): Promise<AgentPrinter[]> {
+  try {
+    if (!(await isPrintAgentAvailable())) return [];
+    return normalizeAgentPrinterList(await listAgentPrinters());
+  } catch {
+    return [];
+  }
+}
+
+export type ResolveLiveEscPosHintsFn = (
+  configuredName: string
+) => PrinterResolutionHints | undefined;
+
+/**
+ * Map saved receipt/kitchen targets to names present on the live agent list.
+ * Drops stale queues; dedupes; falls back to agent default (Sunmi internal on Android till).
+ */
+export function resolveLiveEscPosTargetNames(
+  configuredNames: string[],
+  livePrinters: AgentPrinter[],
+  hintsForName?: ResolveLiveEscPosHintsFn
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (name: string | null | undefined) => {
+    const n = String(name || '').trim();
+    if (!n || seen.has(n)) return;
+    if (livePrinters.length > 0 && !printerNameInList(n, livePrinters)) return;
+    seen.add(n);
+    out.push(n);
+  };
+
+  for (const raw of configuredNames) {
+    const configured = String(raw || '').trim();
+    const hints = hintsForName?.(configured);
+    add(resolveEscPosPrinterName(configured, livePrinters, hints));
+  }
+
+  if (!out.length) {
+    add(resolveEscPosPrinterName('', livePrinters, hintsForName?.('')));
+  }
+  return out;
 }
 
 const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
@@ -755,6 +832,20 @@ export function agentSupportsBtCutTrailer(health: PrintAgentHealth | null | unde
     return compareAgentVersion(health.version || '0', '0.3.2') >= 0;
   }
   return false;
+}
+
+/**
+ * Kitchen tickets already end with feed + GS V (KITCHEN_TICKET_CUT).
+ * Only legacy Bluetooth/COM paths need a separate cut job (dropped last packet).
+ * USB/LAN/Bridge BT must not get a second cut — wastes paper and double-beep.
+ */
+export function shouldSendKitchenCutFollowUp(
+  printer?: Pick<AgentPrinter, 'name' | 'portName' | 'driverName' | 'matchHint' | 'connectionType'> | string | null,
+  health?: PrintAgentHealth | null
+): boolean {
+  const isBt = looksLikeBluetoothOrComPrinter(printer);
+  if (!isBt) return false;
+  return !agentSupportsBtCutTrailer(health);
 }
 
 /** Android tablet (Bridge host) — wider than phone waiter layout. */

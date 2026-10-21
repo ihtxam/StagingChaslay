@@ -55,6 +55,8 @@ import { activateWaitingServiceWorker, reloadIfDeployedBuildChanged } from '@/li
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
 const ShopLocationsPage = lazy(() => import('@/pages/shop/ShopLocationsPage'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
+const ShopHubLocationRedirect = lazy(() => import('@/pages/shop/ShopHubLocationRedirect'));
+const ShopCateringLandingPage = lazy(() => import('@/pages/shop/ShopCateringLandingPage'));
 
 function LegacyReceiptRedirect() {
   const { saleId } = useParams();
@@ -414,6 +416,22 @@ function App() {
             }
           />
           <Route
+            path="/shop/:merchantSlug/l/:locationSlug/catering/menu"
+            element={
+              <ShopRoutes>
+                <OrderingPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/l/:locationSlug/catering"
+            element={
+              <ShopRoutes>
+                <ShopCateringLandingPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
             path="/shop/:merchantSlug/l/:locationSlug/menu"
             element={
               <ShopRoutes>
@@ -458,6 +476,22 @@ function App() {
             element={
               <ShopRoutes>
                 <ShopEntry />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/catering/menu"
+            element={
+              <ShopRoutes>
+                <OrderingPage />
+              </ShopRoutes>
+            }
+          />
+          <Route
+            path="/shop/:merchantSlug/catering"
+            element={
+              <ShopRoutes>
+                <ShopCateringLandingPage />
               </ShopRoutes>
             }
           />
@@ -557,6 +591,62 @@ function App() {
               <Route path="/merchant" element={<PanelLoginRedirect />} />
               <Route path="/merchant/*" element={<PanelLoginRedirect />} />
               <Route path="/superadmin/*" element={<PanelLoginRedirect />} />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/catering/menu"
+                element={
+                  <ShopRoutes>
+                    <ShopHubLocationRedirect />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/catering"
+                element={
+                  <ShopRoutes>
+                    <ShopHubLocationRedirect />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/menu"
+                element={
+                  <ShopRoutes>
+                    <ShopHubLocationRedirect />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug/checkout"
+                element={
+                  <ShopRoutes>
+                    <ShopHubLocationRedirect />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/l/:locationSlug"
+                element={
+                  <ShopRoutes>
+                    <ShopEntry />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/catering/menu"
+                element={
+                  <ShopRoutes>
+                    <OrderingPage />
+                  </ShopRoutes>
+                }
+              />
+              <Route
+                path="/:merchantSlug/catering"
+                element={
+                  <ShopRoutes>
+                    <ShopCateringLandingPage />
+                  </ShopRoutes>
+                }
+              />
               <Route
                 path="/:merchantSlug/menu"
                 element={

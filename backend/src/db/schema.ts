@@ -621,6 +621,40 @@ export const locations = pgTable(
   })
 );
 
+/** Registers / floors within one location (shared menu, one EOD). */
+export const posStations = pgTable(
+  "pos_stations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    status: varchar("status", { length: 20 }).default("active").notNull(),
+    settings: json("settings")
+      .$type<{
+        kitchenPrinterName?: string | null;
+        receiptPrinterName?: string | null;
+      }>()
+      .default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("pos_stations_merchant_id_idx").on(table.merchantId),
+    locationIdx: index("pos_stations_location_id_idx").on(table.locationId),
+    locationSortIdx: index("pos_stations_location_sort_idx").on(
+      table.locationId,
+      table.sortOrder
+    ),
+  })
+);
+
 /** Staff ↔ location scope. Empty rows = all locations (owner/manager default). */
 export const merchantStaffLocations = pgTable(
   "merchant_staff_locations",
@@ -1408,6 +1442,8 @@ export const orders = pgTable(
       .references(() => merchants.id, { onDelete: "cascade" }),
     /** Branch where the sale occurred (nullable for legacy rows). */
     locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
+    /** Floor / register station within a location (nullable for single-station sites). */
+    stationId: uuid("station_id").references(() => posStations.id, { onDelete: "set null" }),
     orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
     customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
     orderType: varchar("order_type", { length: 50 }).notNull(), // pos, web_shop
@@ -1520,6 +1556,7 @@ export const orders = pgTable(
   (table) => ({
     merchantIdIdx: index("orders_merchant_id_idx").on(table.merchantId),
     locationIdIdx: index("orders_location_id_idx").on(table.locationId),
+    stationIdIdx: index("orders_station_id_idx").on(table.stationId),
     orderNumberIdx: uniqueIndex("orders_order_number_idx").on(table.orderNumber),
     statusIdx: index("orders_status_idx").on(table.status),
     createdAtIdx: index("orders_created_at_idx").on(table.createdAt),
@@ -1547,6 +1584,7 @@ export const heldOrders = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    stationId: uuid("station_id").references(() => posStations.id, { onDelete: "set null" }),
     label: varchar("label", { length: 120 }),
     status: varchar("status", { length: 40 }).default("held").notNull(), // held | sent_to_kitchen | closed
     channel: varchar("channel", { length: 50 }).default("takeaway"),
@@ -1579,6 +1617,7 @@ export const posSessions = pgTable(
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
     locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
+    stationId: uuid("station_id").references(() => posStations.id, { onDelete: "set null" }),
     /** main = register till; waiter = floor order entry */
     sessionKind: varchar("session_kind", { length: 20 }).default("main").notNull(),
     /** webpos | waiter_web | android */

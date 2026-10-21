@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { MapPin, Plus, Trash2 } from 'lucide-react';
+import { MapPin, Plus, Trash2, Layers } from 'lucide-react';
+import type { PosStation } from '@/lib/pos-station';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
@@ -34,6 +35,10 @@ export default function SettingsLocationsTab() {
   const [form, setForm] = useState<LocationForm>(emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [merchantSlug, setMerchantSlug] = useState('');
+  const [stations, setStations] = useState<PosStation[]>([]);
+  const [stationsLoading, setStationsLoading] = useState(false);
+  const [stationName, setStationName] = useState('');
+  const [stationSaving, setStationSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +60,27 @@ export default function SettingsLocationsTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadStations = useCallback(async (locationId: string) => {
+    setStationsLoading(true);
+    try {
+      const res = await api.get(`/merchant/locations/${locationId}/stations`);
+      setStations(res.data?.stations || []);
+    } catch {
+      setStations([]);
+    } finally {
+      setStationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!editingId) {
+      setStations([]);
+      setStationName('');
+      return;
+    }
+    void loadStations(editingId);
+  }, [editingId, loadStations]);
 
   const startEdit = (loc: MerchantLocation) => {
     setEditingId(loc.id);
@@ -95,6 +121,54 @@ export default function SettingsLocationsTab() {
       toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Save failed');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onAddStation = async () => {
+    if (!editingId || !stationName.trim()) {
+      toast.error(t('posStationName'));
+      return;
+    }
+    setStationSaving(true);
+    try {
+      await api.post(`/merchant/locations/${editingId}/stations`, {
+        name: stationName.trim(),
+        sortOrder: (stations.length + 1) * 10,
+        isDefault: stations.length === 0,
+      });
+      setStationName('');
+      await loadStations(editingId);
+      toast.success(t('saved'));
+    } catch (err: unknown) {
+      toast.error(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Save failed'
+      );
+    } finally {
+      setStationSaving(false);
+    }
+  };
+
+  const onDeleteStation = async (stationId: string) => {
+    if (!editingId) return;
+    if (!window.confirm(t('confirm'))) return;
+    try {
+      await api.delete(`/merchant/locations/${editingId}/stations/${stationId}`);
+      await loadStations(editingId);
+      toast.success(t('saved'));
+    } catch (err: unknown) {
+      toast.error(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Delete failed'
+      );
+    }
+  };
+
+  const onSetDefaultStation = async (stationId: string) => {
+    if (!editingId) return;
+    try {
+      await api.put(`/merchant/locations/${editingId}/stations/${stationId}`, { isDefault: true });
+      await loadStations(editingId);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -245,6 +319,69 @@ export default function SettingsLocationsTab() {
             ) : null}
           </div>
         </form>
+
+        {editingId ? (
+          <div className="mt-6 border-t border-[var(--border)] pt-4 space-y-3">
+            <h3 className="font-medium flex items-center gap-2">
+              <Layers className="w-4 h-4" />
+              {t('posStationsTitle')}
+            </h3>
+            <p className="text-sm text-[var(--text-muted)]">{t('posStationsHint')}</p>
+            {stationsLoading ? (
+              <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
+            ) : (
+              <div className="space-y-2">
+                {stations.map((st) => (
+                  <div
+                    key={st.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2"
+                  >
+                    <div>
+                      <span className="font-medium">{st.name}</span>
+                      {st.isDefault ? (
+                        <span className="ml-2 text-xs text-[var(--text-muted)]">({t('default')})</span>
+                      ) : null}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {!st.isDefault ? (
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => void onSetDefaultStation(st.id)}
+                        >
+                          {t('default')}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs text-red-600"
+                        onClick={() => void onDeleteStation(st.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                className="input flex-1"
+                placeholder={t('posStationNamePlaceholder')}
+                value={stationName}
+                onChange={(e) => setStationName(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn-secondary shrink-0"
+                disabled={stationSaving}
+                onClick={() => void onAddStation()}
+              >
+                {t('posStationAdd')}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </SettingsReportCard>
     </div>
   );

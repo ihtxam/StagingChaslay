@@ -22,13 +22,15 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onSelect: (customer: WebPosCustomer) => void;
+  /** Unknown RFID / membership card — prompt create or attach to an existing client. */
+  pendingRfidUid?: string | null;
 };
 
 function displayName(c: WebPosCustomer) {
   return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.phone || c.email || '?';
 }
 
-export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props) {
+export default function WebPosCustomerPicker({ open, onClose, onSelect, pendingRfidUid }: Props) {
   const { t } = useI18n();
   const { close: closeKeyboard } = useOnScreenKeyboard();
   const {
@@ -57,8 +59,9 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
     if (!open) return;
     closeKeyboard();
     setQ('');
-    setShowCreate(false);
-  }, [open, closeKeyboard]);
+    setShowCreate(!!pendingRfidUid);
+    setForm({ name: '', phone: '', email: '', address: '', zip: '', city: '' });
+  }, [open, pendingRfidUid, closeKeyboard]);
 
   useEffect(() => {
     if (!open || !keyboardActive || !showCreate) return;
@@ -129,11 +132,22 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
         style={modalStyle}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-4 py-3">
-          <h2 className="font-semibold">{t('webPosSelectCustomer')}</h2>
+          <h2 className="font-semibold">
+            {pendingRfidUid ? t('webPosRfidCreateTitle') : t('webPosSelectCustomer')}
+          </h2>
           <button type="button" className="rounded-lg p-2 hover:bg-[var(--bg-muted)]" onClick={onClose} aria-label={t('close')}>
             <X size={18} />
           </button>
         </div>
+
+        {pendingRfidUid ? (
+          <div className="shrink-0 border-b border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-950">
+            <p className="font-medium">{t('webPosRfidUnknownTitle')}</p>
+            <p className="text-[12px] text-teal-800">
+              {t('webPosRfidUnknownHint').replace('{code}', pendingRfidUid)}
+            </p>
+          </div>
+        ) : null}
 
         {!showCreate ? (
           <>
@@ -185,6 +199,12 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect }: Props)
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <form className="space-y-3 p-4" onSubmit={onCreate}>
+              {pendingRfidUid ? (
+                <p className="rounded-lg bg-[var(--bg-muted)] px-3 py-2 text-sm">
+                  <span className="text-[var(--text-muted)]">{t('giftCardNumber')}: </span>
+                  <span className="font-mono font-semibold tracking-wide">{pendingRfidUid}</span>
+                </p>
+              ) : null}
               <label className="block space-y-1 text-sm">
                 <span>{t('name')}</span>
                 <input

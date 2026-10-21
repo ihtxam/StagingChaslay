@@ -10,6 +10,7 @@ import { isKdsAddonEnabled } from "@/lib/kds-addon";
 import { isOdsAddonEnabled } from "@/lib/ods-addon";
 import { isStorekeeperAddonEnabled } from "@/lib/storekeeper-addon";
 import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
+import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import { SubscriptionAddonsService } from "@/services/subscription-addons.service";
 import { SupportTicketService } from "@/services/support-ticket.service";
@@ -261,6 +262,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled,
+      cateringAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
     if (!email || !trimmedBusinessName || !editionId) {
@@ -302,6 +304,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odooAddonEnabled: odooAddonEnabled === true,
       growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
       guestCrmAddonEnabled: guestCrmAddonEnabled === true,
+      cateringAddonEnabled: cateringAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
   } catch (error) {
@@ -336,6 +339,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled,
+      cateringAddonEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
       resellerId(req),
@@ -389,6 +393,8 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
           growthAnalyticsAddonEnabled != null ? growthAnalyticsAddonEnabled === true : undefined,
         guestCrmAddonEnabled:
           guestCrmAddonEnabled != null ? guestCrmAddonEnabled === true : undefined,
+        cateringAddonEnabled:
+          cateringAddonEnabled != null ? isCateringAddonEnabled(cateringAddonEnabled) : undefined,
       }
     );
     res.json({ success: true, merchant });

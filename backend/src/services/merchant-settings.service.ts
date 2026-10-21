@@ -384,7 +384,16 @@ export class MerchantSettingsService {
       shopLanguage: merchant.shopLanguage || merchant.panelLanguage || "en",
       posPrintSettings: normalizePosPrintSettings(merchant.posPrintSettings),
       tableQrSettings: normalizeTableQrSettings(merchant.tableQrSettings),
-      posCheckoutSettings: normalizePosCheckoutSettings(merchant.posCheckoutSettings),
+      posCheckoutSettings: (() => {
+        let checkout = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+        const locked = normalizeBusinessModule(
+          (merchant as { businessCategory?: string | null }).businessCategory
+        );
+        if (locked) {
+          checkout = { ...checkout, posMode: posModeForModule(locked) };
+        }
+        return checkout;
+      })(),
       customerDisplaySettings: await (async () => {
         try {
           const { CdsService } = await import("@/services/cds.service");
@@ -1170,6 +1179,18 @@ export class MerchantSettingsService {
     }
   ) {
     return this.updateMerchantSettings(merchantId, businessInfo);
+  }
+
+  static async updatePanelNavHidden(merchantId: string, hidden: unknown) {
+    const db = getDb();
+    const panelNavHidden = normalizePanelNavHidden(hidden);
+    await db
+      .update(schema.merchants)
+      .set({ panelNavHidden, updatedAt: new Date() })
+      .where(eq(schema.merchants.id, merchantId));
+    const row = await loadMerchantRowById(merchantId);
+    if (!row) throw new Error("Merchant not found");
+    return this.getMerchantSettings(merchantId);
   }
 
   static async resolveByShopHost(hostOrSlug: string) {

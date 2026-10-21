@@ -51,6 +51,7 @@ router.post("/pos/sessions/register", async (req: Request, res: Response) => {
       staffId: body.staffId ? String(body.staffId) : null,
       staffName: body.staffName ? String(body.staffName) : null,
       locationId: body.locationId ? String(body.locationId) : null,
+      stationId: body.stationId ? String(body.stationId) : null,
     });
     res.json({ success: true, ...result });
   } catch (error) {

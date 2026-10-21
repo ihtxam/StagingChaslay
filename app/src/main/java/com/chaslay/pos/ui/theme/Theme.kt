@@ -7,8 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
-    primary = ChaslayBrand.Black,
-    onPrimary = ChaslayBrand.White,
+    primary = RebornBrand.Burgundy,
+    onPrimary = RebornBrand.White,
     secondary = ChaslayBrand.Gray800,
     onSecondary = ChaslayBrand.White,
     tertiary = ChaslayBrand.Gray600,
@@ -49,6 +49,6 @@ fun ChaslayPosTheme(
 }
 
 object PosColors {
-    val Cash = ChaslayBrand.Black
-    val Card = ChaslayBrand.Gray800
+    val Cash = RebornBrand.Burgundy
+    val Card = RebornBrand.Gray800
 }

@@ -107,8 +107,24 @@ export class ProductService {
       return product[0];
     } catch (error) {
       console.error("Error creating product:", error);
+      if (ProductService.isUniqueViolation(error)) {
+        const code = BarcodeService.normalizeForSave(barcode);
+        if (code) {
+          throw new Error(`A product with barcode ${code} already exists`);
+        }
+        throw new Error("A product with this SKU or barcode already exists");
+      }
       throw error;
     }
+  }
+
+  private static isUniqueViolation(err: unknown): boolean {
+    const e = err as { code?: string; cause?: { code?: string }; message?: string };
+    return (
+      e?.code === "23505" ||
+      e?.cause?.code === "23505" ||
+      /duplicate key|unique constraint/i.test(String(e?.message || err || ""))
+    );
   }
 
   private static productListWhere(

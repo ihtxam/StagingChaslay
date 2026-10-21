@@ -172,7 +172,9 @@ data class SettingsUiState(
     val cloudLoginEmail: String = "",
     val cloudLoginPassword: String = "",
     val isCloudLoggingIn: Boolean = false,
-    val cloudLoginError: String? = null
+    val cloudLoginError: String? = null,
+    /** When set, POS mode follows merchant panel sync (retail vs restaurant). */
+    val posModeManagedByCloud: Boolean = false
 )
 
 @HiltViewModel
@@ -206,7 +208,21 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val settings = settingsRepository.getSettings()
+            var settings = settingsRepository.getSettings()
+            val rawVat = settings.vatIncludedInPrice
+            val localVat = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(
+                appContext,
+                rawVat
+            )
+            if (localVat != rawVat) {
+                settings = settings.copy(vatIncludedInPrice = localVat)
+                settingsRepository.saveSettings(settings)
+            }
+            val cloudMerchant = !syncPreferences.getMerchantId().isNullOrBlank()
+            if (cloudMerchant) {
+                runCatching { terminalSyncRepository.syncTerminals() }
+                settings = settingsRepository.getSettings()
+            }
             currentSettings = settings
             val sessionLanguage = sessionManager.appLanguage.first()
             val settingsLanguage = AppLanguage.fromCode(settings.defaultLanguage)
@@ -273,6 +289,7 @@ class SettingsViewModel @Inject constructor(
                     logoUri = settings.logoUri,
                     receiptTemplateName = settings.receiptTemplateName,
                     posMode = settings.posMode,
+                    posModeManagedByCloud = cloudMerchant || settings.paymentMethodsManagedByCloud,
                     coursesEnabled = settings.coursesEnabled,
                     tablesEnabled = settings.tablesEnabled,
                     retailDineInEnabled = settings.retailDineInEnabled,
@@ -915,6 +932,7 @@ class SettingsViewModel @Inject constructor(
     fun updateTakeawayVatRate(value: String) = _uiState.update { it.copy(takeawayVatRate = value) }
     fun updateVatIncludedInPrice(value: Boolean) {
         _uiState.update { it.copy(vatIncludedInPrice = value) }
+        com.chaslay.pos.util.PosLocalPrefs.saveVatIncludedInPrice(appContext, value)
         saveSettings()
     }
     fun updateNewTableName(value: String) = _uiState.update { it.copy(newTableName = value) }

@@ -146,6 +146,7 @@ import { useAuthStore } from '@/store/auth';
 import { canAccessRoute, hasPermission, isKioskRestrictedStaff } from '@/lib/permissions';
 import { hasEditionFeature, showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { normalizeBusinessModule } from '@/lib/business-module';
+import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
 import { desktopSidecarHealth, isDesktopApp } from '@/lib/platform';
 
 interface SettingsData {
@@ -164,6 +165,7 @@ interface SettingsData {
   taxIncludedInPrice?: boolean;
   vatAfterDiscount?: boolean;
   slug?: string | null;
+  panelNavHidden?: string[] | null;
   subdomain?: string | null;
   customDomain?: string | null;
   shopEnabled?: boolean;
@@ -620,10 +622,12 @@ function SettingsPosPostsBlock({
   hint,
   maxPosPosts,
   maxWaiterPosts,
+  showWaiterPosts = true,
 }: {
   hint: string;
   maxPosPosts: number;
   maxWaiterPosts: number;
+  showWaiterPosts?: boolean;
 }) {
   if (typeof PosPostsSection !== 'function') {
     return (
@@ -638,6 +642,7 @@ function SettingsPosPostsBlock({
       hint={hint}
       maxPosPosts={maxPosPosts}
       maxWaiterPosts={maxWaiterPosts}
+      showWaiterPosts={showWaiterPosts}
     />
   );
 }
@@ -714,6 +719,7 @@ export default function Settings() {
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
+  const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
   const [adyen, setAdyen] = useState<AdyenCreds>({});
   const adyenWebhookUrl = useMemo(() => {
     if (settings?.adyenWebhookUrl) return settings.adyenWebhookUrl;
@@ -1131,6 +1137,7 @@ export default function Settings() {
         if (!s) {
           throw new Error('Settings response missing data');
         }
+        setPanelNavHidden(parsePanelNavHidden(s.panelNavHidden));
         setSettings({
           ...s,
           name: s.name || '',
@@ -2235,6 +2242,12 @@ export default function Settings() {
               saving={saving}
               vacationImageInputRef={vacationImageInputRef}
               highlightId={highlightId}
+              showPanelNavEditor={jwtIsOwner && hasPermission(user?.permissions, 'MANAGE_SETTINGS', jwtIsOwner)}
+              panelNavHidden={panelNavHidden}
+              onPanelNavSaved={(hidden) => {
+                setPanelNavHidden(hidden);
+                setSettings((prev) => (prev ? { ...prev, panelNavHidden: hidden } : prev));
+              }}
             />
           )}
 
@@ -3204,9 +3217,11 @@ export default function Settings() {
                 <a href="/merchant/pos" className="btn-secondary mt-3 inline-flex">
                   {t('openWebPos')}
                 </a>
-                <a href="/merchant/waiter" className="btn-secondary mt-3 ml-2 inline-flex">
-                  {t('waiterAppTitle')}
-                </a>
+                {!isRetailMerchant ? (
+                  <a href="/merchant/waiter" className="btn-secondary mt-3 ml-2 inline-flex">
+                    {t('waiterAppTitle')}
+                  </a>
+                ) : null}
               </Section>
 
               <Section
@@ -3221,6 +3236,7 @@ export default function Settings() {
                   hint={t('posPostsAgencyHint')}
                   maxPosPosts={Math.max(0, Number(settings.maxPosPosts) || 0)}
                   maxWaiterPosts={Math.max(0, Number(settings.maxWaiterPosts) || 0)}
+                  showWaiterPosts={!isRetailMerchant}
                 />
               </Section>
 

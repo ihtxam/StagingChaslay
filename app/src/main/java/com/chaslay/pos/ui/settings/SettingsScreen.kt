@@ -311,20 +311,36 @@ fun SettingsScreen(
 
         SettingsSectionCard(title = stringResource(R.string.pos_mode), icon = Icons.Outlined.Settings) {
         Text(stringResource(R.string.pos_mode_help), style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PosMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = state.posMode == mode,
-                    onClick = { viewModel.updatePosMode(mode) },
-                    label = {
-                        Text(
-                            when (mode) {
-                                PosMode.RETAIL -> stringResource(R.string.pos_mode_retail)
-                                PosMode.RESTAURANT -> stringResource(R.string.pos_mode_restaurant)
-                            }
-                        )
-                    }
-                )
+        if (state.posModeManagedByCloud) {
+            Text(
+                when (state.posMode) {
+                    PosMode.RETAIL -> stringResource(R.string.pos_mode_retail)
+                    PosMode.RESTAURANT -> stringResource(R.string.pos_mode_restaurant)
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.textPrimary
+            )
+            Text(
+                stringResource(R.string.pos_mode_cloud_synced),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PosMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = state.posMode == mode,
+                        onClick = { viewModel.updatePosMode(mode) },
+                        label = {
+                            Text(
+                                when (mode) {
+                                    PosMode.RETAIL -> stringResource(R.string.pos_mode_retail)
+                                    PosMode.RESTAURANT -> stringResource(R.string.pos_mode_restaurant)
+                                }
+                            )
+                        }
+                    )
+                }
             }
         }
 

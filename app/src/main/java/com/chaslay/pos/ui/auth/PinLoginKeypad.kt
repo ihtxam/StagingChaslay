@@ -47,10 +47,10 @@ fun PinDotsDisplay(pinLength: Int, maxLength: Int = 6, modifier: Modifier = Modi
                     .padding(horizontal = 8.dp)
                     .size(if (filled) 18.dp else 14.dp)
                     .clip(CircleShape)
-                    .background(if (filled) ChaslayBrand.White else ChaslayBrand.Gray800)
+                    .background(if (filled) ChaslayBrand.Burgundy else ChaslayBrand.Gray200)
                     .border(
                         width = 1.dp,
-                        color = if (filled) ChaslayBrand.White else ChaslayBrand.Gray600,
+                        color = if (filled) ChaslayBrand.Burgundy else ChaslayBrand.Gray400,
                         shape = CircleShape
                     )
             )
@@ -119,7 +119,7 @@ fun PinLoginKeypad(
             label = stringResource(R.string.login),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp),
+                .height(52.dp),
             variant = KeyVariant.Primary,
             enabled = enterEnabled,
             fillHeight = true,
@@ -139,24 +139,24 @@ private fun PinKey(
     onClick: () -> Unit
 ) {
     val bg = when {
-        !enabled -> ChaslayBrand.Gray900
-        variant == KeyVariant.Primary -> ChaslayBrand.White
-        variant == KeyVariant.Muted -> ChaslayBrand.Gray900
-        else -> ChaslayBrand.Gray800
+        !enabled -> ChaslayBrand.Gray200
+        variant == KeyVariant.Primary -> ChaslayBrand.Burgundy
+        variant == KeyVariant.Muted -> ChaslayBrand.Gray100
+        else -> ChaslayBrand.Gray100
     }
     val contentColor = when {
-        !enabled -> ChaslayBrand.Gray600
-        variant == KeyVariant.Primary -> ChaslayBrand.Black
-        variant == KeyVariant.Muted -> ChaslayBrand.Gray200
-        else -> ChaslayBrand.White
+        !enabled -> ChaslayBrand.Gray400
+        variant == KeyVariant.Primary -> ChaslayBrand.White
+        variant == KeyVariant.Muted -> ChaslayBrand.Gray800
+        else -> ChaslayBrand.Gray900
     }
     val borderColor = when {
-        !enabled -> ChaslayBrand.Gray800
-        variant == KeyVariant.Primary -> ChaslayBrand.White
-        else -> ChaslayBrand.Gray800
+        !enabled -> ChaslayBrand.Gray200
+        variant == KeyVariant.Primary -> ChaslayBrand.Burgundy
+        else -> ChaslayBrand.Gray200
     }
     val shape = RoundedCornerShape(16.dp)
-    val heightMod = if (fillHeight) modifier else modifier.heightIn(min = 72.dp).aspectRatio(1.6f)
+    val heightMod = if (fillHeight) modifier else modifier.heightIn(min = 52.dp).aspectRatio(1.45f)
     Column(
         modifier = heightMod
             .clip(shape)

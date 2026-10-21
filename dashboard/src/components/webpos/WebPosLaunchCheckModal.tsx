@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard, Loader2, Nfc, Printer, Receipt, XCircle } from 'lucide-react';
 import { requestBridgeUsbPermissionActivity } from '@/lib/device-bridge';
+import { requestBridgeUsbPermission } from '@/lib/print-agent';
 import {
   runWebPosConnectionChecks,
   type CheckStatus,
@@ -181,8 +182,13 @@ export default function WebPosLaunchCheckModal({
               className="btn-primary w-full py-2.5"
               disabled={running}
               onClick={() => {
-                requestBridgeUsbPermissionActivity();
-                window.setTimeout(() => void runChecks(), 2_000);
+                void (async () => {
+                  const viaBridge = await requestBridgeUsbPermission().catch(() => false);
+                  if (!viaBridge) {
+                    requestBridgeUsbPermissionActivity();
+                  }
+                  window.setTimeout(() => void runChecks(), 2_500);
+                })();
               }}
             >
               {t('webPosLaunchCheckOpenBridgeUsb')}

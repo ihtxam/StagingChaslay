@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Search, Plus, Edit2, Trash2, Eye, X, Copy, KeyRound, LogIn, Eraser } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Eye, X, Copy, KeyRound, LogIn, Eraser, ListTree } from 'lucide-react';
+import PanelNavManageModal from '@/components/panel/PanelNavManageModal';
+import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
 import { useAuthStore } from '@/store/auth';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -75,6 +77,7 @@ interface Merchant {
   devices: number;
   licenses: number;
   activeLicenses?: number;
+  panelNavHidden?: string[] | null;
 }
 
 function PosVersionBadge({ name }: { name?: string | null }) {
@@ -196,6 +199,12 @@ export default function Merchants() {
     guestCrmAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
+  const [panelNavFor, setPanelNavFor] = useState<{
+    id: string;
+    name: string;
+    hidden: string[];
+  } | null>(null);
+  const [savingPanelNav, setSavingPanelNav] = useState(false);
   const [planForm, setPlanForm] = useState({
     editionId: '',
     planBillingPaid: true,
@@ -407,6 +416,23 @@ export default function Merchants() {
       toast.error(err.response?.data?.error || 'Failed to update limits');
     } finally {
       setSavingPosLimits(false);
+    }
+  };
+
+  const savePanelNav = async () => {
+    if (!panelNavFor) return;
+    setSavingPanelNav(true);
+    try {
+      await api.put(`/superadmin/merchants/${panelNavFor.id}/panel-nav`, {
+        panelNavHidden: panelNavFor.hidden,
+      });
+      toast.success(t('panelNavSaved'));
+      setPanelNavFor(null);
+      await fetchMerchants();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update panel menu');
+    } finally {
+      setSavingPanelNav(false);
     }
   };
 
@@ -889,6 +915,19 @@ export default function Merchants() {
                         onClick={() => void openMerchantPanel(merchant)}
                       >
                         <LogIn className="w-4 h-4 text-teal-700" />
+                      </button>
+                      <button
+                        className="p-2 hover:bg-gray-100 rounded"
+                        title={t('panelNavManage')}
+                        onClick={() =>
+                          setPanelNavFor({
+                            id: merchant.id,
+                            name: merchant.name,
+                            hidden: parsePanelNavHidden(merchant.panelNavHidden),
+                          })
+                        }
+                      >
+                        <ListTree className="w-4 h-4 text-gray-600" />
                       </button>
                       {merchant.status === 'suspended' ? (
                         <button
@@ -2111,6 +2150,18 @@ export default function Merchants() {
           </div>
         </div>
       )}
+
+      <PanelNavManageModal
+        open={!!panelNavFor}
+        merchantName={panelNavFor?.name || ''}
+        hidden={panelNavFor?.hidden || []}
+        saving={savingPanelNav}
+        onClose={() => setPanelNavFor(null)}
+        onChange={(hidden) => {
+          if (panelNavFor) setPanelNavFor({ ...panelNavFor, hidden });
+        }}
+        onSave={() => void savePanelNav()}
+      />
     </div>
   );
 }

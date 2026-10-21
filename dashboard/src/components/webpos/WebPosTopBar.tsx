@@ -18,6 +18,7 @@ import {
   UserCircle2,
   Vault,
   ArrowDownUp,
+  Nfc,
 } from 'lucide-react';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
 import { useFullscreenActive } from '@/hooks/useFullscreenActive';
@@ -593,6 +594,11 @@ export function WebPosSettingsDropdown({
   terminals = [],
   selectedTerminalId = '',
   onTerminalChange,
+  posStations = [],
+  deviceDefaultStationId = '',
+  onDeviceDefaultStationChange,
+  tapToPayWizardVisible = false,
+  onOpenTapToPayWizard,
 }: {
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
@@ -639,6 +645,13 @@ export function WebPosSettingsDropdown({
   terminals?: Array<{ terminalId: string; terminalName: string | null }>;
   selectedTerminalId?: string;
   onTerminalChange?: (terminalId: string) => void;
+  /** Floor registers at this location (2+ → show tablet default picker). */
+  posStations?: Array<{ id: string; name: string }>;
+  deviceDefaultStationId?: string;
+  onDeviceDefaultStationChange?: (stationId: string) => void;
+  /** Android WebPOS + merchant Tap to Pay enabled */
+  tapToPayWizardVisible?: boolean;
+  onOpenTapToPayWizard?: () => void;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -979,6 +992,47 @@ export function WebPosSettingsDropdown({
             {t('webPosEodPrint')}
           </button>
           <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
+        </div>
+      ) : null}
+
+      {posStations.length >= 2 && onDeviceDefaultStationChange ? (
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('posStationDeviceDefault')}
+          </p>
+          <label className="block space-y-1 text-xs">
+            <span className="text-[11px] text-stone-500">{t('posStationPickerTitle')}</span>
+            <select
+              className="input w-full text-xs"
+              value={deviceDefaultStationId}
+              onChange={(e) => onDeviceDefaultStationChange(e.target.value)}
+            >
+              <option value="">{t('webPosTerminalPick')}</option>
+              {posStations.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[10px] leading-snug text-stone-500">{t('posStationDeviceDefaultHint')}</p>
+        </div>
+      ) : null}
+
+      {tapToPayWizardVisible && onOpenTapToPayWizard ? (
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('tapToPaySettings')}
+          </p>
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 py-2 text-xs font-bold text-teal-900 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
+            onClick={onOpenTapToPayWizard}
+          >
+            <Nfc size={16} />
+            {t('tapToPayWizardOpen')}
+          </button>
+          <p className="text-[10px] leading-snug text-stone-500">{t('tapToPayWizardGearHint')}</p>
         </div>
       ) : null}
 

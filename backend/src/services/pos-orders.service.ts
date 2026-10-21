@@ -1275,6 +1275,7 @@ export class PosOrdersService {
       notes?: string;
       staffId?: string;
       staffName?: string;
+      stationId?: string;
       sendToKitchen?: boolean;
     }
   ) {
@@ -1315,6 +1316,11 @@ export class PosOrdersService {
     }
 
     const status = nextOpenTicketStatus(existing?.status, !!body.sendToKitchen);
+    let stationId: string | null = null;
+    if (body.stationId) {
+      const { PosStationsService } = await import("@/services/pos-stations.service");
+      stationId = await PosStationsService.resolveStationId(merchantId, null, body.stationId);
+    }
     const values = {
       label: (body.label || "").trim().slice(0, 120) || null,
       status,
@@ -1323,6 +1329,7 @@ export class PosOrdersService {
       notes: body.notes || null,
       staffId: body.staffId || null,
       staffName: body.staffName || null,
+      stationId,
       updatedAt: new Date(),
     };
 

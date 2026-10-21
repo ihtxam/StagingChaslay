@@ -27,8 +27,14 @@ router.post("/", async (req: Request, res: Response) => {
         metadata: {
           source: String(raw?.source || "client").slice(0, 80),
           path: String(raw?.path || "").slice(0, 512),
+          actorRole: req.user?.role || null,
+          actorEmail: req.user?.email || null,
+          actorDisplayName: req.user?.name || null,
+          // Legacy key — for merchant owners this is merchant.name (store), not POS staff.
           staffId: req.user?.staffId || null,
-          staffName: req.user?.name || null,
+          staffName: req.user?.role === "staff" ? req.user?.name || null : null,
+          merchantDisplayName:
+            req.user?.role === "merchant" ? req.user?.name || null : null,
           ...(raw?.metadata && typeof raw.metadata === "object" ? raw.metadata : {}),
         },
       });

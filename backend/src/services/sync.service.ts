@@ -119,6 +119,8 @@ export interface SyncSalePayload {
   clientId: string;
   /** POS / WebPOS location; falls back to request context or merchant default */
   locationId?: string | null;
+  /** Floor register within location (kitchen routing / reports). */
+  stationId?: string | null;
   deviceId?: string;
   orderNumber?: string;
   /** Kitchen / takeaway shout number shown to staff & customers, e.g. #4821 */
@@ -554,9 +556,22 @@ export class SyncService {
           tableId: sale.tableId,
         });
         if (dup) {
-          throw new Error(
-            `Ticket ${sale.ticketDisplay || sale.tabNumber || "unknown"} was already paid`
+          const { FiskalyService } = await import("@/services/fiskaly.service");
+          const dupRow = await db.query.orders.findFirst({
+            where: eq(schema.orders.id, dup.id),
+            columns: { fiskalySignature: true },
+          });
+          const fiskaly = FiskalyService.toPushResponse(
+            (dupRow?.fiskalySignature as import("@/lib/fiskaly-settings").FiskalySignature | null) ||
+              null
           );
+          results.push({
+            clientId: sale.clientId,
+            orderId: dup.id,
+            created: false,
+            fiskaly,
+          });
+          continue;
         }
       }
 
@@ -659,9 +674,17 @@ export class SyncService {
         sale.locationId ?? contextLocationId
       );
 
+      const { PosStationsService } = await import("@/services/pos-stations.service");
+      const resolvedStationId = await PosStationsService.resolveStationId(
+        merchantId,
+        resolvedLocationId,
+        sale.stationId
+      );
+
       const orderValuesBase = {
         merchantId,
         locationId: resolvedLocationId,
+        stationId: resolvedStationId,
         orderType: "pos" as const,
         fulfillmentChannel: channel,
         status,
