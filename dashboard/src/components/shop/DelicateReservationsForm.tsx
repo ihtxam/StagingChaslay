@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState, type CSSProperties } from 'react';
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { ymdZurich } from '@/components/shop/InlineReservationsWidget';
 import { useI18n } from '@/lib/i18n';
 import { useShopReservationsBooking } from '@/lib/use-shop-reservations-booking';
@@ -33,19 +33,65 @@ export default function DelicateReservationsForm({
   onClose,
   onSuccess,
 }: Props) {
-  const { t, formatDateTime } = useI18n();
+  const { t, locale, formatDateTime } = useI18n();
   const booking = useShopReservationsBooking(shopKey, t);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarViewYm, setCalendarViewYm] = useState(() => booking.date);
+  const [largePartyOpen, setLargePartyOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+
+  const PARTY_CHIP_MAX = 5;
+
+  useEffect(() => {
+    if (calendarOpen) setCalendarViewYm(booking.date);
+  }, [calendarOpen, booking.date]);
 
   const rootStyle = accent ? ({ ['--rb-accent' as string]: accent } as CSSProperties) : undefined;
   const heading = title || t('shopReservations');
 
   const calendarMonth = useMemo(() => {
-    const [y, m] = booking.date.split('-').map(Number);
+    const [y, m] = calendarViewYm.split('-').map(Number);
     return monthDays(y, m - 1);
-  }, [booking.date]);
+  }, [calendarViewYm]);
+
+  const shiftCalendarMonth = (delta: number) => {
+    const [y, m] = calendarViewYm.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    const next = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    setCalendarViewYm(next);
+  };
+
+  const pickPartyChip = (n: number) => {
+    setLargePartyOpen(false);
+    booking.setPartySize(n);
+  };
+
+  const openLargeParty = () => {
+    setLargePartyOpen(true);
+    if (booking.partySize <= PARTY_CHIP_MAX) {
+      booking.setPartySize(Math.min(booking.maxParty, Math.max(6, booking.minParty)));
+    }
+  };
+
+  const showLargePartyStepper =
+    largePartyOpen || booking.partySize > PARTY_CHIP_MAX || booking.minParty > PARTY_CHIP_MAX;
+
+  const calendarMonthLabel = useMemo(() => {
+    const [y, m] = calendarViewYm.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1, 1));
+    const loc = locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-CH';
+    return new Intl.DateTimeFormat(loc, { month: 'long', year: 'numeric' }).format(d);
+  }, [calendarViewYm, locale]);
+
+  const calendarWeekdays = useMemo(() => {
+    const loc = locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-CH';
+    return Array.from({ length: 7 }, (_, i) =>
+      new Intl.DateTimeFormat(loc, { weekday: 'narrow' }).format(
+        new Date(Date.UTC(2024, 0, 1 + i)),
+      ),
+    );
+  }, [locale]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -147,7 +193,10 @@ export default function DelicateReservationsForm({
                 type="button"
                 className="rb-date-chip"
                 aria-pressed={booking.date === d.value}
-                onClick={() => booking.setDate(d.value)}
+                onClick={() => {
+                  booking.setDate(d.value);
+                  setCalendarOpen(false);
+                }}
               >
                 <span>{d.isToday ? t('shopReservationsToday') : d.weekday}</span>
                 <strong>{d.dayNum}</strong>
@@ -155,36 +204,108 @@ export default function DelicateReservationsForm({
             ))}
             <button
               type="button"
-              className="rb-date-chip"
-              aria-pressed={false}
-              onClick={() => setCalendarOpen(true)}
+              className="rb-date-chip rb-date-chip--plus"
+              aria-pressed={calendarOpen}
+              aria-expanded={calendarOpen}
+              aria-label={t('shopReservationsDate')}
+              onClick={() => setCalendarOpen((open) => !open)}
             >
-              <span>+</span>
-              <strong>···</strong>
+              <strong>+</strong>
             </button>
           </div>
+          {calendarOpen ? (
+            <div className="rb-calendar-panel" role="region" aria-label={t('shopReservationsDate')}>
+              <div className="rb-calendar-nav">
+                <button type="button" className="rb-calendar-nav-btn" onClick={() => shiftCalendarMonth(-1)}>
+                  ‹
+                </button>
+                <span className="rb-calendar-month">{calendarMonthLabel}</span>
+                <button type="button" className="rb-calendar-nav-btn" onClick={() => shiftCalendarMonth(1)}>
+                  ›
+                </button>
+              </div>
+              <div className="rb-calendar-weekdays" aria-hidden>
+                {calendarWeekdays.map((d, i) => (
+                  <span key={`${d}-${i}`}>{d}</span>
+                ))}
+              </div>
+              <div className="rb-calendar-grid">
+                {Array.from({ length: (calendarMonth.first.getUTCDay() + 6) % 7 }).map((_, i) => (
+                  <span key={`pad-${i}`} className="rb-calendar-pad" />
+                ))}
+                {calendarMonth.days.map((dt) => {
+                  const value = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+                  const disabled = value < ymdZurich() || value > booking.maxDate;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className="rb-calendar-day"
+                      aria-pressed={booking.date === value}
+                      disabled={disabled}
+                      onClick={() => {
+                        booking.setDate(value);
+                        setCalendarOpen(false);
+                      }}
+                    >
+                      {dt.getUTCDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        <div className="rb-row-2 rb-section">
+        <div className="rb-row-2 rb-section rb-row-party-time">
           <div>
             <span className="rb-label">{t('shopReservationsParty')}</span>
-            <div className="rb-stepper">
+            <div className="rb-party-chips" role="group" aria-label={t('shopReservationsParty')}>
+              {Array.from({ length: PARTY_CHIP_MAX }, (_, i) => i + 1).map((n) => {
+                const disabled = n < booking.minParty || n > booking.maxParty;
+                const pressed = !showLargePartyStepper && booking.partySize === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    className="rb-party-chip"
+                    aria-pressed={pressed}
+                    disabled={disabled}
+                    onClick={() => pickPartyChip(n)}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
               <button
                 type="button"
-                aria-label="-"
-                onClick={() => booking.setPartySize(Math.max(booking.minParty, booking.partySize - 1))}
+                className="rb-party-chip"
+                aria-pressed={showLargePartyStepper}
+                disabled={booking.maxParty <= PARTY_CHIP_MAX}
+                onClick={openLargeParty}
               >
-                −
-              </button>
-              <span>{booking.partySize}</span>
-              <button
-                type="button"
-                aria-label="+"
-                onClick={() => booking.setPartySize(Math.min(booking.maxParty, booking.partySize + 1))}
-              >
-                +
+                {booking.partySize > PARTY_CHIP_MAX && showLargePartyStepper ? booking.partySize : '6+'}
               </button>
             </div>
+            {showLargePartyStepper ? (
+              <div className="rb-stepper rb-stepper--compact">
+                <button
+                  type="button"
+                  aria-label="-"
+                  onClick={() => booking.setPartySize(Math.max(booking.minParty, booking.partySize - 1))}
+                >
+                  −
+                </button>
+                <span>{booking.partySize}</span>
+                <button
+                  type="button"
+                  aria-label="+"
+                  onClick={() => booking.setPartySize(Math.min(booking.maxParty, booking.partySize + 1))}
+                >
+                  +
+                </button>
+              </div>
+            ) : null}
           </div>
           <div>
             <span className="rb-label">{t('shopReservationsTime')}</span>
@@ -277,38 +398,6 @@ export default function DelicateReservationsForm({
 
         <p className="rb-powered">Powered by Reborn</p>
       </form>
-
-      {calendarOpen ? (
-        <div className="rb-calendar-backdrop" role="presentation" onClick={() => setCalendarOpen(false)}>
-          <div className="rb-calendar" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <p className="rb-label">Choisir une date</p>
-            <p className="rb-subtitle" style={{ marginBottom: '0.75rem' }}>
-              Faites défiler — jusqu&apos;à {booking.config?.settings?.maxDaysAhead || 90} jours à l&apos;avance
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.35rem' }}>
-              {calendarMonth.days.map((dt) => {
-                const value = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
-                const disabled = value < ymdZurich() || value > booking.maxDate;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    className="rb-time-btn"
-                    aria-pressed={booking.date === value}
-                    disabled={value > booking.maxDate}
-                    onClick={() => {
-                      booking.setDate(value);
-                      setCalendarOpen(false);
-                    }}
-                  >
-                    {dt.getUTCDate()}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

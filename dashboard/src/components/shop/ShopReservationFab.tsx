@@ -105,11 +105,11 @@ export default function ShopReservationFab({ shopKey, accent, scrollReveal = tru
           }}
         >
           <div
-            className="w-full max-w-[440px] max-h-[92vh] overflow-hidden rounded-t-2xl bg-transparent animate-in fade-in slide-in-from-bottom-4 duration-300 sm:rounded-2xl sm:slide-in-from-bottom-2 sm:shadow-[0_24px_64px_rgba(15,23,42,0.35)]"
+            className="w-full max-w-[min(100vw-2rem,580px)] max-h-[92vh] overflow-hidden rounded-t-2xl bg-transparent animate-in fade-in slide-in-from-bottom-4 duration-300 sm:rounded-2xl sm:slide-in-from-bottom-2 sm:shadow-[0_24px_64px_rgba(15,23,42,0.35)]"
             role="dialog"
             aria-label={label}
           >
-            <div className="max-h-[min(92vh,720px)] overflow-y-auto bg-white sm:max-h-[min(88vh,760px)]">
+            <div className="max-h-[min(92vh,680px)] overflow-y-auto bg-white sm:max-h-[min(86vh,700px)]">
               <DelicateReservationsForm
                 shopKey={shopKey}
                 theme="light"
