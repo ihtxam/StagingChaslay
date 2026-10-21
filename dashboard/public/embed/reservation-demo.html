@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reborn reservation widget — demo</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        min-height: 100vh;
+        color: #0f172a;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 6rem;
+      }
+      h1 {
+        font-size: 1.75rem;
+        letter-spacing: -0.02em;
+      }
+      p {
+        line-height: 1.55;
+        color: #475569;
+      }
+      code {
+        background: #fff;
+        padding: 0.15rem 0.35rem;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        border: 1px solid #e2e8f0;
+        margin-top: 1.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>External site demo</h1>
+      <p>
+        This page simulates a WordPress or custom homepage. The floating button is injected by
+        <code>reborn-reservations.js</code>. Replace <code>data-shop</code> with your merchant slug on staging.
+      </p>
+      <div class="card">
+        <strong>Restaurant (light — EGGA style)</strong>
+        <pre style="overflow:auto;font-size:12px">&lt;script src="/embed/reborn-reservations.js"
+  data-shop="demo"
+  data-theme="light"
+  data-accent="#1c3557"
+  data-label="Réserver une table"
+  data-lang="fr"
+  async&gt;&lt;/script&gt;</pre>
+      </div>
+      <div class="card">
+        <strong>Restaurant (dark — Zenchef style)</strong>
+        <p>Use <code>data-theme="dark"</code> and a light accent if needed.</p>
+      </div>
+      <div class="card">
+        <strong>Retail</strong>
+        <p>
+          Use <code>data-mode="shop"</code> and label <code>Commander</code> to open your online shop instead of
+          reservations.
+        </p>
+      </div>
+    </main>
+    <script
+      src="/embed/reborn-reservations.js"
+      data-shop="demo"
+      data-theme="light"
+      data-accent="#1c3557"
+      data-label="Réserver une table"
+      data-lang="fr"
+      async
+    ></script>
+  </body>
+</html>

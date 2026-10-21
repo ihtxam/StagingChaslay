@@ -34,6 +34,7 @@ import ReservationsPage from '@/pages/shop/ReservationsPage';
 import ReceiptPage from '@/pages/ReceiptPage';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
+import ReservationsEmbedPage from '@/pages/embed/ReservationsEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
 import OdsDisplayPage from '@/pages/OdsDisplayPage';
@@ -316,6 +317,9 @@ function App() {
             />
           )}
           {!shopMode && !statusMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
+          {!shopMode && !statusMode && (
+            <Route path="/embed/reservations/:merchantSlug" element={<ReservationsEmbedPage />} />
+          )}
           {!shopMode && !statusMode && (
             <Route
               path="/host"

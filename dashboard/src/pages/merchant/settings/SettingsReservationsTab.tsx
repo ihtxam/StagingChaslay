@@ -89,15 +89,24 @@ export default function SettingsReservationsTab() {
   const [settings, setSettings] = useState<ResSettings | null>(null);
   const [dineInHours, setDineInHours] = useState<ChannelHours>(emptyWeek());
   const [saving, setSaving] = useState(false);
+  const [shopSlug, setShopSlug] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await api.get('/merchant/reservations/config');
+      const [res, settingsRes] = await Promise.all([
+        api.get('/merchant/reservations/config'),
+        api.get('/merchant/settings'),
+      ]);
       setEnabled(!!res.data.config?.enabled);
       setSettings(res.data.config?.settings);
       if (res.data.config?.hours) setDineInHours(res.data.config.hours);
+      setShopSlug(
+        settingsRes.data?.merchant?.slug ||
+          settingsRes.data?.settings?.slug ||
+          ''
+      );
     } catch (e: any) {
       if (isMissingAuthorizationError(e)) {
         setLoadError(t('reservationsUnlicensedHint'));
@@ -732,6 +741,47 @@ export default function SettingsReservationsTab() {
           </div>
         )}
       </SettingsReportCard>
+
+      {enabled && shopSlug ? (
+        <SettingsReportCard
+          title="Website widget"
+          description="Floating “Réserver une table” button for WordPress, your homepage, or any external site (EGGA / Zenchef style)."
+          icon={CalendarClock}
+        >
+          <p className="text-sm text-[var(--text-muted)] mb-3">
+            Paste before <code className="text-xs bg-[var(--bg-muted)] px-1 rounded">&lt;/body&gt;</code>.
+            Staging: try{' '}
+            <a
+              className="text-teal-700 underline"
+              href={`${typeof window !== 'undefined' ? window.location.origin : ''}/embed/reservation-demo.html`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              reservation demo
+            </a>
+            .
+          </p>
+          <textarea
+            readOnly
+            className="input w-full font-mono text-xs min-h-[9rem]"
+            value={`<script
+  src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com'}/embed/reborn-reservations.js"
+  data-shop="${shopSlug}"
+  data-theme="light"
+  data-accent="#1c3557"
+  data-label="Réserver une table"
+  data-lang="fr"
+  async
+></script>`}
+            onFocus={(e) => e.target.select()}
+          />
+          <p className="text-xs text-[var(--text-muted)] mt-2">
+            Retail shop on the same account: use <code className="text-[10px]">data-mode="shop"</code> and{' '}
+            <code className="text-[10px]">data-label="Commander"</code>. Dark theme:{' '}
+            <code className="text-[10px]">data-theme="dark"</code>.
+          </p>
+        </SettingsReportCard>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]/30 px-4 py-3">
         <button type="submit" className="btn-primary inline-flex items-center gap-2 sm:hidden" disabled={saving}>
