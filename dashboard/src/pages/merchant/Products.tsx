@@ -19,6 +19,7 @@ import {
   Barcode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastInfo } from '@/lib/toast-notify';
 import { parseExtraBarcodes, sanitizeBarcodeFieldValue, stripScannerControlChars } from '@/lib/product-scan-codes';
 import { BARCODE_FIELD_INPUT_CLASS } from '@/lib/barcode-wedge';
 import ProductInventoryExpiryPanel from '@/components/merchant/ProductInventoryExpiryPanel';
@@ -1093,7 +1094,7 @@ export default function Products() {
       if (generated > 0) {
         toast.success(t('barcodeGeneratedCount').replace('{n}', String(generated)));
       } else {
-        toast.info(t('barcodeNoneMissing'));
+        toastInfo(t('barcodeNoneMissing'));
       }
       const updated = (res.data.products || []) as Array<{ id: string; barcode: string }>;
       if (editingId) {
@@ -1122,7 +1123,7 @@ export default function Products() {
       if (n > 0) {
         toast.success(t('productPhotosImported').replace('{n}', String(n)));
       } else {
-        toast.info(t('productPhotosNoneMissing'));
+        toastInfo(t('productPhotosNoneMissing'));
       }
       await load();
     } catch (error: any) {
