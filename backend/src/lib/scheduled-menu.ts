@@ -140,6 +140,15 @@ export function isMenuScheduleActive(
   return ranges.some((r) => isHmInWindow(cur, r.start, r.end));
 }
 
+/** True when any active menu is tied to specific location IDs (multi-terminal catalog). */
+export function merchantHasLocationScopedMenus(menus: ScheduledMenuLike[]): boolean {
+  return menus.some((m) => {
+    if (m.isActive === false) return false;
+    const locIds = Array.isArray(m.locationIds) ? m.locationIds : [];
+    return locIds.length > 0;
+  });
+}
+
 /** Location has at least one non-default scheduled menu assigned (not the global default catalog). */
 export function locationHasDedicatedScheduledMenus(
   menus: ScheduledMenuLike[],
@@ -191,14 +200,22 @@ export function pickActiveScheduledMenu<T extends ScheduledMenuLike>(
     if (isMenuScheduleActive(menu, at, timezone)) return menu;
   }
 
-  if (dedicatedForLocation || terminalIsolation) {
+  if (dedicatedForLocation) {
     return null;
   }
 
   const defaultMenu = active.find((m) => m.isDefault);
   if (defaultMenu) {
     if (!menuIncludesCatalogChannel(defaultMenu.channels, opts.channel as CatalogChannel)) return null;
-    if (!menuMatchesLocation(defaultMenu)) return null;
+    const defaultLocIds = Array.isArray(defaultMenu.locationIds) ? defaultMenu.locationIds : [];
+    if (terminalIsolation) {
+      if (defaultLocIds.length > 0 && !defaultLocIds.includes(locationId)) return null;
+      if (defaultLocIds.length === 0 && merchantHasLocationScopedMenus(active)) {
+        return null;
+      }
+    } else if (defaultLocIds.length && !defaultLocIds.includes(locationId)) {
+      return null;
+    }
     return defaultMenu;
   }
 

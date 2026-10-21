@@ -38,6 +38,18 @@ function readMenuSelection(input: {
   };
 }
 
+function menuHasExplicitCatalogSelection(menu: {
+  productIds?: unknown;
+  categoryIds?: unknown;
+  hqVersionId?: string | null;
+}): boolean {
+  return (
+    stringArray(menu.productIds).length > 0 ||
+    stringArray(menu.categoryIds).length > 0 ||
+    !!menu.hqVersionId
+  );
+}
+
 async function resolveMenuProductIds(
   merchantId: string,
   menu: { productIds?: unknown; categoryIds?: unknown; hqVersionId?: string | null }
@@ -294,8 +306,7 @@ export class HqMenuService {
       terminalIsolation,
     });
     if (!picked) {
-      const strictEmpty =
-        terminalIsolation || locationHasDedicatedScheduledMenus(menus, locationId);
+      const strictEmpty = locationHasDedicatedScheduledMenus(menus, locationId);
       return {
         menu: null,
         productIds: strictEmpty ? new Set<string>() : null,
@@ -304,7 +315,11 @@ export class HqMenuService {
     }
 
     let productIds = await resolveMenuProductIds(merchantId, picked);
-    if (productIds === null && terminalIsolation) {
+    if (
+      productIds === null &&
+      terminalIsolation &&
+      menuHasExplicitCatalogSelection(picked)
+    ) {
       productIds = new Set<string>();
     }
     const productPrices = normalizeProductPrices(picked.productPrices);
