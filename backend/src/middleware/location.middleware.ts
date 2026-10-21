@@ -6,6 +6,8 @@ declare global {
   namespace Express {
     interface Request {
       locationId?: string;
+      /** True when X-Location-Id was sent and resolved to a real location row. */
+      locationFromHeader?: boolean;
     }
   }
 }
@@ -34,8 +36,12 @@ export async function setLocationContext(req: Request, res: Response, next: Next
       if (resolved) {
         await LocationsService.assertStaffAccess(merchantId, resolved, { staffId, isOwner });
         req.locationId = resolved;
+        req.locationFromHeader = true;
         return next();
       }
+      // Invalid terminal header: do not substitute merchant default (prevents Bar menu on Kiosk).
+      req.locationFromHeader = true;
+      return next();
     }
     req.locationId = await LocationsService.getDefaultId(merchantId);
     next();

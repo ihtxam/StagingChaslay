@@ -161,33 +161,44 @@ export function pickActiveScheduledMenu<T extends ScheduledMenuLike>(
     locationId: string;
     at?: Date;
     timezone?: string;
+    /** POS terminal: menu must be explicitly assigned to locationId; no global default bleed. */
+    terminalIsolation?: boolean;
   }
 ): T | null {
   const at = opts.at ?? new Date();
   const timezone = opts.timezone || DEFAULT_TIMEZONE;
+  const locationId = String(opts.locationId || "").trim();
   const active = menus
     .filter((m) => m.isActive !== false)
     .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
 
-  const dedicatedForLocation = locationHasDedicatedScheduledMenus(active, opts.locationId);
+  const dedicatedForLocation = locationHasDedicatedScheduledMenus(active, locationId);
+  const terminalIsolation = opts.terminalIsolation === true && !!locationId;
+
+  const menuMatchesLocation = (menu: ScheduledMenuLike): boolean => {
+    const locIds = Array.isArray(menu.locationIds) ? menu.locationIds : [];
+    if (terminalIsolation) {
+      return locIds.includes(locationId);
+    }
+    if (locIds.length && !locIds.includes(locationId)) return false;
+    return true;
+  };
 
   const nonDefault = active.filter((m) => !m.isDefault);
   for (const menu of nonDefault) {
     if (!menuIncludesCatalogChannel(menu.channels, opts.channel as CatalogChannel)) continue;
-    const locIds = Array.isArray(menu.locationIds) ? menu.locationIds : [];
-    if (locIds.length && !locIds.includes(opts.locationId)) continue;
+    if (!menuMatchesLocation(menu)) continue;
     if (isMenuScheduleActive(menu, at, timezone)) return menu;
   }
 
-  if (dedicatedForLocation) {
+  if (dedicatedForLocation || terminalIsolation) {
     return null;
   }
 
   const defaultMenu = active.find((m) => m.isDefault);
   if (defaultMenu) {
     if (!menuIncludesCatalogChannel(defaultMenu.channels, opts.channel as CatalogChannel)) return null;
-    const locIds = Array.isArray(defaultMenu.locationIds) ? defaultMenu.locationIds : [];
-    if (locIds.length && !locIds.includes(opts.locationId)) return null;
+    if (!menuMatchesLocation(defaultMenu)) return null;
     return defaultMenu;
   }
 

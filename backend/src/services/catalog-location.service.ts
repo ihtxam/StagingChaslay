@@ -128,7 +128,8 @@ export class CatalogLocationService {
       locId,
       channel,
       new Date(),
-      timezone
+      timezone,
+      { terminalIsolation: true }
     );
     const visibleProducts = this.filterByHqMenuProductIds(
       filtered.products,
