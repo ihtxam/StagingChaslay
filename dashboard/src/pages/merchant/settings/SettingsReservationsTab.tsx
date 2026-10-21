@@ -33,6 +33,7 @@ type ResSettings = {
   bufferMinutes: number;
   minPartySize: number;
   maxPartySize: number;
+  largePartyCallThreshold?: number | null;
   minHoursBefore: number;
   maxDaysAhead: number;
   autoAccept: boolean;
@@ -376,6 +377,26 @@ export default function SettingsReservationsTab() {
               className="input"
               value={settings.maxPartySize}
               onChange={(e) => setSettings({ ...settings, maxPartySize: Number(e.target.value) })}
+            />
+          </SettingsField>
+          <SettingsField
+            label={t('reservationsLargePartyCallThreshold')}
+            hint={t('reservationsLargePartyCallThresholdHint')}
+          >
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className="input"
+              placeholder={t('reservationsLargePartyCallThresholdOff')}
+              value={settings.largePartyCallThreshold ?? ''}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  largePartyCallThreshold:
+                    e.target.value === '' ? null : Number(e.target.value),
+                })
+              }
             />
           </SettingsField>
           <SettingsField label={t('reservationsMaxCovers')}>

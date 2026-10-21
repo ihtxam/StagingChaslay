@@ -59,6 +59,7 @@ export const DEFAULT_RESERVATION_SETTINGS: Required<
   bufferMinutes: 15,
   minPartySize: 1,
   maxPartySize: 12,
+  largePartyCallThreshold: null,
   minHoursBefore: 2,
   maxDaysAhead: 30,
   autoAccept: false,
@@ -109,6 +110,10 @@ export function normalizeReservationSettings(
     bufferMinutes: clampInt(s.bufferMinutes, 0, 120, 15),
     minPartySize: clampInt(s.minPartySize, 1, 50, 1),
     maxPartySize: clampInt(s.maxPartySize, 1, 100, 12),
+    largePartyCallThreshold:
+      s.largePartyCallThreshold == null || Number(s.largePartyCallThreshold) <= 0
+        ? null
+        : clampInt(s.largePartyCallThreshold, 1, 100, 10),
     minHoursBefore: clampInt(s.minHoursBefore, 0, 72, 2),
     maxDaysAhead: clampInt(s.maxDaysAhead, 1, 180, 30),
     autoAccept: s.autoAccept !== false && s.autoAccept !== undefined ? !!s.autoAccept : !!s.autoAccept,

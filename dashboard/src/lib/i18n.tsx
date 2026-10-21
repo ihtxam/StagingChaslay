@@ -282,6 +282,10 @@ const en: Dict = {
   reservationsMaxDaysAhead: 'Book how many days ahead',
   reservationsMinParty: 'Min party size',
   reservationsMaxParty: 'Max party size',
+  reservationsLargePartyCallThreshold: 'Call for large parties (from)',
+  reservationsLargePartyCallThresholdHint:
+    'Guests at or above this size see a call-us message instead of booking online. Leave empty to disable.',
+  reservationsLargePartyCallThresholdOff: 'Off',
   reservationsMaxCovers: 'Max covers per slot (optional)',
   reservationsMaxCoversAuto: 'Auto (table capacity)',
   reservationsAutoAccept: 'Automatically accept reservations',
@@ -5440,6 +5444,10 @@ const fr: Dict = {
   reservationsMaxDaysAhead: 'Jours max à l’avance',
   reservationsMinParty: 'Taille min. du groupe',
   reservationsMaxParty: 'Taille max. du groupe',
+  reservationsLargePartyCallThreshold: 'Appeler pour les grands groupes (à partir de)',
+  reservationsLargePartyCallThresholdHint:
+    'À partir de cette taille, les clients voient un message pour appeler au lieu de réserver en ligne. Laisser vide pour désactiver.',
+  reservationsLargePartyCallThresholdOff: 'Désactivé',
   reservationsMaxCovers: 'Couverts max. par créneau (optionnel)',
   reservationsMaxCoversAuto: 'Auto (capacité des tables)',
   reservationsAutoAccept: 'Accepter automatiquement',
@@ -10373,6 +10381,10 @@ const de: Dict = {
   reservationsMaxDaysAhead: 'Max. Tage im Voraus',
   reservationsMinParty: 'Min. Personen',
   reservationsMaxParty: 'Max. Personen',
+  reservationsLargePartyCallThreshold: 'Telefonisch ab (Gäste)',
+  reservationsLargePartyCallThresholdHint:
+    'Ab dieser Gruppengrösse erscheint ein Hinweis zum Anrufen statt Online-Buchung. Leer lassen zum Deaktivieren.',
+  reservationsLargePartyCallThresholdOff: 'Aus',
   reservationsMaxCovers: 'Max. Couverts pro Slot (optional)',
   reservationsMaxCoversAuto: 'Auto (Tischkapazität)',
   reservationsAutoAccept: 'Reservationen automatisch akzeptieren',
