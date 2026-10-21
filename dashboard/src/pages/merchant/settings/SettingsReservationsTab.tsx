@@ -745,7 +745,7 @@ export default function SettingsReservationsTab() {
       {enabled && shopSlug ? (
         <SettingsReportCard
           title="Website widget"
-          description="Floating “Réserver une table” button for WordPress, your homepage, or any external site (EGGA / Zenchef style)."
+          description="Shown automatically on your Reborn shop and CMS homepage when reservations are on. Use the snippet below for WordPress or any external site (EGGA / Zenchef style)."
           icon={CalendarClock}
         >
           <p className="text-sm text-[var(--text-muted)] mb-3">
