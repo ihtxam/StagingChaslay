@@ -504,6 +504,7 @@ import {
 } from '@/lib/order-to-cart';
 import {
   buildHeldTableInfoMap,
+  clearLocalHeldDraftForRow,
   findHeldOrderForTable,
   heldCartSignature,
   heldRowTimeMs,
@@ -6560,6 +6561,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           await api.post(`/merchant/pos/held/${heldId}/cancel`, {
             reason: cancelReason,
           });
+          clearLocalHeldDraftForRow({
+            id: heldId,
+            cartJson: {
+              ticketDisplay: ticketDisplay || lastKitchenTicketRef.current,
+              cart,
+            },
+          });
           recordedViaHeld = true;
           resumedHeldIdRef.current = null;
           setOrdersRefreshToken((n) => n + 1);
@@ -6595,6 +6603,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               await api.post(`/merchant/pos/held/${match.id}/cancel`, {
                 reason: cancelReason,
               });
+              clearLocalHeldDraftForRow({ id: match.id, cartJson: match.cartJson });
               recordedViaHeld = true;
               resumedHeldIdRef.current = null;
               setOrdersRefreshToken((n) => n + 1);

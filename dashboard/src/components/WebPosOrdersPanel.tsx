@@ -62,6 +62,7 @@ import { collectPaymentAction, findPaidOrderForCartLink } from '@/lib/order-to-c
 import {
   localHeldRowsFromSession,
   parseHeldCartJson,
+  clearLocalHeldDraftForRow,
   removeLocalHeldDraft,
   resolveHeldChannel,
   sameHeldIdentity,
@@ -1047,18 +1048,14 @@ export default function WebPosOrdersPanel({
         }
       }
       if (String(heldRow.id).startsWith('local:')) {
-        const meta = parseHeldCartJson(heldRow.cartJson);
-        removeLocalHeldDraft({
-          localId: heldRow.id,
-          ticketDisplay: meta.ticketDisplay,
-          tableId: meta.tableId,
-          tabNumber: meta.tabNumber,
-        });
+        clearLocalHeldDraftForRow(heldRow);
       } else {
         await api.post(`/merchant/pos/held/${heldRow.id}/cancel`, {
           reason: reasonId || reason,
         });
+        clearLocalHeldDraftForRow(heldRow);
       }
+      setHeld((prev) => prev.filter((h) => h.id !== heldRow.id));
       toast.success(t('webPosOrderCancelled'));
       setCancelHeldFor(null);
       if (selectedHeld?.id === heldRow.id) setSelectedHeld(null);
