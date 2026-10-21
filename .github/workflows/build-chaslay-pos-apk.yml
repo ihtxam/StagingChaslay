@@ -1,5 +1,8 @@
 name: Build Chaslay POS Android APK
 
+# APK + manifest are SCP'd to app.rebornsense.com (no GitHub artifact upload — avoids Actions storage quota).
+# Manual publish: scripts/publish-reborn-pos-android-download.sh
+
 on:
   workflow_dispatch:
   push:
@@ -87,11 +90,15 @@ jobs:
           manifest.write_text(json.dumps(data, indent=2) + "\n")
           PY
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: Publish RebornPOS Android APK to production downloads (SCP)
+        if: github.ref == 'refs/heads/main' && github.repository == 'ihtxam/rebornSense'
+        uses: appleboy/scp-action@v1.0.0
         with:
-          name: reborn-pos-android-apk
-          path: |
-            backend/public/downloads/reborn-pos-android.apk
-            backend/public/downloads/reborn-pos-android-*.apk
-          retention-days: 90
+          host: ${{ secrets.REBORN_HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          source: "backend/public/downloads/reborn-pos-android.apk,backend/public/downloads/reborn-pos-android.json,backend/public/downloads/reborn-pos-android-*.apk"
+          target: ${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}/backend/public/downloads/
+          strip_components: 3
+          overwrite: true

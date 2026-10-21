@@ -1,6 +1,7 @@
 name: Build RebornPOS Windows
 
 # NSIS installer for the Tauri kiosk shell. Must run on Windows (WebView2 + MSVC).
+# Installer is SCP'd to app.rebornsense.com on main (no GitHub artifact upload — avoids storage quota).
 # Offline fallback when GitHub billing blocks windows-latest:
 #   powershell -ExecutionPolicy Bypass -File scripts/build-reborn-pos-windows.ps1 -Publish
 # Or register a self-hosted Windows runner with label "windows" and set runs-on below.
@@ -102,34 +103,30 @@ jobs:
             Write-Warning "Skipping reborn-pos-update.json — TAURI_SIGNING_PRIVATE_KEY not configured"
           }
 
-      - name: Upload Windows installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: reborn-pos-windows-${{ github.sha }}
-          path: |
-            backend/public/downloads/reborn-pos-setup.exe
-            backend/public/downloads/reborn-pos-setup.json
-            backend/public/downloads/reborn-pos-update.json
-          retention-days: 90
-
-  publish-downloads:
-    needs: build-windows
-    if: github.ref == 'refs/heads/main' && github.repository == 'ihtxam/rebornSense'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Windows installer artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: reborn-pos-windows-${{ github.sha }}
-          path: backend/public/downloads
-
-      - name: Publish RebornPOS installer to production downloads
-        uses: appleboy/scp-action@v1.0.0
-        with:
-          host: ${{ secrets.REBORN_HETZNER_HOST }}
-          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
-          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
-          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
-          source: "backend/public/downloads/reborn-pos-setup.exe,backend/public/downloads/reborn-pos-setup.json,backend/public/downloads/reborn-pos-update.json"
-          target: ${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}/backend/public/downloads/
-          overwrite: true
+      - name: Publish RebornPOS installer to production downloads (SCP)
+        if: github.ref == 'refs/heads/main' && github.repository == 'ihtxam/rebornSense'
+        shell: pwsh
+        env:
+          REBORN_HOST: ${{ secrets.REBORN_HETZNER_HOST }}
+          REBORN_USER: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
+          REBORN_KEY: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          REBORN_PORT: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          DEPLOY_PATH: ${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP 'reborn_scp_key'
+          $env:REBORN_KEY.Replace("`r`n", "`n").Replace("`n", [Environment]::NewLine) | Set-Content -Path $keyPath -Encoding ascii -NoNewline
+          icacls $keyPath /inheritance:r /grant:r "$($env:USERNAME):(R)" | Out-Null
+          $remote = "$($env:DEPLOY_PATH)/backend/public/downloads/"
+          $port = if ($env:REBORN_PORT) { $env:REBORN_PORT } else { '22' }
+          $target = "$($env:REBORN_USER)@$($env:REBORN_HOST):$remote"
+          $files = @(
+            'backend/public/downloads/reborn-pos-setup.exe',
+            'backend/public/downloads/reborn-pos-setup.json'
+          )
+          if (Test-Path 'backend/public/downloads/reborn-pos-update.json') {
+            $files += 'backend/public/downloads/reborn-pos-update.json'
+          }
+          foreach ($f in $files) {
+            scp -P $port -i $keyPath -o StrictHostKeyChecking=no $f $target
+          }
+          Remove-Item -Force $keyPath
