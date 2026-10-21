@@ -60,6 +60,7 @@ const api: AxiosInstance = axios.create({
 });
 
 const PANEL_LOCATION_STORAGE_KEY = 'manupos_selected_location';
+const PANEL_SCOPE_STORAGE_KEY = 'manupos_panel_scope';
 
 function resolveApiLocationId(): string | null {
   if (typeof window === 'undefined') return null;
@@ -67,6 +68,7 @@ function resolveApiLocationId(): string | null {
     if (isWebPosFloorPath(window.location.pathname)) {
       return getWebPosTerminalLocationId();
     }
+    if (localStorage.getItem(PANEL_SCOPE_STORAGE_KEY) === 'hq') return null;
     return localStorage.getItem(PANEL_LOCATION_STORAGE_KEY);
   } catch {
     return null;
@@ -157,6 +159,7 @@ api.interceptors.response.use(
           sessionStorage.removeItem('webpos_terminal_location_id');
         } else {
           localStorage.removeItem(PANEL_LOCATION_STORAGE_KEY);
+          localStorage.removeItem(PANEL_SCOPE_STORAGE_KEY);
         }
       } catch {
         /* ignore */

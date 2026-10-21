@@ -72,6 +72,7 @@ export default function Header({
             </span>
           ) : null}
           <div className="min-w-0 flex-1 flex items-center justify-end gap-1.5">
+            <LocationSwitcherChip />
             <OnScreenKeyboardToggle className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] hover:bg-[var(--bg-muted)] data-[active=true]:border-teal-400 data-[active=true]:bg-teal-50 dark:data-[active=true]:bg-teal-950/40" />
             <MerchantCompactStatusRow
               registerDisplay={registerDisplay}

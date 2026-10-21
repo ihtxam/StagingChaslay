@@ -671,10 +671,10 @@ function MerchantShell() {
     [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
-  const { locations, limits, locationId: panelLocationId } = useLocationStore();
-  const posLaunchPath = buildWebPosLaunchPath(
-    panelLocationId || getSelectedLocationId() || ''
-  );
+  const { locations, limits, locationId: panelLocationId, isHqView } = useLocationStore();
+  const posLaunchPath = isHqView
+    ? '/merchant/pos'
+    : buildWebPosLaunchPath(panelLocationId || getSelectedLocationId() || '');
   const showHq =
     hqLicensed ||
     isMultiLocationLicensed({ maxLocations: limits?.maxLocations }) ||
@@ -1236,6 +1236,7 @@ function MerchantShell() {
             pinGateSessionMerchantName(user)
           )}
           logoUrl={merchantShopLogoUrl}
+          terminalLocationId={panelLocationId || getSelectedLocationId()}
         />
       </div>
     );
