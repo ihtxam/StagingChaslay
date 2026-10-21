@@ -57,6 +57,8 @@ import { isKioskAddonEnabled } from "@/lib/kiosk-addon";
 import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isGrowthAnalyticsAddonEnabled } from "@/lib/growth-analytics-addon";
 import { isGuestCrmAddonEnabled } from "@/lib/guest-crm-addon";
+import { isPhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
+import { isPhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
 import { isMarketingAutomationAddonEnabled } from "@/lib/marketing-automation-addon";
 import { isSmartSegmentsAddonEnabled } from "@/lib/smart-segments-addon";
 import { isReservationCampaignsAddonEnabled } from "@/lib/reservation-campaigns-addon";
@@ -169,6 +171,9 @@ export class MerchantSettingsService {
     );
     const guestCrmOn = isGuestCrmAddonEnabled(
       (merchant as { guestCrmAddonEnabled?: boolean }).guestCrmAddonEnabled
+    );
+    const phoneOrderingOn = isPhoneOrderingAddonEnabled(
+      (merchant as { phoneOrderingAddonEnabled?: boolean }).phoneOrderingAddonEnabled
     );
     const marketingAutomationOn = isMarketingAutomationAddonEnabled(
       (merchant as { marketingAutomationAddonEnabled?: boolean }).marketingAutomationAddonEnabled
@@ -302,6 +307,7 @@ export class MerchantSettingsService {
       cateringAddonEnabled: cateringOn,
       growthAnalyticsAddonEnabled: growthAnalyticsOn,
       guestCrmAddonEnabled: guestCrmOn,
+      phoneOrderingAddonEnabled: phoneOrderingOn,
       marketingAutomationAddonEnabled: marketingAutomationOn,
       smartSegmentsAddonEnabled: smartSegmentsOn,
       reservationCampaignsAddonEnabled: reservationCampaignsOn,
@@ -365,9 +371,18 @@ export class MerchantSettingsService {
       comoSettings: getComoPublic(
         (merchant as { comoSettings?: ComoSettings | null }).comoSettings
       ),
-      phoneOrderingSettings: getPhoneOrderingPublic(
-        (merchant as { phoneOrderingSettings?: PhoneOrderingSettings | null }).phoneOrderingSettings
-      ),
+      phoneOrderingSettings: phoneOrderingOn
+        ? getPhoneOrderingPublic(
+            (merchant as { phoneOrderingSettings?: PhoneOrderingSettings | null }).phoneOrderingSettings
+          )
+        : {
+            enabled: false,
+            phoneNumber: null,
+            hours: null,
+            webhookSecretMasked: null,
+            webhookSecretSet: false,
+            configured: false,
+          },
       webposExpressEnabled: merchant.webposExpressEnabled !== false,
       webposCashEnabled: merchant.webposCashEnabled !== false,
       webposCardEnabled: merchant.webposCardEnabled !== false,
@@ -746,6 +761,13 @@ export class MerchantSettingsService {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
       });
+      if (
+        !isPhoneOrderingAddonEnabled(
+          (current as { phoneOrderingAddonEnabled?: boolean } | undefined)?.phoneOrderingAddonEnabled
+        )
+      ) {
+        throw new Error("Phone ordering add-on is not enabled for this merchant");
+      }
       const nextPhone = mergePhoneOrderingSettings(
         (current as { phoneOrderingSettings?: PhoneOrderingSettings | null } | undefined)
           ?.phoneOrderingSettings,

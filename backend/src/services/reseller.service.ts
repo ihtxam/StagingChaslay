@@ -432,6 +432,7 @@ export class ResellerService {
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      phoneOrderingAddonEnabled?: boolean;
       cateringAddonEnabled?: boolean;
     }
   ) {
@@ -484,6 +485,7 @@ export class ResellerService {
         odooAddonEnabled: input.odooAddonEnabled,
         growthAnalyticsAddonEnabled: input.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: input.guestCrmAddonEnabled,
+        phoneOrderingAddonEnabled: input.phoneOrderingAddonEnabled,
         cateringAddonEnabled: input.cateringAddonEnabled,
       }
     );
@@ -509,6 +511,7 @@ export class ResellerService {
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      phoneOrderingAddonEnabled?: boolean;
       cateringAddonEnabled?: boolean;
     }
   ) {
@@ -530,6 +533,7 @@ export class ResellerService {
       odooAddonEnabled: limits.odooAddonEnabled,
       growthAnalyticsAddonEnabled: limits.growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled: limits.guestCrmAddonEnabled,
+      phoneOrderingAddonEnabled: limits.phoneOrderingAddonEnabled,
       cateringAddonEnabled: limits.cateringAddonEnabled,
     });
     return MerchantService.getMerchantById(merchantId);

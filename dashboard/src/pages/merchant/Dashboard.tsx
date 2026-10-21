@@ -144,6 +144,7 @@ import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
 import { isCateringLicensed } from '@/lib/catering-addon';
+import { isPhoneOrderingLicensed } from '@/lib/phone-ordering-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import {
@@ -259,6 +260,7 @@ function MerchantShell() {
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [kioskLicensed, setKioskLicensed] = useState(false);
   const [cateringLicensed, setCateringLicensed] = useState(false);
+  const [phoneOrderingLicensed, setPhoneOrderingLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -410,6 +412,7 @@ function MerchantShell() {
       kioskEnabled?: boolean;
       cateringEnabled?: boolean;
       cateringAddonEnabled?: boolean;
+      phoneOrderingAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
     } | null) => {
@@ -427,6 +430,7 @@ function MerchantShell() {
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setKioskLicensed(isKioskLicensed(settings));
       setCateringLicensed(isCateringLicensed(settings));
+      setPhoneOrderingLicensed(isPhoneOrderingLicensed(settings));
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(
         settings?.name?.trim() ||
@@ -457,6 +461,7 @@ function MerchantShell() {
           setSignageLicensed(isSignageLicensed(user));
           setKioskLicensed(false);
           setCateringLicensed(false);
+          setPhoneOrderingLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
           setProductFlagsReady(true);
         });
@@ -622,6 +627,9 @@ function MerchantShell() {
       if (normalized === '/merchant/pos' && productFlagsReady && !hasPos) {
         return false;
       }
+      if (normalized === '/merchant/sales/phone' && !phoneOrderingLicensed) {
+        return false;
+      }
       if (isPanelNavHidden(path, panelNavHidden)) {
         return false;
       }
@@ -642,6 +650,7 @@ function MerchantShell() {
       hasPos,
       panelNavHidden,
       productFlagsReady,
+      phoneOrderingLicensed,
     ]
   );
 
@@ -1018,7 +1027,9 @@ function MerchantShell() {
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
         { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
-        { label: t('phoneOrderingDeskNav'), path: '/merchant/sales/phone', icon: '📞' },
+        ...(phoneOrderingLicensed
+          ? [{ label: t('phoneOrderingDeskNav'), path: '/merchant/sales/phone', icon: '📞' }]
+          : []),
         ...(isRestaurantModule(businessModule)
           ? [
               { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },

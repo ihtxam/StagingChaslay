@@ -51,6 +51,7 @@ const VALID_ADDON_KEYS = new Set([
   "ai_coach",
   "google_reputation",
   "ai_web_seo",
+  "phone_ordering",
 ]);
 
 export class SubscriptionAddonsService {
@@ -388,6 +389,15 @@ export class SubscriptionAddonsService {
         priceMonthly: 28,
         priceYearly: 280,
         sortOrder: 71,
+      },
+      {
+        name: "Phone ordering",
+        slug: "phone-ordering",
+        addonKey: "phone_ordering",
+        description: "Phone desk, inbound SMS/voice webhooks, shop call-to-order",
+        priceMonthly: 28,
+        priceYearly: 280,
+        sortOrder: 72,
       },
       {
         name: "Marketing automations",

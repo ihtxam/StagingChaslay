@@ -150,6 +150,7 @@ import { canAccessRoute, hasPermission, isKioskRestrictedStaff } from '@/lib/per
 import { hasEditionFeature, showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { normalizeBusinessModule } from '@/lib/business-module';
 import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
+import { isPhoneOrderingLicensed } from '@/lib/phone-ordering-addon';
 import { desktopSidecarHealth, isDesktopApp } from '@/lib/platform';
 
 interface SettingsData {
@@ -929,6 +930,7 @@ export default function Settings() {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
         if (item.id === 'reservations' && !reservationsLicensed) return false;
+        if (item.id === 'phone' && !isPhoneOrderingLicensed(settings)) return false;
         if (item.id === 'accounting' && !isAccountingLicensed(settings)) return false;
         return true;
       }),

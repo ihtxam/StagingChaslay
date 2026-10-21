@@ -85,6 +85,7 @@ export const PANEL_NAV_HIDE_OPTIONS: Array<{ key: string; labelKey: string }> = 
   { key: 'inventory', labelKey: 'panelNavHideInventory' },
   { key: 'hq', labelKey: 'panelNavHideHq' },
   { key: 'platform-shop', labelKey: 'panelNavHidePlatformShop' },
+  { key: '/merchant/settings', labelKey: 'panelNavHideSettings' },
 ];
 
 export function parsePanelNavHidden(raw: unknown): string[] {
