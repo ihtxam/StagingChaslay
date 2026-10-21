@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarShopName } from '@/lib/brand';
+import type { PanelLocationHeaderLabels } from '@/lib/panel-location-header';
+import PanelLocationTitle from '@/components/PanelLocationTitle';
 import { useTheme } from '@/lib/theme';
 import { useI18n } from '@/lib/i18n';
 import { pinGateSessionMerchantName } from '@/lib/webpos-pin-gate-brand';
@@ -23,6 +25,8 @@ interface HeaderProps {
   registerDisplay?: { name: string; roleLabel: string };
   /** Store name from settings (`name` / businessName). Shown next to the hamburger. */
   storeName?: string | null;
+  /** Multi-location: branch name / HQ badge overrides plain store name. */
+  panelLocationLabels?: PanelLocationHeaderLabels | null;
 }
 
 export default function Header({
@@ -32,6 +36,7 @@ export default function Header({
   compact = false,
   registerDisplay,
   storeName,
+  panelLocationLabels,
 }: HeaderProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -40,6 +45,7 @@ export default function Header({
   const platformUi = usePlatformMessagesUi();
   const rawStoreName = (storeName || pinGateSessionMerchantName(user)).trim();
   const storeLabel = rawStoreName ? displaySidebarShopName(rawStoreName) : '';
+  const locationChrome = panelLocationLabels?.primary ? panelLocationLabels : null;
 
   const backToSuperadmin = () => {
     if (!stopImpersonation()) {
@@ -63,7 +69,11 @@ export default function Header({
           >
             <Menu className="w-5 h-5" />
           </button>
-          {storeLabel ? (
+          {locationChrome ? (
+            <div className="min-w-0 max-w-[min(16rem,50vw)]">
+              <PanelLocationTitle labels={locationChrome} variant="compact" />
+            </div>
+          ) : storeLabel ? (
             <span
               className="min-w-0 max-w-[min(16rem,50vw)] truncate text-sm font-semibold text-[var(--text)]"
               title={storeLabel}
@@ -97,7 +107,9 @@ export default function Header({
             <Menu className="w-5 h-5" />
           </button>
           <div className="min-w-0">
-            {storeLabel ? (
+            {locationChrome ? (
+              <PanelLocationTitle labels={locationChrome} variant="compact" />
+            ) : storeLabel ? (
               <p className="text-[11px] font-semibold truncate text-[var(--text)]" title={storeLabel}>
                 {storeLabel}
               </p>

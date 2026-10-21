@@ -172,6 +172,7 @@ import {
   shouldShowHqPanelNav,
   shouldShowPanelPosQuickAction,
 } from '@/lib/panel-scope-nav';
+import { buildPanelLocationHeaderLabels } from '@/lib/panel-location-header';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
@@ -676,7 +677,24 @@ function MerchantShell() {
     [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
-  const { locations, limits, locationId: panelLocationId, isHqView } = useLocationStore();
+  const {
+    locations,
+    limits,
+    locationId: panelLocationId,
+    location: panelLocation,
+    isHqView,
+  } = useLocationStore();
+  const panelLocationLabels = useMemo(
+    () =>
+      buildPanelLocationHeaderLabels({
+        merchantName: merchantShopName || '',
+        locationCount: locations.length,
+        maxLocations: limits?.maxLocations,
+        isHqView,
+        location: panelLocation,
+      }),
+    [merchantShopName, locations.length, limits?.maxLocations, isHqView, panelLocation]
+  );
   const panelScopeNavInput = useMemo(
     () => ({
       locationCount: locations.length,
@@ -1314,6 +1332,7 @@ function MerchantShell() {
                     : undefined,
               }}
               shopName={merchantShopName}
+              panelLocationLabels={panelLocationLabels}
               shopPath={
                 !panelChromeRestricted &&
                 !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
@@ -1358,6 +1377,7 @@ function MerchantShell() {
                     : undefined,
               }}
               shopName={merchantShopName}
+              panelLocationLabels={panelLocationLabels}
               shopPath={
                 !panelChromeRestricted &&
                 !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
@@ -1378,6 +1398,7 @@ function MerchantShell() {
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             compact
             storeName={merchantShopName}
+            panelLocationLabels={panelLocationLabels}
             registerDisplay={registerDisplay}
             showAcceptingMenu={!isStorekeeperRoute}
           />

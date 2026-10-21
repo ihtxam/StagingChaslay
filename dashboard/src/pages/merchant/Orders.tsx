@@ -64,6 +64,7 @@ import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
 import ReportDatePresetFilter from '@/components/reports/ReportDatePresetFilter';
 import { resolveReportPresetRange, type ReportPreset } from '@/lib/report-preset';
 import { useAuthStore } from '@/store/auth';
+import { useLocationStore } from '@/store/location';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice' | 'programmed';
@@ -418,6 +419,9 @@ const filterPill =
 export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
+  const locationId = useLocationStore((s) => s.locationId);
+  const isHqView = useLocationStore((s) => s.isHqView);
+  const panelScopeKey = isHqView ? 'hq' : locationId || '';
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
   const canGandolaPurge =
     jwtIsOwner ||
@@ -559,7 +563,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, t]);
+  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, panelScopeKey, t]);
 
   useEffect(() => {
     const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
