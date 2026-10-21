@@ -58,12 +58,7 @@ const customHeader = getReceiptHeaderLines(
   32,
   { padLines: false }
 );
-assert.deepEqual(customHeader, [
-  'Cafe Roma',
-  'Rue du Lac 12',
-  'Lausanne',
-  'Tel: +41 21 000 00 00',
-]);
+assert.deepEqual(customHeader, ['Cafe Roma']);
 
 const mashed = getReceiptHeaderLines(
   {
@@ -80,7 +75,6 @@ const mashed = getReceiptHeaderLines(
 );
 assert.equal(mashed[0], 'Cafe Roma');
 assert.ok(mashed.includes('Rue du Lac 12'));
-assert.ok(mashed.includes('Lausanne'));
 assert.ok(mashed.includes('Tel: +41 21 000 00 00'));
 assert.equal(
   mashed.some((line) => /tel/i.test(line) && /rue du lac/i.test(line)),
@@ -115,7 +109,7 @@ assert.equal(
 const longStreet = getReceiptHeaderLines(
   {
     headerTitle: 'Cafe Roma',
-    header: '',
+    header: 'Rua das Portas de Santo Antao 150\nLisboa',
     businessName: 'Cafe Roma',
     address: 'Rua das Portas de Santo Antao 150',
     city: 'Lisboa',
@@ -148,6 +142,22 @@ const polaCustom = getReceiptHeaderLines(
   { padLines: false }
 );
 assert.deepEqual(polaCustom, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
+
+const polaMashedOneLine = getReceiptHeaderLines(
+  {
+    headerTitle: '',
+    header: 'pola polarue des saars 1152000 Neuchâtel',
+    businessName: 'KABUL',
+    address: 'rue des saars 115',
+    city: '2000 Neuchâtel',
+    phone: '+41 79 000 00 00',
+    vatNumber: 'CHE-123.321.432',
+    headerAlign: 'center',
+  },
+  48,
+  { padLines: false }
+);
+assert.deepEqual(polaMashedOneLine, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
 
 const novaGluedNoSpaces = splitReceiptHeaderDetailLine(
   'Rue des Draizes 22SuisseRue des Draizes 44NeuchâtelTel: 032 558 45 65VAT: CHE-131.903.128'

@@ -8,6 +8,8 @@ const RECEIPT_GLUED_NUMBER_CITY_RE = /(?<=\d)(?=[A-Za-zÀ-ÿ]{2,})/;
 const RECEIPT_GLUED_PLZ_AFTER_STREET_RE = /(?<=\d)(?=\d{4}\b)/;
 const RECEIPT_GLUED_STREET_LABEL_RE =
   /(?<=[a-zà-ÿäöü])(?=(?:Rue|Rua|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\b)/i;
+const RECEIPT_GLUED_LOWERCASE_RUE_RE =
+  /(?<=[a-zà-ÿäöü])(?=rue(?:\s+des)?\s)/;
 const RECEIPT_GLUED_CAPS_STORE_STREET_RE =
   /(?<=[A-Z])(?=(?:Bahnhof|Haupt|Markt|Rue|Rua|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\b)/i;
 const RECEIPT_TAX_SPLIT_RE = /\s+(?=(?:VAT|UID|TVA|MwSt|MWST)\s*:)/i;
@@ -46,6 +48,7 @@ function splitReceiptHeaderDetailLine(line) {
     RECEIPT_GLUED_NUMBER_CITY_RE,
     RECEIPT_GLUED_PLZ_AFTER_STREET_RE,
     RECEIPT_GLUED_STREET_LABEL_RE,
+    RECEIPT_GLUED_LOWERCASE_RUE_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
     RECEIPT_TAX_SPLIT_RE,
     RECEIPT_COUNTRY_SPLIT_RE,
@@ -78,5 +81,8 @@ const nova = splitReceiptHeaderDetailLine(
 assert.ok(nova.some((l) => /Rue des Draizes 22/i.test(l)));
 assert.ok(nova.some((l) => /Tel:\s*032/.test(l)));
 assert.ok(nova.some((l) => /VAT:\s*CHE-131/.test(l)));
+
+const pola = splitReceiptHeaderDetailLine('pola polarue des saars 1152000 Neuchâtel');
+assert.deepEqual(pola, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
 
 console.log('receipt-header-split.test.mjs ok', nova);
