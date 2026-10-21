@@ -1,6 +1,8 @@
 # Self-hosted GitHub Actions runner on Hetzner (Rebornsense)
 
-Use this when GitHub-hosted runners hit **artifact storage quota** or you want Bridge APK builds closer to production (`app.rebornsense.com`).
+Use this when GitHub-hosted runners hit **minutes/concurrency** limits, or you want Bridge APK builds closer to production (`app.rebornsense.com`).
+
+**Artifact storage quota** is separate: only fixed by deleting old artifacts, lowering `retention-days`, skipping `upload-artifact`, or buying more storage. See [GITHUB_ACTIONS_ARTIFACTS.md](./GITHUB_ACTIONS_ARTIFACTS.md).
 
 ## When to use which runner
 
@@ -72,8 +74,9 @@ Suggested labels when prompted (or add later):
 
 - `self-hosted`
 - `linux`
-- `hetzner`
-- `bridge` (optional, for future job pinning)
+- `reborn` (production Hetzner box — same host as `production-reborn` SSH alias)
+- `hetzner` (optional alias)
+- `bridge` (optional, pin Android Bridge jobs only)
 
 ## 4. Install and start the runner service
 
@@ -105,7 +108,17 @@ Ensure these exist on **rebornSense** (not StagingChaslay):
 - **runner**: `self-hosted`
 - **deploy_production**: `true`
 
-Or change default in `.github/workflows/build-bridge-apk.yml` to `runs-on: [self-hosted, linux]` once the runner is online.
+Or change default in `.github/workflows/build-bridge-apk.yml` to `runs-on: [self-hosted, linux, reborn]` once the runner is online.
+
+Example for heavy Linux jobs:
+
+```yaml
+jobs:
+  build-apk:
+    runs-on: [self-hosted, linux, reborn]
+```
+
+Windows NSIS builds still need `windows-latest` or a **self-hosted Windows** machine with label `windows` (see `build-chaslay-pos-windows.yml`).
 
 ## 7. Maintenance
 
