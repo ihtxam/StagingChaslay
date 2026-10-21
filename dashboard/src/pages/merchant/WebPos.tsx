@@ -102,6 +102,7 @@ import {
   listNormalizedLiveAgentPrinters,
   pairPrintAgentCloudRelay,
   printViaAgent,
+  healStaleReceiptPrinterProfiles,
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
@@ -2499,11 +2500,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (!trimmed) {
           return resolveEscPosPrinterName('', list) || current;
         }
-        return resolveEscPosPrinterName(trimmed, list) || resolveLivePrinterName(trimmed, list) || '';
+        const live =
+          resolveEscPosPrinterName(trimmed, list) ||
+          resolveLivePrinterName(trimmed, list) ||
+          resolveEscPosPrinterName('', list) ||
+          '';
+        return live;
       });
       setPrintSettings((ps) => {
         if (!ps?.printers?.length || !list.length) return ps;
-        const { profiles, changed } = reconcileAndPrunePosPrinterProfiles(ps.printers, list);
+        const reconciled = reconcileAndPrunePosPrinterProfiles(ps.printers, list);
+        const healed = healStaleReceiptPrinterProfiles(reconciled.profiles, list);
+        const profiles = healed.profiles;
+        const changed = reconciled.changed || healed.changed;
         if (!changed) return ps;
         const next = { ...ps, printers: profiles };
         void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);

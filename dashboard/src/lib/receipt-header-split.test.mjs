@@ -5,6 +5,7 @@ const RECEIPT_GLUED_VAT_SPLIT_RE = /(?<=[\w\d)])(?=(?:VAT|UID|TVA|MwSt|MWST)\s*:
 const RECEIPT_GLUED_PHONE_SPLIT_RE =
   /(?<=[\wäöüÄÖÜßà-ÿ])(?=(?:Tel|Tél|Telephone|Téléphone|Phone)\s*:)/i;
 const RECEIPT_GLUED_NUMBER_CITY_RE = /(?<=\d)(?=[A-Za-zÀ-ÿ]{2,})/;
+const RECEIPT_GLUED_PLZ_AFTER_STREET_RE = /(?<=\d)(?=\d{4}\b)/;
 const RECEIPT_GLUED_STREET_LABEL_RE =
   /(?<=[a-zà-ÿäöü])(?=(?:Rue|Rua|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\b)/i;
 const RECEIPT_GLUED_CAPS_STORE_STREET_RE =
@@ -43,6 +44,7 @@ function splitReceiptHeaderDetailLine(line) {
     RECEIPT_GLUED_VAT_SPLIT_RE,
     RECEIPT_GLUED_PHONE_SPLIT_RE,
     RECEIPT_GLUED_NUMBER_CITY_RE,
+    RECEIPT_GLUED_PLZ_AFTER_STREET_RE,
     RECEIPT_GLUED_STREET_LABEL_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
     RECEIPT_TAX_SPLIT_RE,
