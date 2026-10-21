@@ -6,7 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { canAddLocation, isAtLocationLimit } from '@/lib/location-limits';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { SettingsReportCard } from '@/components/settings/SettingsReportUi';
-import LocationFormModal from '@/components/merchant/LocationFormModal';
+import LocationWizardModal from '@/components/merchant/LocationWizardModal';
 import LocationRegistersModal from '@/components/merchant/LocationRegistersModal';
 
 export default function SettingsLocationsTab() {
@@ -204,7 +204,7 @@ export default function SettingsLocationsTab() {
         )}
       </SettingsReportCard>
 
-      <LocationFormModal
+      <LocationWizardModal
         open={wizardOpen}
         mode={wizardMode}
         initial={wizardLocation}
