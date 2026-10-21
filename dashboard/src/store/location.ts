@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
+import { notifyPanelLocationScopeChanged } from '@/lib/panel-location-scope';
 
 export type MerchantLocation = {
   id: string;
@@ -88,11 +89,13 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
     writeStoredId(id);
     const loc = get().locations.find((l) => l.id === id) || null;
     set({ locationId: id, location: loc, panelScope: 'branch', isHqView: false });
+    notifyPanelLocationScopeChanged();
   },
   setHqView: () => {
     writeStoredScope('hq');
     writeStoredId(null);
     set({ locationId: null, location: null, panelScope: 'hq', isHqView: true });
+    notifyPanelLocationScopeChanged();
   },
   load: async () => {
     set({ loading: true });

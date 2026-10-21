@@ -3091,8 +3091,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [authUser?.staffId, authUser?.role]);
 
   useEffect(() => {
+    if (!posLocationId && storeLocations.length > 1) return;
     void load().catch(() => undefined);
-  }, [load, posLocationId]);
+  }, [load, posLocationId, storeLocations.length]);
+
+  useEffect(() => {
+    if (!storeLocations.length || !posLocationId) return;
+    if (storeLocations.some((l) => l.id === posLocationId)) return;
+    const healed =
+      (panelBranchId && storeLocations.some((l) => l.id === panelBranchId)
+        ? panelBranchId
+        : storeLocations.find((l) => l.isDefault)?.id || storeLocations[0]?.id) || null;
+    if (!healed) return;
+    setWebPosTerminalLocationId(healed);
+    setPosLocationId(healed);
+  }, [storeLocations, posLocationId, panelBranchId]);
 
   useEffect(() => {
     const refreshCatalog = () => {

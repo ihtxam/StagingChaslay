@@ -23,6 +23,7 @@ import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/auth';
+import { useLocationStore } from '@/store/location';
 import { canShowWebPosQuickAction } from '@/lib/permissions';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import {
@@ -101,6 +102,9 @@ type InsightsPreset = 'today' | 'yesterday' | 'last_week';
 
 export default function Overview() {
   const { t } = useI18n();
+  const locationId = useLocationStore((s) => s.locationId);
+  const isHqView = useLocationStore((s) => s.isHqView);
+  const panelScopeKey = isHqView ? 'hq' : locationId || '';
   const [preset, setPreset] = useState<Preset>('today');
   const [insightsPreset, setInsightsPreset] = useState<InsightsPreset>('today');
   const [insightsData, setInsightsData] = useState<OverviewData | null>(null);
@@ -138,7 +142,7 @@ export default function Overview() {
     } finally {
       setLoading(false);
     }
-  }, [queryParams, t]);
+  }, [queryParams, panelScopeKey, t]);
 
   useEffect(() => {
     void load();
@@ -154,7 +158,7 @@ export default function Overview() {
     } finally {
       setInsightsLoading(false);
     }
-  }, [insightsPreset]);
+  }, [insightsPreset, panelScopeKey]);
 
   useEffect(() => {
     void loadInsights();

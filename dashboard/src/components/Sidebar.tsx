@@ -4,6 +4,8 @@ import { ArrowLeft, BookOpen, ChevronDown, CreditCard, LifeBuoy, LogOut, Monitor
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
+import type { PanelLocationHeaderLabels } from '@/lib/panel-location-header';
+import PanelLocationTitle from '@/components/PanelLocationTitle';
 import { useI18n, type Locale } from '@/lib/i18n';
 import StaffSwitchButton, { type StaffSwitchButtonHandle } from '@/components/StaffSwitchButton';
 
@@ -54,6 +56,7 @@ interface SidebarProps {
   };
   /** Merchant shop name in the sidebar header (defaults to "Shop"). */
   shopName?: string | null;
+  panelLocationLabels?: PanelLocationHeaderLabels | null;
   /** Optional Reborn platform shop shortcut pinned above the footer. */
   shopPath?: string | null;
   /** Light agency chrome for reseller / dealer panel. */
@@ -111,6 +114,7 @@ export default function Sidebar({
   onLanguageChange,
   profileMenu,
   shopName,
+  panelLocationLabels,
   shopPath,
   tone = 'default',
 }: SidebarProps) {
@@ -243,6 +247,7 @@ export default function Sidebar({
       isPathActive(location.pathname, profileMenu.settingsPath, location.search)
   );
   const shopLabel = shopName?.trim() ? displaySidebarShopName(shopName) : '';
+  const locationChrome = panelLocationLabels?.primary ? panelLocationLabels : null;
 
   // Closed off-canvas drawer must not trap touch/scroll on mobile.
   useEffect(() => {
@@ -306,7 +311,9 @@ export default function Sidebar({
                     className="h-9 w-auto max-w-none object-contain object-left"
                   />
                 </div>
-                {!railMode && shopLabel ? (
+                {!railMode && locationChrome ? (
+                  <PanelLocationTitle labels={locationChrome} variant="sidebar" />
+                ) : !railMode && shopLabel ? (
                   <span className="min-w-0 truncate text-sm font-semibold text-white" title={shopLabel}>
                     {shopLabel}
                   </span>
