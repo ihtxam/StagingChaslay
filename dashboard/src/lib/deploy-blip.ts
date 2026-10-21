@@ -102,12 +102,16 @@ function openDeployToastWindow(now = Date.now()): void {
   deployWindowUntil = now + DEPLOY_TOAST_WINDOW_MS;
 }
 
+function showSystemUpdateToast(opts?: Parameters<typeof toast.loading>[1]): string {
+  const message = systemUpdateMessage();
+  return toast.loading(message, { id: DEPLOY_TOAST_ID, duration: 8000, ...opts });
+}
+
 /** One toast for a burst of deploy 502s — same id, same window. */
 export function notifyDeployBlip(): string {
   openDeployToastWindow();
-  const message = systemUpdateMessage();
-  toast.error(message, { id: DEPLOY_TOAST_ID, duration: 8000 });
-  return message;
+  showSystemUpdateToast();
+  return systemUpdateMessage();
 }
 
 export function toastLoadError(error: unknown, fallback: string): void {
@@ -134,7 +138,7 @@ export function installDeployToastGuard(): void {
   const original = toast.error.bind(toast);
   toast.error = ((message, opts) => {
     if (isDeployToastWindowOpen() && looksLikeLoadFailedToast(message)) {
-      return original(systemUpdateMessage(), { ...opts, id: DEPLOY_TOAST_ID });
+      return showSystemUpdateToast({ ...opts, id: DEPLOY_TOAST_ID });
     }
     return original(message, opts);
   }) as typeof toast.error;
