@@ -35,6 +35,7 @@ import {
   type CateringPricingMode,
 } from '@/lib/catering';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import HqPendingCatalogBanner from '@/components/merchant/HqPendingCatalogBanner';
 import {
   panelCatalogListParams,
   shouldShowHqCatalogBadges,
@@ -1375,6 +1376,7 @@ export default function Products() {
 
   return (
     <div className="space-y-3">
+      <HqPendingCatalogBanner />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="page-title">{t('products')}</h1>

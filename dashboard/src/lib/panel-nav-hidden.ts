@@ -33,7 +33,7 @@ export const PANEL_NAV_GROUP_PATHS: Record<string, string[]> = {
     '/merchant/products/scheduled-menus',
     '/merchant/products/pizza-builder',
   ],
-  hq: ['/merchant/hq', '/merchant/hq/menus', '/merchant/hq/bulk-pricing'],
+  hq: ['/merchant/hq', '/merchant/hq/sync', '/merchant/hq/menus', '/merchant/hq/bulk-pricing'],
   inventory: [
     '/merchant/inventory',
     '/merchant/inventory/list',

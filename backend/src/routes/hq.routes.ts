@@ -40,14 +40,51 @@ router.post("/hq/catalog/versions", async (req: Request, res: Response) => {
   }
 });
 
+/** GET /api/merchant/hq/catalog/sync-state */
+router.get("/hq/catalog/sync-state", async (req: Request, res: Response) => {
+  try {
+    const state = await HqCatalogService.getSyncMenuState(req.merchantId!);
+    res.json({ success: true, state });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load HQ sync state",
+    });
+  }
+});
+
+/** POST /api/merchant/hq/catalog/sync */
+router.post("/hq/catalog/sync", async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const result = await HqCatalogService.syncMenuToLocations(req.merchantId!, {
+      locationIds: Array.isArray(body.locationIds) ? body.locationIds : [],
+      productIds: Array.isArray(body.productIds) ? body.productIds : undefined,
+      categoryIds: Array.isArray(body.categoryIds) ? body.categoryIds : undefined,
+      overwritePrices: !!body.overwritePrices,
+      setOnSaleAfterSync: body.setOnSaleAfterSync !== false,
+      staffId: req.user?.staffId || null,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to sync HQ menu",
+    });
+  }
+});
+
 /** POST /api/merchant/hq/catalog/push */
 router.post("/hq/catalog/push", async (req: Request, res: Response) => {
   try {
     const body = req.body || {};
     const result = await HqCatalogService.pushToLocations(req.merchantId!, {
-      versionId: String(body.versionId || ""),
+      versionId: body.versionId ? String(body.versionId) : undefined,
       locationIds: Array.isArray(body.locationIds) ? body.locationIds : [],
       overwritePrices: !!body.overwritePrices,
+      useCurrentCatalog: !!body.useCurrentCatalog,
+      productIds: Array.isArray(body.productIds) ? body.productIds : undefined,
+      categoryIds: Array.isArray(body.categoryIds) ? body.categoryIds : undefined,
+      setOnSaleAfterSync: !!body.setOnSaleAfterSync,
+      staffId: req.user?.staffId || null,
     });
     res.json({ success: true, ...result });
   } catch (error) {
