@@ -11,4 +11,14 @@ describe("catalog location menu filter", () => {
     const products = [{ id: "a" }, { id: "b" }];
     expect(CatalogLocationService.filterByHqMenuProductIds(products, new Set())).toEqual([]);
   });
+
+  it("resolveLinkedProductIds heals stale localProductId via hqProductId", () => {
+    const products = [{ id: "p1" }, { id: "p2" }];
+    const links = [
+      { hqProductId: "p1", localProductId: "deleted-old-id" },
+      { hqProductId: "p2", localProductId: null },
+    ];
+    const allowed = CatalogLocationService.resolveLinkedProductIds(links, products);
+    expect([...allowed].sort()).toEqual(["p1", "p2"]);
+  });
 });

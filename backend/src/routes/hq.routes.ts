@@ -83,7 +83,7 @@ router.post("/hq/catalog/push", async (req: Request, res: Response) => {
       useCurrentCatalog: !!body.useCurrentCatalog,
       productIds: Array.isArray(body.productIds) ? body.productIds : undefined,
       categoryIds: Array.isArray(body.categoryIds) ? body.categoryIds : undefined,
-      setOnSaleAfterSync: !!body.setOnSaleAfterSync,
+      setOnSaleAfterSync: body.setOnSaleAfterSync !== false,
       staffId: req.user?.staffId || null,
     });
     res.json({ success: true, ...result });

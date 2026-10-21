@@ -396,9 +396,26 @@ export class HqMenuService {
     });
     if (!picked) {
       const strictEmpty = locationHasDedicatedScheduledMenus(menus, locationId);
+      if (strictEmpty) {
+        const linkRows = await db.query.locationCatalogLinks.findMany({
+          where: and(
+            eq(schema.locationCatalogLinks.merchantId, merchantId),
+            eq(schema.locationCatalogLinks.locationId, locationId)
+          ),
+          columns: { localProductId: true, hqProductId: true },
+        });
+        const hasBranchCatalogLinks = linkRows.some(
+          (l) => String(l.localProductId || l.hqProductId || "").trim()
+        );
+        return {
+          menu: null,
+          productIds: hasBranchCatalogLinks ? null : new Set<string>(),
+          productPrices: {},
+        };
+      }
       return {
         menu: null,
-        productIds: strictEmpty ? new Set<string>() : null,
+        productIds: null,
         productPrices: {},
       };
     }
