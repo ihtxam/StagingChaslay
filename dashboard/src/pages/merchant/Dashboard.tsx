@@ -161,6 +161,7 @@ import {
 } from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
 import HqDashboardPage from './HqDashboard';
+import HqSyncMenuPage from './HqSyncMenuPage';
 import BulkPricingPage from './BulkPricingPage';
 import ScheduledMenusPage from './ScheduledMenusPage';
 import PizzaBuilderPage from './PizzaBuilderPage';
@@ -1045,6 +1046,7 @@ function MerchantShell() {
       children: showHqNav
         ? [
             { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
+            { label: t('hqSyncNav'), path: '/merchant/hq/sync', icon: '🔄' },
             { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
           ].filter((item) => allowHq(item.path))
         : [],
@@ -1655,6 +1657,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/hq" allow={allowHq}>
                   <HqDashboardPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="hq/sync"
+              element={
+                <PanelRouteGuard path="/merchant/hq/sync" allow={allowHq}>
+                  <HqSyncMenuPage />
                 </PanelRouteGuard>
               }
             />

@@ -35,9 +35,11 @@ import {
   type CateringPricingMode,
 } from '@/lib/catering';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import HqPendingCatalogBanner from '@/components/merchant/HqPendingCatalogBanner';
 import {
   panelCatalogListParams,
   shouldShowHqCatalogBadges,
+  shouldUseBranchCatalogPanel,
 } from '@/lib/panel-scope-nav';
 import { useLocationStore } from '@/store/location';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
@@ -372,6 +374,7 @@ export default function Products() {
     locationId,
   };
   const catalogListParams = panelCatalogListParams(panelScopeNavInput);
+  const branchCatalogPanel = shouldUseBranchCatalogPanel(panelScopeNavInput);
   const showHqCatalogBadges = shouldShowHqCatalogBadges(panelScopeNavInput);
   const [hqProductIds, setHqProductIds] = useState<Set<string>>(new Set());
   const productTypeLabel = (product: Product) => {
@@ -455,14 +458,16 @@ export default function Products() {
 
   const productLimitLabel = useMemo(() => {
     if (!productLimit) return null;
-    const count = productLimit.currentCount ?? products.length;
+    const count = branchCatalogPanel
+      ? products.length
+      : productLimit.currentCount ?? products.length;
     if (productLimit.maxProducts == null) {
       return t('productCountUnlimited').replace('{n}', String(count));
     }
     return t('productCountLimited')
       .replace('{n}', String(count))
       .replace('{max}', String(productLimit.maxProducts));
-  }, [productLimit, products.length, t]);
+  }, [branchCatalogPanel, productLimit, products.length, t]);
 
   const onUploadProductImage = async (file: File | null) => {
     if (!file) return;
@@ -1375,6 +1380,7 @@ export default function Products() {
 
   return (
     <div className="space-y-3">
+      <HqPendingCatalogBanner />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="page-title">{t('products')}</h1>

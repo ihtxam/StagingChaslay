@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 import { Building2, RefreshCw, Upload } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -32,19 +33,24 @@ export default function HqDashboardPage() {
   const [selectedVersion, setSelectedVersion] = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [overwritePrices, setOverwritePrices] = useState(false);
+  const [catalogStats, setCatalogStats] = useState<
+    Array<{ locationId: string; name: string; linkedCount: number; pendingCount: number }>
+  >([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [versionsRes, analyticsRes, settingsRes] = await Promise.all([
+      const [versionsRes, analyticsRes, settingsRes, syncStateRes] = await Promise.all([
         api.get('/merchant/hq/catalog/versions'),
         api.get('/merchant/hq/analytics', { params: { preset: 'today' } }),
         api.get('/merchant/settings'),
+        api.get('/merchant/hq/catalog/sync-state').catch(() => ({ data: null })),
       ]);
       const rows: HqVersion[] = versionsRes.data?.versions || [];
       setVersions(rows);
       setAnalytics(analyticsRes.data?.analytics || null);
       setMerchantSlug(settingsRes.data?.merchant?.slug || settingsRes.data?.settings?.slug || '');
+      setCatalogStats(syncStateRes.data?.state?.locationStats || []);
       if (!selectedVersion && rows[0]) setSelectedVersion(rows[0].id);
     } catch {
       toast.error(t('hqLoadFailed'));
@@ -68,7 +74,7 @@ export default function HqDashboardPage() {
   };
 
   const push = async () => {
-    if (!selectedVersion || selectedLocations.length === 0) {
+    if (selectedLocations.length === 0) {
       toast.error(t('hqSelectVersionAndLocations'));
       return;
     }
@@ -78,6 +84,7 @@ export default function HqDashboardPage() {
         versionId: selectedVersion,
         locationIds: selectedLocations,
         overwritePrices,
+        useCurrentCatalog: true,
       });
       toast.success(t('hqPushSuccess', { count: res.data?.linked || 0 }));
     } catch (e: unknown) {
@@ -171,6 +178,35 @@ export default function HqDashboardPage() {
                   );
                 })}
               </ul>
+            </div>
+          ) : null}
+
+          {catalogStats.length > 0 ? (
+            <div className="rounded-lg border border-[var(--border)] p-4 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-medium">{t('hqCatalogBranchStats')}</h2>
+                <Link to="/merchant/hq/sync" className="text-sm text-sky-700 underline">
+                  {t('hqSyncNav')}
+                </Link>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[var(--text-muted)]">
+                    <th className="py-1">{t('locationName')}</th>
+                    <th className="py-1 text-right">{t('hqSyncPendingBadge')}</th>
+                    <th className="py-1 text-right">{t('products')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalogStats.map((row) => (
+                    <tr key={row.locationId} className="border-t border-[var(--border)]">
+                      <td className="py-1.5">{row.name}</td>
+                      <td className="py-1.5 text-right tabular-nums">{row.pendingCount}</td>
+                      <td className="py-1.5 text-right tabular-nums">{row.linkedCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : null}
 

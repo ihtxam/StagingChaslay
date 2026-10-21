@@ -4,6 +4,7 @@ import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import HqPendingCatalogBanner from '@/components/merchant/HqPendingCatalogBanner';
 import {
   panelCatalogListParams,
   shouldShowHqCatalogBadges,
@@ -326,6 +327,7 @@ export default function Categories() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <HqPendingCatalogBanner />
       <div className="card">
         <h1 className="page-title mb-1">{t('categories')}</h1>
         <p className="page-sub mb-3">

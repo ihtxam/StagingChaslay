@@ -563,7 +563,7 @@ router.get("/products", async (req: Request, res: Response) => {
       productLimit: productLimit
         ? {
             maxProducts: productLimit.maxProducts,
-            currentCount: productLimit.currentCount,
+            currentCount: catalogLocationId ? pageList.length : productLimit.currentCount,
             planSlug: productLimit.planSlug,
             planName: productLimit.planName,
           }

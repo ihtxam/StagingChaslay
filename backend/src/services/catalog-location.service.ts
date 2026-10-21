@@ -15,7 +15,35 @@ export type LocationChannelCatalog = {
   locationId: string;
 };
 
+type CatalogLinkRow = {
+  hqProductId: string;
+  localProductId?: string | null;
+};
+
 export class CatalogLocationService {
+  /**
+   * Map HQ catalog links to live product ids (heals null/stale localProductId via hqProductId).
+   */
+  static resolveLinkedProductIds<T extends { id: string }>(
+    links: CatalogLinkRow[],
+    activeProducts: T[]
+  ): Set<string> {
+    const activeIds = new Set(activeProducts.map((p) => p.id));
+    const allowed = new Set<string>();
+    for (const link of links) {
+      const local = String(link.localProductId || "").trim();
+      const hq = String(link.hqProductId || "").trim();
+      if (local && activeIds.has(local)) {
+        allowed.add(local);
+        continue;
+      }
+      if (hq && activeIds.has(hq)) {
+        allowed.add(hq);
+      }
+    }
+    return allowed;
+  }
+
   /** Merge per-location price, visibility, and availability overrides onto products. */
   static async applyLocationOverrides<T extends ProductRow>(
     merchantId: string,
@@ -107,10 +135,7 @@ export class CatalogLocationService {
 
     let productPool = products;
     if (links.length) {
-      const allowed = new Set(
-        links.map((l) => l.localProductId).filter((id): id is string => !!id)
-      );
-      // HQ link rows without a resolved local product must not blank the terminal menu.
+      const allowed = this.resolveLinkedProductIds(links, products);
       if (allowed.size > 0) {
         productPool = products.filter((p) => allowed.has(p.id));
       }
@@ -139,9 +164,14 @@ export class CatalogLocationService {
       activeMenu.productIds
     );
 
-    if (!visibleProducts.length && links.length > 0 && filtered.products.length > 0) {
-      // HQ push links are authoritative when schedule menus would blank the terminal (e.g. off-hours).
-      visibleProducts = filtered.products;
+    if (!visibleProducts.length && links.length > 0) {
+      // HQ push links are authoritative when schedule menus or POS filters would blank the branch.
+      const linkPool = this.resolveLinkedProductIds(links, withOverrides);
+      if (linkPool.size > 0) {
+        visibleProducts = withOverrides.filter((p) => linkPool.has(p.id));
+      } else if (filtered.products.length > 0) {
+        visibleProducts = filtered.products;
+      }
     }
 
     const menuCategoryIds = Array.isArray(activeMenu.menu?.categoryIds)
