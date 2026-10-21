@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState, type CSSProperties } from 'react';
 import { ymdZurich } from '@/components/shop/InlineReservationsWidget';
 import { useI18n } from '@/lib/i18n';
 import { useShopReservationsBooking } from '@/lib/use-shop-reservations-booking';
+import '@/styles/delicate-reservations.css';
 
 type Props = {
   shopKey: string;

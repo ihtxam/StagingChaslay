@@ -32,7 +32,6 @@ export default function ReservationsEmbedPage() {
 
   return (
     <I18nProvider storageKey={`${SHOP_LANG_KEY}_${shopKey}`} initialLocale={initialLocale}>
-      <link rel="stylesheet" href="/embed/delicate-reservations.css" />
       <DelicateReservationsForm
         shopKey={shopKey}
         theme={theme}

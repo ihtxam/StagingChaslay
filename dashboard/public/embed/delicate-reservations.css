@@ -1,3 +1,5 @@
+/* Delicate reservations widget — bundled for shop modal + embed React route.
+   public/embed/delicate-reservations.css is copied from here on `npm run build`. */
 .rb-root {
   --rb-accent: #1c3557;
   --rb-accent-text: #ffffff;
@@ -29,6 +31,13 @@
 .rb-root *::before,
 .rb-root *::after {
   box-sizing: border-box;
+}
+
+/* Stack field labels above inputs when nested in shop Tailwind surfaces */
+.rb-root form label:not(.rb-check) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .rb-shell {
@@ -88,6 +97,7 @@
 
 .rb-dates {
   display: flex;
+  flex-wrap: nowrap;
   gap: 0.4rem;
   overflow-x: auto;
   padding-bottom: 0.15rem;
@@ -107,6 +117,8 @@
   padding: 0.45rem 0.35rem;
   text-align: center;
   cursor: pointer;
+  font: inherit;
+  color: inherit;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 
@@ -128,6 +140,7 @@
   display: block;
   font-size: 0.95rem;
   margin-top: 0.15rem;
+  font-weight: 700;
 }
 
 .rb-row-2 {
@@ -164,10 +177,11 @@
   text-align: center;
 }
 
-.rb-select,
-.rb-input,
-.rb-textarea {
+.rb-root .rb-select,
+.rb-root .rb-input,
+.rb-root .rb-textarea {
   width: 100%;
+  display: block;
   border: 1px solid var(--rb-border);
   border-radius: 10px;
   padding: 0.65rem 0.75rem;
@@ -176,11 +190,12 @@
   color: var(--rb-text);
 }
 
-.rb-input:focus,
-.rb-select:focus,
-.rb-textarea:focus {
+.rb-root .rb-input:focus,
+.rb-root .rb-select:focus,
+.rb-root .rb-textarea:focus {
   outline: 2px solid color-mix(in srgb, var(--rb-accent) 35%, transparent);
   border-color: var(--rb-accent);
+  box-shadow: none;
 }
 
 .rb-time-groups {
@@ -214,6 +229,8 @@
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
 .rb-time-btn[aria-pressed='true'] {

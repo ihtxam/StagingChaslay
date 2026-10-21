@@ -2,16 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import DelicateReservationsForm from '@/components/shop/DelicateReservationsForm';
 import { useI18n } from '@/lib/i18n';
 
-function ensureDelicateReservationsCss() {
-  const id = 'reborn-delicate-reservations-css';
-  if (document.getElementById(id)) return;
-  const link = document.createElement('link');
-  link.id = id;
-  link.rel = 'stylesheet';
-  link.href = '/embed/delicate-reservations.css';
-  document.head.appendChild(link);
-}
-
 type Props = {
   shopKey: string;
   accent?: string;
@@ -25,10 +15,6 @@ export default function ShopReservationFab({ shopKey, accent }: Props) {
   const [open, setOpen] = useState(false);
   const label = t('shopReservations');
   const fabBg = accent?.trim() || '#1c3557';
-
-  useEffect(() => {
-    ensureDelicateReservationsCss();
-  }, []);
 
   useEffect(() => {
     if (!open) return;
