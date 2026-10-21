@@ -184,6 +184,23 @@ describe("scheduled-menu", () => {
         terminalIsolation: true,
       })
     ).toBeNull();
+
+    expect(
+      pickActiveScheduledMenu([defaultMenu, barMenu, kioskMenu], {
+        channel: "pos",
+        locationId: "bar-loc",
+        at,
+        terminalIsolation: true,
+      })?.id
+    ).toBe("bar-vk1");
+    expect(
+      pickActiveScheduledMenu([defaultMenu], {
+        channel: "pos",
+        locationId: "bar-loc",
+        at,
+        terminalIsolation: true,
+      })?.id
+    ).toBe("default");
   });
 
   it("uniform pricing fixed and percent", () => {

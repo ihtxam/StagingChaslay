@@ -131,19 +131,35 @@ export class CatalogLocationService {
       timezone,
       { terminalIsolation: true }
     );
-    const visibleProducts = this.filterByHqMenuProductIds(
+    let visibleProducts = this.filterByHqMenuProductIds(
       filtered.products,
       activeMenu.productIds
     );
 
+    const menuCategoryIds = Array.isArray(activeMenu.menu?.categoryIds)
+      ? activeMenu.menu!.categoryIds!.map((id) => String(id || "").trim()).filter(Boolean)
+      : [];
+    if (menuCategoryIds.length > 0) {
+      const allowedCats = new Set(menuCategoryIds);
+      visibleProducts = visibleProducts.filter(
+        (p) => p.categoryId && allowedCats.has(String(p.categoryId))
+      );
+    }
+
     const categoryIdsWithProducts = new Set(
       visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
     );
-    const visibleCategories = filtered.categories.filter(
+    let visibleCategories = filtered.categories.filter(
       (c) =>
         categoryIdsWithProducts.has(c.id) ||
         !!(c as { isOffersCategory?: boolean }).isOffersCategory
     );
+    if (menuCategoryIds.length > 0) {
+      const allowedCats = new Set(menuCategoryIds);
+      visibleCategories = visibleCategories.filter(
+        (c) => allowedCats.has(c.id) || !!(c as { isOffersCategory?: boolean }).isOffersCategory
+      );
+    }
 
     const pricedProducts = HqMenuService.applyMenuPrices(
       visibleProducts,
