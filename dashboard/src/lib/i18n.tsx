@@ -2416,6 +2416,8 @@ const en: Dict = {
   receiptLogoUrl: 'Receipt logo URL',
   receiptLogoHint: 'Leave empty to use the shop logo. Printed on 80mm / 58mm receipts.',
   receiptHeader: 'Receipt header',
+  receiptHeaderMultilineHint:
+    'Each line you type prints on its own row. The first line uses the text size and bold options below.',
   receiptHeaderTitle: 'Store name',
   receiptHeaderTitleHint: 'Printed large at the top of the receipt (uses size and bold below)',
   receiptHeaderDetails: 'Address & details',
@@ -7396,6 +7398,8 @@ const fr: Dict = {
   receiptLogoUrl: 'URL du logo reçu',
   receiptLogoHint: 'Laissez vide pour utiliser le logo boutique. Imprimé en 80mm / 58mm.',
   receiptHeader: 'En-tête du reçu',
+  receiptHeaderMultilineHint:
+    'Chaque ligne saisie s’imprime sur une ligne du reçu. La première ligne utilise la taille et le gras ci-dessous.',
   receiptHeaderTitle: 'Nom du magasin',
   receiptHeaderTitleHint: 'Imprimé en grand en haut du reçu (utilise la taille et le gras ci-dessous)',
   receiptHeaderDetails: 'Adresse et détails',
@@ -12302,6 +12306,8 @@ const de: Dict = {
   receiptLogoUrl: 'Logo-URL für Beleg',
   receiptLogoHint: 'Leer lassen für Shop-Logo. Druck auf 80mm / 58mm.',
   receiptHeader: 'Beleg-Kopfzeile',
+  receiptHeaderMultilineHint:
+    'Jede Zeile wird auf dem Beleg in einer eigenen Zeile gedruckt. Die erste Zeile nutzt Grösse und Fett unten.',
   receiptHeaderTitle: 'Geschäftsname',
   receiptHeaderTitleHint: 'Gross oben auf dem Beleg gedruckt (nutzt Grösse und Fett unten)',
   receiptHeaderDetails: 'Adresse & Details',
