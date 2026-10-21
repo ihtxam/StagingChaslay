@@ -275,7 +275,8 @@ export class HqMenuService {
     locationId: string,
     channel: CatalogChannel,
     at: Date = new Date(),
-    timezone = "Europe/Zurich"
+    timezone = "Europe/Zurich",
+    opts?: { terminalIsolation?: boolean }
   ): Promise<ResolvedHqMenu> {
     const db = getDb();
     await this.ensureDefaultMenu(merchantId);
@@ -284,14 +285,17 @@ export class HqMenuService {
       orderBy: [asc(schema.hqMenus.sortOrder)],
     });
 
+    const terminalIsolation = opts?.terminalIsolation === true;
     const picked = pickActiveScheduledMenu(menus, {
       channel,
       locationId,
       at,
       timezone,
+      terminalIsolation,
     });
     if (!picked) {
-      const strictEmpty = locationHasDedicatedScheduledMenus(menus, locationId);
+      const strictEmpty =
+        terminalIsolation || locationHasDedicatedScheduledMenus(menus, locationId);
       return {
         menu: null,
         productIds: strictEmpty ? new Set<string>() : null,
@@ -299,7 +303,10 @@ export class HqMenuService {
       };
     }
 
-    const productIds = await resolveMenuProductIds(merchantId, picked);
+    let productIds = await resolveMenuProductIds(merchantId, picked);
+    if (productIds === null && terminalIsolation) {
+      productIds = new Set<string>();
+    }
     const productPrices = normalizeProductPrices(picked.productPrices);
     return { menu: picked, productIds, productPrices };
   }

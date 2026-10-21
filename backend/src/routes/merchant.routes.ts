@@ -54,6 +54,18 @@ function wantsPosLocationCatalog(req: Request): boolean {
   return raw === "1" || raw.toLowerCase() === "true";
 }
 
+/** POS catalog APIs: isolate by terminal when WebPOS sends X-Location-Id or posLocationCatalog=1. */
+function usesPosLocationCatalog(req: Request): boolean {
+  if (wantsPosLocationCatalog(req)) return true;
+  return String(req.headers["x-location-id"] || "").trim().length > 0;
+}
+
+function posCatalogLocationId(req: Request): string | undefined {
+  if (!usesPosLocationCatalog(req)) return undefined;
+  if (req.locationFromHeader && !req.locationId) return undefined;
+  return req.locationId;
+}
+
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
@@ -445,14 +457,17 @@ router.get("/products", async (req: Request, res: Response) => {
     ]);
     let pageList = products || [];
 
-    if (wantsPosLocationCatalog(req) && req.locationId) {
+    const catalogLocationId = posCatalogLocationId(req);
+    if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
         merchantId,
-        req.locationId,
+        catalogLocationId,
         "pos"
       );
       pageList = catalog.products;
+    } else if (usesPosLocationCatalog(req)) {
+      pageList = [];
     }
 
     // Resolve combo option products that may not be on the current page
@@ -533,11 +548,11 @@ router.get("/products", async (req: Request, res: Response) => {
       success: true,
       products: withCatalog,
       pagination: {
-        page: wantsPosLocationCatalog(req) ? 1 : page,
-        limit: wantsPosLocationCatalog(req) ? pageList.length : limit,
-        total: wantsPosLocationCatalog(req) ? pageList.length : total,
+        page: usesPosLocationCatalog(req) ? 1 : page,
+        limit: usesPosLocationCatalog(req) ? pageList.length : limit,
+        total: usesPosLocationCatalog(req) ? pageList.length : total,
       },
-      locationId: wantsPosLocationCatalog(req) ? req.locationId : undefined,
+      locationId: catalogLocationId,
       productLimit: productLimit
         ? {
             maxProducts: productLimit.maxProducts,
@@ -1182,17 +1197,25 @@ router.get("/categories", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    if (wantsPosLocationCatalog(req) && req.locationId) {
+    const catalogLocationId = posCatalogLocationId(req);
+    if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
         merchantId,
-        req.locationId,
+        catalogLocationId,
         "pos"
       );
       return res.json({
         success: true,
         categories: catalog.categories,
         locationId: catalog.locationId,
+      });
+    }
+    if (usesPosLocationCatalog(req)) {
+      return res.json({
+        success: true,
+        categories: [],
+        locationId: null,
       });
     }
 
