@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "cp src/styles/delicate-reservations.css public/embed/delicate-reservations.css && vite build",
     "build:openpage": "npm --prefix ../openpage ci && npm --prefix ../openpage run build && node ../scripts/copy-openpage.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
