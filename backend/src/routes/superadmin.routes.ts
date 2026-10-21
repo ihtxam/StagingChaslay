@@ -608,6 +608,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled,
+      phoneOrderingAddonEnabled,
       marketingAutomationAddonEnabled,
       smartSegmentsAddonEnabled,
       reservationCampaignsAddonEnabled,
@@ -654,6 +655,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         odooAddonEnabled: odooAddonEnabled === true,
         growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: guestCrmAddonEnabled === true,
+        phoneOrderingAddonEnabled: phoneOrderingAddonEnabled === true,
         marketingAutomationAddonEnabled: marketingAutomationAddonEnabled === true,
         smartSegmentsAddonEnabled: smartSegmentsAddonEnabled === true,
         reservationCampaignsAddonEnabled: reservationCampaignsAddonEnabled === true,
@@ -733,6 +735,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.cateringAddonEnabled != null ||
       updates.growthAnalyticsAddonEnabled != null ||
       updates.guestCrmAddonEnabled != null ||
+      updates.phoneOrderingAddonEnabled != null ||
       updates.marketingAutomationAddonEnabled != null ||
       updates.smartSegmentsAddonEnabled != null ||
       updates.reservationCampaignsAddonEnabled != null ||
@@ -802,6 +805,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
           updates.guestCrmAddonEnabled != null
             ? updates.guestCrmAddonEnabled === true
             : undefined,
+        phoneOrderingAddonEnabled:
+          updates.phoneOrderingAddonEnabled != null
+            ? updates.phoneOrderingAddonEnabled === true
+            : undefined,
         marketingAutomationAddonEnabled:
           updates.marketingAutomationAddonEnabled != null
             ? updates.marketingAutomationAddonEnabled === true
@@ -839,6 +846,7 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.cateringAddonEnabled;
       delete updates.growthAnalyticsAddonEnabled;
       delete updates.guestCrmAddonEnabled;
+      delete updates.phoneOrderingAddonEnabled;
       delete updates.marketingAutomationAddonEnabled;
       delete updates.smartSegmentsAddonEnabled;
       delete updates.reservationCampaignsAddonEnabled;

@@ -28,6 +28,7 @@ import {
   readGuestCrmAddonEnabled,
   writeGuestCrmAddonEnabled,
 } from "@/lib/guest-crm-addon";
+import { writePhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
 import {
   isMarketingAutomationAddonEnabled,
   readMarketingAutomationAddonEnabled,
@@ -450,6 +451,7 @@ export class MerchantService {
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      phoneOrderingAddonEnabled?: boolean;
       cateringAddonEnabled?: boolean;
       marketingAutomationAddonEnabled?: boolean;
       smartSegmentsAddonEnabled?: boolean;
@@ -633,6 +635,9 @@ export class MerchantService {
       if (options?.guestCrmAddonEnabled === true) {
         await writeGuestCrmAddonEnabled(created.id, true);
       }
+      if (options?.phoneOrderingAddonEnabled === true) {
+        await writePhoneOrderingAddonEnabled(created.id, true);
+      }
       if (options?.cateringAddonEnabled === true) {
         await writeCateringAddonEnabled(created.id, true);
       }
@@ -801,6 +806,7 @@ export class MerchantService {
       storekeeperAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
+      phoneOrderingAddonEnabled?: boolean;
       marketingAutomationAddonEnabled?: boolean;
       smartSegmentsAddonEnabled?: boolean;
       reservationCampaignsAddonEnabled?: boolean;
@@ -880,6 +886,10 @@ export class MerchantService {
       await writeGuestCrmAddonEnabled(merchantId, limits.guestCrmAddonEnabled);
       wroteAddon = true;
     }
+    if (limits.phoneOrderingAddonEnabled !== undefined) {
+      await writePhoneOrderingAddonEnabled(merchantId, limits.phoneOrderingAddonEnabled);
+      wroteAddon = true;
+    }
     if (limits.marketingAutomationAddonEnabled !== undefined) {
       await writeMarketingAutomationAddonEnabled(merchantId, limits.marketingAutomationAddonEnabled);
       wroteAddon = true;
@@ -906,7 +916,7 @@ export class MerchantService {
     }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, cateringEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, phoneOrderingAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, cateringEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

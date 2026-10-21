@@ -27,6 +27,7 @@ export default function PhoneOrders() {
   const { t } = useI18n();
   const [tickets, setTickets] = useState<PhoneTicket[]>([]);
   const [enabled, setEnabled] = useState(true);
+  const [licensed, setLicensed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -43,7 +44,10 @@ export default function PhoneOrders() {
         api.get('/merchant/settings'),
       ]);
       setTickets(ordersRes.data?.orders || []);
-      const phone = settingsRes.data?.phoneOrderingSettings || settingsRes.data?.settings?.phoneOrderingSettings;
+      setLicensed(settingsRes.data?.settings?.phoneOrderingAddonEnabled === true);
+      const phone =
+        settingsRes.data?.settings?.phoneOrderingSettings ||
+        settingsRes.data?.phoneOrderingSettings;
       setEnabled(phone?.enabled !== false);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -127,6 +131,17 @@ export default function PhoneOrders() {
 
   if (loading) {
     return <div className="p-6 text-sm text-[var(--text-muted)]">{t('loading')}</div>;
+  }
+
+  if (!licensed) {
+    return (
+      <div className="space-y-4 p-4 sm:p-6">
+        <h1 className="text-2xl font-semibold">{t('phoneOrderingDeskTitle')}</h1>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {t('phoneOrderingAddonUpsell')}
+        </div>
+      </div>
+    );
   }
 
   return (

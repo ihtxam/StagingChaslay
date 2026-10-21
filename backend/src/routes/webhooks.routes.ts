@@ -14,6 +14,7 @@ import {
   normalizePhoneOrderingSettings,
   timingSafeEqualSecret,
 } from "@/lib/phone-ordering-settings";
+import { isPhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
 import { OrderService } from "@/services/order.service";
 
 const router = Router();
@@ -128,9 +129,12 @@ router.get("/phone/:merchantId", async (req: Request, res: Response) => {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),
-      columns: { id: true, phoneOrderingSettings: true },
+      columns: { id: true, phoneOrderingSettings: true, phoneOrderingAddonEnabled: true },
     });
     if (!merchant) return res.status(404).json({ ok: false, error: "Merchant not found" });
+    if (!isPhoneOrderingAddonEnabled(merchant.phoneOrderingAddonEnabled)) {
+      return res.status(403).json({ ok: false, error: "Phone ordering add-on is not enabled" });
+    }
     const settings = normalizePhoneOrderingSettings(
       (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
     );
@@ -161,6 +165,13 @@ router.post("/phone/:merchantId", async (req: Request, res: Response) => {
       where: eq(schema.merchants.id, merchantId),
     });
     if (!merchant) return res.status(404).json({ ok: false, error: "Merchant not found" });
+    if (
+      !isPhoneOrderingAddonEnabled(
+        (merchant as { phoneOrderingAddonEnabled?: boolean }).phoneOrderingAddonEnabled
+      )
+    ) {
+      return res.status(403).json({ ok: false, error: "Phone ordering add-on is not enabled" });
+    }
     const settings = normalizePhoneOrderingSettings(
       (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
     );

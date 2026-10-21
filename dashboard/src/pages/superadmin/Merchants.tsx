@@ -73,6 +73,7 @@ interface Merchant {
   cateringAddonEnabled?: boolean;
   growthAnalyticsAddonEnabled?: boolean;
   guestCrmAddonEnabled?: boolean;
+  phoneOrderingAddonEnabled?: boolean;
   createdAt: string;
   devices: number;
   licenses: number;
@@ -140,6 +141,7 @@ const emptyForm = {
   kioskAddonEnabled: false,
   growthAnalyticsAddonEnabled: false,
   guestCrmAddonEnabled: false,
+  phoneOrderingAddonEnabled: false,
   productSurface: 'full_pos' as MerchantProductSurface,
 };
 
@@ -180,6 +182,7 @@ export default function Merchants() {
     cateringEnabled: boolean;
     growthAnalyticsAddonEnabled: boolean;
     guestCrmAddonEnabled: boolean;
+    phoneOrderingAddonEnabled: boolean;
   }>({
     maxPosPosts: 0,
     maxWaiterPosts: 0,
@@ -197,6 +200,7 @@ export default function Merchants() {
     cateringEnabled: false,
     growthAnalyticsAddonEnabled: false,
     guestCrmAddonEnabled: false,
+    phoneOrderingAddonEnabled: false,
   });
   const [savingPosLimits, setSavingPosLimits] = useState(false);
   const [panelNavFor, setPanelNavFor] = useState<{
@@ -321,6 +325,7 @@ export default function Merchants() {
           res.data.merchant?.cateringAddonEnabled === true,
         growthAnalyticsAddonEnabled: res.data.merchant?.growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: res.data.merchant?.guestCrmAddonEnabled === true,
+        phoneOrderingAddonEnabled: res.data.merchant?.phoneOrderingAddonEnabled === true,
       });
       setDetailSurface(
         inferProductSurface({
@@ -355,6 +360,7 @@ export default function Merchants() {
         cateringEnabled: !!posLimits.cateringEnabled,
         growthAnalyticsAddonEnabled: !!posLimits.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!posLimits.guestCrmAddonEnabled,
+        phoneOrderingAddonEnabled: !!posLimits.phoneOrderingAddonEnabled,
       });
       const saved = res.data?.merchant;
       const inventoryOn = saved?.inventoryAddonEnabled === true || saved?.inventoryEnabled === true;
@@ -366,6 +372,7 @@ export default function Merchants() {
       const cateringOn = saved?.cateringEnabled === true || saved?.cateringAddonEnabled === true;
       const growthAnalyticsOn = saved?.growthAnalyticsAddonEnabled === true;
       const guestCrmOn = saved?.guestCrmAddonEnabled === true;
+      const phoneOrderingOn = saved?.phoneOrderingAddonEnabled === true;
       setPosLimits({
         maxPosPosts: Math.max(0, Number(saved?.maxPosPosts ?? posLimits.maxPosPosts) || 0),
         maxWaiterPosts: Math.max(0, Number(saved?.maxWaiterPosts ?? posLimits.maxWaiterPosts) || 0),
@@ -388,6 +395,7 @@ export default function Merchants() {
         cateringEnabled: cateringOn,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
         guestCrmAddonEnabled: guestCrmOn,
+        phoneOrderingAddonEnabled: phoneOrderingOn,
       });
       setShowDetail((prev) =>
         prev
@@ -407,6 +415,7 @@ export default function Merchants() {
               kioskEnabled: kioskOn,
               growthAnalyticsAddonEnabled: growthAnalyticsOn,
               guestCrmAddonEnabled: guestCrmOn,
+              phoneOrderingAddonEnabled: phoneOrderingOn,
             }
           : prev
       );
@@ -618,6 +627,7 @@ export default function Merchants() {
         kioskAddonEnabled: !!form.kioskAddonEnabled,
         growthAnalyticsAddonEnabled: !!form.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!form.guestCrmAddonEnabled,
+        phoneOrderingAddonEnabled: !!form.phoneOrderingAddonEnabled,
       });
       const merchantId = res.data.merchant?.id as string | undefined;
       if (merchantId && form.productSurface) {
@@ -1356,6 +1366,22 @@ export default function Merchants() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
+                    checked={!!form.phoneOrderingAddonEnabled}
+                    onChange={(e) =>
+                      setForm({ ...form, phoneOrderingAddonEnabled: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium block">Phone ordering</span>
+                    <span className="text-xs text-gray-500">
+                      Phone desk, SMS/voice webhooks, shop call-to-order.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm pt-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
                     checked={!!form.kdsAddonEnabled}
                     onChange={(e) => setForm({ ...form, kdsAddonEnabled: e.target.checked })}
                   />
@@ -1867,6 +1893,31 @@ export default function Merchants() {
                         }`}
                       >
                         {posLimits.guestCrmAddonEnabled ? 'Currently on' : 'Currently off'}
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm mt-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={!!posLimits.phoneOrderingAddonEnabled}
+                      onChange={(e) =>
+                        setPosLimits({ ...posLimits, phoneOrderingAddonEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium block">Phone ordering</span>
+                      <span className="text-xs text-gray-500">
+                        Phone desk, SMS/voice webhooks, shop call-to-order.
+                      </span>
+                      <span
+                        className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          posLimits.phoneOrderingAddonEnabled
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {posLimits.phoneOrderingAddonEnabled ? 'Currently on' : 'Currently off'}
                       </span>
                     </span>
                   </label>

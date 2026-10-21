@@ -190,6 +190,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS growth_analytics_addon_enabled boolean NOT NULL DEFAULT false",
   guest_crm_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS guest_crm_addon_enabled boolean NOT NULL DEFAULT false",
+  phone_ordering_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS phone_ordering_addon_enabled boolean NOT NULL DEFAULT false",
   marketing_automation_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS marketing_automation_addon_enabled boolean NOT NULL DEFAULT false",
   smart_segments_addon_enabled:
@@ -1582,6 +1584,11 @@ export async function ensureGrowthAnalyticsAddonColumn(): Promise<void> {
 
 export async function ensureGuestCrmAddonColumn(): Promise<void> {
   await runPatch("guest_crm_addon_enabled");
+  await ensureMerchantTables();
+}
+
+export async function ensurePhoneOrderingAddonColumn(): Promise<void> {
+  await runPatch("phone_ordering_addon_enabled");
   await ensureMerchantTables();
 }
 
