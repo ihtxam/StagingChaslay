@@ -3,6 +3,7 @@ import {
   expandReceiptHeaderDetailLines,
   getReceiptHeaderLines,
   healLegacyMashedReceiptHeaderFields,
+  receiptHeaderLinesFromPrintSettings,
   receiptHeaderTxFromPrintSettings,
   splitMerchantAddressLines,
   splitReceiptHeaderDetailLine,
@@ -145,6 +146,26 @@ const polaCustom = getReceiptHeaderLines(
   { padLines: false }
 );
 assert.deepEqual(polaCustom, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
+
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeaderLines: ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+  }),
+  ['pola pola', 'rue des saars 115', '2000 Neuchâtel']
+);
+
+const polaFromArray = getReceiptHeaderLines(
+  {
+    headerTitle: '',
+    header: '',
+    headerLines: ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+    businessName: 'KABUL',
+    headerAlign: 'center',
+  },
+  48,
+  { padLines: false }
+);
+assert.deepEqual(polaFromArray, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
 
 const polaLiteral = getReceiptHeaderLines(
   {

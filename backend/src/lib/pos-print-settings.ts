@@ -35,6 +35,8 @@ export type PosPrintSettings = {
   receiptHeaderTitle?: string;
   /** Address and other details printed below store name at normal size. */
   receiptHeader?: string;
+  /** One receipt row per entry (preferred over receiptHeader string). */
+  receiptHeaderLines?: string[];
   receiptFooter?: string;
   /** Receipt header alignment: left, center (default), or right. */
   receiptHeaderAlign?: "left" | "center" | "right";
@@ -153,6 +155,7 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
 > & { receiptLogoUrl: string | null; printers: PosPrinterProfile[] } = {
   receiptHeaderTitle: "",
   receiptHeader: "",
+  receiptHeaderLines: [],
   receiptFooter: "Merci / Danke / Thank you",
   receiptHeaderAlign: "center",
   receiptHeaderBold: false,
@@ -255,6 +258,28 @@ export function healLegacyMashedReceiptHeader(
     return { receiptHeaderTitle: "", receiptHeader: "" };
   }
   return { receiptHeaderTitle: titleTrim, receiptHeader: bodyTrim };
+}
+
+export function parseReceiptHeaderLines(
+  linesRaw: unknown,
+  fallbackText: string
+): string[] {
+  const fromArray = Array.isArray(linesRaw)
+    ? linesRaw
+        .map((line) => String(line ?? "").replace(/\r\n/g, "\n").trim())
+        .filter(Boolean)
+    : [];
+  if (fromArray.length) {
+    return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
+  }
+  const text = String(fallbackText ?? "").replace(/\r\n/g, "\n");
+  if (!text.trim()) return [];
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 24)
+    .map((line) => line.slice(0, 200));
 }
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
@@ -368,10 +393,19 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     String(src.receiptHeaderTitle ?? ""),
     String(src.receiptHeader ?? "")
   );
+  const receiptHeaderLines = parseReceiptHeaderLines(
+    src.receiptHeaderLines,
+    healedHeader.receiptHeader
+  );
+  const receiptHeader =
+    receiptHeaderLines.length > 0
+      ? receiptHeaderLines.join("\n")
+      : healedHeader.receiptHeader.slice(0, 2000);
 
   return {
     receiptHeaderTitle: healedHeader.receiptHeaderTitle.slice(0, 500),
-    receiptHeader: healedHeader.receiptHeader.slice(0, 2000),
+    receiptHeader,
+    receiptHeaderLines,
     receiptFooter: String(src.receiptFooter ?? DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
     receiptHeaderAlign,
     receiptHeaderBold: src.receiptHeaderBold === true,

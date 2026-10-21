@@ -1650,9 +1650,16 @@ export default function Settings() {
         ps.receiptHeaderTitle,
         ps.receiptHeader
       ).slice(0, 2000);
+      const receiptHeaderLines = receiptHeader
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 24)
+        .map((line) => line.slice(0, 200));
       return {
         receiptHeaderTitle: '',
         receiptHeader,
+        receiptHeaderLines,
         receiptFooter: ps.receiptFooter || '',
         receiptHeaderAlign:
           ps.receiptHeaderAlign === 'left' || ps.receiptHeaderAlign === 'right'

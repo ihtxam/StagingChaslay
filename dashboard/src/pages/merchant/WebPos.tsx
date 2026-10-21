@@ -2859,6 +2859,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             ...merchantPs,
             receiptHeaderTitle: merchantPs.receiptHeaderTitle ?? cfgPs.receiptHeaderTitle,
             receiptHeader: merchantPs.receiptHeader ?? cfgPs.receiptHeader,
+            receiptHeaderLines:
+              merchantPs.receiptHeaderLines?.length
+                ? merchantPs.receiptHeaderLines
+                : cfgPs.receiptHeaderLines,
           };
           setPrintSettings(nextPrintSettings);
           cacheMerchantAutoPrintSettings(nextPrintSettings);

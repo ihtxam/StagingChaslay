@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { healLegacyMashedReceiptHeader, normalizePosPrintSettings } from "./pos-print-settings";
+import {
+  healLegacyMashedReceiptHeader,
+  normalizePosPrintSettings,
+  parseReceiptHeaderLines,
+} from "./pos-print-settings";
 
 assert.deepEqual(
   healLegacyMashedReceiptHeader(
@@ -24,5 +28,22 @@ const norm = normalizePosPrintSettings({
 });
 assert.equal(norm.receiptHeader, "");
 assert.equal(norm.receiptHeaderTitle, "");
+
+assert.deepEqual(
+  parseReceiptHeaderLines(
+    ["pola pola", "rue des saars 115", "2000 Neuchâtel"],
+    ""
+  ),
+  ["pola pola", "rue des saars 115", "2000 Neuchâtel"]
+);
+
+const normLines = normalizePosPrintSettings({
+  receiptHeader: "pola pola\nrue des saars 115\n2000 Neuchâtel",
+});
+assert.deepEqual(normLines.receiptHeaderLines, [
+  "pola pola",
+  "rue des saars 115",
+  "2000 Neuchâtel",
+]);
 
 console.log("pos-print-settings.receipt-header-heal.test.ts ok");
