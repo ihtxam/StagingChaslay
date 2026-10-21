@@ -2851,10 +2851,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (Array.isArray(cfg.pizzaTemplates)) {
           setPizzaTemplates(cfg.pizzaTemplates);
         }
-        if (cfg.posPrintSettings) {
-          nextPrintSettings = cfg.posPrintSettings;
-          setPrintSettings(cfg.posPrintSettings);
-          cacheMerchantAutoPrintSettings(cfg.posPrintSettings);
+        if (cfg.posPrintSettings || merch?.posPrintSettings) {
+          const merchantPs = merch?.posPrintSettings || {};
+          const cfgPs = cfg.posPrintSettings || {};
+          nextPrintSettings = {
+            ...cfgPs,
+            ...merchantPs,
+            receiptHeaderTitle: merchantPs.receiptHeaderTitle ?? cfgPs.receiptHeaderTitle,
+            receiptHeader: merchantPs.receiptHeader ?? cfgPs.receiptHeader,
+          };
+          setPrintSettings(nextPrintSettings);
+          cacheMerchantAutoPrintSettings(nextPrintSettings);
         }
         const staffId = loadWebPosStaffSession()?.id;
         const terminalId = resolveActiveTerminalId(cfg.terminals, {

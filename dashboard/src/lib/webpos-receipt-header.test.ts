@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {
   expandReceiptHeaderDetailLines,
   getReceiptHeaderLines,
+  healLegacyMashedReceiptHeaderFields,
+  receiptHeaderTxFromPrintSettings,
   splitMerchantAddressLines,
   splitReceiptHeaderDetailLine,
   splitStreetAndLocality,
@@ -281,5 +283,47 @@ const longMashedBody = getReceiptHeaderLines(
 assert.equal(longMashedBody[0], 'POLACAFE');
 assert.ok(longMashedBody.some((l) => /Bahnhofstrasse/i.test(l)));
 assert.ok(longMashedBody.some((l) => /Tel:\s*\+41/.test(l)));
+
+const emptyHeaderDefault = getReceiptHeaderLines(
+  {
+    headerTitle: '',
+    header: '',
+    businessName: 'KABUL',
+    address: 'Bahnhofstrasse 1, Zürich',
+    city: 'Zürich',
+    phone: '+41 79 000 00 00',
+    vatNumber: 'CHE-123.321.432',
+    headerAlign: 'center',
+  },
+  48,
+  { padLines: false }
+);
+assert.deepEqual(emptyHeaderDefault, ['KABUL']);
+
+assert.deepEqual(
+  healLegacyMashedReceiptHeaderFields(
+    '',
+    'POLACAFE Bahnhofstrasse 1, Zürich Tel: +41 79 000 00 00 VAT: CHE-123.321.432 MWST'
+  ),
+  { headerTitle: '', header: '' }
+);
+
+const healedDemoPrint = getReceiptHeaderLines(
+  {
+    ...receiptHeaderTxFromPrintSettings({
+      receiptHeader:
+        'POLACAFE Bahnhofstrasse 1, Zürich Tel: +41 79 000 00 00 VAT: CHE-123.321.432 MWST',
+    }),
+    businessName: 'KABUL',
+    address: 'Bahnhofstrasse 1, Zürich',
+    city: 'Zürich',
+    phone: '+41 79 000 00 00',
+    vatNumber: 'CHE-123.321.432',
+    headerAlign: 'center',
+  },
+  48,
+  { padLines: false }
+);
+assert.deepEqual(healedDemoPrint, ['KABUL']);
 
 console.log('webpos-receipt-header.test.ts ok');
