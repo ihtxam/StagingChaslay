@@ -1,7 +1,7 @@
 import { APP_NAME } from '@/lib/brand';
 import { lineWidthForPaper } from '@/lib/receipt-labels';
 import {
-  isAndroidWebPosTill,
+  receiptEscPosTextEncodingForPrinter,
   isPrintAgentAvailable,
   isUnsuitableRawPrinter,
   listNormalizedLiveAgentPrinters,
@@ -114,6 +114,10 @@ async function printReceiptText(
     headerTitle: opts.printSettings?.receiptHeaderTitle,
     header: opts.printSettings?.receiptHeader,
   });
+  const textEncoding = receiptEscPosTextEncodingForPrinter(
+    named[0] || configuredNames[0],
+    livePrinters
+  );
   const escpos = await buildReceiptEscPos(text, {
     qrData: opts.qrUrl,
     deliveryQrData: opts.deliveryQrUrl,
@@ -127,7 +131,7 @@ async function printReceiptText(
     headerBold: headerFmt.bold,
     headerTextScale: headerFmt.textScale,
     titleBodyGap: !!(headerNorm.title && headerNorm.body),
-    textEncoding: isAndroidWebPosTill() ? 'utf8' : 'cp850',
+    textEncoding,
   });
   const dataBase64 = uint8ToBase64(escpos);
   for (const name of names) {

@@ -105,6 +105,7 @@ import {
   reconcilePosPrinterProfiles,
   reconcileAndPrunePosPrinterProfiles,
   resolveAgentPrinterName,
+  receiptEscPosTextEncodingForPrinter,
   resolveEscPosPrinterName,
   resolveLiveEscPosTargetNames,
   resolveLivePrinterName,
@@ -8045,6 +8046,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerTitle: printSettings?.receiptHeaderTitle,
       header: printSettings?.receiptHeader,
     });
+    const receiptTargets = printersForRole(printSettings, 'receipt');
+    const primaryReceiptPrinter =
+      receiptTargets[0]?.name ||
+      (printerName && !printerUsesLabelProtocol(printSettings, printerName) ? printerName : '');
+    const liveForEncoding = printers.length
+      ? printers
+      : await listNormalizedLiveAgentPrinters().catch(() => []);
+    const textEncoding = receiptEscPosTextEncodingForPrinter(
+      primaryReceiptPrinter,
+      liveForEncoding
+    );
     const escpos = await buildReceiptEscPos(text, {
       qrData: qr,
       deliveryQrData: opts.deliveryQrUrl,
@@ -8061,7 +8073,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerTextScale: headerFmt.textScale,
       soldGiftCards: opts.soldGiftCards,
       titleBodyGap: !!(headerNorm.title && headerNorm.body),
-      textEncoding: isAndroidWebPosTill() ? 'utf8' : 'cp850',
+      textEncoding,
     });
     const dataBase64 = uint8ToBase64(escpos);
     lastReceiptEscPosBase64Ref.current = dataBase64;
@@ -8220,6 +8232,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerTitle: printSettings?.receiptHeaderTitle,
         header: printSettings?.receiptHeader,
       });
+      const primaryReceiptPrinter = targets[0]?.name || fallbackName || '';
+      let liveForEncoding = printers;
+      if (!liveForEncoding.length) {
+        liveForEncoding = await listNormalizedLiveAgentPrinters().catch(() => []);
+      }
+      const textEncoding = receiptEscPosTextEncodingForPrinter(
+        primaryReceiptPrinter,
+        liveForEncoding
+      );
       const escpos = await buildReceiptEscPos(text, {
         qrData: qr,
         deliveryQrData: opts.deliveryQrUrl,
@@ -8236,7 +8257,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerTextScale: headerFmt.textScale,
         soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
         titleBodyGap: !!(headerNorm.title && headerNorm.body),
-        textEncoding: isAndroidWebPosTill() ? 'utf8' : 'cp850',
+        textEncoding,
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {

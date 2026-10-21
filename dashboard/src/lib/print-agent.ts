@@ -8,6 +8,7 @@ import {
 } from '@/lib/hardware/desktop-bridge';
 import { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
 import { isEscPosBase64 } from './escpos-payload';
+import type { EscPosTextEncoding } from './escpos-encode';
 
 export { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
 
@@ -314,6 +315,27 @@ export function resolveEscPosPrinterName(
     return isEscPosTicketPrinterName(want) ? want : null;
   }
   return defaultLivePrinter(livePrinters)?.name || null;
+}
+
+/** Sunmi built-in thermal expects UTF-8 raw bytes; USB/BT ESC/POS needs CP850 + ESC t 2. */
+export function receiptEscPosTextEncodingForPrinter(
+  printerName?: string | null,
+  livePrinters?: AgentPrinter[] | null
+): EscPosTextEncoding {
+  const label = String(printerName || '').trim();
+  if (/sunmi\s+built-?in/i.test(label)) return 'utf8';
+  if (livePrinters?.length && label) {
+    const match = livePrinters.find((p) => printerNameInList(label, [p]));
+    const conn = String(match?.connectionType || '').toLowerCase();
+    const driver = String(match?.driver || match?.driverName || '').toLowerCase();
+    if (conn === 'sunmi-internal' || driver.includes('sunmi')) return 'utf8';
+  }
+  if (!label && livePrinters?.length === 1) {
+    const only = livePrinters[0]!;
+    const conn = String(only.connectionType || '').toLowerCase();
+    if (conn === 'sunmi-internal') return 'utf8';
+  }
+  return 'cp850';
 }
 
 /** Live Bridge / Print Agent list, normalized and stale USB/LAN rows removed. */
