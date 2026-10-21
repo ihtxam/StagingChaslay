@@ -369,6 +369,7 @@ export default function Products() {
     locationCount: locations.length,
     maxLocations: limits?.maxLocations,
     isHqView,
+    locationId,
   };
   const catalogListParams = panelCatalogListParams(panelScopeNavInput);
   const showHqCatalogBadges = shouldShowHqCatalogBadges(panelScopeNavInput);
@@ -510,7 +511,9 @@ export default function Products() {
 
       const [p, c, m] = await Promise.all([
         fetchAllProducts(),
-        api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
+        api
+          .get('/merchant/categories', { params: catalogListParams })
+          .catch(() => ({ data: { categories: [] } })),
         api.get('/merchant/modifiers').catch(() => ({ data: { groups: [] } })),
       ]);
       setProducts(p.products || []);

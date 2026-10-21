@@ -139,6 +139,11 @@ export class CatalogLocationService {
       activeMenu.productIds
     );
 
+    if (!visibleProducts.length && links.length > 0 && filtered.products.length > 0) {
+      // HQ push links are authoritative when schedule menus would blank the terminal (e.g. off-hours).
+      visibleProducts = filtered.products;
+    }
+
     const menuCategoryIds = Array.isArray(activeMenu.menu?.categoryIds)
       ? activeMenu.menu!.categoryIds!.map((id) => String(id || "").trim()).filter(Boolean)
       : [];

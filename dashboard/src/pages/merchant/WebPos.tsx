@@ -775,15 +775,25 @@ function mergeBillDiscounts(
   return { percent: 0, amount: roundMoney2(Math.max(src.amount, tgt.amount)) };
 }
 
-async function fetchAllMerchantProducts(fetchOpts: { timeout: number }) {
+async function fetchAllMerchantProducts(
+  fetchOpts: { timeout: number },
+  locationId?: string | null
+) {
   const pageSize = 500;
   let page = 1;
   const all: any[] = [];
   let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
+  const catalogParams: Record<string, string | number> = {
+    limit: pageSize,
+    page,
+    posLocationCatalog: '1',
+  };
+  const loc = String(locationId || '').trim();
+  if (loc) catalogParams.locationId = loc;
   for (;;) {
     try {
       const res = await api.get('/merchant/products', {
-        params: { limit: pageSize, page, posLocationCatalog: '1' },
+        params: catalogParams,
         ...fetchOpts,
       });
       const batch = asArray<any>(res.data?.products ?? res.data);
@@ -2783,13 +2793,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
       let staffFailed = false;
+      const catalogLoc = String(posLocationId || '').trim();
+      const posCatalogParams = catalogLoc
+        ? { posLocationCatalog: '1', locationId: catalogLoc }
+        : { posLocationCatalog: '1' };
       const [settingsRes, catRes, prodFetch, webposRes, staffRes, bestsellerRes] = await Promise.all([
         api.get('/merchant/settings', fetchOpts),
         api.get('/merchant/categories', {
-          params: { posLocationCatalog: '1' },
+          params: posCatalogParams,
           ...fetchOpts,
         }).catch(() => ({ data: { categories: [] } })),
-        fetchAllMerchantProducts(fetchOpts),
+        fetchAllMerchantProducts(fetchOpts, posLocationId),
         api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
         api.get('/merchant/staff', fetchOpts).catch(() => {
           staffFailed = true;
@@ -3011,7 +3025,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setLoading(false);
       catalogBootedRef.current = true;
     }
-  }, [applyCachedOfflineSnapshot, applyStaffRoster, refreshAgent, refreshCurrentShift, t]);
+  }, [applyCachedOfflineSnapshot, applyStaffRoster, posLocationId, refreshAgent, refreshCurrentShift, t]);
 
   const refreshBestsellers = useCallback(async () => {
     try {

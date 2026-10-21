@@ -1,5 +1,18 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import {
+  collectPendingProductIds,
+  hasNeverSynced,
+  resolveSyncProductIds,
+  type HqSyncLinkRef,
+  type HqSyncLocationRef,
+  type HqSyncProductRef,
+} from "@/lib/hq-catalog-sync";
+import {
+  DEFAULT_CATALOG_VISIBILITY,
+  isVisibleOnChannel,
+  normalizeCatalogVisibility,
+} from "@/lib/catalog-visibility";
 import { roundMoney2 } from "@/lib/money";
 import { v4 as uuidv4 } from "uuid";
 
@@ -231,9 +244,197 @@ export class HqCatalogService {
   static async pushToLocations(
     merchantId: string,
     input: {
-      versionId: string;
+      versionId?: string;
       locationIds: string[];
       overwritePrices?: boolean;
+      useCurrentCatalog?: boolean;
+      productIds?: string[];
+      categoryIds?: string[];
+      setOnSaleAfterSync?: boolean;
+      staffId?: string | null;
+    }
+  ) {
+    const locationIds = (input.locationIds || []).filter(Boolean);
+    if (!locationIds.length) throw new Error("Select at least one location");
+
+    let versionId = String(input.versionId || "").trim();
+    let versionRow: typeof schema.hqCatalogVersions.$inferSelect | null = null;
+
+    if (input.useCurrentCatalog || !versionId) {
+      const created = await this.createVersion(merchantId, {
+        name: `HQ sync ${new Date().toISOString().slice(0, 10)}`,
+        productIds: input.productIds,
+        staffId: input.staffId || null,
+      });
+      versionId = created.id;
+      versionRow = created;
+    } else {
+      const db = getDb();
+      versionRow = await db.query.hqCatalogVersions.findFirst({
+        where: and(
+          eq(schema.hqCatalogVersions.id, versionId),
+          eq(schema.hqCatalogVersions.merchantId, merchantId)
+        ),
+      });
+      if (!versionRow) throw new Error("HQ catalog version not found");
+    }
+
+    const syncResult = await this.syncProductsToLocations(merchantId, {
+      versionId,
+      locationIds,
+      productIds: input.productIds,
+      categoryIds: input.categoryIds,
+      overwritePrices: input.overwritePrices,
+      setOnSaleAfterSync: input.setOnSaleAfterSync,
+      useVersionProductList: !input.useCurrentCatalog && !input.productIds?.length && !input.categoryIds?.length,
+    });
+
+    return { ...syncResult, versionId, version: versionRow };
+  }
+
+  static async getSyncMenuState(merchantId: string) {
+    const db = getDb();
+    const [locations, categories, products, allLinks] = await Promise.all([
+      db.query.locations.findMany({
+        where: eq(schema.locations.merchantId, merchantId),
+        orderBy: [asc(schema.locations.name)],
+        columns: { id: true, name: true },
+      }),
+      db.query.categories.findMany({
+        where: eq(schema.categories.merchantId, merchantId),
+        orderBy: [asc(schema.categories.sortOrder)],
+        columns: { id: true, name: true, sortOrder: true },
+      }),
+      db.query.products.findMany({
+        where: and(eq(schema.products.merchantId, merchantId), eq(schema.products.isActive, true)),
+        orderBy: [asc(schema.products.sortOrder), asc(schema.products.name)],
+        columns: {
+          id: true,
+          name: true,
+          categoryId: true,
+          price: true,
+          updatedAt: true,
+          visibility: true,
+        },
+      }),
+      db.query.locationCatalogLinks.findMany({
+        where: eq(schema.locationCatalogLinks.merchantId, merchantId),
+      }),
+    ]);
+
+    const linkCountByLocation = new Map<string, number>();
+    const linksByLocation = new Map<string, HqSyncLinkRef[]>();
+    for (const link of allLinks) {
+      linkCountByLocation.set(link.locationId, (linkCountByLocation.get(link.locationId) || 0) + 1);
+      const row: HqSyncLinkRef = {
+        hqProductId: link.hqProductId,
+        localProductId: link.localProductId,
+        updatedAtMs: link.updatedAt?.getTime() || 0,
+      };
+      const list = linksByLocation.get(link.locationId) || [];
+      list.push(row);
+      linksByLocation.set(link.locationId, list);
+    }
+
+    const productRefs: HqSyncProductRef[] = products.map((p) => ({
+      id: p.id,
+      categoryId: p.categoryId,
+      updatedAtMs: p.updatedAt?.getTime() || 0,
+    }));
+
+    const locationRefs: HqSyncLocationRef[] = locations.map((l) => ({
+      id: l.id,
+      name: l.name,
+      linkCount: linkCountByLocation.get(l.id) || 0,
+    }));
+
+    const pendingProductIds = collectPendingProductIds(productRefs, linksByLocation, locationRefs);
+    const neverSynced = hasNeverSynced(locationRefs);
+    const hasPending =
+      locations.length > 1 && (neverSynced || pendingProductIds.length > 0);
+
+    const productsByCategory = new Map<string | null, typeof products>();
+    for (const p of products) {
+      const key = p.categoryId || null;
+      const list = productsByCategory.get(key) || [];
+      list.push(p);
+      productsByCategory.set(key, list);
+    }
+
+    const locationStats = locationRefs.map((loc) => {
+      const links = linksByLocation.get(loc.id) || [];
+      const linkedIds = new Set(
+        links.map((l) => l.localProductId || l.hqProductId).filter(Boolean) as string[]
+      );
+      const pendingAtLoc = productRefs.filter((p) => {
+        const link = links.find((l) => l.hqProductId === p.id);
+        return loc.linkCount > 0 && (!link || p.updatedAtMs > link.updatedAtMs);
+      }).length;
+      return {
+        locationId: loc.id,
+        name: loc.name,
+        linkedCount: linkedIds.size,
+        pendingCount: pendingAtLoc,
+        usesCatalogLinks: loc.linkCount > 0,
+      };
+    });
+
+    return {
+      multiLocation: locations.length > 1,
+      hasPending,
+      neverSynced,
+      pendingProductIds,
+      pendingCount: pendingProductIds.length,
+      categories: categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        products: (productsByCategory.get(c.id) || []).map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          categoryId: p.categoryId,
+          pending: pendingProductIds.includes(p.id),
+        })),
+      })),
+      uncategorizedProducts: (productsByCategory.get(null) || []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        categoryId: null,
+        pending: pendingProductIds.includes(p.id),
+      })),
+      locationStats,
+      totalActiveProducts: products.length,
+    };
+  }
+
+  static async syncMenuToLocations(
+    merchantId: string,
+    input: {
+      locationIds: string[];
+      productIds?: string[];
+      categoryIds?: string[];
+      overwritePrices?: boolean;
+      setOnSaleAfterSync?: boolean;
+      staffId?: string | null;
+    }
+  ) {
+    return this.pushToLocations(merchantId, {
+      ...input,
+      useCurrentCatalog: true,
+    });
+  }
+
+  private static async syncProductsToLocations(
+    merchantId: string,
+    input: {
+      versionId: string;
+      locationIds: string[];
+      productIds?: string[];
+      categoryIds?: string[];
+      overwritePrices?: boolean;
+      setOnSaleAfterSync?: boolean;
+      useVersionProductList?: boolean;
     }
   ) {
     const db = getDb();
@@ -248,28 +449,66 @@ export class HqCatalogService {
     const payload = version.payloadJson as {
       products?: Array<{
         id: string;
-        name: string;
-        description?: string | null;
         price: string | number;
-        categoryId?: string | null;
         visibility?: unknown;
-        isActive?: boolean;
       }>;
     };
-    const hqProducts = payload.products || [];
+
+    const allProducts = await db.query.products.findMany({
+      where: eq(schema.products.merchantId, merchantId),
+      columns: {
+        id: true,
+        price: true,
+        visibility: true,
+        isActive: true,
+        categoryId: true,
+        updatedAt: true,
+      },
+    });
+
+    const activeRefs: HqSyncProductRef[] = allProducts
+      .filter((p) => p.isActive !== false)
+      .map((p) => ({
+        id: p.id,
+        categoryId: p.categoryId,
+        updatedAtMs: p.updatedAt?.getTime() || 0,
+      }));
+
+    let targetIds: string[];
+    if (input.useVersionProductList) {
+      targetIds = (payload.products || []).map((p) => p.id).filter(Boolean);
+    } else {
+      targetIds = resolveSyncProductIds(
+        activeRefs,
+        input.productIds || [],
+        input.categoryIds || []
+      );
+    }
+    if (!targetIds.length) {
+      throw new Error("No products selected to sync");
+    }
+
+    const priceById = new Map<string, string>();
+    for (const hp of payload.products || []) {
+      priceById.set(hp.id, String(hp.price));
+    }
+    for (const p of allProducts) {
+      if (!priceById.has(p.id)) priceById.set(p.id, String(p.price));
+    }
+
+    const productById = new Map(allProducts.map((p) => [p.id, p]));
     let linked = 0;
+    const { HqMenuService } = await import("@/services/hq-menu.service");
 
     for (const locationId of input.locationIds) {
-      for (const hp of hqProducts) {
-        const local = await db.query.products.findFirst({
-          where: and(eq(schema.products.merchantId, merchantId), eq(schema.products.id, hp.id)),
-        });
-        if (!local) continue;
+      for (const productId of targetIds) {
+        const local = productById.get(productId);
+        if (!local || local.isActive === false) continue;
 
         const existingLink = await db.query.locationCatalogLinks.findFirst({
           where: and(
             eq(schema.locationCatalogLinks.locationId, locationId),
-            eq(schema.locationCatalogLinks.hqProductId, hp.id)
+            eq(schema.locationCatalogLinks.hqProductId, productId)
           ),
         });
 
@@ -287,7 +526,7 @@ export class HqCatalogService {
           await db.insert(schema.locationCatalogLinks).values({
             merchantId,
             locationId,
-            hqProductId: hp.id,
+            hqProductId: productId,
             localProductId: local.id,
             syncStatus: "synced",
             fromHqVersionId: version.id,
@@ -295,13 +534,13 @@ export class HqCatalogService {
         }
 
         if (input.overwritePrices) {
+          const price = priceById.get(productId) || String(local.price);
           const override = await db.query.locationProductOverrides.findFirst({
             where: and(
               eq(schema.locationProductOverrides.locationId, locationId),
               eq(schema.locationProductOverrides.productId, local.id)
             ),
           });
-          const price = String(hp.price);
           if (override) {
             await db
               .update(schema.locationProductOverrides)
@@ -316,11 +555,54 @@ export class HqCatalogService {
             });
           }
         }
+
+        if (input.setOnSaleAfterSync) {
+          const vis = normalizeCatalogVisibility(local.visibility);
+          const channels = new Set(vis.channels);
+          channels.add("pos");
+          const override = await db.query.locationProductOverrides.findFirst({
+            where: and(
+              eq(schema.locationProductOverrides.locationId, locationId),
+              eq(schema.locationProductOverrides.productId, local.id)
+            ),
+          });
+          const patch = {
+            isAvailable: true,
+            visibility: { channels: [...channels] },
+            updatedAt: new Date(),
+          };
+          if (override) {
+            await db
+              .update(schema.locationProductOverrides)
+              .set(patch)
+              .where(eq(schema.locationProductOverrides.id, override.id));
+          } else if (!isVisibleOnChannel(local.visibility, "pos")) {
+            await db.insert(schema.locationProductOverrides).values({
+              merchantId,
+              locationId,
+              productId: local.id,
+              visibility: patch.visibility,
+              isAvailable: true,
+            });
+          } else {
+            await db.insert(schema.locationProductOverrides).values({
+              merchantId,
+              locationId,
+              productId: local.id,
+              isAvailable: true,
+            });
+          }
+        }
+
         linked += 1;
+      }
+
+      if (targetIds.length > 0) {
+        await HqMenuService.ensureLocationPushMenu(merchantId, locationId, version.id);
       }
     }
 
-    return { linked, locationCount: input.locationIds.length };
+    return { linked, locationCount: input.locationIds.length, productCount: targetIds.length };
   }
 
   static async listLocationLinks(merchantId: string, locationId: string) {
