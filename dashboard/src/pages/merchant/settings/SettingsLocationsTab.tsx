@@ -1,29 +1,13 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { MapPin, Plus, Trash2, Layers } from 'lucide-react';
-import type { PosStation } from '@/lib/pos-station';
+import { Layers, MapPin, Plus, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { canAddLocation, isAtLocationLimit } from '@/lib/location-limits';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
-import { SettingsField, SettingsReportCard } from '@/components/settings/SettingsReportUi';
-
-type LocationForm = {
-  name: string;
-  businessCategory: 'retail' | 'restaurant';
-  address: string;
-  city: string;
-  country: string;
-  isDefault: boolean;
-};
-
-const emptyForm = (): LocationForm => ({
-  name: '',
-  businessCategory: 'restaurant',
-  address: '',
-  city: '',
-  country: '',
-  isDefault: false,
-});
+import { SettingsReportCard } from '@/components/settings/SettingsReportUi';
+import LocationWizardModal from '@/components/merchant/LocationWizardModal';
+import LocationRegistersModal from '@/components/merchant/LocationRegistersModal';
 
 export default function SettingsLocationsTab() {
   const { t } = useI18n();
@@ -31,14 +15,15 @@ export default function SettingsLocationsTab() {
   const [locations, setLocations] = useState<MerchantLocation[]>([]);
   const [limits, setLimits] = useState<{ maxLocations: number; currentCount: number } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<LocationForm>(emptyForm());
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [merchantSlug, setMerchantSlug] = useState('');
-  const [stations, setStations] = useState<PosStation[]>([]);
-  const [stationsLoading, setStationsLoading] = useState(false);
-  const [stationName, setStationName] = useState('');
-  const [stationSaving, setStationSaving] = useState(false);
+  const [stationCounts, setStationCounts] = useState<Record<string, number>>({});
+
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardMode, setWizardMode] = useState<'create' | 'edit'>('create');
+  const [wizardLocation, setWizardLocation] = useState<MerchantLocation | null>(null);
+
+  const [registersOpen, setRegistersOpen] = useState(false);
+  const [registersLocation, setRegistersLocation] = useState<MerchantLocation | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,11 +32,26 @@ export default function SettingsLocationsTab() {
         api.get('/merchant/locations'),
         api.get('/merchant/settings'),
       ]);
-      setLocations(res.data?.locations || []);
+      const rows: MerchantLocation[] = res.data?.locations || [];
+      setLocations(rows);
       setLimits(res.data?.limits || null);
       setMerchantSlug(settingsRes.data?.merchant?.slug || settingsRes.data?.settings?.slug || '');
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        rows.map(async (loc) => {
+          try {
+            const st = await api.get(`/merchant/locations/${loc.id}/stations`);
+            counts[loc.id] = (st.data?.stations || []).length;
+          } catch {
+            counts[loc.id] = 0;
+          }
+        })
+      );
+      setStationCounts(counts);
     } catch (e: unknown) {
-      toast.error((e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load locations');
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load locations'
+      );
     } finally {
       setLoading(false);
     }
@@ -61,115 +61,32 @@ export default function SettingsLocationsTab() {
     void load();
   }, [load]);
 
-  const loadStations = useCallback(async (locationId: string) => {
-    setStationsLoading(true);
-    try {
-      const res = await api.get(`/merchant/locations/${locationId}/stations`);
-      setStations(res.data?.stations || []);
-    } catch {
-      setStations([]);
-    } finally {
-      setStationsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!editingId) {
-      setStations([]);
-      setStationName('');
-      return;
-    }
-    void loadStations(editingId);
-  }, [editingId, loadStations]);
-
-  const startEdit = (loc: MerchantLocation) => {
-    setEditingId(loc.id);
-    setForm({
-      name: loc.name,
-      businessCategory: (loc.businessCategory as 'retail' | 'restaurant') || 'restaurant',
-      address: loc.address || '',
-      city: loc.city || '',
-      country: loc.country || '',
-      isDefault: !!loc.isDefault,
-    });
+  const openCreate = () => {
+    setWizardMode('create');
+    setWizardLocation(null);
+    setWizardOpen(true);
   };
 
-  const resetForm = () => {
-    setEditingId(null);
-    setForm(emptyForm());
+  const openEdit = (loc: MerchantLocation) => {
+    setWizardMode('edit');
+    setWizardLocation(loc);
+    setWizardOpen(true);
   };
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error(t('locationNameRequired'));
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editingId) {
-        await api.put(`/merchant/locations/${editingId}`, form);
-        toast.success(t('saved'));
-      } else {
-        await api.post('/merchant/locations', form);
-        toast.success(t('locationCreated'));
-      }
-      resetForm();
-      await load();
-      await refresh();
-    } catch (err: unknown) {
-      toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Save failed');
-    } finally {
-      setSaving(false);
-    }
+  const openRegisters = (loc: MerchantLocation) => {
+    setRegistersLocation(loc);
+    setRegistersOpen(true);
   };
 
-  const onAddStation = async () => {
-    if (!editingId || !stationName.trim()) {
-      toast.error(t('posStationName'));
-      return;
-    }
-    setStationSaving(true);
-    try {
-      await api.post(`/merchant/locations/${editingId}/stations`, {
-        name: stationName.trim(),
-        sortOrder: (stations.length + 1) * 10,
-        isDefault: stations.length === 0,
-      });
-      setStationName('');
-      await loadStations(editingId);
-      toast.success(t('saved'));
-    } catch (err: unknown) {
-      toast.error(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Save failed'
-      );
-    } finally {
-      setStationSaving(false);
-    }
+  const onWizardSaved = async () => {
+    await load();
+    await refresh();
   };
 
-  const onDeleteStation = async (stationId: string) => {
-    if (!editingId) return;
-    if (!window.confirm(t('confirm'))) return;
-    try {
-      await api.delete(`/merchant/locations/${editingId}/stations/${stationId}`);
-      await loadStations(editingId);
-      toast.success(t('saved'));
-    } catch (err: unknown) {
-      toast.error(
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Delete failed'
-      );
-    }
-  };
-
-  const onSetDefaultStation = async (stationId: string) => {
-    if (!editingId) return;
-    try {
-      await api.put(`/merchant/locations/${editingId}/stations/${stationId}`, { isDefault: true });
-      await loadStations(editingId);
-    } catch {
-      /* ignore */
-    }
+  const onRegistersClose = () => {
+    setRegistersOpen(false);
+    setRegistersLocation(null);
+    void load();
   };
 
   const onDelete = async (id: string) => {
@@ -180,9 +97,14 @@ export default function SettingsLocationsTab() {
       await load();
       await refresh();
     } catch (err: unknown) {
-      toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Delete failed');
+      toast.error(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Delete failed'
+      );
     }
   };
+
+  const allowAdd = canAddLocation(limits);
+  const atLimit = isAtLocationLimit(limits);
 
   return (
     <div className="space-y-6">
@@ -191,20 +113,36 @@ export default function SettingsLocationsTab() {
         description={t('locationsDescription')}
         icon={MapPin}
       >
-        {limits ? (
-          <p className="text-sm text-[var(--text-muted)] mb-4">
-            {t('locationsUsage', { current: limits.currentCount, max: limits.maxLocations })}
-          </p>
-        ) : null}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          {limits ? (
+            <p
+              className={`text-sm ${atLimit ? 'text-amber-800 dark:text-amber-200 font-medium' : 'text-[var(--text-muted)]'}`}
+            >
+              {limits.maxLocations > 0
+                ? t('locationsUsage', { current: limits.currentCount, max: limits.maxLocations })
+                : t('locationsUsageUnlimited', { current: limits.currentCount })}
+            </p>
+          ) : null}
+          {allowAdd ? (
+            <button type="button" className="btn-primary text-sm shrink-0 inline-flex items-center gap-1" onClick={openCreate}>
+              <Plus className="w-4 h-4" />
+              {t('addLocation')}
+            </button>
+          ) : null}
+        </div>
 
         {loading ? (
           <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
+        ) : locations.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)] rounded-lg border border-dashed border-[var(--border)] px-3 py-6 text-center">
+            {t('locationPickerEmpty')}
+          </p>
         ) : (
-          <div className="space-y-3 mb-6">
+          <div className="space-y-3">
             {locations.map((loc) => (
               <div
                 key={loc.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-2"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-3"
               >
                 <div className="min-w-0">
                   <div className="font-medium truncate">
@@ -220,6 +158,11 @@ export default function SettingsLocationsTab() {
                         ? t('restaurant')
                         : loc.businessCategory}
                     {loc.city ? ` · ${loc.city}` : ''}
+                    {stationCounts[loc.id] != null ? (
+                      <span className="ml-1">
+                        · {t('locationRegisterCount', { count: stationCounts[loc.id] })}
+                      </span>
+                    ) : null}
                   </div>
                   {loc.slug && merchantSlug ? (
                     <a
@@ -233,8 +176,16 @@ export default function SettingsLocationsTab() {
                     </a>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button type="button" className="btn-secondary text-xs" onClick={() => startEdit(loc)}>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs inline-flex items-center gap-1"
+                    onClick={() => openRegisters(loc)}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    {t('locationManageRegisters')}
+                  </button>
+                  <button type="button" className="btn-secondary text-xs" onClick={() => openEdit(loc)}>
                     {t('edit')}
                   </button>
                   {!loc.isDefault ? (
@@ -251,138 +202,24 @@ export default function SettingsLocationsTab() {
             ))}
           </div>
         )}
-
-        <form onSubmit={onSubmit} className="space-y-4 border-t border-[var(--border)] pt-4">
-          <h3 className="font-medium flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            {editingId ? t('editLocation') : t('addLocation')}
-          </h3>
-          <SettingsField label={t('locationName')}>
-            <input
-              className="input w-full"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </SettingsField>
-          <SettingsField label={t('businessType')}>
-            <select
-              className="input w-full"
-              value={form.businessCategory}
-              onChange={(e) =>
-                setForm({ ...form, businessCategory: e.target.value as 'retail' | 'restaurant' })
-              }
-            >
-              <option value="restaurant">{t('restaurant')}</option>
-              <option value="retail">{t('retail')}</option>
-            </select>
-          </SettingsField>
-          <SettingsField label={t('address')}>
-            <input
-              className="input w-full"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-          </SettingsField>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <SettingsField label={t('city')}>
-              <input
-                className="input w-full"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-              />
-            </SettingsField>
-            <SettingsField label={t('country')}>
-              <input
-                className="input w-full"
-                value={form.country}
-                onChange={(e) => setForm({ ...form, country: e.target.value })}
-              />
-            </SettingsField>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.isDefault}
-              onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-            />
-            {t('locationSetDefault')}
-          </label>
-          <div className="flex gap-2">
-            <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? t('saving') : editingId ? t('save') : t('addLocation')}
-            </button>
-            {editingId ? (
-              <button type="button" className="btn-secondary" onClick={resetForm}>
-                {t('cancel')}
-              </button>
-            ) : null}
-          </div>
-        </form>
-
-        {editingId ? (
-          <div className="mt-6 border-t border-[var(--border)] pt-4 space-y-3">
-            <h3 className="font-medium flex items-center gap-2">
-              <Layers className="w-4 h-4" />
-              {t('posStationsTitle')}
-            </h3>
-            <p className="text-sm text-[var(--text-muted)]">{t('posStationsHint')}</p>
-            {stationsLoading ? (
-              <p className="text-sm text-[var(--text-muted)]">{t('loading')}</p>
-            ) : (
-              <div className="space-y-2">
-                {stations.map((st) => (
-                  <div
-                    key={st.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2"
-                  >
-                    <div>
-                      <span className="font-medium">{st.name}</span>
-                      {st.isDefault ? (
-                        <span className="ml-2 text-xs text-[var(--text-muted)]">({t('default')})</span>
-                      ) : null}
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      {!st.isDefault ? (
-                        <button
-                          type="button"
-                          className="btn-secondary text-xs"
-                          onClick={() => void onSetDefaultStation(st.id)}
-                        >
-                          {t('default')}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs text-red-600"
-                        onClick={() => void onDeleteStation(st.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                className="input flex-1"
-                placeholder={t('posStationNamePlaceholder')}
-                value={stationName}
-                onChange={(e) => setStationName(e.target.value)}
-              />
-              <button
-                type="button"
-                className="btn-secondary shrink-0"
-                disabled={stationSaving}
-                onClick={() => void onAddStation()}
-              >
-                {t('posStationAdd')}
-              </button>
-            </div>
-          </div>
-        ) : null}
       </SettingsReportCard>
+
+      <LocationWizardModal
+        open={wizardOpen}
+        mode={wizardMode}
+        initial={wizardLocation}
+        onClose={() => setWizardOpen(false)}
+        onSaved={() => {
+          void onWizardSaved();
+        }}
+      />
+
+      <LocationRegistersModal
+        open={registersOpen}
+        locationId={registersLocation?.id ?? null}
+        locationName={registersLocation?.name ?? ''}
+        onClose={onRegistersClose}
+      />
     </div>
   );
 }
