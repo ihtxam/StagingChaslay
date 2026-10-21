@@ -62,14 +62,19 @@ export function buildWebPosLaunchPath(locationId: string, base = '/merchant/pos'
 }
 
 /**
- * On POS entry: honor `?loc_id=`, else seed terminal scope from the panel branch (not HQ).
+ * On POS entry: honor `?loc_id=`, else panel branch (location switcher), else prior terminal session.
+ * Panel branch wins over stale `webpos_terminal_location_id` so switching Kiosk/Bar before opening POS works.
  */
 export function bootstrapWebPosLocationFromPanel(panelBranchId: string | null | undefined): string | null {
-  syncWebPosTerminalLocationFromUrl();
-  const fromTerminal = getWebPosTerminalLocationId();
-  if (fromTerminal) return fromTerminal;
+  const fromUrl = readTerminalLocationIdFromUrl();
+  if (fromUrl) {
+    setWebPosTerminalLocationId(fromUrl);
+    return fromUrl;
+  }
   const branch = String(panelBranchId || '').trim();
-  if (!branch) return null;
-  setWebPosTerminalLocationId(branch);
-  return branch;
+  if (branch) {
+    setWebPosTerminalLocationId(branch);
+    return branch;
+  }
+  return getWebPosTerminalLocationId();
 }

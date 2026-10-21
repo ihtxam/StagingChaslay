@@ -110,7 +110,10 @@ export class CatalogLocationService {
       const allowed = new Set(
         links.map((l) => l.localProductId).filter((id): id is string => !!id)
       );
-      productPool = products.filter((p) => allowed.has(p.id));
+      // HQ link rows without a resolved local product must not blank the terminal menu.
+      if (allowed.size > 0) {
+        productPool = products.filter((p) => allowed.has(p.id));
+      }
     }
 
     const withOverrides = await this.applyLocationOverrides(merchantId, locId, productPool);

@@ -72,6 +72,8 @@ async function resolveMenuProductIds(
     }
   }
 
+  if (explicit.length) return ids;
+
   if (ids.size) return ids;
 
   if (menu.hqVersionId) {
@@ -86,7 +88,7 @@ async function resolveMenuProductIds(
     if (versionIds.length) return new Set(versionIds);
   }
 
-  if (explicit.length || categoryIds.length) return ids;
+  if (categoryIds.length) return null;
 
   return null;
 }
