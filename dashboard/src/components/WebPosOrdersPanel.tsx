@@ -62,10 +62,14 @@ import { collectPaymentAction, findPaidOrderForCartLink } from '@/lib/order-to-c
 import {
   parseHeldCartJson,
   clearLocalHeldDraftForRow,
+  filterActiveHeldRows,
+  heldRowTicketKey,
+  rememberCancelledKitchenTicket,
   resolveHeldChannel,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
 import {
+  dismissKdsTicket,
   fetchKdsBoardStatus,
   buildKdsReadyMap,
   fetchKdsTicketStatus,
@@ -704,7 +708,7 @@ export default function WebPosOrdersPanel({
       }
       nextOrders = [...map.values()];
     }
-    // Actives = server-held tickets only (not this tablet's sessionStorage cart drafts).
+    nextHeld = filterActiveHeldRows(nextHeld, nextOrders);
     console.info('[WebPOS][orders] loaded', {
       held: nextHeld.length,
       posOrders: nextOrders.length,
@@ -1035,7 +1039,15 @@ export default function WebPosOrdersPanel({
         });
         clearLocalHeldDraftForRow(heldRow);
       }
-      setHeld((prev) => prev.filter((h) => h.id !== heldRow.id));
+      const ticketKey = heldRowTicketKey(heldRow);
+      rememberCancelledKitchenTicket(ticketKey);
+      if (ticketKey) void dismissKdsTicket(ticketKey);
+      setHeld((prev) =>
+        filterActiveHeldRows(
+          prev.filter((h) => h.id !== heldRow.id),
+          orders
+        )
+      );
       toast.success(t('webPosOrderCancelled'));
       setCancelHeldFor(null);
       if (selectedHeld?.id === heldRow.id) setSelectedHeld(null);

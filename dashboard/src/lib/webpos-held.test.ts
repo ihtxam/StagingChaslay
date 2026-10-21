@@ -3,6 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { filterActiveHeldRows } from './webpos-held.ts';
 import { ticketQueryMatches } from './webpos-ticket-search.ts';
 
 test('partial numeric query matches kitchen ticket numbers', () => {
@@ -22,4 +23,22 @@ test('non-matching numeric fragments do not match unrelated tickets', () => {
 
 test('text query matches labels', () => {
   assert.equal(ticketQueryMatches('poco', 'Poco Loco · #3929'), true);
+});
+
+test('filterActiveHeldRows removes ticket with cancelled CXL on server', () => {
+  const rows = [
+    {
+      id: 'h1',
+      label: '#7477 · takeaway · CHF 4.90',
+      cartJson: { ticketDisplay: '#7477', cart: [{ name: 'x', quantity: 1, lineTotal: 4.9 }] },
+    },
+  ];
+  const orders = [
+    {
+      status: 'cancelled',
+      paymentStatus: 'cancelled',
+      notes: '[ticket:#7477] Wrong order',
+    },
+  ];
+  assert.equal(filterActiveHeldRows(rows, orders).length, 0);
 });
