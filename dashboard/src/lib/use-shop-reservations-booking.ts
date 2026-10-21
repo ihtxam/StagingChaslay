@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { hmZurich, ymdZurich } from '@/components/shop/InlineReservationsWidget';
 import { formatShopVacationMessage } from '@/lib/shop-ordering-status';
+import {
+  evaluatePartyBookingGate,
+  resolveLargePartyCallThreshold,
+} from '@/lib/reservation-party-threshold';
 
 export type ReservationSlot = {
   time: string;
@@ -45,8 +49,8 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
         const res = await axios.get(`/api/shop/${shopKey}/reservations/config`);
         if (cancelled) return;
         setConfig(res.data.config);
-        const min = Number(res.data.config?.settings?.minPartySize) || 2;
-        setPartySize(min);
+        const min = Number(res.data.config?.settings?.minPartySize) || 1;
+        setPartySize(Math.max(2, min));
       } catch (e: any) {
         if (!cancelled) setError(e.response?.data?.error || t('shopReservationsUnavailable'));
       } finally {
@@ -103,6 +107,18 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
 
   const minParty = Number(config?.settings?.minPartySize) || 1;
   const maxParty = Number(config?.settings?.maxPartySize) || 12;
+  const largePartyCallThreshold = resolveLargePartyCallThreshold(
+    config?.settings?.largePartyCallThreshold,
+  );
+  const reservationPhone = String(config?.phone || '').trim();
+  const slotIntervalMinutes = Number(config?.settings?.slotIntervalMinutes) || 30;
+  const minHoursBefore = Number(config?.settings?.minHoursBefore) || 0;
+  const waitlistEnabled = config?.settings?.waitlistEnabled !== false;
+
+  const partyGate = useMemo(
+    () => evaluatePartyBookingGate(partySize, minParty, maxParty, largePartyCallThreshold),
+    [partySize, minParty, maxParty, largePartyCallThreshold],
+  );
 
   const dateOptions = useMemo(() => {
     const days = Math.min(Math.max(Number(config?.settings?.maxDaysAhead) || 30, 1), 90);
@@ -111,6 +127,7 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
       value: string;
       weekday: string;
       dayNum: string;
+      month: string;
       isToday: boolean;
     }> = [];
     for (let i = 0; i < Math.min(days, 14); i += 1) {
@@ -121,6 +138,7 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
         value,
         weekday: labelDate.toLocaleDateString('fr-CH', { weekday: 'short' }).replace('.', '').toUpperCase(),
         dayNum: String(dt.getUTCDate()),
+        month: labelDate.toLocaleDateString('fr-CH', { month: 'short' }).replace('.', '').toUpperCase(),
         isToday: i === 0,
       });
     }
@@ -155,6 +173,16 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
           returnTime: config.vacation.returnTime,
         })
       );
+      return null;
+    }
+    if (partyGate.blocked) {
+      if (partyGate.reason === 'call_threshold') {
+        setError(t('shopReservationsLargePartyCall', { count: largePartyCallThreshold ?? partySize, phone: reservationPhone || '—' }));
+      } else if (partyGate.reason === 'above_max') {
+        setError(t('shopReservationsLargePartyMax', { max: maxParty, phone: reservationPhone || '—' }));
+      } else {
+        setError(t('shopReservationsParty'));
+      }
       return null;
     }
     if (!time) {
@@ -196,6 +224,7 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
 
   const canSubmit =
     !!time &&
+    !partyGate.blocked &&
     config?.acceptingReservations !== false &&
     !config?.vacation?.active &&
     (!config?.settings?.depositEnabled || policyAccepted);
@@ -209,6 +238,12 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
     setPartySize,
     minParty,
     maxParty,
+    largePartyCallThreshold,
+    reservationPhone,
+    partyGate,
+    slotIntervalMinutes,
+    minHoursBefore,
+    waitlistEnabled,
     date,
     setDate,
     maxDate,

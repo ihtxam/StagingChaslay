@@ -2190,6 +2190,8 @@ export type ReservationSettings = {
   bufferMinutes?: number;
   minPartySize?: number;
   maxPartySize?: number;
+  /** Party size at or above this value: web bookings show call-us message (0/null = off) */
+  largePartyCallThreshold?: number | null;
   /** Guest must book at least this many hours before the slot */
   minHoursBefore?: number;
   /** How far ahead guests can book (days) */

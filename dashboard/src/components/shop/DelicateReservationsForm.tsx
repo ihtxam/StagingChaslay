@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { ymdZurich } from '@/components/shop/InlineReservationsWidget';
 import { useI18n } from '@/lib/i18n';
+import type { ReservationSlot } from '@/lib/use-shop-reservations-booking';
 import { useShopReservationsBooking } from '@/lib/use-shop-reservations-booking';
 import '@/styles/delicate-reservations.css';
 
@@ -24,6 +25,20 @@ function monthDays(year: number, month: number) {
   return { first, days };
 }
 
+const PARTY_CHIP_MAX = 4;
+const INITIAL_TIME_SLOTS = 9;
+
+function CalendarIcon() {
+  return (
+    <svg className="rb-date-other-icon" viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path
+        fill="currentColor"
+        d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1Zm13 8H4v10h16V10ZM6 6h12v2H6V6Z"
+      />
+    </svg>
+  );
+}
+
 export default function DelicateReservationsForm({
   shopKey,
   theme = 'light',
@@ -38,17 +53,26 @@ export default function DelicateReservationsForm({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarViewYm, setCalendarViewYm] = useState(() => booking.date);
   const [largePartyOpen, setLargePartyOpen] = useState(false);
+  const [timeExpanded, setTimeExpanded] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-
-  const PARTY_CHIP_MAX = 5;
 
   useEffect(() => {
     if (calendarOpen) setCalendarViewYm(booking.date);
   }, [calendarOpen, booking.date]);
 
+  useEffect(() => {
+    setTimeExpanded(false);
+  }, [booking.date, booking.partySize]);
+
   const rootStyle = accent ? ({ ['--rb-accent' as string]: accent } as CSSProperties) : undefined;
   const heading = title || t('shopReservations');
+
+  const carouselValues = useMemo(
+    () => new Set(booking.dateOptions.map((d) => d.value)),
+    [booking.dateOptions],
+  );
+  const isOtherDate = calendarOpen || !carouselValues.has(booking.date);
 
   const calendarMonth = useMemo(() => {
     const [y, m] = calendarViewYm.split('-').map(Number);
@@ -70,7 +94,7 @@ export default function DelicateReservationsForm({
   const openLargeParty = () => {
     setLargePartyOpen(true);
     if (booking.partySize <= PARTY_CHIP_MAX) {
-      booking.setPartySize(Math.min(booking.maxParty, Math.max(6, booking.minParty)));
+      booking.setPartySize(Math.min(booking.maxParty, Math.max(5, booking.minParty)));
     }
   };
 
@@ -93,12 +117,54 @@ export default function DelicateReservationsForm({
     );
   }, [locale]);
 
+  const visibleSlots = timeExpanded ? booking.slots : booking.slots.slice(0, INITIAL_TIME_SLOTS);
+  const hasMoreTimes = booking.slots.length > INITIAL_TIME_SLOTS;
+
+  const largePartyMessage = useMemo(() => {
+    if (!booking.partyGate.blocked) return null;
+    if (booking.partyGate.reason === 'call_threshold' && booking.largePartyCallThreshold) {
+      return t('shopReservationsLargePartyCall', {
+        count: booking.largePartyCallThreshold,
+        phone: booking.reservationPhone || '—',
+      });
+    }
+    if (booking.partyGate.reason === 'above_max') {
+      return t('shopReservationsLargePartyMax', {
+        max: booking.maxParty,
+        phone: booking.reservationPhone || '—',
+      });
+    }
+    return null;
+  }, [booking, t]);
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const guestName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
     booking.setGuestName(guestName);
     const result = await booking.submit({ guestName });
     if (result) onSuccess?.({ code: result.code, status: result.status });
+  };
+
+  const renderSlotButton = (s: ReservationSlot) => {
+    const waitlist = !s.available && !!s.waitlistAvailable;
+    const canPick = s.available || waitlist;
+    const discount =
+      s.discountPercent && s.discountPercent > 0
+        ? s.discountLabel || `-${s.discountPercent}%`
+        : null;
+    return (
+      <button
+        key={s.time}
+        type="button"
+        className={['rb-time-btn', waitlist ? 'rb-time-btn--waitlist' : ''].filter(Boolean).join(' ')}
+        aria-pressed={booking.time === s.time}
+        disabled={!canPick}
+        onClick={() => booking.setTime(s.time)}
+      >
+        <span className="rb-time-btn-main">{s.time}</span>
+        {discount ? <span className="rb-time-discount">{discount}</span> : null}
+      </button>
+    );
   };
 
   if (booking.loading) {
@@ -140,33 +206,6 @@ export default function DelicateReservationsForm({
     );
   }
 
-  const renderTimeGroup = (label: string, list: typeof booking.slots) => {
-    if (!list.length) return null;
-    return (
-      <div>
-        <div className="rb-time-group-title">{label}</div>
-        <div className="rb-time-grid">
-          {list.map((s) => {
-            const waitlist = !s.available && !!s.waitlistAvailable;
-            const canPick = s.available || waitlist;
-            return (
-              <button
-                key={s.time}
-                type="button"
-                className="rb-time-btn"
-                aria-pressed={booking.time === s.time}
-                disabled={!canPick}
-                onClick={() => booking.setTime(s.time)}
-              >
-                {s.time}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className={`rb-root rb-theme-${theme}`} style={rootStyle}>
       <form className="rb-shell" onSubmit={onSubmit}>
@@ -185,6 +224,57 @@ export default function DelicateReservationsForm({
         {booking.error ? <div className="rb-error">{booking.error}</div> : null}
 
         <div className="rb-section">
+          <span className="rb-label">{t('shopReservationsParty')}</span>
+          <div className="rb-party-chips" role="group" aria-label={t('shopReservationsParty')}>
+            {Array.from({ length: PARTY_CHIP_MAX }, (_, i) => i + 1).map((n) => {
+              const disabled = n < booking.minParty || n > booking.maxParty;
+              const pressed = !showLargePartyStepper && booking.partySize === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  className="rb-party-chip"
+                  aria-pressed={pressed}
+                  disabled={disabled}
+                  onClick={() => pickPartyChip(n)}
+                >
+                  {n}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className="rb-party-chip"
+              aria-pressed={showLargePartyStepper}
+              disabled={booking.maxParty <= PARTY_CHIP_MAX}
+              onClick={openLargeParty}
+            >
+              {booking.partySize > PARTY_CHIP_MAX && showLargePartyStepper ? booking.partySize : '5+'}
+            </button>
+          </div>
+          {showLargePartyStepper ? (
+            <div className="rb-stepper rb-stepper--compact">
+              <button
+                type="button"
+                aria-label="-"
+                onClick={() => booking.setPartySize(Math.max(booking.minParty, booking.partySize - 1))}
+              >
+                −
+              </button>
+              <span>{booking.partySize}</span>
+              <button
+                type="button"
+                aria-label="+"
+                onClick={() => booking.setPartySize(Math.min(booking.maxParty, booking.partySize + 1))}
+              >
+                +
+              </button>
+            </div>
+          ) : null}
+          {largePartyMessage ? <p className="rb-callout">{largePartyMessage}</p> : null}
+        </div>
+
+        <div className="rb-section">
           <span className="rb-label">{t('shopReservationsDate')}</span>
           <div className="rb-dates" role="group" aria-label={t('shopReservationsDate')}>
             {booking.dateOptions.map((d) => (
@@ -192,7 +282,7 @@ export default function DelicateReservationsForm({
                 key={d.value}
                 type="button"
                 className="rb-date-chip"
-                aria-pressed={booking.date === d.value}
+                aria-pressed={!isOtherDate && booking.date === d.value}
                 onClick={() => {
                   booking.setDate(d.value);
                   setCalendarOpen(false);
@@ -200,125 +290,115 @@ export default function DelicateReservationsForm({
               >
                 <span>{d.isToday ? t('shopReservationsToday') : d.weekday}</span>
                 <strong>{d.dayNum}</strong>
+                <em className="rb-date-month">{d.month}</em>
               </button>
             ))}
             <button
               type="button"
-              className="rb-date-chip rb-date-chip--plus"
-              aria-pressed={calendarOpen}
+              className="rb-date-chip rb-date-chip--other"
+              aria-pressed={isOtherDate}
               aria-expanded={calendarOpen}
-              aria-label={t('shopReservationsDate')}
+              aria-label={t('shopReservationsOtherDate')}
               onClick={() => setCalendarOpen((open) => !open)}
             >
-              <strong>+</strong>
+              <CalendarIcon />
+              <span className="rb-date-other-label">{t('shopReservationsOtherShort')}…</span>
             </button>
           </div>
           {calendarOpen ? (
-            <div className="rb-calendar-panel" role="region" aria-label={t('shopReservationsDate')}>
-              <div className="rb-calendar-nav">
-                <button type="button" className="rb-calendar-nav-btn" onClick={() => shiftCalendarMonth(-1)}>
-                  ‹
-                </button>
-                <span className="rb-calendar-month">{calendarMonthLabel}</span>
-                <button type="button" className="rb-calendar-nav-btn" onClick={() => shiftCalendarMonth(1)}>
-                  ›
-                </button>
+            <>
+              <label className="rb-date-native-wrap">
+                <span className="rb-label rb-label--inline">{t('shopReservationsOtherDate')}</span>
+                <input
+                  type="date"
+                  className="rb-input rb-input--date"
+                  value={booking.date}
+                  min={ymdZurich()}
+                  max={booking.maxDate}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) booking.setDate(v);
+                  }}
+                />
+              </label>
+              <div className="rb-calendar-panel" role="region" aria-label={t('shopReservationsDate')}>
+                <div className="rb-calendar-nav">
+                  <button type="button" className="rb-calendar-nav-btn" onClick={() => shiftCalendarMonth(-1)}>
+                    ‹
+                  </button>
+                  <span className="rb-calendar-month">{calendarMonthLabel}</span>
+                  <button type="button" className="rb-calendar-nav-btn" onClick={() => shiftCalendarMonth(1)}>
+                    ›
+                  </button>
+                </div>
+                <div className="rb-calendar-weekdays" aria-hidden>
+                  {calendarWeekdays.map((d, i) => (
+                    <span key={`${d}-${i}`}>{d}</span>
+                  ))}
+                </div>
+                <div className="rb-calendar-grid">
+                  {Array.from({ length: (calendarMonth.first.getUTCDay() + 6) % 7 }).map((_, i) => (
+                    <span key={`pad-${i}`} className="rb-calendar-pad" />
+                  ))}
+                  {calendarMonth.days.map((dt) => {
+                    const value = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+                    const disabled = value < ymdZurich() || value > booking.maxDate;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        className="rb-calendar-day"
+                        aria-pressed={booking.date === value}
+                        disabled={disabled}
+                        onClick={() => {
+                          booking.setDate(value);
+                          setCalendarOpen(false);
+                        }}
+                      >
+                        {dt.getUTCDate()}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="rb-calendar-weekdays" aria-hidden>
-                {calendarWeekdays.map((d, i) => (
-                  <span key={`${d}-${i}`}>{d}</span>
-                ))}
-              </div>
-              <div className="rb-calendar-grid">
-                {Array.from({ length: (calendarMonth.first.getUTCDay() + 6) % 7 }).map((_, i) => (
-                  <span key={`pad-${i}`} className="rb-calendar-pad" />
-                ))}
-                {calendarMonth.days.map((dt) => {
-                  const value = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
-                  const disabled = value < ymdZurich() || value > booking.maxDate;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      className="rb-calendar-day"
-                      aria-pressed={booking.date === value}
-                      disabled={disabled}
-                      onClick={() => {
-                        booking.setDate(value);
-                        setCalendarOpen(false);
-                      }}
-                    >
-                      {dt.getUTCDate()}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            </>
           ) : null}
         </div>
 
-        <div className="rb-row-2 rb-section rb-row-party-time">
-          <div>
-            <span className="rb-label">{t('shopReservationsParty')}</span>
-            <div className="rb-party-chips" role="group" aria-label={t('shopReservationsParty')}>
-              {Array.from({ length: PARTY_CHIP_MAX }, (_, i) => i + 1).map((n) => {
-                const disabled = n < booking.minParty || n > booking.maxParty;
-                const pressed = !showLargePartyStepper && booking.partySize === n;
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    className="rb-party-chip"
-                    aria-pressed={pressed}
-                    disabled={disabled}
-                    onClick={() => pickPartyChip(n)}
-                  >
-                    {n}
-                  </button>
-                );
+        <div className="rb-section">
+          <span className="rb-label">{t('shopReservationsTime')}</span>
+          {booking.slotsLoading ? (
+            <p className="rb-subtitle">{t('loading')}</p>
+          ) : booking.partyGate.blocked ? (
+            <p className="rb-subtitle">{largePartyMessage}</p>
+          ) : booking.slots.length === 0 ? (
+            <p className="rb-subtitle">{t('shopReservationsNoSlots')}</p>
+          ) : (
+            <>
+              <div className="rb-time-grid rb-time-grid--standalone">
+                {visibleSlots.map(renderSlotButton)}
+              </div>
+              {hasMoreTimes ? (
+                <button
+                  type="button"
+                  className="rb-show-more"
+                  onClick={() => setTimeExpanded((v) => !v)}
+                >
+                  {timeExpanded ? t('shopReservationsShowLess') : t('shopReservationsShowMore')}
+                </button>
+              ) : null}
+            </>
+          )}
+          <div className="rb-footer-hints">
+            <p className="rb-hint">
+              {t('shopReservationsSlotHint', {
+                interval: booking.slotIntervalMinutes,
+                hours: booking.minHoursBefore,
               })}
-              <button
-                type="button"
-                className="rb-party-chip"
-                aria-pressed={showLargePartyStepper}
-                disabled={booking.maxParty <= PARTY_CHIP_MAX}
-                onClick={openLargeParty}
-              >
-                {booking.partySize > PARTY_CHIP_MAX && showLargePartyStepper ? booking.partySize : '6+'}
-              </button>
-            </div>
-            {showLargePartyStepper ? (
-              <div className="rb-stepper rb-stepper--compact">
-                <button
-                  type="button"
-                  aria-label="-"
-                  onClick={() => booking.setPartySize(Math.max(booking.minParty, booking.partySize - 1))}
-                >
-                  −
-                </button>
-                <span>{booking.partySize}</span>
-                <button
-                  type="button"
-                  aria-label="+"
-                  onClick={() => booking.setPartySize(Math.min(booking.maxParty, booking.partySize + 1))}
-                >
-                  +
-                </button>
-              </div>
+            </p>
+            {booking.waitlistEnabled ? (
+              <p className="rb-hint rb-hint--waitlist">{t('shopReservationsWaitlistHint')}</p>
             ) : null}
-          </div>
-          <div>
-            <span className="rb-label">{t('shopReservationsTime')}</span>
-            {booking.slotsLoading ? (
-              <p className="rb-subtitle">{t('loading')}</p>
-            ) : booking.slots.length === 0 ? (
-              <p className="rb-subtitle">{t('shopReservationsNoSlots')}</p>
-            ) : (
-              <div className="rb-time-groups">
-                {renderTimeGroup('Midi', booking.lunchSlots)}
-                {renderTimeGroup('Soir', booking.dinnerSlots)}
-              </div>
-            )}
           </div>
         </div>
 
@@ -393,7 +473,7 @@ export default function DelicateReservationsForm({
         ) : null}
 
         <button type="submit" className="rb-submit" disabled={!booking.canSubmit || booking.submitting}>
-          {booking.submitting ? t('saving') : 'Confirmer la réservation'}
+          {booking.submitting ? t('saving') : t('shopReservationsBook')}
         </button>
 
         <p className="rb-powered">Powered by Reborn</p>

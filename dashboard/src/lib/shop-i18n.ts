@@ -574,6 +574,10 @@ export const shopEn: Record<string, string> = {
   shopReservationsTime: 'Time',
   shopReservationsNoSlots: 'No available slots this day - try another date.',
   shopReservationsSlotHint: 'Slots every {interval} min · book at least {hours}h ahead',
+  shopReservationsLargePartyCall:
+    'Booking for {count} or more guests? Please call us at {phone} to arrange your table.',
+  shopReservationsLargePartyMax:
+    'Online booking is limited to {max} guests. For larger groups, call us at {phone}.',
   shopReservationsBook: 'Request reservation',
 };
 
@@ -1138,6 +1142,10 @@ export const shopFr: Record<string, string> = {
   shopReservationsTime: 'Heure',
   shopReservationsNoSlots: 'Aucun créneau ce jour - essayez une autre date.',
   shopReservationsSlotHint: 'Créneaux toutes les {interval} min · réserver au moins {hours}h avant',
+  shopReservationsLargePartyCall:
+    'Pour {count} personnes ou plus, merci de nous appeler au {phone} pour réserver.',
+  shopReservationsLargePartyMax:
+    'Réservation en ligne limitée à {max} personnes. Pour un plus grand groupe, appelez le {phone}.',
   shopReservationsBook: 'Demander une réservation',
 };
 
@@ -1702,5 +1710,9 @@ export const shopDe: Record<string, string> = {
   shopReservationsTime: 'Uhrzeit',
   shopReservationsNoSlots: 'Keine Slots an diesem Tag - anderes Datum wählen.',
   shopReservationsSlotHint: 'Slots alle {interval} Min. · mindestens {hours} Std. im Voraus',
+  shopReservationsLargePartyCall:
+    'Ab {count} Personen bitte telefonisch reservieren: {phone}.',
+  shopReservationsLargePartyMax:
+    'Online maximal {max} Personen. Für grössere Gruppen: {phone}.',
   shopReservationsBook: 'Reservation anfragen',
 };
