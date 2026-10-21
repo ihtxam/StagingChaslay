@@ -13,6 +13,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastInfo } from '@/lib/toast-notify';
 import { toastPrintError } from '@/lib/webpos-print-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -222,7 +223,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
       staffName: staff?.name || null,
     }).then((result) => {
       if (result.ok && result.kickedSessionIds.length > 0) {
-        toast.info(t('webPosSessionReclaimed'));
+        toastInfo(t('webPosSessionReclaimed'));
       }
     });
   }, [staffPinsKnown, pinRequired, staff?.id, staff?.name, t]);
@@ -761,7 +762,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     }
     setPinModalOpen(false);
     if (reg.ok && reg.kickedSessionIds.length > 0) {
-      toast.info(t('webPosSessionReclaimed'));
+      toastInfo(t('webPosSessionReclaimed'));
     }
   };
 

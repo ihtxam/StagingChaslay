@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { toastInfo } from '@/lib/toast-notify';
 import { RefreshCw, Truck } from 'lucide-react';
 import api, { resolveApiOriginForBridge } from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
@@ -1451,7 +1452,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     })
       .then((result) => {
         if (result.ok && result.kickedSessionIds.length > 0) {
-          toast.info(t('webPosSessionReclaimed'));
+          toastInfo(t('webPosSessionReclaimed'));
         }
       })
       .catch(() => undefined);
@@ -7386,7 +7387,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       if (guard.action === 'collect') {
         openOrderCollectCheckout(guard.order, 'register');
-        toast.info(
+        toastInfo(
           t('webPosOrderUseCollect').replace('{number}', orderDisplayLabel(guard.order))
         );
         return false;
@@ -10349,7 +10350,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       console.warn('[webpos] session register skipped (schema):', reg.error);
     }
     if (reg.ok && reg.kickedSessionIds.length > 0) {
-      toast.info(t('webPosSessionReclaimed'));
+      toastInfo(t('webPosSessionReclaimed'));
     }
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
