@@ -906,6 +906,8 @@ const RECEIPT_GLUED_NUMBER_CITY_RE = /(?<=\d)(?=[A-Za-zÀ-ÿ]{2,})/;
 /** Country or city glued to street label (e.g. SuisseRue des Draizes). */
 const RECEIPT_GLUED_STREET_LABEL_RE =
   /(?<=[a-zà-ÿäöü])(?=(?:Rue|Rua|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\b)/i;
+/** Street number glued to Swiss PLZ (e.g. saars 1152000 Neuchâtel). */
+const RECEIPT_GLUED_PLZ_AFTER_STREET_RE = /(?<=\d)(?=\d{4}\b)/;
 
 function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   const text = String(line || '').replace(/\s+/g, ' ').trim();
@@ -927,6 +929,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
     RECEIPT_GLUED_VAT_SPLIT_RE,
     RECEIPT_GLUED_PHONE_SPLIT_RE,
     RECEIPT_GLUED_NUMBER_CITY_RE,
+    RECEIPT_GLUED_PLZ_AFTER_STREET_RE,
     RECEIPT_GLUED_STREET_LABEL_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
     RECEIPT_TAX_SPLIT_RE,
@@ -1249,7 +1252,11 @@ export function getReceiptHeaderLines(
     for (const line of [...leftover, ...peeledBody]) {
       pushDetailLine(line);
     }
-    appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
+    const hasCustomReceiptHeader =
+      !!(String(tx.headerTitle || '').trim() || String(tx.header || '').trim());
+    if (!hasCustomReceiptHeader) {
+      appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
+    }
     return lines;
   }
   push(lines, (tx.businessName || APP_NAME).toUpperCase(), titleWidth);

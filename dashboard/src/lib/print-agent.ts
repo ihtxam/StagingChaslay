@@ -385,7 +385,7 @@ export function resolveLiveEscPosTargetNames(
 
 const WEBPOS_PRINTER_STORAGE_KEY = 'manupos_webpos_printer';
 
-/** Clear or remap stale localStorage till printer when Windows renames a queue. */
+/** Clear or remap stale localStorage till printer when the queue is gone or renamed. */
 export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string | null {
   if (typeof localStorage === 'undefined' || !livePrinters.length) return null;
   let stored = '';
@@ -394,15 +394,103 @@ export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string
   } catch {
     return null;
   }
-  if (!stored) return null;
+  const fallback =
+    resolveEscPosPrinterName('', livePrinters) ||
+    livePrinters.find((p) => isEscPosTicketPrinterName(p.name))?.name ||
+    livePrinters[0]?.name ||
+    '';
+  if (!stored) {
+    if (!fallback) return null;
+    try {
+      localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, fallback);
+    } catch {
+      /* ignore */
+    }
+    return fallback;
+  }
   const resolved = resolveLivePrinterName(stored, livePrinters);
-  if (!resolved || resolved === stored) return null;
+  if (resolved && printerNameInList(resolved, livePrinters)) {
+    if (resolved === stored) return null;
+    try {
+      localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, resolved);
+    } catch {
+      /* ignore */
+    }
+    return resolved;
+  }
+  if (!fallback) {
+    try {
+      localStorage.removeItem(WEBPOS_PRINTER_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
   try {
-    localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, resolved);
+    localStorage.setItem(WEBPOS_PRINTER_STORAGE_KEY, fallback);
   } catch {
     /* ignore */
   }
-  return resolved;
+  return fallback;
+}
+
+export type PosPrinterProfileWithRoles = PosPrinterProfileLike & {
+  printReceipts?: boolean;
+  printKitchenTickets?: boolean;
+  printEndOfDayReports?: boolean;
+  paperWidthMm?: 58 | 80;
+  enabled?: boolean;
+};
+
+/** Point receipt routing at a live Bridge printer when saved WiFi/LAN names disappear. */
+export function healStaleReceiptPrinterProfiles<T extends PosPrinterProfileWithRoles>(
+  profiles: T[],
+  livePrinters: AgentPrinter[]
+): { profiles: T[]; changed: boolean } {
+  if (!livePrinters.length) return { profiles, changed: false };
+  const fallback = resolveEscPosPrinterName('', livePrinters);
+  if (!fallback) return { profiles, changed: false };
+  let changed = false;
+  let hasLiveReceipt = false;
+  const next = profiles.map((p) => {
+    if (!p.printReceipts) return p;
+    const name = String(p.name || '').trim();
+    if (name && printerNameInList(name, livePrinters)) {
+      hasLiveReceipt = true;
+      return p;
+    }
+    changed = true;
+    hasLiveReceipt = true;
+    const picked = livePrinters.find((ap) => ap.name === fallback);
+    return {
+      ...p,
+      name: fallback,
+      portName: picked?.portName ?? p.portName ?? null,
+      matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
+    };
+  });
+  if (!hasLiveReceipt) {
+    const blank = next.find((p) => p.enabled !== false && !String(p.name || '').trim());
+    if (blank) {
+      changed = true;
+      const picked = livePrinters.find((ap) => ap.name === fallback);
+      return {
+        profiles: next.map((p) =>
+          p === blank
+            ? {
+                ...p,
+                name: fallback,
+                printReceipts: true,
+                portName: picked?.portName ?? p.portName ?? null,
+                matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
+              }
+            : p
+        ),
+        changed,
+      };
+    }
+  }
+  return { profiles: next, changed };
 }
 
 /** Dedupe agent enumeration by exact Windows queue name. */

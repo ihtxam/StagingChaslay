@@ -133,6 +133,22 @@ assert.equal(
   'overflow wraps to the next line instead of slicing'
 );
 
+const polaCustom = getReceiptHeaderLines(
+  {
+    headerTitle: 'pola pola',
+    header: 'rue des saars 115\n2000 Neuchâtel',
+    businessName: 'KABUL',
+    address: 'Bahnhofstrasse 1, Zürich',
+    city: 'Zürich',
+    phone: '+41 79 000 00 00',
+    vatNumber: 'CHE-123.321.432',
+    headerAlign: 'center',
+  },
+  48,
+  { padLines: false }
+);
+assert.deepEqual(polaCustom, ['pola pola', 'rue des saars 115', '2000 Neuchâtel']);
+
 const novaGluedNoSpaces = splitReceiptHeaderDetailLine(
   'Rue des Draizes 22SuisseRue des Draizes 44NeuchâtelTel: 032 558 45 65VAT: CHE-131.903.128'
 );
