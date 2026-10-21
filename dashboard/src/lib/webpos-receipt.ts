@@ -906,6 +906,9 @@ const RECEIPT_GLUED_NUMBER_CITY_RE = /(?<=\d)(?=[A-Za-zÀ-ÿ]{2,})/;
 /** Country or city glued to street label (e.g. SuisseRue des Draizes). */
 const RECEIPT_GLUED_STREET_LABEL_RE =
   /(?<=[a-zà-ÿäöü])(?=(?:Rue|Rua|Route|Avenue|Av\.|Chemin|Place|Boulevard|Bd\.?|Rte)\b)/i;
+/** Store name glued to lowercase street (e.g. polarue des saars → pola pola + rue des saars). */
+const RECEIPT_GLUED_LOWERCASE_RUE_RE =
+  /(?<=[a-zà-ÿäöü])(?=rue(?:\s+des)?\s)/;
 /** Street number glued to Swiss PLZ (e.g. saars 1152000 Neuchâtel). */
 const RECEIPT_GLUED_PLZ_AFTER_STREET_RE = /(?<=\d)(?=\d{4}\b)/;
 
@@ -931,6 +934,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
     RECEIPT_GLUED_NUMBER_CITY_RE,
     RECEIPT_GLUED_PLZ_AFTER_STREET_RE,
     RECEIPT_GLUED_STREET_LABEL_RE,
+    RECEIPT_GLUED_LOWERCASE_RUE_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
     RECEIPT_TAX_SPLIT_RE,
     RECEIPT_COUNTRY_SPLIT_RE,
@@ -1185,6 +1189,8 @@ export function getReceiptHeaderLines(
     }
   }
   const lines: string[] = [];
+  const hasCustomReceiptHeader =
+    !!(String(tx.headerTitle || '').trim() || String(tx.header || '').trim());
   const addressParts = splitMerchantAddressLines(tx.address || '', tx.city).filter(
     (part) => !isReceiptTelephoneLine(part) && !isReceiptVatLine(part)
   );
@@ -1205,10 +1211,12 @@ export function getReceiptHeaderLines(
         return;
       }
     }
-    const alreadyAddress = addressParts.some(
-      (part) => compactHeaderKey(part) === compactHeaderKey(raw)
-    );
-    if (alreadyAddress) return;
+    if (!hasCustomReceiptHeader) {
+      const alreadyAddress = addressParts.some(
+        (part) => compactHeaderKey(part) === compactHeaderKey(raw)
+      );
+      if (alreadyAddress) return;
+    }
     push(lines, raw);
   };
   if (title || body) {
@@ -1235,16 +1243,15 @@ export function getReceiptHeaderLines(
     if (splitName.extra) leftover.unshift(splitName.extra);
     if (titleLine) {
       const compactTitle = titleLine.replace(/\s+/g, ' ').trim();
+      const expandedTitle = expandReceiptHeaderDetailLines(compactTitle);
       const titleLooksMashed =
+        expandedTitle.length > 1 ||
         compactTitle.length > titleWidth ||
         (RECEIPT_CONTACT_LABEL_RE.test(compactTitle) && compactTitle.length > 12);
-      if (titleLooksMashed) {
-        const expanded = expandReceiptHeaderDetailLines(compactTitle);
-        if (expanded.length > 1) {
-          titleLine = expanded[0]!;
-          for (let j = expanded.length - 1; j >= 1; j--) {
-            leftover.unshift(expanded[j]!);
-          }
+      if (titleLooksMashed && expandedTitle.length > 1) {
+        titleLine = expandedTitle[0]!;
+        for (let j = expandedTitle.length - 1; j >= 1; j--) {
+          leftover.unshift(expandedTitle[j]!);
         }
       }
       push(lines, titleLine, titleWidth);
@@ -1252,8 +1259,6 @@ export function getReceiptHeaderLines(
     for (const line of [...leftover, ...peeledBody]) {
       pushDetailLine(line);
     }
-    const hasCustomReceiptHeader =
-      !!(String(tx.headerTitle || '').trim() || String(tx.header || '').trim());
     if (!hasCustomReceiptHeader) {
       appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
     }
