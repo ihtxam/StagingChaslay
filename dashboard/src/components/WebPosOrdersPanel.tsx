@@ -60,12 +60,9 @@ import {
 import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { collectPaymentAction, findPaidOrderForCartLink } from '@/lib/order-to-cart';
 import {
-  localHeldRowsFromSession,
   parseHeldCartJson,
   clearLocalHeldDraftForRow,
-  removeLocalHeldDraft,
   resolveHeldChannel,
-  sameHeldIdentity,
   ticketQueryMatches,
 } from '@/lib/webpos-held';
 import {
@@ -707,26 +704,9 @@ export default function WebPosOrdersPanel({
       }
       nextOrders = [...map.values()];
     }
-    const localRows = localHeldRowsFromSession().filter((row): row is NonNullable<typeof row> => !!row);
-    for (const local of localRows) {
-      const ident = {
-        ticketDisplay: local.cartJson.ticketDisplay,
-        tableId: local.cartJson.tableId,
-        tabNumber: local.cartJson.tabNumber,
-      };
-      const already = nextHeld.some((h) => {
-        const meta = parseHeldCartJson(h.cartJson);
-        return sameHeldIdentity(ident, {
-          ticketDisplay: meta.ticketDisplay,
-          tableId: meta.tableId,
-          tabNumber: meta.tabNumber,
-        });
-      });
-      if (!already) nextHeld.push(local as HeldRow);
-    }
+    // Actives = server-held tickets only (not this tablet's sessionStorage cart drafts).
     console.info('[WebPOS][orders] loaded', {
       held: nextHeld.length,
-      localAdded: localRows.length,
       posOrders: nextOrders.length,
       openPos: nextOrders.filter((o) => isOpenWebPosOrder(o)).length,
     });
