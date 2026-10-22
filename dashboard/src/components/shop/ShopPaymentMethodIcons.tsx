@@ -11,9 +11,8 @@ const PAYMENT_FILES = [
 ] as const;
 
 function paymentIconUrl(file: string): string {
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin.replace(/\/+$/, '')}/payment-logos/${file}`;
-  }
+  // Shop path hubs (order.rebornsense.com) proxy HTML to the API; nested /payment-logos/*
+  // must be loaded from the panel/dashboard origin (same pattern as getRebornLogoWhiteUrl).
   const origin = resolvePanelAppOrigin().replace(/\/+$/, '');
   return `${origin}/payment-logos/${file}`;
 }
