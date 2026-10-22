@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
+import { useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 import { useModalKeyboardScroll } from '@/lib/useModalKeyboardScroll';
 
 type Props = {

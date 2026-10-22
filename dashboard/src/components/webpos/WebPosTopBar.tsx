@@ -20,7 +20,7 @@ import {
   ArrowDownUp,
   Nfc,
 } from 'lucide-react';
-import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
 import { useFullscreenActive } from '@/hooks/useFullscreenActive';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';

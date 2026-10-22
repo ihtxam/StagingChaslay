@@ -5,7 +5,7 @@ import {
   type CSSProperties,
   type FocusEvent,
 } from 'react';
-import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
+import { useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 
 /** Minimum visualViewport shrink (px) before treating it as the soft keyboard. */
 const SOFT_KEYBOARD_THRESHOLD_PX = 80;

@@ -15,7 +15,7 @@ import { clearWebPosStaffSession } from '@/lib/permissions';
 import { bootstrapStaffRegisterSessionAfterEmailLogin } from '@/lib/staff-email-login-bootstrap';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
-import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
 import { shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
 import { useSoftKeyboardLayout } from '@/lib/useSoftKeyboardLayout';
 

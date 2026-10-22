@@ -3,7 +3,7 @@ import { Minus, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useI18n } from '@/lib/i18n';
 import { DesktopHubActiveLabel, DesktopHubGearMenu } from '@/components/DesktopHubNav';
-import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
 import {
   desktopMinimize,
   desktopReload,

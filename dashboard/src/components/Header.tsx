@@ -9,7 +9,7 @@ import { useTheme } from '@/lib/theme';
 import { useI18n } from '@/lib/i18n';
 import { pinGateSessionMerchantName } from '@/lib/webpos-pin-gate-brand';
 import AcceptingMenu from '@/components/AcceptingMenu';
-import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
 import { LocationSwitcherChip } from '@/components/merchant/LocationPicker';
 import MerchantCompactStatusRow from '@/components/merchant/MerchantCompactStatusRow';
 import { usePlatformMessagesUi } from '@/components/platform/PlatformMessagesProvider';

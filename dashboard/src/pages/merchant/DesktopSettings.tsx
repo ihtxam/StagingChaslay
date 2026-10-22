@@ -41,7 +41,8 @@ import {
 } from '@/lib/print-agent';
 import { buildPrinterTestEscPos, uint8ToBase64 } from '@/lib/webpos-receipt';
 import { normalizePosCheckoutSettings, type RetailTileSize } from '@/lib/pos-checkout';
-import { OnScreenKeyboardToggle, useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
+import { useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 import DeviceEnrollmentWizard from '@/components/settings/DeviceEnrollmentWizard';
 import { fetchDeviceRuntimeConfig } from '@/lib/device-enrollment';
 import { webPosDeviceId } from '@/lib/webpos-print-relay';
