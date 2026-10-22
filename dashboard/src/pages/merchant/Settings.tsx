@@ -35,6 +35,7 @@ import {
   Calculator,
   Award,
   Phone,
+  Puzzle,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -42,7 +43,6 @@ import PosPostsSection from '@/components/settings/PosPostsSection';
 import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PaymentProfilesSection from '@/components/settings/PaymentProfilesSection';
 import DeviceEnrollmentWizard from '@/components/settings/DeviceEnrollmentWizard';
-import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import CdsSettingsPanel from '@/components/merchant/CdsSettingsPanel';
@@ -70,7 +70,6 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
-import { isAccountingLicensed } from '@/lib/accounting-addon';
 import {
   shouldShowOnlineReservationsToggle,
   shouldShowReservationsSettings,
@@ -104,12 +103,10 @@ import {
   fetchPrintAgentManifest,
   fetchRebornPosManifest,
   isAndroidDevice,
-  isBridgeAlreadyInstalled,
   openPrintBridgeApkInstall,
   printAgentDownloadUrl,
   printBridgeDownloadUrl,
   preferredPrintCompanion,
-  rebornPosDownloadUrl,
   type DownloadManifest,
 } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -128,7 +125,11 @@ import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsAccountingTab from './settings/SettingsAccountingTab';
+import SettingsExtraModulesTab from './settings/SettingsExtraModulesTab';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
+import { isLicensedSettingsAddonTab } from './settings/settings-extra-modules';
+import { isKdsLicensed } from '@/lib/kds-addon';
+import { isOdsLicensed } from '@/lib/ods-addon';
 import { normalizePosCheckoutSettings } from '@/lib/pos-checkout';
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
 import {
@@ -154,7 +155,6 @@ import { canAccessRoute, hasPermission, isKioskRestrictedStaff } from '@/lib/per
 import { hasEditionFeature, showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { normalizeBusinessModule } from '@/lib/business-module';
 import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
-import { isPhoneOrderingLicensed } from '@/lib/phone-ordering-addon';
 import { desktopSidecarHealth, isDesktopApp } from '@/lib/platform';
 
 interface SettingsData {
@@ -426,7 +426,8 @@ type TabId =
   | 'kiosk'
   | 'email'
   | 'language'
-  | 'users';
+  | 'users'
+  | 'extra-modules';
 
 const SETTINGS_TAB_IDS: TabId[] = [
   'business',
@@ -452,9 +453,10 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'email',
   'language',
   'users',
+  'extra-modules',
 ];
 
-/** SpotOn-style settings groups: Team / Tables / Service / Guest / Money */
+/** SpotOn-style settings groups: Team / Tables / Service / Guest / Money / Add-ons */
 const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }> = [
   { id: 'business', labelKey: 'settingsGroupBusiness', ids: ['business'] },
   { id: 'team', labelKey: 'settingsGroupTeam', ids: ['users', 'language'] },
@@ -462,10 +464,15 @@ const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }>
   {
     id: 'service',
     labelKey: 'settingsGroupService',
-    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'kiosk', 'signage', 'delivery', 'phone'],
+    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'delivery'],
   },
   { id: 'guest', labelKey: 'settingsGroupGuest', ids: ['shop', 'email', 'delivery-map'] },
-  { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting', 'como'] },
+  { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments'] },
+  {
+    id: 'addons',
+    labelKey: 'settingsGroupAddons',
+    ids: ['kiosk', 'signage', 'phone', 'fiscal', 'accounting', 'como', 'extra-modules'],
+  },
 ];
 
 const TAX_RATE_MAX = 100;
@@ -506,6 +513,7 @@ function parseSettingsTabFromSearch(search: string): TabId {
     if (q === 'reservations') return 'reservations';
     if (q === 'signage') return 'signage';
     if (q === 'kiosk') return 'kiosk';
+    if (q === 'extra-modules') return 'extra-modules';
   } catch {
     /* ignore */
   }
@@ -857,6 +865,12 @@ export default function Settings() {
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
         { id: 'users' as const, label: t('staffPageTitle'), navLabel: t('settingsNavStaff'), icon: Users },
         { id: 'language' as const, label: t('language'), navLabel: t('settingsNavLanguage'), icon: Languages },
+        {
+          id: 'extra-modules' as const,
+          label: t('settingsExtraModules'),
+          navLabel: t('settingsNavExtraModules'),
+          icon: Puzzle,
+        },
       ] as const,
     [t]
   );
@@ -940,11 +954,15 @@ export default function Settings() {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
         if (item.id === 'reservations' && !reservationsLicensed) return false;
-        if (item.id === 'phone' && !isPhoneOrderingLicensed(settings)) return false;
-        if (item.id === 'accounting' && !isAccountingLicensed(settings)) return false;
+        if (item.id === 'extra-modules') return true;
+        if (
+          !isLicensedSettingsAddonTab(item.id, settings, { isRetailMerchant })
+        ) {
+          return false;
+        }
         return true;
       }),
-    [canOpenSettingsTab, reservationsLicensed, showTablesSettings, settings, tabs]
+    [canOpenSettingsTab, isRetailMerchant, reservationsLicensed, showTablesSettings, settings, tabs]
   );
 
   const selectTab = useCallback(
@@ -1034,9 +1052,12 @@ export default function Settings() {
       if (id === 'pos-courses') return showCoursesSettings;
       if (id === 'tables-floor' || id === 'tables-management') return showTablesSettings;
       if (id === 'reservations-config') return reservationsLicensed;
+      if (id === 'inventory-addon') return isInventoryLicensed(settings);
+      if (id === 'storekeeper-addon') return isInventoryLicensed(settings);
+      if (id === 'signage-addon') return isSignageLicensed(settings);
       return true;
     },
-    [reservationsLicensed, showCoursesSettings, showTablesSettings]
+    [reservationsLicensed, settings, showCoursesSettings, showTablesSettings]
   );
 
   const visibleTabIds = useMemo(
@@ -3265,6 +3286,7 @@ export default function Settings() {
                 />
               </Section>
 
+              {isInventoryLicensed(settings) ? (
               <Section
                 id="inventory-addon"
                 icon={Package}
@@ -3354,7 +3376,9 @@ export default function Settings() {
                   {t('save')}
                 </button>
               </Section>
+              ) : null}
 
+              {isInventoryLicensed(settings) ? (
               <Section
                 id="storekeeper-addon"
                 icon={Package}
@@ -3373,7 +3397,9 @@ export default function Settings() {
                   </Link>
                 ) : null}
               </Section>
+              ) : null}
 
+              {isSignageLicensed(settings) ? (
               <Section
                 id="signage-addon"
                 icon={Tv}
@@ -3396,6 +3422,7 @@ export default function Settings() {
                   </button>
                 ) : null}
               </Section>
+              ) : null}
 
               {showCoursesSettings ? (
               <Section
@@ -4279,7 +4306,7 @@ export default function Settings() {
             <form className="space-y-5" onSubmit={saveReceiptPrint}>
               <SettingsPageHeader
                 title={t('settingsReceipt')}
-                subtitle={t('settingsReceiptHint')}
+                subtitle={t('settingsReceiptSubtitleShort')}
                 action={
                   <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={savingReceipt}>
                     <Save className="h-4 w-4" aria-hidden />
@@ -4287,7 +4314,7 @@ export default function Settings() {
                   </button>
                 }
               />
-              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsReceipt')} description={t('settingsReceiptHint')}>
+              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsReceipt')}>
                 <Field label={t('receiptLanguage')}>
                   <select
                     className="input"
@@ -4990,148 +5017,38 @@ export default function Settings() {
                 </label>
               </Section>
 
-              {!isAndroidDevice() && !isDesktopApp() ? (
-                <Section
-                  icon={Monitor}
-                  accent={settingsDash.accent}
-                  title={t('desktopAppDownload')}
-                  description={t('desktopAppDownloadHint')}
-                >
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      {rebornPosManifest?.available === false ? (
-                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                          {rebornPosManifest.message || t('desktopAppNotPublished')}
-                        </p>
-                      ) : (
-                        <a
-                          className="btn-primary inline-flex"
-                          href={rebornPosManifest?.downloadUrl || rebornPosDownloadUrl()}
-                          download="reborn-pos-setup.exe"
-                        >
-                          {rebornPosManifest?.version
-                            ? t('downloadDesktopAppVersion').replace(
-                                '{version}',
-                                rebornPosManifest.version
-                              )
-                            : t('downloadDesktopApp')}
-                        </a>
-                      )}
-                    </div>
-                    {rebornPosManifest?.version ? (
-                      <p className="text-sm text-emerald-800 max-w-xl m-0">
-                        {t('desktopAppCurrentVersion').replace('{version}', rebornPosManifest.version)}
-                      </p>
-                    ) : null}
-                    <p className="text-sm text-[var(--muted)] max-w-xl m-0">{t('desktopAppInstallSteps')}</p>
-                  </div>
-                </Section>
-              ) : null}
-
-              <Section
-                icon={Printer}
-                accent={settingsDash.info}
-                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentOptionalTitle')}
-                description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
-              >
-                <div className="space-y-3">
+              {!printAgentOk ? (
+                <Section icon={Printer} accent={settingsDash.info} title={t('printerProfiles')}>
                   <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm m-0 text-[var(--text-muted)]">{t('webPosAgentOffline')}</p>
                     {preferredPrintCompanion() !== 'android-bridge' &&
                     !(isDesktopApp() && desktopBundledSidecarOk) ? (
                       <a
-                        className="btn-secondary inline-flex"
+                        className="btn-secondary inline-flex text-sm"
                         href={printAgentDownloadUrl()}
                         download="reborn-print-agent-setup.exe"
                       >
                         {t('downloadPrintAgent')}
                       </a>
-                    ) : isDesktopApp() && desktopBundledSidecarOk ? (
-                      <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                        {t('desktopSettingsHidePrintAgentDownload')}
-                      </p>
                     ) : null}
-                    {preferredPrintCompanion() !== 'windows-agent' ? (
-                      printBridgeManifest?.versionMismatch ? (
-                        <p className="text-sm text-amber-900 max-w-xl m-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                          {t('printBridgeApkNotPublished')
-                            .replace('{apkVersion}', String(printBridgeManifest.version || ''))
-                            .replace(
-                              '{declaredVersion}',
-                              String(printBridgeManifest.declaredVersion || printBridgeManifest.version || '')
-                            )}
-                        </p>
-                      ) : printBridgeManifest?.available === false ? (
-                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                          {printBridgeManifest.message ||
-                            'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
-                        </p>
-                      ) : isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) &&
-                        printBridgeManifest?.version &&
-                        compareAgentVersion(
-                          String(installedPrintCompanionVersion || ''),
-                          String(printBridgeManifest.version)
-                        ) >= 0 ? (
-                        <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                          {t('printBridgeAlreadyInstalled').replace(
-                            '{version}',
-                            installedPrintCompanionVersion || ''
-                          )}
-                        </p>
-                      ) : isAndroidDevice() ? (
-                        <button
-                          type="button"
-                          className="btn-primary inline-flex"
-                          onClick={() =>
-                            openPrintBridgeApkInstall(
-                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
-                            )
-                          }
-                        >
-                          {t('installPrintBridge')}
-                        </button>
-                      ) : (
-                        <a
-                          className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
-                          href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                        >
-                          {t('downloadPrintBridge')}
-                        </a>
-                      )
+                    {isAndroidDevice() && preferredPrintCompanion() !== 'windows-agent' ? (
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex text-sm"
+                        onClick={() =>
+                          openPrintBridgeApkInstall(
+                            printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
+                          )
+                        }
+                      >
+                        {t('installPrintBridge')}
+                      </button>
                     ) : null}
                   </div>
-                  <div className="space-y-1">
-                    {preferredPrintCompanion() !== 'android-bridge' ? (
-                      <PrintCompanionVersionStatus
-                        kind="windows-agent"
-                        installedVersion={installedPrintCompanionVersion}
-                        serverVersion={printAgentManifest?.version}
-                        downloadUrl={printAgentDownloadUrl()}
-                        agentChecked={printAgentHealthChecked}
-                        agentOk={printAgentOk}
-                      />
-                    ) : null}
-                    {preferredPrintCompanion() !== 'windows-agent' &&
-                    printBridgeManifest?.available !== false ? (
-                      <PrintCompanionVersionStatus
-                        kind="android-bridge"
-                        installedVersion={installedPrintCompanionVersion}
-                        serverVersion={printBridgeManifest?.version}
-                        declaredVersion={printBridgeManifest?.declaredVersion}
-                        versionMismatch={printBridgeManifest?.versionMismatch}
-                        downloadUrl={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                        onAndroid={isAndroidDevice()}
-                        agentChecked={printAgentHealthChecked}
-                        agentOk={printAgentOk}
-                      />
-                    ) : null}
-                  </div>
-                  <p className="text-sm text-[var(--muted)] max-w-xl m-0">
-                    {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}
-                  </p>
-                </div>
-              </Section>
+                </Section>
+              ) : null}
 
-              <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')} description={t('printerProfilesHint')}>
+              <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')}>
                 <div className="flex flex-wrap items-center gap-3 mb-3">
                   <button
                     type="button"
@@ -5603,6 +5520,10 @@ export default function Settings() {
               <KioskSettingsPage embedded />
             </div>
           )}
+
+          {tab === 'extra-modules' && settings ? (
+            <SettingsExtraModulesTab settings={settings} isRetailMerchant={isRetailMerchant} />
+          ) : null}
 
           {tab === 'language' && (
             <div className="space-y-5">
