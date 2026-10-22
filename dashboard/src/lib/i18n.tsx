@@ -4174,6 +4174,9 @@ const en: Dict = {
   staffRole: 'Role',
   staffPinLabel: 'PIN (Reborn / app)',
   staffPinPlaceholder: '4-8 digits',
+  staffPinOnlyLabel: 'POS PIN only (no email login)',
+  staffPinOnlyHint:
+    'Staff sign in on the till with their PIN only. Official app login at /login stays disabled.',
   staffCanAccessPanel: 'Can access backend panel',
   staffEmailLogin: 'Official login (email + password)',
   staffEmailLoginHint:
@@ -4439,6 +4442,8 @@ const en: Dict = {
   deviceEnrollSaved: 'Device enrollment saved',
   deviceEnrollCleared: 'Device enrollment cleared',
   webPosStaffHardwareTitle: 'Printers',
+  webPosStaffHardwareHint:
+    'Test print and cash drawer only. Payment terminals and store settings are managed by your manager.',
   paymentsSwisspayoutDisabledHint:
     'Turn on Swisspayout above to configure terminals, NFC Tap to Pay, and in-store card payments.',
   paymentsTerminalOnlyCredentialsHint:

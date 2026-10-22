@@ -606,6 +606,7 @@ import {
   deliveryDriverHomePath,
   getEffectivePanelAccess,
   hasPermission,
+  hasPosHardwareGearAccess,
   isDeliveryDriverOnlyStaff,
   isMerchantOwnerJwt,
   clearWebPosStaffSession,
@@ -10183,6 +10184,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     : staffConfigured
       ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_PRODUCTS', false)
       : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', jwtIsOwner);
+  const canShowStaffHardware = ownerOnRegister
+    ? hasPosHardwareGearAccess(authUser?.permissions as Permission[] | undefined, true)
+    : staffConfigured
+      ? !!webposStaff && hasPosHardwareGearAccess(staffPerms, false)
+      : hasPosHardwareGearAccess(authUser?.permissions as Permission[] | undefined, jwtIsOwner);
+  const hardwareGearOnly =
+    !ownerOnRegister &&
+    staffConfigured &&
+    !!webposStaff &&
+    canShowStaffHardware &&
+    !canManageSettings;
   const canViewOrders =
     ownerOnRegister ||
     !staffConfigured ||
@@ -11238,7 +11250,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             })
             .catch(() => undefined);
         }}
-        hideSettingsMenu={isDesktop}
+        hideSettingsMenu={isDesktop && !canShowStaffHardware}
         settingsPanel={
           isDesktop ? null : (
           <WebPosSettingsDropdown
@@ -11351,10 +11363,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onTerminalChange={
               terminalEnrollmentLocked ? undefined : (id) => void changePosTerminal(id)
             }
-            showStaffHardwarePanel={canManageProducts}
+            hardwareGearOnly={hardwareGearOnly}
+            showStaffHardwarePanel={canShowStaffHardware}
             staffPrinterProfiles={printSettings?.printers || []}
+            staffAllowPrinterPick={
+              canShowStaffHardware &&
+              !terminalEnrollmentLocked &&
+              (printSettings?.printers?.length ?? 0) > 1
+            }
+            staffSelectedPrinter={printerName}
+            onStaffPrinterChange={(name) => setPrinterName(name)}
             onStaffTestReceipt={
-              canManageProducts
+              canShowStaffHardware
                 ? () => {
                     const name =
                       printSettings?.printers?.find((p) => p.printReceipts)?.name ||
@@ -11374,7 +11394,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 : undefined
             }
             onStaffReprintLast={
-              canManageProducts && lastReceipt
+              canShowStaffHardware && lastReceipt
                 ? () => {
                     void printEscPosToTargets(lastReceipt, { role: 'receipt', quiet: true });
                   }

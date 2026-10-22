@@ -1816,7 +1816,7 @@ function MerchantShell() {
             <Route
               path="desktop-settings"
               element={
-                <PanelRouteGuard path="/merchant/settings" allow={allow}>
+                <PanelRouteGuard path="/merchant/desktop-settings" allow={allow}>
                   <DesktopSettings />
                 </PanelRouteGuard>
               }
