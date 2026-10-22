@@ -57,6 +57,8 @@ export class LocationsService {
           status: "active",
         })
         .returning();
+      const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
+      await PaymentProfilesService.ensureProfileForLocation(merchantId, row!.id);
       return row;
     });
   }
@@ -238,6 +240,8 @@ export class LocationsService {
         status: "active",
       })
       .returning();
+    const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
+    await PaymentProfilesService.ensureProfileForLocation(merchantId, row!.id);
     return row;
   }
 

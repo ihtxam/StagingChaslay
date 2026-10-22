@@ -98,6 +98,9 @@ export class DeviceEnrollmentService {
       ),
     });
     if (!profile) throw new Error("Payment profile not found");
+    if (profile.locationId && profile.locationId !== input.locationId) {
+      throw new Error("Payment settings do not match this branch");
+    }
 
     const terminal = await db.query.paymentTerminals.findFirst({
       where: and(

@@ -170,6 +170,7 @@ import OrderCenterApp from './OrderCenterApp';
 import { getSelectedLocationId, useLocationStore } from '@/store/location';
 import { buildWebPosLaunchPath } from '@/lib/webpos-terminal-location';
 import {
+  shouldHideMerchantSettingsInHqView,
   shouldRedirectFromHqPanelPath,
   shouldShowHqPanelNav,
   shouldShowPanelPosQuickAction,
@@ -963,6 +964,12 @@ function MerchantShell() {
     [hasPos, jwtIsOwner, user?.permissions, panelScopeNavInput]
   );
 
+  const hideSettingsInHqView = shouldHideMerchantSettingsInHqView(panelScopeNavInput);
+  const merchantSettingsPath =
+    !panelChromeRestricted && allow('/merchant/settings') && !hideSettingsInHqView
+      ? '/merchant/settings'
+      : undefined;
+
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
   const tillPrintHubEnabled = !isPosLikeRoute && isTillPrintHubCandidate();
   useTillPrintHub({ enabled: tillPrintHubEnabled });
@@ -1342,10 +1349,7 @@ function MerchantShell() {
               language={locale}
               onLanguageChange={changeLanguage}
               profileMenu={{
-                settingsPath:
-                  !panelChromeRestricted && allow('/merchant/settings')
-                    ? '/merchant/settings'
-                    : undefined,
+                settingsPath: merchantSettingsPath,
                 billingPath:
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:
@@ -1387,10 +1391,7 @@ function MerchantShell() {
               language={locale}
               onLanguageChange={changeLanguage}
               profileMenu={{
-                settingsPath:
-                  !panelChromeRestricted && allow('/merchant/settings')
-                    ? '/merchant/settings'
-                    : undefined,
+                settingsPath: merchantSettingsPath,
                 billingPath:
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:

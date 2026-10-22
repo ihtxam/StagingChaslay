@@ -94,3 +94,9 @@ export function shouldShowPanelPosQuickAction(
   if (!isPanelLocationSwitcherActive(input)) return true;
   return !input.isHqView;
 }
+
+/** Branch settings (payments, printers, receipts) require a selected branch — not HQ aggregate. */
+export function shouldHideMerchantSettingsInHqView(input: PanelScopeNavInput): boolean {
+  if (!isPanelLocationSwitcherActive(input)) return false;
+  return input.isHqView;
+}

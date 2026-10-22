@@ -1920,6 +1920,44 @@ export async function ensurePaymentProfilesSchema(): Promise<void> {
         AND pp.is_default = true
         AND pt.payment_profile_id IS NULL
     `);
+    await execSql(`
+      INSERT INTO payment_profiles (
+        merchant_id, name, location_id, is_default,
+        adyen_merchant_account, adyen_api_key, adyen_client_id, adyen_store_reference, adyen_hmac_key,
+        adyen_live_environment, adyen_live_url_prefix, adyen_live_region, adyen_use_legacy_endpoint
+      )
+      SELECT
+        l.merchant_id,
+        LEFT(l.name, 120),
+        l.id,
+        false,
+        COALESCE(dp.adyen_merchant_account, m.adyen_merchant_account),
+        COALESCE(dp.adyen_api_key, m.adyen_api_key),
+        COALESCE(dp.adyen_client_id, m.adyen_client_id),
+        COALESCE(dp.adyen_store_reference, m.adyen_store_reference),
+        COALESCE(dp.adyen_hmac_key, m.adyen_hmac_key),
+        COALESCE(dp.adyen_live_environment, m.adyen_live_environment, false),
+        COALESCE(dp.adyen_live_url_prefix, m.adyen_live_url_prefix),
+        COALESCE(dp.adyen_live_region, m.adyen_live_region, 'EU'),
+        COALESCE(dp.adyen_use_legacy_endpoint, m.adyen_use_legacy_endpoint, false)
+      FROM locations l
+      INNER JOIN merchants m ON m.id = l.merchant_id
+      LEFT JOIN payment_profiles dp ON dp.merchant_id = l.merchant_id AND dp.is_default = true
+      WHERE l.status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM payment_profiles pp WHERE pp.location_id = l.id
+        )
+    `);
+    await execSql(`
+      UPDATE payment_terminals pt
+      SET payment_profile_id = pp_loc.id
+      FROM locations l
+      INNER JOIN payment_profiles pp_loc ON pp_loc.location_id = l.id AND pp_loc.merchant_id = l.merchant_id
+      INNER JOIN payment_profiles pp_def ON pp_def.merchant_id = l.merchant_id AND pp_def.is_default = true
+      WHERE pt.merchant_id = l.merchant_id
+        AND l.is_default = true
+        AND (pt.payment_profile_id IS NULL OR pt.payment_profile_id = pp_def.id)
+    `);
     paymentProfilesBackfillDone = true;
   } catch (err) {
     console.warn("[schema] payment profile backfill failed:", err);

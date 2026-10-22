@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 
 const SOFT_KEYBOARD_THRESHOLD_PX = 72;
+
+/** Reserve space above the fixed WebPOS / desktop on-screen keyboard (matches modal scroll). */
+export const ON_SCREEN_KEYBOARD_BOTTOM_RESERVE = 'min(42dvh, 300px)';
+
+function onScreenKeyboardReservePx(): number {
+  if (typeof window === 'undefined') return 0;
+  return Math.min(Math.round(window.innerHeight * 0.42), 300);
+}
 
 function readViewportLayout() {
   if (typeof window === 'undefined') {
@@ -23,6 +32,7 @@ function readViewportLayout() {
  * so the soft keyboard does not cover submit buttons.
  */
 export function useSoftKeyboardLayout() {
+  const { open: onScreenKeyboardOpen } = useOnScreenKeyboard();
   const [layout, setLayout] = useState(readViewportLayout);
 
   useEffect(() => {
@@ -38,9 +48,10 @@ export function useSoftKeyboardLayout() {
     };
   }, []);
 
-  const keyboardOpen = layout.inset > 0;
+  const softKeyboardOpen = layout.inset > 0;
+  const keyboardOpen = softKeyboardOpen || onScreenKeyboardOpen;
 
-  const pageStyle: CSSProperties = keyboardOpen
+  const pageStyle: CSSProperties = softKeyboardOpen
     ? {
         position: 'fixed',
         left: 0,
@@ -50,9 +61,17 @@ export function useSoftKeyboardLayout() {
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
       }
-    : {
-        minHeight: '100dvh',
-      };
+    : onScreenKeyboardOpen
+      ? {
+          minHeight: '100dvh',
+          maxHeight: '100dvh',
+          overflowY: 'auto',
+          paddingBottom: ON_SCREEN_KEYBOARD_BOTTOM_RESERVE,
+          WebkitOverflowScrolling: 'touch',
+        }
+      : {
+          minHeight: '100dvh',
+        };
 
   const scrollFieldIntoView = useCallback(
     (el: HTMLElement | null) => {
@@ -60,15 +79,26 @@ export function useSoftKeyboardLayout() {
       window.requestAnimationFrame(() => {
         const vv = window.visualViewport;
         const visibleTop = vv?.offsetTop ?? 0;
-        const visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+        let visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+        if (onScreenKeyboardOpen) {
+          visibleBottom -= onScreenKeyboardReservePx();
+        }
         const rect = el.getBoundingClientRect();
         if (rect.bottom > visibleBottom - 20 || rect.top < visibleTop + 12) {
           el.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }
       });
     },
-    []
+    [onScreenKeyboardOpen]
   );
 
-  return { keyboardOpen, pageStyle, scrollFieldIntoView };
+  useEffect(() => {
+    if (!onScreenKeyboardOpen) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      scrollFieldIntoView(active);
+    }
+  }, [onScreenKeyboardOpen, scrollFieldIntoView]);
+
+  return { keyboardOpen, pageStyle, scrollFieldIntoView, onScreenKeyboardOpen };
 }

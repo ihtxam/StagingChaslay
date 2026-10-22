@@ -3,7 +3,8 @@ import toast from 'react-hot-toast';
 import { Smartphone } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { getSelectedLocationId } from '@/store/location';
+import { isPanelLocationSwitcherActive } from '@/lib/panel-scope-nav';
+import { useLocationStore } from '@/store/location';
 import {
   clearDeviceEnrollment,
   enrollCurrentDevice,
@@ -12,32 +13,45 @@ import {
 } from '@/lib/device-enrollment';
 import { webPosDeviceId } from '@/lib/webpos-print-relay';
 
-type Profile = { id: string; name: string };
 type Terminal = { id: string; terminalId: string; terminalName: string };
 
 export default function DeviceEnrollmentWizard() {
   const { t } = useI18n();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [terminals, setTerminals] = useState<Terminal[]>([]);
+  const { locationId, isHqView, locations, limits } = useLocationStore();
+  const branchSwitcher = isPanelLocationSwitcherActive({
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+  });
+
   const [profileId, setProfileId] = useState('');
+  const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [terminalId, setTerminalId] = useState('');
   const [lockEnrollment, setLockEnrollment] = useState(true);
   const [current, setCurrent] = useState<DeviceEnrollmentSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    if (branchSwitcher && (isHqView || !locationId)) {
+      setProfileId('');
+      setTerminals([]);
+      return;
+    }
     try {
+      const params = locationId ? { locationId } : undefined;
       const [pRes, cfg] = await Promise.all([
-        api.get('/merchant/payment-profiles'),
+        api.get('/merchant/payment-profiles', { params }),
         fetchDeviceRuntimeConfig(),
       ]);
-      const list = (pRes.data?.profiles || []) as Profile[];
-      setProfiles(list);
-      setCurrent(cfg?.enrollment || null);
+      const list = (pRes.data?.profiles || []) as { id: string }[];
       const pid = cfg?.paymentProfileId || list[0]?.id || '';
       setProfileId(pid);
+      setCurrent(cfg?.enrollment || null);
+      if (!pid) {
+        setTerminals([]);
+        return;
+      }
       const tRes = await api.get('/merchant/payment-profiles/terminals', {
-        params: { paymentProfileId: pid },
+        params: { paymentProfileId: pid, ...(locationId ? { locationId } : {}) },
       });
       const terms = (tRes.data?.terminals || []) as Terminal[];
       setTerminals(terms);
@@ -45,30 +59,20 @@ export default function DeviceEnrollmentWizard() {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [branchSwitcher, isHqView, locationId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!profileId) return;
-    void api
-      .get('/merchant/payment-profiles/terminals', { params: { paymentProfileId: profileId } })
-      .then((res) => {
-        const terms = (res.data?.terminals || []) as Terminal[];
-        setTerminals(terms);
-        if (!terms.some((x) => x.terminalId === terminalId)) {
-          setTerminalId(terms[0]?.terminalId || '');
-        }
-      })
-      .catch(() => undefined);
-  }, [profileId, terminalId]);
-
   const enroll = async () => {
-    const locationId = getSelectedLocationId();
-    if (!locationId) {
+    const enrollLocationId = locationId;
+    if (!enrollLocationId) {
       toast.error(t('deviceEnrollPickLocation'));
+      return;
+    }
+    if (!profileId) {
+      toast.error(t('deviceEnrollPickTerminal'));
       return;
     }
     const terminal = terminals.find((x) => x.terminalId === terminalId);
@@ -79,7 +83,7 @@ export default function DeviceEnrollmentWizard() {
     setBusy(true);
     try {
       const row = await enrollCurrentDevice({
-        locationId,
+        locationId: enrollLocationId,
         paymentProfileId: profileId,
         paymentTerminalId: terminal.id,
         lockEnrollment,
@@ -110,6 +114,18 @@ export default function DeviceEnrollmentWizard() {
     }
   };
 
+  if (branchSwitcher && isHqView) {
+    return null;
+  }
+
+  if (branchSwitcher && !locationId) {
+    return (
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        {t('hqSettingsPickBranch')}
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]/20 p-4">
       <div className="flex items-start gap-2">
@@ -127,15 +143,6 @@ export default function DeviceEnrollmentWizard() {
           ) : null}
         </div>
       </div>
-
-      <label className="block text-sm">
-        <span className="text-xs font-medium">{t('paymentProfilesTitle')}</span>
-        <select className="input mt-1 w-full" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-          {profiles.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </label>
 
       <label className="block text-sm">
         <span className="text-xs font-medium">{t('webPosPaymentTerminal')}</span>

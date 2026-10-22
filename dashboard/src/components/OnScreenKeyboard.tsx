@@ -1,8 +1,6 @@
 import { Delete, Keyboard, X } from 'lucide-react';
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -10,7 +8,10 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { OnScreenKeyboardContext, useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 import { shouldShowOnScreenKeyboardToggle, shouldUseWebPosOnScreenKeyboard } from '@/lib/platform';
+
+export { useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 
 type TextTarget = HTMLInputElement | HTMLTextAreaElement;
 
@@ -74,28 +75,6 @@ function deleteBackward(el: TextTarget) {
   } catch {
     /* ignore */
   }
-}
-
-type OnScreenKeyboardContextValue = {
-  open: boolean;
-  openKeyboard: () => void;
-  toggle: () => void;
-  close: () => void;
-};
-
-const OnScreenKeyboardContext = createContext<OnScreenKeyboardContextValue | null>(null);
-
-export function useOnScreenKeyboard(): OnScreenKeyboardContextValue {
-  const ctx = useContext(OnScreenKeyboardContext);
-  if (!ctx) {
-    return {
-      open: false,
-      openKeyboard: () => {},
-      toggle: () => {},
-      close: () => {},
-    };
-  }
-  return ctx;
 }
 
 const ROWS: string[][] = [

@@ -1391,6 +1391,16 @@ export default function OrderingPage() {
     active?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }, [selectedCategory]);
 
+  const scrollToMenuAfterDietaryFilter = useCallback(() => {
+    const bar = document.querySelector('.shop-sticky-category-bar');
+    if (bar) {
+      const y = bar.getBoundingClientRect().top + window.scrollY - 8;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      return;
+    }
+    document.getElementById('shop-menu-start')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-600">
@@ -1527,16 +1537,6 @@ export default function OrderingPage() {
       categoryScrollLock.current = false;
     }, 900);
   };
-
-  const scrollToMenuAfterDietaryFilter = useCallback(() => {
-    const bar = document.querySelector('.shop-sticky-category-bar');
-    if (bar) {
-      const y = bar.getBoundingClientRect().top + window.scrollY - 8;
-      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
-      return;
-    }
-    document.getElementById('shop-menu-start')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
 
   const productGridClass =
     productView === 'grid5'

@@ -15,6 +15,8 @@ import { clearWebPosStaffSession } from '@/lib/permissions';
 import { bootstrapStaffRegisterSessionAfterEmailLogin } from '@/lib/staff-email-login-bootstrap';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
 import { useSoftKeyboardLayout } from '@/lib/useSoftKeyboardLayout';
 
 const loginSchema = z.object({
@@ -296,6 +298,8 @@ export default function LoginPage() {
     }
   };
 
+  const showKeyboardToggle = shouldShowOnScreenKeyboardToggle();
+
   return (
     <div
       className={`flex w-full flex-col items-center p-4 ${
@@ -303,6 +307,14 @@ export default function LoginPage() {
       }`}
       style={{ backgroundColor: BRAND_BLUE_CHARCOAL, ...pageStyle }}
     >
+      {showKeyboardToggle ? (
+        <div className="relative z-10 mb-2 flex w-full max-w-[420px] justify-end">
+          <OnScreenKeyboardToggle
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white hover:bg-white/20 data-[active=true]:border-teal-300 data-[active=true]:bg-teal-900/40"
+            iconSize={18}
+          />
+        </div>
+      ) : null}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -340,7 +352,7 @@ export default function LoginPage() {
                   </label>
                   <input
                     id="login-email"
-                    {...register('email')}
+                    {...emailField}
                     type="email"
                     placeholder="name@company.com"
                     className="input py-2.5"
@@ -370,7 +382,7 @@ export default function LoginPage() {
                   </div>
                   <input
                     id="login-password"
-                    {...register('password')}
+                    {...passwordField}
                     type="password"
                     placeholder="••••••••"
                     className="input py-2.5"

@@ -66,6 +66,10 @@ export function shopSlugFromPath(path: string): string | null {
     "cds",
     "receipt",
     "receipts",
+    "payment-logos",
+    "icons",
+    "brand",
+    "embed",
   ]);
   if (reserved.has(segment.toLowerCase())) return null;
   return segment;

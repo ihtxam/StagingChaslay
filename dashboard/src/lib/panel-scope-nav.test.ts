@@ -9,6 +9,7 @@ import {
   shouldRedirectFromHqPanelPath,
   shouldShowHqCatalogBadges,
   shouldShowHqPanelNav,
+  shouldHideMerchantSettingsInHqView,
   shouldShowPanelPosQuickAction,
   shouldUseBranchCatalogPanel,
 } from './panel-scope-nav';
@@ -69,5 +70,9 @@ assert.equal(
   shouldShowPanelPosQuickAction({ ...multiHq, baseAllowed: false }),
   false
 );
+
+assert.equal(shouldHideMerchantSettingsInHqView(multi), false);
+assert.equal(shouldHideMerchantSettingsInHqView(multiHq), true);
+assert.equal(shouldHideMerchantSettingsInHqView(single), false);
 
 console.log('panel-scope-nav.test.ts OK');
