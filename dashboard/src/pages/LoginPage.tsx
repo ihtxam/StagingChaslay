@@ -12,6 +12,7 @@ import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
+import { bootstrapStaffRegisterSessionAfterEmailLogin } from '@/lib/staff-email-login-bootstrap';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
 import { useSoftKeyboardLayout } from '@/lib/useSoftKeyboardLayout';
@@ -209,10 +210,12 @@ export default function LoginPage() {
     document.title = APP_PANEL_TITLE;
   }, []);
 
+  // Restore an existing session once on mount (do not re-run after manual login — that races refreshSession).
   useEffect(() => {
-    if (!user || !token) return;
     let cancelled = false;
     void (async () => {
+      const initial = useAuthStore.getState();
+      if (!initial.token || !initial.user) return;
       await refreshSession();
       if (cancelled) return;
       const session = useAuthStore.getState();
@@ -222,7 +225,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [user, token, navigate, refreshSession]);
+  }, [navigate, refreshSession]);
 
   const onSubmit = async (form: LoginFormData) => {
     setIsLoading(true);
@@ -254,8 +257,9 @@ export default function LoginPage() {
           localStorage.removeItem('manupos_panel_scope');
           const { useLocationStore } = await import('@/store/location');
           await useLocationStore.getState().load();
+          await bootstrapStaffRegisterSessionAfterEmailLogin(hit.user, hit.token);
         } catch {
-          /* branch bind is best-effort */
+          /* branch bind / register session is best-effort */
         }
       }
       toast.success(t('loginWelcome'));
