@@ -90,4 +90,15 @@ describe('on-screen keyboard platform gates', () => {
     expect(isMobilePhone()).toBe(false);
     expect(shouldAutoOpenOnScreenKeyboard()).toBe(true);
   });
+
+  it('does not auto-open on login with fine pointer (desktop mouse+keyboard)', async () => {
+    installWindow({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RebornPOS/1.0',
+      pathname: '/login',
+      media: { '(pointer: coarse)': false, '(max-width: 767px)': false },
+    });
+    vi.stubGlobal('__TAURI_INTERNALS__', { invoke: vi.fn() });
+    const { shouldAutoOpenOnScreenKeyboard } = await import('./platform');
+    expect(shouldAutoOpenOnScreenKeyboard()).toBe(false);
+  });
 });
