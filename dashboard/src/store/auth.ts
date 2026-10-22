@@ -119,8 +119,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (typeof window !== 'undefined' && isShopCustomerSurface()) {
       return;
     }
-    const token = get().token || localStorage.getItem('token');
-    if (!token) return;
+    const tokenAtStart = get().token || localStorage.getItem('token');
+    if (!tokenAtStart) return;
     try {
       const res = await api.get('/auth/me');
       const { user, role, token: refreshedToken } = res.data;
@@ -147,8 +147,22 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       };
 
       if (refreshedToken) {
-        localStorage.setItem('token', refreshedToken);
-        set({ token: refreshedToken });
+        let acceptRefresh = true;
+        if (role === 'staff') {
+          try {
+            const b64 = refreshedToken.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
+            const payload = b64 ? (JSON.parse(atob(b64)) as { authEpoch?: number }) : null;
+            if (payload && typeof payload.authEpoch !== 'number') {
+              acceptRefresh = false;
+            }
+          } catch {
+            acceptRefresh = false;
+          }
+        }
+        if (acceptRefresh) {
+          localStorage.setItem('token', refreshedToken);
+          set({ token: refreshedToken });
+        }
       }
       localStorage.setItem('user', JSON.stringify(updated));
       set({ user: updated });
@@ -156,7 +170,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const err = error as { response?: { status?: number }; config?: { url?: string } };
       const status = err.response?.status;
       const url = String(err.config?.url || '');
-      if (status === 401 && !/verify-pin/i.test(url)) {
+      const currentToken = get().token || localStorage.getItem('token');
+      if (status === 401 && !/verify-pin/i.test(url) && currentToken === tokenAtStart) {
         get().logout();
       }
     }
