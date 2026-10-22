@@ -59,6 +59,34 @@ function contentTypeLooksHtml(headers: Record<string, unknown> | undefined): boo
 }
 
 /** 502/503/504, network drop, HTML/Caddy body — not 401/403/422 business errors. */
+const CLIENT_DEPLOY_RING =
+  typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEPLOY_RING
+    ? String(import.meta.env.VITE_DEPLOY_RING).trim()
+    : '';
+
+function responseDeployRing(error: unknown): string | null {
+  const err = error as { response?: { headers?: Record<string, unknown> } };
+  const headers = err.response?.headers;
+  if (!headers) return null;
+  const raw = headers['x-reborn-deploy-ring'] ?? headers['X-Reborn-Deploy-Ring'];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+/** Ignore deploy blips from another ring (e.g. misconfigured API URL). */
+export function deployBlipMatchesClientRing(error: unknown): boolean {
+  const serverRing = responseDeployRing(error);
+  if (!serverRing) return true;
+  const clientRing = CLIENT_DEPLOY_RING || inferDeployRingFromHostname();
+  return serverRing === clientRing;
+}
+
+function inferDeployRingFromHostname(): string {
+  if (typeof window === 'undefined') return 'production';
+  const host = window.location.hostname.toLowerCase();
+  if (host.includes('chaslay.com')) return 'staging';
+  return 'production';
+}
+
 export function isDeployBlip(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const err = error as AxiosLike;
@@ -108,15 +136,18 @@ function showSystemUpdateToast(opts?: Parameters<typeof toast.loading>[1]): stri
 }
 
 /** One toast for a burst of deploy 502s — same id, same window. */
-export function notifyDeployBlip(): string {
+export function notifyDeployBlip(error?: unknown): string {
+  if (error != null && !deployBlipMatchesClientRing(error)) {
+    return systemUpdateMessage();
+  }
   openDeployToastWindow();
   showSystemUpdateToast();
   return systemUpdateMessage();
 }
 
 export function toastLoadError(error: unknown, fallback: string): void {
-  if (isDeployBlip(error)) {
-    notifyDeployBlip();
+  if (isDeployBlip(error) && deployBlipMatchesClientRing(error)) {
+    notifyDeployBlip(error);
     return;
   }
   const err = error as { response?: { data?: { error?: string } } };

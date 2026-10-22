@@ -69,6 +69,12 @@ dotenv.config();
 const app: Express = express();
 const PORT = process.env.PORT || 3000;
 
+app.use((_req, res, next) => {
+  const ring = process.env.DEPLOY_STACK === "chaslay" ? "staging" : "production";
+  res.setHeader("X-Reborn-Deploy-Ring", ring);
+  next();
+});
+
 function buildCorsOrigins(): string[] {
   const defaults = [
     process.env.SUPERADMIN_URL,

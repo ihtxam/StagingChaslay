@@ -4,6 +4,7 @@ import { isMerchantPanelPath, isShopCustomerSurface } from '@/lib/shop-storefron
 import {
   installDeployToastGuard,
   isDeployBlip,
+  deployBlipMatchesClientRing,
   notifyDeployBlip,
   shouldSkipDeployToastForRequest,
 } from '@/lib/deploy-blip';
@@ -173,10 +174,11 @@ api.interceptors.response.use(
     }
     if (
       isDeployBlip(error) &&
+      deployBlipMatchesClientRing(error) &&
       !shouldSkipDeployToastForRequest(error) &&
       !isPublicShopHost()
     ) {
-      notifyDeployBlip();
+      notifyDeployBlip(error);
     }
     if (error.response?.status === 401) {
       const path = window.location.pathname || '';
