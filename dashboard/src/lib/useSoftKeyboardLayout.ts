@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
+import { useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 
 const SOFT_KEYBOARD_THRESHOLD_PX = 72;
 
