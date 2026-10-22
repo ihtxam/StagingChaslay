@@ -93,13 +93,33 @@ shop.chaslay.com {
 		reverse_proxy dashboard:80
 	}
 
+	handle /payment-logos/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /icons/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /brand/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /embed/* {
+		reverse_proxy dashboard:80
+	}
+
 	@shop_spa {
 		not path /api/*
 		not path /assets/*
 		not path /openpage/*
 		not path /downloads/*
 		not path /shop/payments/*
-		not path /*.*
+		not path /payment-logos/*
+		not path /icons/*
+		not path /brand/*
+		not path /embed/*
+		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
 		reverse_proxy api:3000
@@ -158,12 +178,32 @@ status.chaslay.com {
 		reverse_proxy api:3000
 	}
 
+	handle /payment-logos/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /icons/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /brand/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /embed/* {
+		reverse_proxy dashboard:80
+	}
+
 	@shop_spa {
 		not path /api/*
 		not path /assets/*
 		not path /openpage/*
 		not path /downloads/*
-		not path /*.*
+		not path /payment-logos/*
+		not path /icons/*
+		not path /brand/*
+		not path /embed/*
+		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
 		reverse_proxy api:3000
@@ -203,12 +243,32 @@ https:// {
 		reverse_proxy api:3000
 	}
 
+	handle /payment-logos/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /icons/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /brand/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /embed/* {
+		reverse_proxy dashboard:80
+	}
+
 	@shop_spa {
 		not path /api/*
 		not path /assets/*
 		not path /openpage/*
 		not path /downloads/*
-		not path /*.*
+		not path /payment-logos/*
+		not path /icons/*
+		not path /brand/*
+		not path /embed/*
+		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
 		reverse_proxy api:3000

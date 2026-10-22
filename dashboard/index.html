@@ -82,6 +82,16 @@
         if (!isShop) return;
         window.__REBORN_SHOP_STOREFRONT__ = true;
         try {
+          var panelOrigin =
+            host.indexOf('chaslay.com') !== -1
+              ? 'https://app.chaslay.com'
+              : 'https://app.rebornsense.com';
+          var manifestLink = document.querySelector('link[rel="manifest"]');
+          if (manifestLink) manifestLink.parentNode.removeChild(manifestLink);
+          var touchIcon = document.querySelector('link[rel="apple-touch-icon"]');
+          if (touchIcon) touchIcon.setAttribute('href', panelOrigin + '/icons/apple-touch-icon.png');
+        } catch (eShopChrome) {}
+        try {
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(function (regs) {
               regs.forEach(function (reg) {

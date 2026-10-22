@@ -2,7 +2,20 @@ import { NextFunction, Request, Response } from "express";
 import { ShopSpaService } from "@/services/shop-spa.service";
 import { isShopRequestHost, requestLooksLikeSpaDocument } from "@/lib/shop-request-host";
 
-const SKIP_PREFIXES = ["/api", "/health", "/v1", "/downloads", "/receipt", "/receipts"];
+const SKIP_PREFIXES = [
+  "/api",
+  "/health",
+  "/v1",
+  "/downloads",
+  "/receipt",
+  "/receipts",
+  "/assets",
+  "/payment-logos",
+  "/icons",
+  "/brand",
+  "/embed",
+  "/openpage",
+];
 
 /** Serve shop SPA index.html with server-side Open Graph tags for social crawlers. */
 export async function shopSpaShellMiddleware(req: Request, res: Response, next: NextFunction) {
