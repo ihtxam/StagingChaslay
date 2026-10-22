@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { translate } from './i18n.tsx';
 import {
+  deployBlipMatchesClientRing,
   isDeployBlip,
   isHtmlErrorBody,
   resetDeployBlipStateForTests,
@@ -54,6 +55,15 @@ assert.equal(isDeployBlip(null), false);
 assert.equal(isDeployBlip('boom'), false);
 
 assert.equal(shouldSkipDeployToastForRequest({ config: { url: '/auth/merchant/login' } }), true);
+
+assert.equal(
+  deployBlipMatchesClientRing({ response: { headers: { 'x-reborn-deploy-ring': 'production' } } }),
+  true
+);
+assert.equal(
+  deployBlipMatchesClientRing({ response: { headers: { 'x-reborn-deploy-ring': 'staging' } } }),
+  false
+);
 
 assert.equal(translate('en', 'systemUpdateWait'), 'Wait for system update');
 assert.equal(translate('fr', 'systemUpdateWait'), 'Attendez la mise à jour du système');

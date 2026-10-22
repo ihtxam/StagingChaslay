@@ -58,6 +58,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GH_TOKEN: ${GH_TOKEN:-}
       GITHUB_REPO: ${GITHUB_REPO:-ihtxam/rebornSense}
+      DEPLOY_STACK: ${DEPLOY_STACK:-rebornsense}
     volumes:
       - uploads_data:/app/uploads
       # Host-built print-agent EXE (gitignored). Deploy script rebuilds into this path.
@@ -98,6 +99,7 @@ services:
         VITE_PUBLIC_DOMAIN: ${DOMAIN:-rebornsense.com}
         VITE_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://app.rebornsense.com}
         VITE_PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.rebornsense.com}
+        VITE_DEPLOY_RING: ${VITE_DEPLOY_RING:-production}
     restart: unless-stopped
     depends_on:
       api:

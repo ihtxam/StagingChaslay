@@ -915,6 +915,12 @@ while IFS= read -r orphan_api; do
   [[ -z "$orphan_api" ]] && continue
   docker rm -f "$orphan_api" 2>/dev/null || true
 done < <(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E "(^|_)${migrate_project}-api-" || true)
+export DEPLOY_STACK="${DEPLOY_STACK:-rebornsense}"
+if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
+  export VITE_DEPLOY_RING=staging
+else
+  export VITE_DEPLOY_RING=production
+fi
 dc up -d --build --remove-orphans db api dashboard caddy
 
 # Caddyfile is bind-mounted. `caddy reload` can leave stale site blocks (e.g. new

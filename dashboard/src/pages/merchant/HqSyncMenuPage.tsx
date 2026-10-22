@@ -5,6 +5,9 @@ import { ArrowLeft, RefreshCw, Upload } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useLocationStore } from '@/store/location';
+import SearchableMultiSelect from '@/components/SearchableMultiSelect';
+
+const UNCATEGORIZED_ID = '__uncategorized__';
 
 type SyncProduct = { id: string; name: string; pending?: boolean };
 type SyncCategory = { id: string; name: string; products: SyncProduct[] };
@@ -28,7 +31,7 @@ export default function HqSyncMenuPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [state, setState] = useState<SyncState | null>(null);
-  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [selectedLocations, setSelectedLocations] = useState<Set<string>>(new Set());
   const [setOnSaleAfterSync, setSetOnSaleAfterSync] = useState(true);
@@ -44,22 +47,15 @@ export default function HqSyncMenuPage() {
       if (pending.size) {
         setSelectedProducts(pending);
       } else {
-        const all = new Set<string>();
-        for (const c of s?.categories || []) {
-          for (const p of c.products) all.add(p.id);
-        }
-        for (const p of s?.uncategorizedProducts || []) all.add(p.id);
-        setSelectedProducts(all);
+        setSelectedProducts(new Set());
       }
-      if (!activeCategoryId && s?.categories?.[0]) {
-        setActiveCategoryId(s.categories[0].id);
-      }
+      setSelectedCategoryIds([]);
     } catch {
       toast.error(t('hqSyncLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [activeCategoryId, t]);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -72,13 +68,38 @@ export default function HqSyncMenuPage() {
   }, [locations]);
 
   const categories = state?.categories || [];
-  const activeCategory = categories.find((c) => c.id === activeCategoryId) || categories[0];
-  const menuProducts = useMemo(() => {
-    if (!activeCategoryId && state?.uncategorizedProducts?.length) {
-      return state.uncategorizedProducts;
+
+  const categoryOptions = useMemo(() => {
+    const opts = categories.map((c) => ({ id: c.id, label: c.name }));
+    if ((state?.uncategorizedProducts?.length || 0) > 0) {
+      opts.push({ id: UNCATEGORIZED_ID, label: t('uncategorized') });
     }
-    return activeCategory?.products || [];
-  }, [activeCategory, activeCategoryId, state?.uncategorizedProducts]);
+    return opts;
+  }, [categories, state?.uncategorizedProducts, t]);
+
+  const visibleProductGroups = useMemo(() => {
+    if (!selectedCategoryIds.length) return [];
+    const groups: Array<{ key: string; title: string; products: SyncProduct[] }> = [];
+    for (const catId of selectedCategoryIds) {
+      if (catId === UNCATEGORIZED_ID) {
+        const products = state?.uncategorizedProducts || [];
+        if (products.length) {
+          groups.push({ key: UNCATEGORIZED_ID, title: t('uncategorized'), products });
+        }
+        continue;
+      }
+      const cat = categories.find((c) => c.id === catId);
+      if (cat?.products?.length) {
+        groups.push({ key: cat.id, title: cat.name, products: cat.products });
+      }
+    }
+    return groups;
+  }, [categories, selectedCategoryIds, state?.uncategorizedProducts, t]);
+
+  const visibleProductIds = useMemo(
+    () => visibleProductGroups.flatMap((g) => g.products.map((p) => p.id)),
+    [visibleProductGroups]
+  );
 
   const toggleProduct = (id: string) => {
     setSelectedProducts((prev) => {
@@ -89,11 +110,10 @@ export default function HqSyncMenuPage() {
     });
   };
 
-  const toggleCategoryProducts = (selectAll: boolean) => {
-    const ids = menuProducts.map((p) => p.id);
+  const toggleVisibleProducts = (selectAll: boolean) => {
     setSelectedProducts((prev) => {
       const next = new Set(prev);
-      for (const id of ids) {
+      for (const id of visibleProductIds) {
         if (selectAll) next.add(id);
         else next.delete(id);
       }
@@ -111,6 +131,10 @@ export default function HqSyncMenuPage() {
   };
 
   const runSync = async () => {
+    if (selectedCategoryIds.length === 0) {
+      toast.error(t('hqSyncSelectCategories'));
+      return;
+    }
     if (selectedProducts.size === 0) {
       toast.error(t('hqSyncSelectProducts'));
       return;
@@ -140,91 +164,120 @@ export default function HqSyncMenuPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link to="/merchant/hq" className="btn-secondary text-sm inline-flex items-center gap-1">
-          <ArrowLeft className="w-4 h-4" />
-          {t('hqDashboardTitle')}
-        </Link>
-        <div>
-          <h1 className="text-xl font-semibold">{t('hqSyncPageTitle')}</h1>
-          <p className="text-sm text-[var(--text-muted)]">{t('hqSyncPageDescription')}</p>
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-2 min-w-0">
+          <Link
+            to="/merchant/hq"
+            className="btn-secondary text-sm inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft className="w-4 h-4 shrink-0" />
+            {t('hqDashboardTitle')}
+          </Link>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('hqSyncPageTitle')}</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1 max-w-2xl">
+              {t('hqSyncPageDescription')}
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          className="btn-secondary text-sm shrink-0"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          <RefreshCw className={`w-4 h-4 inline mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+          {t('refresh')}
+        </button>
       </div>
 
       {loading ? (
         <p className="text-sm muted">{t('loading')}</p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="rounded-lg border border-[var(--border)] p-4 space-y-3 min-h-[420px]">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-medium">{t('hqSyncMenuColumn')}</h2>
-              <button type="button" className="btn-secondary text-xs" onClick={() => void load()}>
-                <RefreshCw className="w-3.5 h-3.5 inline mr-1" />
-                {t('refresh')}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                    activeCategory?.id === cat.id
-                      ? 'bg-[var(--bg-elevated)] shadow-sm'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-                  }`}
-                  onClick={() => setActiveCategoryId(cat.id)}
-                >
-                  {cat.name}
-                </button>
-              ))}
-              {(state?.uncategorizedProducts?.length || 0) > 0 ? (
-                <button
-                  type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                    !activeCategoryId
-                      ? 'bg-[var(--bg-elevated)] shadow-sm'
-                      : 'text-[var(--text-muted)]'
-                  }`}
-                  onClick={() => setActiveCategoryId(null)}
-                >
-                  {t('uncategorized')}
-                </button>
-              ) : null}
-            </div>
-            <div className="flex gap-2 text-xs">
-              <button type="button" className="underline" onClick={() => toggleCategoryProducts(true)}>
-                {t('selectAll')}
-              </button>
-              <button type="button" className="underline" onClick={() => toggleCategoryProducts(false)}>
-                {t('deselectAll')}
-              </button>
-            </div>
-            <ul className="space-y-1 max-h-[340px] overflow-y-auto pr-1">
-              {menuProducts.map((p) => (
-                <li key={p.id}>
-                  <label className="flex items-center gap-2 text-sm py-1.5 rounded hover:bg-[var(--bg-muted)] px-1">
-                    <input
-                      type="checkbox"
-                      checked={selectedProducts.has(p.id)}
-                      onChange={() => toggleProduct(p.id)}
-                    />
-                    <span className="flex-1 truncate">{p.name}</span>
-                    {p.pending ? (
-                      <span className="text-[10px] uppercase font-semibold text-amber-700">
-                        {t('hqSyncPendingBadge')}
-                      </span>
-                    ) : null}
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <section
+            className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-sm p-5 space-y-4 min-h-[480px] flex flex-col"
+          >
+            <h2 className="text-base font-semibold">{t('hqSyncMenuColumn')}</h2>
 
-          <div className="rounded-lg border border-[var(--border)] p-4 space-y-4">
-            <h2 className="font-medium">{t('hqSyncStoresColumn')}</h2>
-            <ul className="space-y-2">
+            <SearchableMultiSelect
+              label={t('hqSyncCategoriesLabel')}
+              helperText={t('hqSyncCategoriesHelper')}
+              placeholder={t('hqSyncCategoriesPlaceholder')}
+              options={categoryOptions}
+              value={selectedCategoryIds}
+              onChange={setSelectedCategoryIds}
+              required
+            />
+
+            {selectedCategoryIds.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)] rounded-lg border border-dashed border-[var(--border)] px-4 py-8 text-center">
+                {t('hqSyncSelectCategoriesFirst')}
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-b border-[var(--border)] pb-2">
+                  <span className="text-[var(--text-muted)]">
+                    {t('hqSyncProductsInCategories', { count: visibleProductIds.length })}
+                  </span>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      className="font-medium text-[var(--accent)] hover:underline"
+                      onClick={() => toggleVisibleProducts(true)}
+                    >
+                      {t('selectAll')}
+                    </button>
+                    <button
+                      type="button"
+                      className="font-medium text-[var(--text-muted)] hover:underline"
+                      onClick={() => toggleVisibleProducts(false)}
+                    >
+                      {t('deselectAll')}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 space-y-4 max-h-[380px] overflow-y-auto pr-1">
+                  {visibleProductGroups.map((group) => (
+                    <div key={group.key}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2 sticky top-0 bg-[var(--bg-surface)] py-1">
+                        {group.title}
+                      </p>
+                      <ul className="space-y-0.5">
+                        {group.products.map((p) => (
+                          <li key={p.id}>
+                            <label
+                              className="flex items-center gap-2.5 text-sm py-2 px-2 rounded-lg hover:bg-[var(--bg-muted)] cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                className="rounded border-[var(--border)]"
+                                checked={selectedProducts.has(p.id)}
+                                onChange={() => toggleProduct(p.id)}
+                              />
+                              <span className="flex-1 truncate">{p.name}</span>
+                              {p.pending ? (
+                                <span className="text-[10px] uppercase font-semibold text-amber-700 dark:text-amber-400 shrink-0">
+                                  {t('hqSyncPendingBadge')}
+                                </span>
+                              ) : null}
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+
+          <section
+            className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-sm p-5 space-y-5 lg:sticky lg:top-4"
+          >
+            <h2 className="text-base font-semibold">{t('hqSyncStoresColumn')}</h2>
+            <ul className="space-y-3">
               {(state?.locationStats ||
                 locations.map((l) => ({
                   locationId: l.id,
@@ -232,17 +285,20 @@ export default function HqSyncMenuPage() {
                   linkedCount: 0,
                   pendingCount: 0,
                 }))).map((loc) => (
-                <li key={loc.locationId}>
-                  <label className="flex items-start gap-2 text-sm">
+                <li
+                  key={loc.locationId}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2.5 hover:bg-[var(--bg-muted)]/50"
+                >
+                  <label className="flex items-start gap-3 text-sm cursor-pointer">
                     <input
                       type="checkbox"
-                      className="mt-1"
+                      className="mt-0.5 rounded border-[var(--border)]"
                       checked={selectedLocations.has(loc.locationId)}
                       onChange={() => toggleLocation(loc.locationId)}
                     />
-                    <span>
-                      <span className="font-medium">{loc.name}</span>
-                      <span className="block text-xs text-[var(--text-muted)]">
+                    <span className="min-w-0">
+                      <span className="font-medium block">{loc.name}</span>
+                      <span className="block text-xs text-[var(--text-muted)] mt-0.5">
                         {t('hqSyncLocationStats', {
                           linked: loc.linkedCount,
                           pending: loc.pendingCount,
@@ -253,32 +309,36 @@ export default function HqSyncMenuPage() {
                 </li>
               ))}
             </ul>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={setOnSaleAfterSync}
-                onChange={(e) => setSetOnSaleAfterSync(e.target.checked)}
-              />
-              {t('hqSyncOnSaleAfter')}
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={overwritePrices}
-                onChange={(e) => setOverwritePrices(e.target.checked)}
-              />
-              {t('hqOverwritePrices')}
-            </label>
+            <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+              <label className="flex items-start gap-2.5 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-[var(--border)]"
+                  checked={setOnSaleAfterSync}
+                  onChange={(e) => setSetOnSaleAfterSync(e.target.checked)}
+                />
+                <span>{t('hqSyncOnSaleAfter')}</span>
+              </label>
+              <label className="flex items-start gap-2.5 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-[var(--border)]"
+                  checked={overwritePrices}
+                  onChange={(e) => setOverwritePrices(e.target.checked)}
+                />
+                <span>{t('hqOverwritePrices')}</span>
+              </label>
+            </div>
             <button
               type="button"
-              className="btn-primary w-full sm:w-auto"
-              disabled={syncing}
+              className="btn-primary w-full py-2.5 text-base font-medium"
+              disabled={syncing || selectedCategoryIds.length === 0}
               onClick={() => void runSync()}
             >
-              <Upload className="w-4 h-4 mr-1 inline" />
+              <Upload className="w-4 h-4 mr-2 inline" />
               {syncing ? t('saving') : t('hqSyncMenuCta')}
             </button>
-          </div>
+          </section>
         </div>
       )}
     </div>
