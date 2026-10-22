@@ -319,13 +319,19 @@ export class HqMenuService {
         eq(schema.hqCatalogVersions.merchantId, merchantId)
       ),
     });
-    const versionPayload = (version?.payloadJson || {}) as { products?: Array<{ id: string }> };
+    const versionPayload = (version?.payloadJson || {}) as {
+      products?: Array<{ id: string }>;
+      categories?: Array<{ id: string }>;
+    };
     const versionProductIds = (versionPayload.products || []).map((p) => p.id).filter(Boolean);
+    const versionCategoryIds = (versionPayload.categories || [])
+      .map((c) => String(c.id || "").trim())
+      .filter(Boolean);
 
     const menuPatch = {
       hqVersionId: versionId,
       productIds: versionProductIds,
-      categoryIds: [] as string[],
+      categoryIds: versionCategoryIds,
       channels: [...DEFAULT_MENU_CHANNELS],
       scheduleType: "daily" as const,
       daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
@@ -363,7 +369,7 @@ export class HqMenuService {
       locationIds: [loc],
       hqVersionId: versionId,
       productIds: versionProductIds,
-      categoryIds: [],
+      categoryIds: versionCategoryIds,
       productPrices: {},
       isDefault: false,
       isActive: true,

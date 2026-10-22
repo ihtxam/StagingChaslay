@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, RefreshCw, Upload } from 'lucide-react';
@@ -43,12 +43,7 @@ export default function HqSyncMenuPage() {
       const res = await api.get('/merchant/hq/catalog/sync-state');
       const s = res.data?.state as SyncState;
       setState(s);
-      const pending = new Set<string>(s?.pendingProductIds || []);
-      if (pending.size) {
-        setSelectedProducts(pending);
-      } else {
-        setSelectedProducts(new Set());
-      }
+      setSelectedProducts(new Set());
       setSelectedCategoryIds([]);
     } catch {
       toast.error(t('hqSyncLoadFailed'));
@@ -101,6 +96,43 @@ export default function HqSyncMenuPage() {
     [visibleProductGroups]
   );
 
+  const prevCategoryIdsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    const prev = new Set(prevCategoryIdsRef.current);
+    const added = selectedCategoryIds.filter((id) => !prev.has(id));
+    prevCategoryIdsRef.current = selectedCategoryIds;
+
+    if (!selectedCategoryIds.length) {
+      setSelectedProducts(new Set());
+      return;
+    }
+
+    const visible = new Set(visibleProductIds);
+    const pending = new Set(state?.pendingProductIds || []);
+
+    setSelectedProducts((prevSel) => {
+      const next = new Set<string>();
+      for (const id of prevSel) {
+        if (visible.has(id)) next.add(id);
+      }
+      if (!added.length) return next;
+
+      for (const catId of added) {
+        let products: SyncProduct[] = [];
+        if (catId === UNCATEGORIZED_ID) {
+          products = state?.uncategorizedProducts || [];
+        } else {
+          products = categories.find((c) => c.id === catId)?.products || [];
+        }
+        for (const p of products) {
+          if (pending.has(p.id)) next.add(p.id);
+        }
+      }
+      return next;
+    });
+  }, [categories, selectedCategoryIds, state?.pendingProductIds, state?.uncategorizedProducts, visibleProductIds]);
+
   const toggleProduct = (id: string) => {
     setSelectedProducts((prev) => {
       const next = new Set(prev);
@@ -143,11 +175,19 @@ export default function HqSyncMenuPage() {
       toast.error(t('hqSelectVersionAndLocations'));
       return;
     }
+    const visible = new Set(visibleProductIds);
+    const productIds = [...selectedProducts].filter((id) => visible.has(id));
+    if (!productIds.length) {
+      toast.error(t('hqSyncSelectProducts'));
+      return;
+    }
+
     setSyncing(true);
     try {
       const res = await api.post('/merchant/hq/catalog/sync', {
         locationIds: [...selectedLocations],
-        productIds: [...selectedProducts],
+        categoryIds: selectedCategoryIds,
+        productIds,
         setOnSaleAfterSync,
         overwritePrices,
       });
