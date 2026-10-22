@@ -181,7 +181,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, locale, setLocale } = useI18n();
-  const { user, token, setUser, setToken } = useAuthStore();
+  const { user, token, setUser, setToken, refreshSession, logout } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<'login' | 'forgot' | 'sent'>(
     location.pathname.includes('forgot-password') ? 'forgot' : 'login'
@@ -210,10 +210,19 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (user && token) {
-      navigate(posEmbedReturnPath() ?? homePathForUser(user), { replace: true });
-    }
-  }, [user, token, navigate]);
+    if (!user || !token) return;
+    let cancelled = false;
+    void (async () => {
+      await refreshSession();
+      if (cancelled) return;
+      const session = useAuthStore.getState();
+      if (!session.token || !session.user) return;
+      navigate(posEmbedReturnPath() ?? homePathForUser(session.user), { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, token, navigate, refreshSession]);
 
   const onSubmit = async (form: LoginFormData) => {
     setIsLoading(true);
@@ -240,6 +249,15 @@ export default function LoginPage() {
       clearWebPosStaffSession();
       setToken(hit.token);
       setUser(hit.user);
+      if (hit.user.role === 'staff') {
+        try {
+          localStorage.removeItem('manupos_panel_scope');
+          const { useLocationStore } = await import('@/store/location');
+          await useLocationStore.getState().load();
+        } catch {
+          /* branch bind is best-effort */
+        }
+      }
       toast.success(t('loginWelcome'));
       navigate(posEmbedReturnPath() ?? homePathForUser(hit.user), { replace: true });
     } catch (error: unknown) {
