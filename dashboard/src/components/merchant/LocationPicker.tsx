@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Building2, Check, MapPin, Network } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { shouldShowLocationSwitcher } from '@/lib/pos-hub-visibility';
+import { canSwitchPanelLocationFromUser } from '@/lib/panel-location-switch';
+import { useAuthStore } from '@/store/auth';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { setWebPosTerminalLocationId } from '@/lib/webpos-terminal-location';
 
@@ -149,8 +151,12 @@ export default function LocationPickerModal({
 
 export function LocationSwitcherChip() {
   const { t } = useI18n();
-  const { location, locations, limits, isHqView, load } = useLocationStore();
+  const authUser = useAuthStore((s) => s.user);
+  const { location, locations, limits, isHqView, load, canSwitchPanelLocation } =
+    useLocationStore();
   const [open, setOpen] = useState(false);
+  const maySwitch =
+    canSwitchPanelLocation && canSwitchPanelLocationFromUser(authUser);
 
   useEffect(() => {
     void load();
@@ -167,12 +173,25 @@ export function LocationSwitcherChip() {
 
   const label = isHqView ? t('navHq') : location?.name || t('selectLocation');
 
+  if (!maySwitch) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 max-w-[min(12rem,40vw)] px-2 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--bg-muted)]/40 truncate shrink-0 cursor-default select-none"
+        title={label}
+        aria-label={label}
+      >
+        <MapPin className="w-3.5 h-3.5 shrink-0 opacity-80" />
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 max-w-[min(12rem,40vw)] px-2 py-1 rounded-md text-xs border border-[var(--border)] hover:bg-[var(--bg-muted)] truncate shrink-0"
+        className="inline-flex items-center gap-1.5 max-w-[min(12rem,40vw)] px-2 py-1 rounded-md text-xs border border-[var(--border)] hover:bg-[var(--bg-muted)] truncate shrink-0 cursor-pointer"
         title={t('switchLocation')}
       >
         {isHqView ? (

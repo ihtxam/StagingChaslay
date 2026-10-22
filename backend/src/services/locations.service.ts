@@ -319,6 +319,33 @@ export class LocationsService {
     return rows.map((r) => r.locationId);
   }
 
+  /**
+   * Hard-bound branch for staff who cannot use the panel location switcher.
+   * Uses explicit staff↔location rows when present; otherwise merchant default.
+   */
+  static async resolveStaffBoundLocationId(
+    merchantId: string,
+    staffId: string
+  ): Promise<string> {
+    const scoped = await this.getStaffLocationIds(merchantId, staffId);
+    if (scoped.length === 1) return scoped[0]!;
+
+    const db = getDb();
+    if (scoped.length > 1) {
+      const rows = await db.query.locations.findMany({
+        where: and(
+          eq(schema.locations.merchantId, merchantId),
+          inArray(schema.locations.id, scoped),
+          eq(schema.locations.status, "active")
+        ),
+        orderBy: [asc(schema.locations.isDefault), asc(schema.locations.name)],
+      });
+      if (rows[0]?.id) return rows[0].id;
+    }
+
+    return this.getDefaultId(merchantId);
+  }
+
   static async setStaffLocations(merchantId: string, staffId: string, locationIds: string[]) {
     const db = getDb();
     const unique = [...new Set(locationIds.filter(Boolean))];

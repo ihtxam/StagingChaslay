@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
 import { notifyPanelLocationScopeChanged } from '@/lib/panel-location-scope';
+import { canSwitchPanelLocationFromUser } from '@/lib/panel-location-switch';
+import { useAuthStore } from '@/store/auth';
 
 export type MerchantLocation = {
   id: string;
@@ -35,6 +37,9 @@ type LocationStore = {
   limits: LocationLimits | null;
   loading: boolean;
   hydrated: boolean;
+  /** Manager / admin / owner may switch branches; floor staff are locked. */
+  canSwitchPanelLocation: boolean;
+  boundLocationId: string | null;
   setLocationId: (id: string) => void;
   setHqView: () => void;
   load: () => Promise<void>;
@@ -75,6 +80,11 @@ function writeStoredId(id: string | null) {
   }
 }
 
+function panelLocationSwitchAllowed(): boolean {
+  const user = useAuthStore.getState().user;
+  return canSwitchPanelLocationFromUser(user);
+}
+
 export const useLocationStore = create<LocationStore>((set, get) => ({
   locations: [],
   locationId: readStoredScope() === 'hq' ? null : readStoredId(),
@@ -84,7 +94,25 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
   limits: null,
   loading: false,
   hydrated: false,
+  canSwitchPanelLocation: true,
+  boundLocationId: null,
   setLocationId: (id) => {
+    const { canSwitchPanelLocation: canSwitch, boundLocationId } = get();
+    if (!canSwitch) {
+      const locked = boundLocationId || id;
+      if (locked && locked !== get().locationId) {
+        const loc = get().locations.find((l) => l.id === locked) || null;
+        writeStoredScope('branch');
+        writeStoredId(locked);
+        set({
+          locationId: locked,
+          location: loc,
+          panelScope: 'branch',
+          isHqView: false,
+        });
+      }
+      return;
+    }
     writeStoredScope('branch');
     writeStoredId(id);
     const loc = get().locations.find((l) => l.id === id) || null;
@@ -92,6 +120,7 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
     notifyPanelLocationScopeChanged();
   },
   setHqView: () => {
+    if (!get().canSwitchPanelLocation) return;
     writeStoredScope('hq');
     writeStoredId(null);
     set({ locationId: null, location: null, panelScope: 'hq', isHqView: true });
@@ -103,6 +132,39 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
       const res = await api.get('/merchant/locations');
       const locations: MerchantLocation[] = res.data?.locations || [];
       const limits: LocationLimits | null = res.data?.limits || null;
+      const panelLocation = res.data?.panelLocation as
+        | { canSwitchPanelLocation?: boolean; boundLocationId?: string | null }
+        | undefined;
+      const canSwitch =
+        panelLocation?.canSwitchPanelLocation ?? panelLocationSwitchAllowed();
+      const boundLocationId = panelLocation?.boundLocationId
+        ? String(panelLocation.boundLocationId)
+        : null;
+
+      if (!canSwitch) {
+        const pick =
+          (boundLocationId && locations.find((l) => l.id === boundLocationId)?.id) ||
+          locations.find((l) => l.isDefault)?.id ||
+          locations[0]?.id ||
+          null;
+        if (pick) {
+          writeStoredScope('branch');
+          writeStoredId(pick);
+        }
+        set({
+          locations,
+          limits,
+          locationId: pick,
+          location: locations.find((l) => l.id === pick) || null,
+          panelScope: 'branch',
+          isHqView: false,
+          canSwitchPanelLocation: false,
+          boundLocationId: pick,
+          hydrated: true,
+        });
+        return;
+      }
+
       const scope = readStoredScope();
       const stored = readStoredId();
       const canUseHq = locations.length > 1 && scope === 'hq';
@@ -115,6 +177,8 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
           location: null,
           panelScope: 'hq',
           isHqView: true,
+          canSwitchPanelLocation: true,
+          boundLocationId: null,
           hydrated: true,
         });
         return;
@@ -136,6 +200,8 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
         location: locations.find((l) => l.id === pick) || null,
         panelScope: 'branch',
         isHqView: false,
+        canSwitchPanelLocation: true,
+        boundLocationId: null,
         hydrated: true,
       });
     } catch {
@@ -150,6 +216,8 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
         location: null,
         panelScope: 'branch',
         isHqView: false,
+        canSwitchPanelLocation: panelLocationSwitchAllowed(),
+        boundLocationId: null,
         hydrated: true,
       });
     } finally {
