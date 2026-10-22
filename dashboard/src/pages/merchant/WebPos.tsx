@@ -11365,7 +11365,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     }
                     void printEscPosToTargets('', {
                       role: 'receipt',
-                      dataBase64: uint8ToBase64(buildPrinterTestEscPos(name)),
+                      dataBase64: uint8ToBase64(
+                        buildPrinterTestEscPos({ printerName: name, merchantName: merchant?.name })
+                      ),
                       quiet: true,
                     });
                   }
