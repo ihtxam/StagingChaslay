@@ -199,7 +199,7 @@ export function LocationSwitcherChip() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 max-w-[min(12rem,40vw)] px-2 py-1 rounded-md text-xs border border-[var(--border)] hover:bg-[var(--bg-muted)] truncate shrink-0 cursor-pointer"
+        className="inline-flex items-center gap-1.5 max-w-[min(9rem,34vw)] sm:max-w-[min(12rem,40vw)] px-2 py-1 rounded-md text-xs border border-[var(--border)] hover:bg-[var(--bg-muted)] truncate shrink-0 cursor-pointer"
         title={t('switchLocation')}
       >
         {isHqView ? (
