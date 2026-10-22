@@ -1,3 +1,4 @@
+# Deploy 2026-10-22T10:05:00Z — POS open-ticket ledger: paid/cancel heal, KDS ghost prevention (#843)
 # Deploy 2026-10-21T14:40:00Z — POS cancelled kitchen tickets leave Actives (#826), KDS dismiss, sw v16
 # Deploy 2026-10-20T05:55:00Z — Bridge download manifest 0.4.46, canonical APK route fix
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
