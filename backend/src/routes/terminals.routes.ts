@@ -1,6 +1,12 @@
 import { Router, Request, Response } from "express";
 import { eq, and } from "drizzle-orm";
-import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
+import {
+  verifyToken,
+  requireMerchant,
+  setMerchantContext,
+  requirePermission,
+} from "@/middleware/auth.middleware";
+import { PaymentProfilesService } from "@/services/payment-profiles.service";
 import { getDb, schema } from "@/db";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { AdyenMerchantWebhookService } from "@/services/adyen-merchant-webhook.service";
@@ -18,12 +24,16 @@ function maskSecret(value?: string | null): string | null {
   return `${value.slice(0, 4)}••••${value.slice(-4)}`;
 }
 
-function sanitizeTerminal(t: typeof schema.paymentTerminals.$inferSelect) {
+function sanitizeTerminal(
+  t: typeof schema.paymentTerminals.$inferSelect,
+  defaultProfileId?: string | null
+) {
   return {
     ...t,
     adyenApiKey: undefined,
     adyenApiKeyMasked: maskSecret(t.adyenApiKey),
     adyenApiKeySet: !!t.adyenApiKey,
+    paymentProfileId: t.paymentProfileId || defaultProfileId || null,
   };
 }
 
@@ -34,6 +44,7 @@ function sanitizeTerminal(t: typeof schema.paymentTerminals.$inferSelect) {
 router.get("/", async (req: Request, res: Response) => {
   try {
     const db = getDb();
+    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(req.merchantId!);
     const terminals = await db.query.paymentTerminals.findMany({
       where: eq(schema.paymentTerminals.merchantId, req.merchantId!),
     });
@@ -41,7 +52,7 @@ router.get("/", async (req: Request, res: Response) => {
     const webhookUrl = AdyenMerchantWebhookService.webhookUrlFromRequest(req.merchantId!, req);
     res.json({
       success: true,
-      terminals: terminals.map(sanitizeTerminal),
+      terminals: terminals.map((t) => sanitizeTerminal(t, defaultProfileId)),
       adyen: {
         merchantAccount: settings.adyenMerchantAccount,
         storeReference: settings.adyenStoreReference || "",
@@ -63,7 +74,7 @@ router.get("/", async (req: Request, res: Response) => {
  * PUT /api/terminals/adyen-credentials
  * Store merchant-level Adyen merchant account, API key, client ID, and webhook HMAC key.
  */
-router.put("/adyen-credentials", async (req: Request, res: Response) => {
+router.put("/adyen-credentials", requirePermission("MANAGE_SETTINGS"), async (req: Request, res: Response) => {
   try {
     const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix, adyenStoreReference } =
       req.body;
@@ -103,8 +114,9 @@ router.put("/adyen-credentials", async (req: Request, res: Response) => {
  * Register a payment terminal. Uses merchant-level Adyen credentials from Settings.
  * Only terminal ID is required (display name optional).
  */
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", requirePermission("MANAGE_SETTINGS"), async (req: Request, res: Response) => {
   try {
+    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(req.merchantId!);
     const terminalId = String(req.body.terminalId || req.body.serialNumber || "").trim();
     const terminalName = String(req.body.terminalName || terminalId || "").trim();
     const serialNumber = String(req.body.serialNumber || terminalId || "").trim() || null;
@@ -116,6 +128,7 @@ router.post("/", async (req: Request, res: Response) => {
       .insert(schema.paymentTerminals)
       .values({
         merchantId: req.merchantId!,
+        paymentProfileId: req.body.paymentProfileId || defaultProfileId,
         terminalId,
         terminalName: terminalName || terminalId,
         serialNumber,
@@ -132,6 +145,7 @@ router.post("/", async (req: Request, res: Response) => {
           serialNumber,
           status: "active",
           lastHeartbeat: new Date(),
+          paymentProfileId: req.body.paymentProfileId || defaultProfileId,
         },
       })
       .returning();
@@ -141,7 +155,10 @@ router.post("/", async (req: Request, res: Response) => {
     if (terminal.merchantId !== req.merchantId!) {
       return res.status(409).json({ error: "Terminal ID is already registered to another merchant" });
     }
-    res.status(201).json({ success: true, terminal: sanitizeTerminal(terminal) });
+    res.status(201).json({
+      success: true,
+      terminal: sanitizeTerminal(terminal, defaultProfileId),
+    });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to register terminal" });
   }
@@ -150,14 +167,18 @@ router.post("/", async (req: Request, res: Response) => {
 /**
  * PUT /api/terminals/:id
  */
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", requirePermission("MANAGE_SETTINGS"), async (req: Request, res: Response) => {
   try {
+    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(req.merchantId!);
     const db = getDb();
     const patch: Record<string, unknown> = {};
     if (req.body.terminalId !== undefined) patch.terminalId = String(req.body.terminalId).trim();
     if (req.body.terminalName !== undefined) patch.terminalName = req.body.terminalName;
     if (req.body.serialNumber !== undefined) patch.serialNumber = req.body.serialNumber;
     if (req.body.status !== undefined) patch.status = req.body.status;
+    if (req.body.paymentProfileId !== undefined) {
+      patch.paymentProfileId = req.body.paymentProfileId || defaultProfileId;
+    }
     // Do not accept per-terminal Adyen credential overrides
 
     const [terminal] = await db
@@ -171,7 +192,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       )
       .returning();
     if (!terminal) return res.status(404).json({ error: "Terminal not found" });
-    res.json({ success: true, terminal: sanitizeTerminal(terminal) });
+    res.json({ success: true, terminal: sanitizeTerminal(terminal, defaultProfileId) });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update terminal" });
   }
@@ -180,7 +201,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 /**
  * DELETE /api/terminals/:id
  */
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", requirePermission("MANAGE_SETTINGS"), async (req: Request, res: Response) => {
   try {
     const db = getDb();
     await db

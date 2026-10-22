@@ -32,6 +32,7 @@ import {
 import type { PosTab, PosView } from './types';
 import { cycleWebPosTextSize } from '@/lib/webpos-appearance';
 import { shouldShowPosOptionChooser } from '@/lib/pos-hub-visibility';
+import { WebPosStaffHardwarePanel } from '@/components/webpos/WebPosStaffHardwarePanel';
 export type {
   WebPosAppearance,
   WebPosColorTheme,
@@ -599,6 +600,11 @@ export function WebPosSettingsDropdown({
   onDeviceDefaultStationChange,
   tapToPayWizardVisible = false,
   onOpenTapToPayWizard,
+  showStaffHardwarePanel = false,
+  staffPrinterProfiles = [],
+  onStaffTestReceipt,
+  onStaffReprintLast,
+  staffReprintAvailable = false,
 }: {
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
@@ -652,6 +658,11 @@ export function WebPosSettingsDropdown({
   /** Android WebPOS + merchant Tap to Pay enabled */
   tapToPayWizardVisible?: boolean;
   onOpenTapToPayWizard?: () => void;
+  showStaffHardwarePanel?: boolean;
+  staffPrinterProfiles?: Array<{ id: string; name: string }>;
+  onStaffTestReceipt?: () => void;
+  onStaffReprintLast?: () => void;
+  staffReprintAvailable?: boolean;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -1034,6 +1045,15 @@ export function WebPosSettingsDropdown({
           </button>
           <p className="text-[10px] leading-snug text-stone-500">{t('tapToPayWizardGearHint')}</p>
         </div>
+      ) : null}
+
+      {showStaffHardwarePanel ? (
+        <WebPosStaffHardwarePanel
+          printers={staffPrinterProfiles}
+          onTestReceipt={onStaffTestReceipt}
+          onReprintLast={onStaffReprintLast}
+          reprintAvailable={staffReprintAvailable}
+        />
       ) : null}
 
       {terminalEnabled && shouldShowPosOptionChooser(terminals.length) && onTerminalChange ? (

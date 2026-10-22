@@ -4414,6 +4414,31 @@ const en: Dict = {
   paymentsTerminalSection: 'Terminals, NFC & in-store',
   paymentsTerminalSectionHint:
     'Register Adyen terminals, Tap to Pay (NFC), and live terminal environment. Uses the same merchant account and API key.',
+  paymentProfilesTitle: 'Payment profiles',
+  paymentProfilesHint:
+    'Group terminals under separate Swisspayout credential sets (e.g. per location or legal entity).',
+  paymentProfileNewName: 'New profile name',
+  paymentProfileNewNamePlaceholder: 'Bar register',
+  paymentProfileAdd: 'Add profile',
+  paymentProfileDeleteConfirm: 'Delete this payment profile?',
+  paymentProfileAdyenAccount: 'Merchant account',
+  paymentProfileInheritMerchant: 'Inherited from merchant',
+  paymentProfileAssignTerminals: 'Assign terminals',
+  paymentProfileAssign: 'Assign',
+  paymentProfileAssigned: 'Assigned',
+  deviceEnrollTitle: 'Enroll this device',
+  deviceEnrollHint:
+    'Locks this tablet or desktop to one payment terminal for floor staff. Managers can still change it in settings.',
+  deviceEnrollDeviceId: 'Device ID',
+  deviceEnrollActive: 'Enrolled terminal: {terminal}',
+  deviceEnrollPickLocation: 'Select a location in the panel before enrolling.',
+  deviceEnrollPickTerminal: 'Choose a payment terminal.',
+  deviceEnrollLockFloorStaff: 'Lock terminal picker for floor staff',
+  deviceEnrollSave: 'Save enrollment',
+  deviceEnrollClear: 'Clear enrollment',
+  deviceEnrollSaved: 'Device enrollment saved',
+  deviceEnrollCleared: 'Device enrollment cleared',
+  webPosStaffHardwareTitle: 'Printers',
   paymentsSwisspayoutDisabledHint:
     'Turn on Swisspayout above to configure terminals, NFC Tap to Pay, and in-store card payments.',
   paymentsTerminalOnlyCredentialsHint:

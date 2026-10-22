@@ -991,7 +991,7 @@ export class StaffService {
   static async updatePosPreferences(
     merchantId: string,
     staffId: string,
-    prefs: { preferredTerminalId?: string | null }
+    prefs: { preferredTerminalId?: string | null; deviceId?: string | null }
   ) {
     const db = getDb();
     const staff = await db.query.merchantStaff.findFirst({
@@ -1013,6 +1013,21 @@ export class StaffService {
         ),
       });
       if (!terminal) throw new Error("Terminal not found");
+
+      const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
+      const { DeviceEnrollmentService } = await import("@/services/device-enrollment.service");
+      const { terminalBelongsToProfile } = await import("@/lib/adyen-terminal-credentials");
+      const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(merchantId);
+      const scopeProfileId = await DeviceEnrollmentService.resolveProfileScopeForDevice(
+        merchantId,
+        prefs.deviceId
+      );
+      if (
+        scopeProfileId &&
+        !terminalBelongsToProfile(terminal.paymentProfileId, scopeProfileId, defaultProfileId)
+      ) {
+        throw new Error("Terminal must use the same payment profile as this device");
+      }
     }
 
     await db

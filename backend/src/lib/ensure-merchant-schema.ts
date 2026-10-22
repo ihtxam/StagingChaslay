@@ -379,6 +379,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   pos_sessions_location_id: "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS location_id uuid",
   pos_sessions_station_id:
     "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS station_id uuid REFERENCES pos_stations(id) ON DELETE SET NULL",
+  pos_stations_payment_profile_id:
+    "ALTER TABLE pos_stations ADD COLUMN IF NOT EXISTS payment_profile_id uuid REFERENCES payment_profiles(id) ON DELETE SET NULL",
+  payment_terminals_payment_profile_id:
+    "ALTER TABLE payment_terminals ADD COLUMN IF NOT EXISTS payment_profile_id uuid REFERENCES payment_profiles(id) ON DELETE SET NULL",
   pos_sessions_print_agent_online:
     "ALTER TABLE pos_sessions ADD COLUMN IF NOT EXISTS print_agent_online boolean",
   hq_menus_category_ids:
@@ -1456,6 +1460,41 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS como_transactions_merchant_order_uidx ON como_transactions(merchant_id, order_id)`,
   `CREATE INDEX IF NOT EXISTS como_transactions_merchant_idx ON como_transactions(merchant_id)`,
+  `CREATE TABLE IF NOT EXISTS payment_profiles (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name varchar(120) NOT NULL,
+    location_id uuid REFERENCES locations(id) ON DELETE SET NULL,
+    is_default boolean NOT NULL DEFAULT false,
+    adyen_merchant_account varchar(255),
+    adyen_api_key text,
+    adyen_client_id varchar(255),
+    adyen_store_reference varchar(255),
+    adyen_hmac_key text,
+    adyen_live_environment boolean NOT NULL DEFAULT false,
+    adyen_live_url_prefix varchar(255),
+    adyen_live_region varchar(10) NOT NULL DEFAULT 'EU',
+    adyen_use_legacy_endpoint boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS payment_profiles_merchant_id_idx ON payment_profiles(merchant_id)`,
+  `CREATE INDEX IF NOT EXISTS payment_profiles_merchant_default_idx ON payment_profiles(merchant_id, is_default)`,
+  `CREATE TABLE IF NOT EXISTS device_enrollments (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    device_id varchar(128) NOT NULL,
+    location_id uuid NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    station_id uuid REFERENCES pos_stations(id) ON DELETE SET NULL,
+    payment_profile_id uuid NOT NULL REFERENCES payment_profiles(id) ON DELETE RESTRICT,
+    payment_terminal_id uuid NOT NULL REFERENCES payment_terminals(id) ON DELETE RESTRICT,
+    print_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+    enrolled_by_staff_id uuid REFERENCES merchant_staff(id) ON DELETE SET NULL,
+    enrolled_at timestamptz NOT NULL DEFAULT now(),
+    lock_enrollment boolean NOT NULL DEFAULT true
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS device_enrollments_merchant_device_idx ON device_enrollments(merchant_id, device_id)`,
+  `CREATE INDEX IF NOT EXISTS device_enrollments_merchant_id_idx ON device_enrollments(merchant_id)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1831,6 +1870,58 @@ export async function ensurePosStationsSchema(): Promise<void> {
   await runPatch("orders_station_id");
   await runPatch("held_orders_station_id");
   await runPatch("pos_sessions_station_id");
+  await runPatch("pos_stations_payment_profile_id");
+}
+
+let paymentProfilesBackfillDone = false;
+
+/** Create default payment profile per merchant and link existing terminals. */
+export async function ensurePaymentProfilesSchema(): Promise<void> {
+  for (const statement of TABLE_PATCHES) {
+    if (!/payment_profiles|device_enrollments|payment_terminals_payment_profile_id|pos_stations_payment_profile_id/.test(
+      statement
+    )) {
+      continue;
+    }
+    try {
+      await execSql(statement);
+    } catch (err) {
+      console.warn("[schema] payment profile patch failed:", err);
+    }
+  }
+  await runPatch("payment_terminals_payment_profile_id");
+  await runPatch("pos_stations_payment_profile_id");
+
+  if (paymentProfilesBackfillDone) return;
+  try {
+    await execSql(`
+      INSERT INTO payment_profiles (
+        merchant_id, name, is_default,
+        adyen_merchant_account, adyen_api_key, adyen_client_id, adyen_store_reference, adyen_hmac_key,
+        adyen_live_environment, adyen_live_url_prefix, adyen_live_region, adyen_use_legacy_endpoint
+      )
+      SELECT
+        m.id, 'Default', true,
+        m.adyen_merchant_account, m.adyen_api_key, m.adyen_client_id, m.adyen_store_reference, m.adyen_hmac_key,
+        COALESCE(m.adyen_live_environment, false), m.adyen_live_url_prefix, COALESCE(m.adyen_live_region, 'EU'),
+        COALESCE(m.adyen_use_legacy_endpoint, false)
+      FROM merchants m
+      WHERE NOT EXISTS (
+        SELECT 1 FROM payment_profiles pp WHERE pp.merchant_id = m.id AND pp.is_default = true
+      )
+    `);
+    await execSql(`
+      UPDATE payment_terminals pt
+      SET payment_profile_id = pp.id
+      FROM payment_profiles pp
+      WHERE pp.merchant_id = pt.merchant_id
+        AND pp.is_default = true
+        AND pt.payment_profile_id IS NULL
+    `);
+    paymentProfilesBackfillDone = true;
+  } catch (err) {
+    console.warn("[schema] payment profile backfill failed:", err);
+  }
 }
 
 /** Add columns that drizzle-kit often skips on pos_sessions (OOM / old CREATE TABLE). */
@@ -2123,6 +2214,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   await ensureMerchantTables();
   await ensureSubscriptionPlansSchema();
   await ensureLocationsSchema();
+  await ensurePaymentProfilesSchema();
   await ensurePosSessionsSchema();
   await backfillKioskCatalogVisibility();
 
