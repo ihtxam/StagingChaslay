@@ -37,7 +37,7 @@ import {
 } from '@/lib/order-management';
 import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
+import { filterActiveHeldRows, parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
 import { computeMerchandiseTotals } from '@/lib/money';
 import { applyBillDiscountToTotals } from '@/lib/webpos-bill-discount';
 import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
@@ -553,8 +553,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
           api.get(`/merchant/pos/orders?${params.toString()}`),
           api.get('/merchant/pos/held'),
         ]);
-        setOrders((ordersRes.data.orders || []) as MerchantOrder[]);
-        setHeldRows((heldRes.data.held || []) as HeldRow[]);
+        const nextOrders = (ordersRes.data.orders || []) as MerchantOrder[];
+        const nextHeld = filterActiveHeldRows(
+          (heldRes.data.held || []) as HeldRow[],
+          nextOrders
+        );
+        setOrders(nextOrders);
+        setHeldRows(nextHeld);
         setRefundReasons(ordersRes.data.refundReasons || []);
         setCancelReasons(ordersRes.data.cancelReasons || []);
       }

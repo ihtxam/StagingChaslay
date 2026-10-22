@@ -42,3 +42,22 @@ test('filterActiveHeldRows removes ticket with cancelled CXL on server', () => {
   ];
   assert.equal(filterActiveHeldRows(rows, orders).length, 0);
 });
+
+test('filterActiveHeldRows removes held row when matching paid POS order exists', () => {
+  const rows = [
+    {
+      id: 'h2',
+      label: 'TG1 · dine_in',
+      cartJson: { tableId: 'table-uuid-1', tableLabel: 'TG1', cart: [] },
+    },
+  ];
+  const orders = [
+    {
+      status: 'completed',
+      paymentStatus: 'paid',
+      tableId: 'table-uuid-1',
+      notes: '',
+    },
+  ];
+  assert.equal(filterActiveHeldRows(rows, orders).length, 0);
+});

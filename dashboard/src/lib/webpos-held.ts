@@ -286,6 +286,71 @@ function cancelledOrderMatchesTicket(
   return td === ticketKey || td.replace(/^#/, '') === bare;
 }
 
+function isPaidKitchenOrder(o: {
+  status?: string | null;
+  paymentStatus?: string | null;
+}): boolean {
+  const status = String(o.status || '').toLowerCase();
+  const pay = String(o.paymentStatus || '').toLowerCase();
+  if (status === 'cancelled' || pay === 'cancelled') return false;
+  return pay === 'completed' || pay === 'paid';
+}
+
+function orderTicketFromNotes(notes?: string | null): string {
+  const m = String(notes || '').match(/\[ticket:([^\]]+)\]/i);
+  return normHeldTicket(m?.[1]);
+}
+
+function orderTabFromNotes(notes?: string | null, guestCount?: number | null): string {
+  const m = String(notes || '').match(/\[tab:([^\]]+)\]/i);
+  if (m?.[1]?.trim()) return m[1].trim().replace(/^#/, '');
+  if (guestCount != null && Number(guestCount) > 0) return String(guestCount);
+  return '';
+}
+
+/** Same cart link as order-to-cart — kept local to avoid import cycle with order-management. */
+function paidOrderMatchesHeldRow(
+  row: Pick<HeldOrderRow, 'label' | 'cartJson'>,
+  o: {
+    status?: string | null;
+    paymentStatus?: string | null;
+    notes?: string | null;
+    ticketDisplay?: string | null;
+    tabNumber?: string | null;
+    tableId?: string | null;
+    orderNumber?: string | null;
+    guestCount?: number | null;
+  }
+): boolean {
+  if (!isPaidKitchenOrder(o)) return false;
+  const meta = parseHeldCartJson(row.cartJson);
+  const cartTicket = normHeldTicket(
+    meta.kitchenTicketKey?.trim() || meta.ticketDisplay || ticketFromHeldLabel(row.label)
+  );
+  const cartTab = String(meta.tabNumber || '').trim().replace(/^#/, '');
+  const orderTicket = normHeldTicket(o.ticketDisplay || orderTicketFromNotes(o.notes));
+  const orderTab = String(o.tabNumber || orderTabFromNotes(o.notes, o.guestCount) || '')
+    .trim()
+    .replace(/^#/, '');
+  if (cartTicket && orderTicket && cartTicket === orderTicket) return true;
+  if (cartTab && orderTab && cartTab === orderTab) return true;
+  if (
+    meta.ticketOrderNumber?.trim() &&
+    o.orderNumber?.trim() &&
+    meta.ticketOrderNumber.trim() === o.orderNumber.trim()
+  ) {
+    return true;
+  }
+  if (meta.tableId && o.tableId && meta.tableId === o.tableId) {
+    if (cartTicket && orderTicket) return cartTicket === orderTicket;
+    if (cartTicket || orderTicket) return false;
+    if (cartTab && orderTab) return cartTab === orderTab;
+    if (cartTab || orderTab) return false;
+    return true;
+  }
+  return false;
+}
+
 /** Drop held rows that were cancelled (server CXL or this-session cancel). */
 export function filterActiveHeldRows<T extends HeldOrderRow>(
   rows: T[],
@@ -294,13 +359,19 @@ export function filterActiveHeldRows<T extends HeldOrderRow>(
     paymentStatus?: string | null;
     notes?: string | null;
     ticketDisplay?: string | null;
+    tableId?: string | null;
+    tabNumber?: string | null;
+    orderNumber?: string | null;
+    guestCount?: number | null;
   }>
 ): T[] {
   return rows.filter((row) => {
     const ticketKey = heldRowTicketKey(row);
-    if (!ticketKey) return true;
-    if (isRememberedCancelledKitchenTicket(ticketKey)) return false;
-    if (orders.some((o) => cancelledOrderMatchesTicket(o, ticketKey))) return false;
+    if (ticketKey) {
+      if (isRememberedCancelledKitchenTicket(ticketKey)) return false;
+      if (orders.some((o) => cancelledOrderMatchesTicket(o, ticketKey))) return false;
+    }
+    if (orders.some((o) => paidOrderMatchesHeldRow(row, o))) return false;
     return true;
   });
 }
