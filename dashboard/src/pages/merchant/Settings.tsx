@@ -38,6 +38,8 @@ import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
 import PosPostsSection from '@/components/settings/PosPostsSection';
 import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
+import PaymentProfilesSection from '@/components/settings/PaymentProfilesSection';
+import DeviceEnrollmentWizard from '@/components/settings/DeviceEnrollmentWizard';
 import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
@@ -3900,6 +3902,9 @@ export default function Settings() {
                     </Section>
                     <SettingsSaveBar saving={savingWebposPay} />
                   </form>
+
+                  <PaymentProfilesSection />
+                  <DeviceEnrollmentWizard />
 
                   <Section
                     id="payments-terminals-list"

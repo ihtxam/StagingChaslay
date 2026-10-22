@@ -42,6 +42,9 @@ import {
 import { buildPrinterTestEscPos, uint8ToBase64 } from '@/lib/webpos-receipt';
 import { normalizePosCheckoutSettings, type RetailTileSize } from '@/lib/pos-checkout';
 import { OnScreenKeyboardToggle, useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
+import DeviceEnrollmentWizard from '@/components/settings/DeviceEnrollmentWizard';
+import { fetchDeviceRuntimeConfig } from '@/lib/device-enrollment';
+import { webPosDeviceId } from '@/lib/webpos-print-relay';
 
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
@@ -143,6 +146,7 @@ export default function DesktopSettings() {
   const [startWithWindows, setStartWithWindows] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [autoOpenCashDrawer, setAutoOpenCashDrawer] = useState(true);
+  const [enrolledTerminalLabel, setEnrolledTerminalLabel] = useState<string | null>(null);
 
   const applyScaleDevice = useCallback((device: ScaleDevice) => {
     const port = formatScalePortLabel(device.port);
@@ -273,6 +277,12 @@ export default function DesktopSettings() {
           } catch {
             /* ignore */
           }
+        }
+        const runtime = await fetchDeviceRuntimeConfig(webPosDeviceId());
+        if (!cancelled && runtime?.enrollment) {
+          setEnrolledTerminalLabel(
+            runtime.enrollment.terminalName || runtime.enrollment.terminalId || null
+          );
         }
         await refreshHardware({
           autoSaveScale: true,
@@ -773,6 +783,12 @@ export default function DesktopSettings() {
                     <dt className="text-stone-500 dark:text-stone-400">{t('desktopSettingsAppVersion')}</dt>
                     <dd className="font-medium">{shellVersion}</dd>
                   </div>
+                  {enrolledTerminalLabel ? (
+                    <div className="flex justify-between gap-4 border-b border-stone-100 py-2 dark:border-stone-700">
+                      <dt className="text-stone-500 dark:text-stone-400">{t('webPosPaymentTerminal')}</dt>
+                      <dd className="font-medium">{enrolledTerminalLabel}</dd>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between gap-4 border-b border-stone-100 py-2 dark:border-stone-700">
                     <dt className="text-stone-500 dark:text-stone-400">{t('printAgentVersionStatusLabel')}</dt>
                     <dd className="font-medium">
@@ -811,6 +827,7 @@ export default function DesktopSettings() {
                   <Monitor size={14} aria-hidden />
                   {t('desktopSettingsDeviceHint')}
                 </div>
+                <DeviceEnrollmentWizard />
                 <div className="grid grid-cols-1 gap-2 border-t border-stone-100 pt-4 dark:border-stone-700 sm:grid-cols-2">
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-stone-600 dark:bg-stone-800/60 sm:col-span-2">
                     <div>

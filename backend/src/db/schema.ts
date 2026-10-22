@@ -623,6 +623,38 @@ export const locations = pgTable(
   })
 );
 
+/** Merchant-level Adyen credential profile (optional per-location scope). */
+export const paymentProfiles = pgTable(
+  "payment_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
+    isDefault: boolean("is_default").default(false).notNull(),
+    adyenMerchantAccount: varchar("adyen_merchant_account", { length: 255 }),
+    adyenApiKey: text("adyen_api_key"),
+    adyenClientId: varchar("adyen_client_id", { length: 255 }),
+    adyenStoreReference: varchar("adyen_store_reference", { length: 255 }),
+    adyenHmacKey: text("adyen_hmac_key"),
+    adyenLiveEnvironment: boolean("adyen_live_environment").default(false).notNull(),
+    adyenLiveUrlPrefix: varchar("adyen_live_url_prefix", { length: 255 }),
+    adyenLiveRegion: varchar("adyen_live_region", { length: 10 }).default("EU").notNull(),
+    adyenUseLegacyEndpoint: boolean("adyen_use_legacy_endpoint").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("payment_profiles_merchant_id_idx").on(table.merchantId),
+    merchantDefaultIdx: index("payment_profiles_merchant_default_idx").on(
+      table.merchantId,
+      table.isDefault
+    ),
+  })
+);
+
 /** Registers / floors within one location (shared menu, one EOD). */
 export const posStations = pgTable(
   "pos_stations",
@@ -634,6 +666,9 @@ export const posStations = pgTable(
     locationId: uuid("location_id")
       .notNull()
       .references(() => locations.id, { onDelete: "cascade" }),
+    paymentProfileId: uuid("payment_profile_id").references(() => paymentProfiles.id, {
+      onDelete: "set null",
+    }),
     name: varchar("name", { length: 120 }).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
@@ -2608,6 +2643,9 @@ export const paymentTerminals = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    paymentProfileId: uuid("payment_profile_id").references(() => paymentProfiles.id, {
+      onDelete: "set null",
+    }),
     terminalId: varchar("terminal_id", { length: 255 }).notNull().unique(), // Swisspayout / Adyen terminal ID
     terminalName: varchar("terminal_name", { length: 255 }).notNull(),
     serialNumber: varchar("serial_number", { length: 255 }),
@@ -2622,6 +2660,40 @@ export const paymentTerminals = pgTable(
   (table) => ({
     merchantIdIdx: index("payment_terminals_merchant_id_idx").on(table.merchantId),
     terminalIdIdx: uniqueIndex("payment_terminals_terminal_id_idx").on(table.terminalId),
+  })
+);
+
+export const deviceEnrollments = pgTable(
+  "device_enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    deviceId: varchar("device_id", { length: 128 }).notNull(),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    stationId: uuid("station_id").references(() => posStations.id, { onDelete: "set null" }),
+    paymentProfileId: uuid("payment_profile_id")
+      .notNull()
+      .references(() => paymentProfiles.id, { onDelete: "restrict" }),
+    paymentTerminalId: uuid("payment_terminal_id")
+      .notNull()
+      .references(() => paymentTerminals.id, { onDelete: "restrict" }),
+    printSnapshot: json("print_snapshot").$type<Record<string, unknown>>().default({}),
+    enrolledByStaffId: uuid("enrolled_by_staff_id").references(() => merchantStaff.id, {
+      onDelete: "set null",
+    }),
+    enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
+    lockEnrollment: boolean("lock_enrollment").default(true).notNull(),
+  },
+  (table) => ({
+    merchantDeviceIdx: uniqueIndex("device_enrollments_merchant_device_idx").on(
+      table.merchantId,
+      table.deviceId
+    ),
+    merchantIdIdx: index("device_enrollments_merchant_id_idx").on(table.merchantId),
   })
 );
 
@@ -3338,7 +3410,9 @@ export const merchantsRelations = relations(merchants, ({ many, one }) => ({
   products: many(products),
   customers: many(customers),
   orders: many(orders),
+  paymentProfiles: many(paymentProfiles),
   paymentTerminals: many(paymentTerminals),
+  deviceEnrollments: many(deviceEnrollments),
   paymentTransactions: many(paymentTransactions),
   loyaltyCards: many(loyaltyCards),
   loyaltyTransactions: many(loyaltyTransactions),
@@ -3607,8 +3681,32 @@ export const deliveryZipRulesRelations = relations(deliveryZipRules, ({ one }) =
   merchant: one(merchants, { fields: [deliveryZipRules.merchantId], references: [merchants.id] }),
 }));
 
+export const paymentProfilesRelations = relations(paymentProfiles, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [paymentProfiles.merchantId], references: [merchants.id] }),
+  location: one(locations, { fields: [paymentProfiles.locationId], references: [locations.id] }),
+  terminals: many(paymentTerminals),
+}));
+
 export const paymentTerminalsRelations = relations(paymentTerminals, ({ one }) => ({
   merchant: one(merchants, { fields: [paymentTerminals.merchantId], references: [merchants.id] }),
+  paymentProfile: one(paymentProfiles, {
+    fields: [paymentTerminals.paymentProfileId],
+    references: [paymentProfiles.id],
+  }),
+}));
+
+export const deviceEnrollmentsRelations = relations(deviceEnrollments, ({ one }) => ({
+  merchant: one(merchants, { fields: [deviceEnrollments.merchantId], references: [merchants.id] }),
+  location: one(locations, { fields: [deviceEnrollments.locationId], references: [locations.id] }),
+  station: one(posStations, { fields: [deviceEnrollments.stationId], references: [posStations.id] }),
+  paymentProfile: one(paymentProfiles, {
+    fields: [deviceEnrollments.paymentProfileId],
+    references: [paymentProfiles.id],
+  }),
+  paymentTerminal: one(paymentTerminals, {
+    fields: [deviceEnrollments.paymentTerminalId],
+    references: [paymentTerminals.id],
+  }),
 }));
 
 /** Trackable reservation invite campaigns (Growth SKU). */

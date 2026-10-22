@@ -41,6 +41,8 @@ import posSessionsRoutes from "@/routes/pos-sessions.routes";
 import locationsRoutes from "@/routes/locations.routes";
 import hqRoutes from "@/routes/hq.routes";
 import clientErrorsRoutes from "@/routes/client-errors.routes";
+import paymentProfilesRoutes from "@/routes/payment-profiles.routes";
+import deviceEnrollmentRoutes from "@/routes/device-enrollment.routes";
 import { setLocationContext } from "@/middleware/location.middleware";
 import type { ReportPreset } from "@/services/pos-reports.service";
 
@@ -2041,10 +2043,21 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Merchant not found" });
     }
 
-    const terminals = await db.query.paymentTerminals.findMany({
+    const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
+    const { DeviceEnrollmentService } = await import("@/services/device-enrollment.service");
+    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(merchantId);
+    const deviceId = String(req.query.deviceId || "").trim();
+    const deviceConfig = deviceId
+      ? await DeviceEnrollmentService.getDeviceConfig(merchantId, deviceId)
+      : null;
+
+    let terminals = await db.query.paymentTerminals.findMany({
       where: eq(schema.paymentTerminals.merchantId, merchantId),
       orderBy: asc(schema.paymentTerminals.createdAt),
     });
+    if (deviceConfig?.enrollment) {
+      terminals = terminals.filter((t) => t.id === deviceConfig.enrollment?.paymentTerminalId);
+    }
 
     const activeTerminals = terminals.filter((t) => t.status === "active");
     const terminalReady =
@@ -2113,13 +2126,18 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
         adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
         adyenLiveRegion: merchant.adyenLiveRegion || "EU",
         adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
-        defaultTerminalId: activeTerminals[0]?.terminalId || null,
+        defaultTerminalId:
+          deviceConfig?.fixedTerminalId || activeTerminals[0]?.terminalId || null,
         staffPreferredTerminalId,
+        deviceEnrollment: deviceConfig?.enrollment || null,
+        deviceEnrollmentLocked: deviceConfig?.lockEnrollment === true,
+        paymentProfileId: deviceConfig?.paymentProfileId || defaultProfileId,
         terminals: terminals.map((t) => ({
           id: t.id,
           terminalId: t.terminalId,
           terminalName: t.terminalName,
           status: t.status,
+          paymentProfileId: t.paymentProfileId || defaultProfileId,
         })),
         posPrintSettings,
         posCheckoutSettings: {
@@ -3557,6 +3575,7 @@ router.put("/pos/staff-preferences", async (req: Request, res: Response) => {
     const { StaffService } = await import("@/services/staff.service");
     const prefs = await StaffService.updatePosPreferences(merchantId, staffId, {
       preferredTerminalId: req.body?.preferredTerminalId ?? null,
+      deviceId: req.body?.deviceId ?? null,
     });
     res.json({ success: true, ...prefs });
   } catch (error) {
@@ -4199,6 +4218,8 @@ router.get("/shop-commission", async (req: Request, res: Response) => {
 router.use(posSessionsRoutes);
 router.use(locationsRoutes);
 router.use(hqRoutes);
+router.use("/payment-profiles", paymentProfilesRoutes);
+router.use("/device-enrollments", deviceEnrollmentRoutes);
 router.use("/client-errors", clientErrorsRoutes);
 
 export default router;

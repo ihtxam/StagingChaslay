@@ -54,6 +54,7 @@ import {
   receiptAndKitchenSharePrinter,
   resolveReceiptLanguage,
   buildReceiptEscPos,
+  buildPrinterTestEscPos,
   normalizeGoogleReviewUrl,
   uint8ToBase64,
   posOrderToWebPosReceipt,
@@ -137,6 +138,7 @@ import {
   shouldAutoPrintReceipt,
   shouldAutoOpenCashDrawer,
   cacheMerchantAutoPrintSettings,
+  webPosDeviceId,
 } from '@/lib/webpos-print-relay';
 import { shouldSkipAutoPrint } from '@/lib/webpos-print-targets';
 import { printOrderLabelViaAgent } from '@/lib/order-labels';
@@ -717,6 +719,7 @@ type WebPosPaymentConfig = {
   tapToPayEnabled?: boolean;
   defaultTerminalId: string | null;
   staffPreferredTerminalId?: string | null;
+  deviceEnrollmentLocked?: boolean;
   terminals: WebPosTerminal[];
   posPrintSettings?: PosPrintSettingsClient | null;
   posCheckoutSettings?: PosCheckoutSettings | null;
@@ -2804,7 +2807,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           ...fetchOpts,
         }).catch(() => ({ data: { categories: [] } })),
         fetchAllMerchantProducts(fetchOpts, posLocationId),
-        api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
+        api
+          .get('/merchant/webpos-config', {
+            params: { deviceId: webPosDeviceId() },
+            ...fetchOpts,
+          })
+          .catch(() => ({ data: { config: null } })),
         api.get('/merchant/staff', fetchOpts).catch(() => {
           staffFailed = true;
           return { data: { staff: [] } };
@@ -10186,6 +10194,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const canShowBackOffice =
     impersonating || jwtPanelAccess || canOpenPanel || canManageProducts || canViewOrders;
+  const canManageSettings = ownerOnRegister
+    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
+    : staffConfigured
+      ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_SETTINGS', false)
+      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
+  const terminalEnrollmentLocked =
+    paymentConfig?.deviceEnrollmentLocked === true && !canManageSettings;
   const canManageOnlineShop = ownerOnRegister
     ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', true) ||
       hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
@@ -10334,6 +10349,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       try {
         await api.put('/merchant/pos/staff-preferences', {
           preferredTerminalId: terminalId || null,
+          deviceId: webPosDeviceId(),
         });
       } catch {
         /* local fallback kept */
@@ -11332,7 +11348,37 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             terminalEnabled={enabledMethods.terminal}
             terminals={activeTerminals}
             selectedTerminalId={selectedTerminalId}
-            onTerminalChange={(id) => void changePosTerminal(id)}
+            onTerminalChange={
+              terminalEnrollmentLocked ? undefined : (id) => void changePosTerminal(id)
+            }
+            showStaffHardwarePanel={canManageProducts}
+            staffPrinterProfiles={printSettings?.printers || []}
+            onStaffTestReceipt={
+              canManageProducts
+                ? () => {
+                    const name =
+                      printSettings?.printers?.find((p) => p.printReceipts)?.name ||
+                      printSettings?.printers?.[0]?.name;
+                    if (!name) {
+                      toast.error(t('testPrinterFailed'));
+                      return;
+                    }
+                    void printEscPosToTargets('', {
+                      role: 'receipt',
+                      dataBase64: uint8ToBase64(buildPrinterTestEscPos(name)),
+                      quiet: true,
+                    });
+                  }
+                : undefined
+            }
+            onStaffReprintLast={
+              canManageProducts && lastReceipt
+                ? () => {
+                    void printEscPosToTargets(lastReceipt, { role: 'receipt', quiet: true });
+                  }
+                : undefined
+            }
+            staffReprintAvailable={!!lastReceipt}
             posStations={posStations}
             deviceDefaultStationId={deviceDefaultStationId}
             onDeviceDefaultStationChange={changeDeviceDefaultStation}
