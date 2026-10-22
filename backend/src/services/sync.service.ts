@@ -934,6 +934,7 @@ export class SyncService {
               tableId: sale.tableId,
               paidTotal: Number(sale.total) || Number(order.total) || 0,
               settleKitchen: true,
+              paymentSettled: true,
             });
           } catch (heldErr) {
             console.warn("[sync] held release failed:", heldErr);

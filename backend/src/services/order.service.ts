@@ -39,6 +39,8 @@ async function releaseHeldAfterPosPayment(
           : null),
       tableId: order.tableId || null,
       paidTotal: Number(order.total) || 0,
+      settleKitchen: true,
+      paymentSettled: true,
     });
   } catch (err) {
     console.warn("Held release after payment failed:", err);

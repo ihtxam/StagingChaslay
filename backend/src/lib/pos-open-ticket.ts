@@ -11,6 +11,19 @@
  * Kitchen tickets (sent_to_kitchen) are never closed by a stale session id,
  * a missing amount, a pay-later / invoice sale, or a partial payment.
  * ODS/KDS are projections only.
+ *
+ * ## Reconciliation protocol (all clients: WebPOS, Waiter, sync)
+ *
+ * 1. **Open** — `POST /merchant/pos/held` creates/updates one ledger row per ticket identity.
+ * 2. **Terminal states** — every path must close the ledger row (`closed_at` + reason):
+ *    - **paid** — full payment or `settleKitchen` after kitchen ticket (`releaseHeldByIdentity`)
+ *    - **cancelled** — `cancelHeld` or matching CXL sale
+ *    - **transferred** — empty cart / table move
+ * 3. **Payment** — `push-sales` (paid) and Order Center collect both call `releaseHeldByIdentity`
+ *    with `settleKitchen: true` and `paymentSettled: true` when money is collected.
+ * 4. **List / poll** — `GET /merchant/pos/held` reconciles stale rows (paid/cancelled heal) **before**
+ *    any optional KDS restore; restore never runs for tickets that already have a paid POS sale.
+ * 5. **KDS** — dismissed on paid release and cancel so open KDS cannot recreate ghosts.
  */
 
 export type OpenTicketStatus = "held" | "sent_to_kitchen";

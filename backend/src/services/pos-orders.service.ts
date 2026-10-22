@@ -28,6 +28,7 @@ import {
 } from "@/lib/online-payment-refund";
 import {
   decideOpenTicketClose,
+  isKitchenTicketStatus,
   nextOpenTicketStatus,
   OPEN_TICKET_STATUSES,
   type TicketCloseReason,
@@ -336,15 +337,22 @@ function isOpenUnpaidPosSale(order: { status?: string | null; paymentStatus?: st
   return true;
 }
 
-/** Drop open held rows whose ticket/table already has a paid POS sale (release missed at checkout). */
-async function dropHeldRowsPaidOnServer(
-  merchantId: string,
-  rows: Array<(typeof schema.heldOrders)["$inferSelect"]>
-) {
-  if (!rows.length) return rows;
+const HELD_HEAL_SALES_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+
+type HeldHealPosSale = {
+  id: string;
+  notes: string | null;
+  tableId: string | null;
+  guestCount: number | null;
+  total: string | null;
+  status: string | null;
+  paymentStatus: string | null;
+};
+
+async function loadRecentPosSalesForHeldHeal(merchantId: string): Promise<HeldHealPosSale[]> {
   const db = getDb();
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const recentSales = await db
+  const cutoff = new Date(Date.now() - HELD_HEAL_SALES_LOOKBACK_MS);
+  return db
     .select({
       id: schema.orders.id,
       notes: schema.orders.notes,
@@ -362,6 +370,43 @@ async function dropHeldRowsPaidOnServer(
         gte(schema.orders.createdAt, cutoff)
       )
     );
+}
+
+function paidSaleBlocksHeldIdentity(
+  sale: HeldHealPosSale,
+  ident: ReturnType<typeof heldIdentity>
+): boolean {
+  if (!isPaidPosSale(sale)) return false;
+  const saleIdent = paidPosOrderIdentity(sale);
+  const rowTicket = normalizeHeldTicket(ident.ticketDisplay);
+  return (
+    sameHeldIdentity(ident, saleIdent) ||
+    (rowTicket && normalizeHeldTicket(saleIdent.ticketDisplay) === rowTicket)
+  );
+}
+
+/** Paid POS sale for this shout ticket — blocks KDS → held restore. */
+function paidSaleBlocksKitchenTicket(
+  sales: HeldHealPosSale[],
+  ticketKey: string,
+  tableId?: string | null,
+  tabNumber?: string | null
+): boolean {
+  const ident = heldIdentity({
+    ticketDisplay: ticketKey,
+    tableId: tableId || null,
+    tabNumber: tabNumber || null,
+  });
+  return sales.some((sale) => paidSaleBlocksHeldIdentity(sale, ident));
+}
+
+/** Drop open held rows whose ticket/table already has a paid POS sale (release missed at checkout). */
+async function dropHeldRowsPaidOnServer(
+  merchantId: string,
+  rows: Array<(typeof schema.heldOrders)["$inferSelect"]>
+) {
+  if (!rows.length) return rows;
+  const recentSales = await loadRecentPosSalesForHeldHeal(merchantId);
 
   const kept: typeof rows = [];
   for (const row of rows) {
@@ -1284,9 +1329,21 @@ export class PosOrdersService {
 
       const productIds = new Set<string>();
       const itemsByTicket = new Map<string, Array<(typeof schema.kdsTicketItems)["$inferSelect"]>>();
+      const recentSales = await loadRecentPosSalesForHeldHeal(merchantId);
+
       for (const ticket of shoutTickets) {
         const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
         if (!key || existingOrderTickets.has(key)) continue;
+        if (
+          paidSaleBlocksKitchenTicket(
+            recentSales,
+            key,
+            null,
+            ticket.tabNumber != null ? String(ticket.tabNumber) : null
+          )
+        ) {
+          continue;
+        }
         const items = await db.query.kdsTicketItems.findMany({
           where: eq(schema.kdsTicketItems.ticketId, ticket.id),
         });
@@ -1337,6 +1394,16 @@ export class PosOrdersService {
       for (const ticket of shoutTickets) {
         const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
         if (!key || existingOrderTickets.has(key)) continue;
+        if (
+          paidSaleBlocksKitchenTicket(
+            recentSales,
+            key,
+            null,
+            ticket.tabNumber != null ? String(ticket.tabNumber) : null
+          )
+        ) {
+          continue;
+        }
         const items = itemsByTicket.get(key);
         if (!items?.length) continue;
         const cart = buildCart(items);
@@ -1433,17 +1500,27 @@ export class PosOrdersService {
     }
   }
 
-  static async listHeld(merchantId: string) {
-    return withMerchantSchemaRetry(async () => {
-    const db = getDb();
-    await this.restoreHeldFromOpenKitchen(merchantId);
+  /** Heal stale open tickets, then optional KDS restore — see pos-open-ticket.ts protocol. */
+  static async reconcileOpenTicketLedger(merchantId: string) {
     await this.closeStaleKitchenHeldTickets(merchantId);
+    const db = getDb();
     let rows = await db.query.heldOrders.findMany({
       where: openHeldWhere(merchantId),
       orderBy: [desc(schema.heldOrders.updatedAt)],
     });
     rows = await dropHeldRowsCancelledOnServer(merchantId, rows);
     rows = await dropHeldRowsPaidOnServer(merchantId, rows);
+    await this.restoreHeldFromOpenKitchen(merchantId);
+  }
+
+  static async listHeld(merchantId: string) {
+    return withMerchantSchemaRetry(async () => {
+    const db = getDb();
+    await this.reconcileOpenTicketLedger(merchantId);
+    const rows = await db.query.heldOrders.findMany({
+      where: openHeldWhere(merchantId),
+      orderBy: [desc(schema.heldOrders.updatedAt)],
+    });
     console.info("[pos-held] list", {
       merchantId,
       count: rows.length,
@@ -1678,7 +1755,22 @@ export class PosOrdersService {
     }
 
     for (const id of toClose) {
+      const row = open.find((r) => r.id === id);
       await closeHeldRow(merchantId, id, "paid", paidKnown ? paidTotal : null);
+      if (row && isKitchenTicketStatus(row.status)) {
+        const ticketKey = normalizeHeldTicket(heldIdentity(row.cartJson).ticketDisplay);
+        if (ticketKey) {
+          try {
+            await KdsService.dismissTicketsByKey(merchantId, ticketKey);
+          } catch (err) {
+            console.warn("[pos-held] kds dismiss after paid release failed", {
+              merchantId,
+              ticketKey,
+              err,
+            });
+          }
+        }
+      }
     }
 
     if (toClose.size) {
