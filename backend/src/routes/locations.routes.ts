@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
 import { setLocationContext } from "@/middleware/location.middleware";
+import { canSwitchPanelLocation } from "@/lib/panel-location-switch";
 import { LocationsService } from "@/services/locations.service";
 import { PosStationsService } from "@/services/pos-stations.service";
 import { MerchantEntitlementsService } from "@/services/merchant-entitlements.service";
@@ -31,7 +32,24 @@ router.get("/locations", async (req: Request, res: Response) => {
       planSlug: null,
       planName: null,
     }));
-    res.json({ success: true, locations, limits });
+    const canSwitch = canSwitchPanelLocation({
+      authRole: req.user?.role,
+      roleName: req.user?.roleName,
+      isOwner: ctx.isOwner,
+    });
+    let boundLocationId: string | null = null;
+    if (!canSwitch && ctx.staffId) {
+      boundLocationId = await LocationsService.resolveStaffBoundLocationId(
+        merchantId,
+        ctx.staffId
+      );
+    }
+    res.json({
+      success: true,
+      locations,
+      limits,
+      panelLocation: { canSwitchPanelLocation: canSwitch, boundLocationId },
+    });
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to list locations",

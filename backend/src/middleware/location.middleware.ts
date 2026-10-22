@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { ensureLocationsSchema, ensureMerchantColumnsSchema, ensureOrdersColumnsSchema, ensureOrderItemsColumnsSchema } from "@/lib/ensure-merchant-schema";
+import { canSwitchPanelLocation } from "@/lib/panel-location-switch";
 import { LocationsService } from "@/services/locations.service";
 
 declare global {
@@ -30,6 +31,19 @@ export async function setLocationContext(req: Request, res: Response, next: Next
     const headerId = String(req.headers["x-location-id"] || "").trim();
     const isOwner = req.user?.role === "merchant";
     const staffId = req.user?.staffId || null;
+    const maySwitchLocation = canSwitchPanelLocation({
+      authRole: req.user?.role,
+      roleName: req.user?.roleName,
+      isOwner,
+    });
+
+    if (!maySwitchLocation && staffId) {
+      const bound = await LocationsService.resolveStaffBoundLocationId(merchantId, staffId);
+      await LocationsService.assertStaffAccess(merchantId, bound, { staffId, isOwner });
+      req.locationId = bound;
+      req.locationFromHeader = false;
+      return next();
+    }
 
     if (headerId) {
       const resolved = await LocationsService.resolveLocationIdOrNull(merchantId, headerId);

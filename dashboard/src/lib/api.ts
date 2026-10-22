@@ -12,6 +12,7 @@ import {
   getWebPosTerminalLocationId,
   isWebPosFloorPath,
 } from '@/lib/webpos-terminal-location';
+import { canSwitchPanelLocationFromUser } from '@/lib/panel-location-switch';
 
 installDeployToastGuard();
 
@@ -63,13 +64,29 @@ const api: AxiosInstance = axios.create({
 const PANEL_LOCATION_STORAGE_KEY = 'manupos_selected_location';
 const PANEL_SCOPE_STORAGE_KEY = 'manupos_panel_scope';
 
+function readStoredPanelUser(): { role?: string; roleName?: string; isOwner?: boolean } | null {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return null;
+    return JSON.parse(raw) as { role?: string; roleName?: string; isOwner?: boolean };
+  } catch {
+    return null;
+  }
+}
+
 function resolveApiLocationId(): string | null {
   if (typeof window === 'undefined') return null;
   try {
     if (isWebPosFloorPath(window.location.pathname)) {
       return getWebPosTerminalLocationId();
     }
-    if (localStorage.getItem(PANEL_SCOPE_STORAGE_KEY) === 'hq') return null;
+    const lockedStaff = !canSwitchPanelLocationFromUser(readStoredPanelUser());
+    if (localStorage.getItem(PANEL_SCOPE_STORAGE_KEY) === 'hq') {
+      if (lockedStaff) {
+        return localStorage.getItem(PANEL_LOCATION_STORAGE_KEY);
+      }
+      return null;
+    }
     return localStorage.getItem(PANEL_LOCATION_STORAGE_KEY);
   } catch {
     return null;
