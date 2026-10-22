@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, Plus, Trash2 } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { isPanelLocationSwitcherActive } from '@/lib/panel-scope-nav';
+import { useLocationStore } from '@/store/location';
 
 type PaymentProfile = {
   id: string;
@@ -24,31 +26,50 @@ type TerminalRow = {
 
 export default function PaymentProfilesSection() {
   const { t } = useI18n();
-  const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
+  const { locationId, location, isHqView, locations, limits } = useLocationStore();
+  const branchSwitcher = isPanelLocationSwitcherActive({
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+  });
+
+  const [profile, setProfile] = useState<PaymentProfile | null>(null);
   const [terminals, setTerminals] = useState<TerminalRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState('');
-  const [newName, setNewName] = useState('');
-  const [saving, setSaving] = useState(false);
+
+  const sectionTitle = useMemo(() => {
+    const branchName = location?.name?.trim() || profile?.name || '';
+    if (branchName) {
+      return t('branchPaymentsTitle').replace('{branch}', branchName);
+    }
+    return t('branchPaymentsTitleFallback');
+  }, [location?.name, profile?.name, t]);
 
   const load = useCallback(async () => {
+    if (branchSwitcher && isHqView) {
+      setProfile(null);
+      setTerminals([]);
+      setLoading(false);
+      return;
+    }
+    const scopedLocationId = branchSwitcher ? locationId : locationId || undefined;
+    if (branchSwitcher && !scopedLocationId) {
+      setProfile(null);
+      setTerminals([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
+      const params = scopedLocationId ? { locationId: scopedLocationId } : undefined;
       const [pRes, tRes] = await Promise.all([
-        api.get('/merchant/payment-profiles'),
-        api.get('/terminals'),
+        api.get('/merchant/payment-profiles', { params }),
+        api.get('/merchant/payment-profiles/terminals', { params }),
       ]);
-      setProfiles(pRes.data?.profiles || []);
-      setTerminals(
-        (tRes.data?.terminals || []).map((row: TerminalRow) => ({
-          id: row.id,
-          terminalId: row.terminalId,
-          terminalName: row.terminalName,
-          paymentProfileId: row.paymentProfileId,
-        }))
-      );
-      const first = pRes.data?.profiles?.[0]?.id;
-      if (first && !selectedId) setSelectedId(first);
+      const profiles = (pRes.data?.profiles || []) as PaymentProfile[];
+      const branchProfile = profiles[0] || null;
+      setProfile(branchProfile);
+      setTerminals((tRes.data?.terminals || []) as TerminalRow[]);
     } catch (e: unknown) {
       const msg =
         e && typeof e === 'object' && 'response' in e
@@ -58,33 +79,11 @@ export default function PaymentProfilesSection() {
     } finally {
       setLoading(false);
     }
-  }, [selectedId, t]);
+  }, [branchSwitcher, isHqView, locationId, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const selected = profiles.find((p) => p.id === selectedId) || profiles[0];
-
-  const createProfile = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    setSaving(true);
-    try {
-      await api.post('/merchant/payment-profiles', { name });
-      setNewName('');
-      await load();
-      toast.success(t('saved'));
-    } catch (e: unknown) {
-      const msg =
-        e && typeof e === 'object' && 'response' in e
-          ? String((e as { response?: { data?: { error?: string } } }).response?.data?.error || '')
-          : '';
-      toast.error(msg || t('saveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const assignTerminal = async (terminalId: string, profileId: string) => {
     try {
@@ -102,20 +101,17 @@ export default function PaymentProfilesSection() {
     }
   };
 
-  const removeProfile = async (id: string) => {
-    if (!window.confirm(t('paymentProfileDeleteConfirm'))) return;
-    try {
-      await api.delete(`/merchant/payment-profiles/${id}`);
-      await load();
-      toast.success(t('saved'));
-    } catch (e: unknown) {
-      const msg =
-        e && typeof e === 'object' && 'response' in e
-          ? String((e as { response?: { data?: { error?: string } } }).response?.data?.error || '')
-          : '';
-      toast.error(msg || t('saveFailed'));
-    }
-  };
+  if (branchSwitcher && isHqView) {
+    return null;
+  }
+
+  if (branchSwitcher && !locationId) {
+    return (
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        {t('hqSettingsPickBranch')}
+      </p>
+    );
+  }
 
   if (loading) {
     return <p className="text-sm muted">{t('loading')}</p>;
@@ -126,99 +122,56 @@ export default function PaymentProfilesSection() {
       <div className="flex items-start gap-2">
         <CreditCard className="mt-0.5 h-5 w-5 text-[var(--text-muted)]" aria-hidden />
         <div>
-          <h3 className="text-sm font-semibold">{t('paymentProfilesTitle')}</h3>
-          <p className="text-xs text-[var(--text-muted)]">{t('paymentProfilesHint')}</p>
+          <h3 className="text-sm font-semibold">{sectionTitle}</h3>
+          <p className="text-xs text-[var(--text-muted)]">{t('branchPaymentsHint')}</p>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {profiles.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className={`rounded-lg border px-3 py-1.5 text-sm ${
-              selected?.id === p.id
-                ? 'border-teal-600 bg-teal-50 text-teal-900'
-                : 'border-[var(--border)] bg-white'
-            }`}
-            onClick={() => setSelectedId(p.id)}
-          >
-            {p.name}
-            {p.isDefault ? ` (${t('default')})` : ''}
-          </button>
-        ))}
-      </div>
-
-      {selected ? (
+      {profile ? (
         <div className="space-y-3 rounded-lg border border-[var(--border)] bg-white p-3">
           <p className="text-xs text-[var(--text-muted)]">
             {t('paymentProfileAdyenAccount')}:{' '}
             <span className="font-mono text-[var(--text)]">
-              {selected.adyenMerchantAccount || t('paymentProfileInheritMerchant')}
+              {profile.adyenMerchantAccount || t('paymentProfileInheritMerchant')}
             </span>
           </p>
-          {!selected.isDefault ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-red-700"
-              onClick={() => void removeProfile(selected.id)}
-            >
-              <Trash2 size={14} />
-              {t('delete')}
-            </button>
-          ) : null}
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               {t('paymentProfileAssignTerminals')}
             </p>
-            <ul className="space-y-1">
-              {terminals.map((term) => {
-                const assigned = term.paymentProfileId === selected.id;
-                return (
-                  <li
-                    key={term.id}
-                    className="flex items-center justify-between gap-2 rounded border border-[var(--border)] px-2 py-1.5 text-sm"
-                  >
-                    <span>{term.terminalName || term.terminalId}</span>
-                    <button
-                      type="button"
-                      className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                        assigned
-                          ? 'bg-teal-100 text-teal-900'
-                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                      }`}
-                      onClick={() => void assignTerminal(term.id, selected.id)}
+            {terminals.length === 0 ? (
+              <p className="text-sm muted">{t('paymentTerminalsHint')}</p>
+            ) : (
+              <ul className="space-y-1">
+                {terminals.map((term) => {
+                  const assigned = term.paymentProfileId === profile.id;
+                  return (
+                    <li
+                      key={term.id}
+                      className="flex items-center justify-between gap-2 rounded border border-[var(--border)] px-2 py-1.5 text-sm"
                     >
-                      {assigned ? t('paymentProfileAssigned') : t('paymentProfileAssign')}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                      <span>{term.terminalName || term.terminalId}</span>
+                      <button
+                        type="button"
+                        className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                          assigned
+                            ? 'bg-teal-100 text-teal-900'
+                            : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                        }`}
+                        onClick={() => void assignTerminal(term.id, profile.id)}
+                      >
+                        {assigned ? t('paymentProfileAssigned') : t('paymentProfileAssign')}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
-        <label className="flex-1 text-sm">
-          <span className="mb-1 block text-xs font-medium">{t('paymentProfileNewName')}</span>
-          <input
-            className="input w-full"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder={t('paymentProfileNewNamePlaceholder')}
-          />
-        </label>
-        <button
-          type="button"
-          className="btn-primary inline-flex items-center gap-1"
-          disabled={saving || !newName.trim()}
-          onClick={() => void createProfile()}
-        >
-          <Plus size={16} />
-          {t('paymentProfileAdd')}
-        </button>
-      </div>
+      ) : (
+        <p className="text-sm muted">{t('saveFailed')}</p>
+      )}
     </div>
   );
 }

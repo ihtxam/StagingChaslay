@@ -4417,6 +4417,13 @@ const en: Dict = {
   paymentProfilesTitle: 'Payment profiles',
   paymentProfilesHint:
     'Group terminals under separate Swisspayout credential sets (e.g. per location or legal entity).',
+  branchPaymentsTitle: 'Payments for {branch}',
+  branchPaymentsTitleFallback: 'Branch payments',
+  branchPaymentsHint:
+    'Card terminals and in-store Swisspayout settings for this branch. Switch branches in the header to configure another site.',
+  hqSettingsPickBranchTitle: 'Choose a branch',
+  hqSettingsPickBranch:
+    'Select a branch to configure payments, printers, and receipts. HQ view is for overview and menu push only.',
   paymentProfileNewName: 'New profile name',
   paymentProfileNewNamePlaceholder: 'Bar register',
   paymentProfileAdd: 'Add profile',

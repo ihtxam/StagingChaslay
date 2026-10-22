@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useLocationStore } from '@/store/location';
+import { shouldHideMerchantSettingsInHqView } from '@/lib/panel-scope-nav';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -723,6 +725,12 @@ export default function Settings() {
   const { t, setLocale, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
+  const { isHqView, locations, limits } = useLocationStore();
+  const hqSettingsBlocked = shouldHideMerchantSettingsInHqView({
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+    isHqView,
+  });
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
@@ -1917,6 +1925,18 @@ export default function Settings() {
       selectTab(visibleTabs[0].id);
     }
   }, [selectTab, tab, visibleTabs, settingsQuery, normalizedQuery]);
+
+  if (hqSettingsBlocked) {
+    return (
+      <div className="card mx-auto max-w-lg space-y-4 py-12 text-center">
+        <h1 className="text-xl font-semibold">{t('hqSettingsPickBranchTitle')}</h1>
+        <p className="text-sm muted">{t('hqSettingsPickBranch')}</p>
+        <Link to="/merchant/hq" className="btn-primary inline-flex">
+          {t('navHq')}
+        </Link>
+      </div>
+    );
+  }
 
   if (loading && !settingsOptionalTab) {
     return <div className="text-center py-12 muted text-sm">{t('loading')}</div>;

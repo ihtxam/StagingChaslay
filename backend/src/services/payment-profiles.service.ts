@@ -57,6 +57,11 @@ function sanitizeProfile(
   };
 }
 
+/** Hidden implementation detail — managers configure per-branch payments, not “profiles”. */
+export function allowManualPaymentProfileCreate(): boolean {
+  return process.env.ALLOW_PAYMENT_PROFILE_CREATE === "1";
+}
+
 export class PaymentProfilesService {
   static async ensureDefaultProfile(merchantId: string) {
     const db = getDb();
@@ -93,19 +98,102 @@ export class PaymentProfilesService {
     return created!;
   }
 
+  /** One auto profile per branch — named after the location, credentials copied from default/merchant. */
+  static async ensureProfileForLocation(merchantId: string, locationId: string) {
+    const db = getDb();
+    const locId = String(locationId || "").trim();
+    if (!locId) throw new Error("Location id is required");
+
+    const location = await db.query.locations.findFirst({
+      where: and(eq(schema.locations.id, locId), eq(schema.locations.merchantId, merchantId)),
+    });
+    if (!location) throw new Error("Location not found");
+
+    const existing = await db.query.paymentProfiles.findFirst({
+      where: and(
+        eq(schema.paymentProfiles.merchantId, merchantId),
+        eq(schema.paymentProfiles.locationId, locId)
+      ),
+    });
+    if (existing) return existing;
+
+    const defaultProfile = await this.ensureDefaultProfile(merchantId);
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+    });
+    if (!merchant) throw new Error("Merchant not found");
+
+    const name = String(location.name || "Branch").trim().slice(0, 120) || "Branch";
+    const [created] = await db
+      .insert(schema.paymentProfiles)
+      .values({
+        merchantId,
+        name,
+        locationId: locId,
+        isDefault: false,
+        adyenMerchantAccount:
+          defaultProfile.adyenMerchantAccount ?? merchant.adyenMerchantAccount,
+        adyenApiKey: defaultProfile.adyenApiKey ?? merchant.adyenApiKey,
+        adyenClientId: defaultProfile.adyenClientId ?? merchant.adyenClientId,
+        adyenStoreReference:
+          defaultProfile.adyenStoreReference ?? merchant.adyenStoreReference,
+        adyenHmacKey: defaultProfile.adyenHmacKey ?? merchant.adyenHmacKey,
+        adyenLiveEnvironment:
+          defaultProfile.adyenLiveEnvironment ?? merchant.adyenLiveEnvironment,
+        adyenLiveUrlPrefix:
+          defaultProfile.adyenLiveUrlPrefix ?? merchant.adyenLiveUrlPrefix,
+        adyenLiveRegion: defaultProfile.adyenLiveRegion ?? merchant.adyenLiveRegion,
+        adyenUseLegacyEndpoint:
+          defaultProfile.adyenUseLegacyEndpoint ?? merchant.adyenUseLegacyEndpoint,
+      })
+      .returning();
+    if (!created) throw new Error("Failed to create branch payment profile");
+    return created;
+  }
+
+  static async getProfileIdForLocation(
+    merchantId: string,
+    locationId: string
+  ): Promise<string> {
+    const row = await this.ensureProfileForLocation(merchantId, locationId);
+    return row.id;
+  }
+
   static async list(
     merchantId: string,
     filters?: { locationId?: string | null; paymentProfileId?: string | null }
   ): Promise<PaymentProfilePublic[]> {
     await this.ensureDefaultProfile(merchantId);
     const db = getDb();
+    if (filters?.locationId) {
+      const branchProfile = await this.ensureProfileForLocation(
+        merchantId,
+        filters.locationId
+      );
+      const rows = [branchProfile];
+      const filtered = rows;
+      const ids = filtered.map((r) => r.id);
+      const counts = new Map<string, number>();
+      if (ids.length) {
+        const terminals = await db.query.paymentTerminals.findMany({
+          where: and(
+            eq(schema.paymentTerminals.merchantId, merchantId),
+            inArray(schema.paymentTerminals.paymentProfileId, ids)
+          ),
+          columns: { paymentProfileId: true },
+        });
+        for (const t of terminals) {
+          if (!t.paymentProfileId) continue;
+          counts.set(t.paymentProfileId, (counts.get(t.paymentProfileId) || 0) + 1);
+        }
+      }
+      return filtered.map((r) => sanitizeProfile(r, counts.get(r.id) || 0));
+    }
     const rows = await db.query.paymentProfiles.findMany({
       where: eq(schema.paymentProfiles.merchantId, merchantId),
       orderBy: [asc(schema.paymentProfiles.isDefault), asc(schema.paymentProfiles.name)],
     });
-    const filtered = filters?.locationId
-      ? rows.filter((r) => !r.locationId || r.locationId === filters.locationId)
-      : rows;
+    const filtered = rows;
     const ids = filtered.map((r) => r.id);
     const counts = new Map<string, number>();
     if (ids.length) {
@@ -146,6 +234,11 @@ export class PaymentProfilesService {
       adyenUseLegacyEndpoint?: boolean;
     }
   ) {
+    if (!allowManualPaymentProfileCreate()) {
+      throw new Error(
+        "Payment profiles are managed automatically per branch. Select a branch in the panel to configure payments."
+      );
+    }
     const name = String(input.name || "").trim();
     if (!name) throw new Error("Profile name is required");
     const db = getDb();
@@ -318,15 +411,11 @@ export class PaymentProfilesService {
       );
     }
     if (filters?.locationId) {
-      const profileIdsForLocation = (
-        await db.query.paymentProfiles.findMany({
-          where: and(
-            eq(schema.paymentProfiles.merchantId, merchantId),
-            eq(schema.paymentProfiles.locationId, filters.locationId)
-          ),
-          columns: { id: true },
-        })
-      ).map((p) => p.id);
+      const branchProfile = await this.ensureProfileForLocation(
+        merchantId,
+        filters.locationId
+      );
+      const profileIdsForLocation = [branchProfile.id];
       const allowed = new Set([defaultProfileId, ...profileIdsForLocation]);
       terminals = terminals.filter((t) =>
         allowed.has(t.paymentProfileId || defaultProfileId)
