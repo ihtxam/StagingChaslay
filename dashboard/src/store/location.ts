@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
 import { notifyPanelLocationScopeChanged } from '@/lib/panel-location-scope';
-import { canSwitchPanelLocationFromUser } from '@/lib/panel-location-switch';
+import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
+import { loadWebPosStaffSession, WEBPOS_STAFF_SESSION_EVENT } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
 
 export type MerchantLocation = {
@@ -82,7 +83,13 @@ function writeStoredId(id: string | null) {
 
 function panelLocationSwitchAllowed(): boolean {
   const user = useAuthStore.getState().user;
-  return canSwitchPanelLocationFromUser(user);
+  const pinSession = loadWebPosStaffSession();
+  return effectiveCanSwitchPanelLocation({
+    jwtUser: user,
+    pinRoleName: pinSession?.roleName,
+    pinPermissions: pinSession?.permissions,
+    pinActive: !!pinSession,
+  });
 }
 
 export const useLocationStore = create<LocationStore>((set, get) => ({
@@ -228,6 +235,14 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
     await get().load();
   },
 }));
+
+if (typeof window !== 'undefined') {
+  const refreshPanelLocation = () => {
+    void useLocationStore.getState().refresh();
+  };
+  window.addEventListener(WEBPOS_STAFF_SESSION_EVENT, refreshPanelLocation);
+  window.addEventListener('storage', refreshPanelLocation);
+}
 
 export function getSelectedLocationId(): string | null {
   if (readStoredScope() === 'hq') return null;

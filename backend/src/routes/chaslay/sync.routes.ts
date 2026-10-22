@@ -70,7 +70,7 @@ router.post("/staff/verify-pin", async (req: Request, res: Response) => {
     const staff = await StaffService.verifyPin(req.chaslayMerchantId!, String(req.body?.pin || ""));
     res.json({ success: true, staff });
   } catch (error) {
-    res.status(401).json({ error: error instanceof Error ? error.message : "Invalid PIN" });
+    res.status(403).json({ error: error instanceof Error ? error.message : "Invalid PIN" });
   }
 });
 

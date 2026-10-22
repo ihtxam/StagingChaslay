@@ -12,7 +12,8 @@ import {
   getWebPosTerminalLocationId,
   isWebPosFloorPath,
 } from '@/lib/webpos-terminal-location';
-import { canSwitchPanelLocationFromUser } from '@/lib/panel-location-switch';
+import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
+import { loadWebPosStaffSession } from '@/lib/permissions';
 
 installDeployToastGuard();
 
@@ -64,14 +65,28 @@ const api: AxiosInstance = axios.create({
 const PANEL_LOCATION_STORAGE_KEY = 'manupos_selected_location';
 const PANEL_SCOPE_STORAGE_KEY = 'manupos_panel_scope';
 
-function readStoredPanelUser(): { role?: string; roleName?: string; isOwner?: boolean } | null {
+function readStoredPanelUser(): {
+  role?: string;
+  roleName?: string;
+  isOwner?: boolean;
+  permissions?: string[];
+} | null {
   try {
     const raw = localStorage.getItem('user');
     if (!raw) return null;
-    return JSON.parse(raw) as { role?: string; roleName?: string; isOwner?: boolean };
+    return JSON.parse(raw) as {
+      role?: string;
+      roleName?: string;
+      isOwner?: boolean;
+      permissions?: string[];
+    };
   } catch {
     return null;
   }
+}
+
+function isStaffPinVerifyRequest(url: string): boolean {
+  return /verify-pin/i.test(url);
 }
 
 function resolveApiLocationId(): string | null {
@@ -80,7 +95,14 @@ function resolveApiLocationId(): string | null {
     if (isWebPosFloorPath(window.location.pathname)) {
       return getWebPosTerminalLocationId();
     }
-    const lockedStaff = !canSwitchPanelLocationFromUser(readStoredPanelUser());
+    const panelUser = readStoredPanelUser();
+    const pinSession = loadWebPosStaffSession();
+    const lockedStaff = !effectiveCanSwitchPanelLocation({
+      jwtUser: panelUser,
+      pinRoleName: pinSession?.roleName,
+      pinPermissions: pinSession?.permissions,
+      pinActive: !!pinSession,
+    });
     if (localStorage.getItem(PANEL_SCOPE_STORAGE_KEY) === 'hq') {
       if (lockedStaff) {
         return localStorage.getItem(PANEL_LOCATION_STORAGE_KEY);
@@ -140,6 +162,15 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   try {
+    const pinSession = loadWebPosStaffSession();
+    const pinTok = pinSession?.accessToken?.trim();
+    if (pinTok) {
+      config.headers['X-WebPos-Staff-Access'] = pinTok;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
     const locationId = resolveApiLocationId();
     if (locationId) {
       config.headers['X-Location-Id'] = locationId;
@@ -197,13 +228,14 @@ api.interceptors.response.use(
     ) {
       notifyDeployBlip(error);
     }
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const reqUrl = String(error.config?.url || '');
+    // Wrong staff PIN (401 legacy / 403 current) must not clear the merchant JWT.
+    if (isStaffPinVerifyRequest(reqUrl)) {
+      return Promise.reject(error);
+    }
+    if (status === 401) {
       const path = window.location.pathname || '';
-      const reqUrl = String(error.config?.url || '');
-      // Wrong staff PIN is not a session expiry — keep merchant JWT on WebPOS.
-      if (reqUrl.includes('/staff/verify-pin')) {
-        return Promise.reject(error);
-      }
       // Online shop uses its own customer token; don't redirect to staff login.
       if (isPublicShopHost(window.location.hostname)) {
         return Promise.reject(error);

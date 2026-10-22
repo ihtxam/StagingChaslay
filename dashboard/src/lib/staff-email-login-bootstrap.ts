@@ -30,7 +30,7 @@ export async function bootstrapStaffRegisterSessionAfterEmailLogin(
       roleId: row.roleId,
       roleName: row.roleName,
       permissions: row.permissions || user.permissions || [],
-      accessToken: jwtToken,
+      // Omit accessToken — scoped PIN JWT is set only after verify-pin succeeds.
     })
   );
   notifyWebPosStaffSessionChanged();

@@ -175,6 +175,7 @@ import {
   shouldShowPanelPosQuickAction,
 } from '@/lib/panel-scope-nav';
 import { buildPanelLocationHeaderLabels } from '@/lib/panel-location-header';
+import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
@@ -705,13 +706,23 @@ function MerchantShell() {
       }),
     [merchantShopName, locations.length, limits?.maxLocations, isHqView, panelLocation]
   );
+  const pinRestrictsHq = useMemo(() => {
+    if (!effective.pinActive || !pinSession) return false;
+    return !effectiveCanSwitchPanelLocation({
+      jwtUser: user,
+      pinRoleName: pinSession.roleName,
+      pinPermissions: pinSession.permissions,
+      pinActive: true,
+    });
+  }, [effective.pinActive, pinSession, user]);
   const panelScopeNavInput = useMemo(
     () => ({
       locationCount: locations.length,
       maxLocations: limits?.maxLocations,
       isHqView,
+      pinRestrictsHq,
     }),
-    [locations.length, limits?.maxLocations, isHqView]
+    [locations.length, limits?.maxLocations, isHqView, pinRestrictsHq]
   );
   const posLaunchPath = isHqView
     ? '/merchant/pos'

@@ -7,6 +7,8 @@ export type PanelScopeNavInput = {
   isHqView: boolean;
   /** Active branch id when scope is branch (for catalog API query fallback). */
   locationId?: string | null;
+  /** Restricted floor PIN (waiter/cashier) — hide HQ nav and lock branch scope. */
+  pinRestrictsHq?: boolean;
 };
 
 export function isPanelLocationSwitcherActive(input: {
@@ -39,6 +41,7 @@ export function shouldShowHqPanelNav(
   input: PanelScopeNavInput & { hqNavLicensed: boolean }
 ): boolean {
   if (!input.hqNavLicensed) return false;
+  if (input.pinRestrictsHq) return false;
   const switcher = isPanelLocationSwitcherActive(input);
   if (!switcher) return true;
   return input.isHqView;

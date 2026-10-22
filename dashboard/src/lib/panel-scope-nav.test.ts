@@ -23,6 +23,10 @@ assert.equal(isHqPanelPath('/merchant/products'), false);
 
 assert.equal(shouldShowHqPanelNav({ ...multi, hqNavLicensed: true }), false);
 assert.equal(shouldShowHqPanelNav({ ...multiHq, hqNavLicensed: true }), true);
+assert.equal(
+  shouldShowHqPanelNav({ ...multiHq, hqNavLicensed: true, pinRestrictsHq: true }),
+  false
+);
 assert.equal(shouldShowHqPanelNav({ ...single, hqNavLicensed: true }), true);
 assert.equal(shouldShowHqPanelNav({ ...multiHq, hqNavLicensed: false }), false);
 

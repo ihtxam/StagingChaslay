@@ -153,8 +153,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       localStorage.setItem('user', JSON.stringify(updated));
       set({ user: updated });
     } catch (error: unknown) {
-      const status = (error as { response?: { status?: number } })?.response?.status;
-      if (status === 401) {
+      const err = error as { response?: { status?: number }; config?: { url?: string } };
+      const status = err.response?.status;
+      const url = String(err.config?.url || '');
+      if (status === 401 && !/verify-pin/i.test(url)) {
         get().logout();
       }
     }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { canSwitchPanelLocationFromUser } from '@/lib/panel-location-switch';
+import {
+  canSwitchPanelLocationFromUser,
+  effectiveCanSwitchPanelLocation,
+} from '@/lib/panel-location-switch';
 
 describe('canSwitchPanelLocationFromUser', () => {
   it('allows owners and manager roles', () => {
@@ -13,6 +16,25 @@ describe('canSwitchPanelLocationFromUser', () => {
         name: 'x',
         email: 'a',
         id: '1',
+      })
+    ).toBe(true);
+  });
+
+  it('owner JWT stays locked when a waiter PIN is active', () => {
+    expect(
+      effectiveCanSwitchPanelLocation({
+        jwtUser: { role: 'merchant', isOwner: true },
+        pinRoleName: 'Waiter',
+        pinPermissions: ['USE_WEBPOS', 'VIEW_ORDER_HISTORY'],
+        pinActive: true,
+      })
+    ).toBe(false);
+    expect(
+      effectiveCanSwitchPanelLocation({
+        jwtUser: { role: 'merchant', isOwner: true },
+        pinRoleName: 'Manager',
+        pinPermissions: ['ACCESS_PANEL', 'USE_WEBPOS'],
+        pinActive: true,
       })
     ).toBe(true);
   });

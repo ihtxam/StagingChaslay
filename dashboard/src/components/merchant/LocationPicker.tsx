@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Building2, Check, MapPin, Network } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { shouldShowLocationSwitcher } from '@/lib/pos-hub-visibility';
-import { canSwitchPanelLocationFromUser } from '@/lib/panel-location-switch';
+import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
+import { loadWebPosStaffSession } from '@/lib/permissions';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { setWebPosTerminalLocationId } from '@/lib/webpos-terminal-location';
@@ -155,8 +156,15 @@ export function LocationSwitcherChip() {
   const { location, locations, limits, isHqView, load, canSwitchPanelLocation } =
     useLocationStore();
   const [open, setOpen] = useState(false);
+  const pinSession = loadWebPosStaffSession();
   const maySwitch =
-    canSwitchPanelLocation && canSwitchPanelLocationFromUser(authUser);
+    canSwitchPanelLocation &&
+    effectiveCanSwitchPanelLocation({
+      jwtUser: authUser,
+      pinRoleName: pinSession?.roleName,
+      pinPermissions: pinSession?.permissions,
+      pinActive: !!pinSession,
+    });
 
   useEffect(() => {
     void load();
