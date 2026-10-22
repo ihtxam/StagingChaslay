@@ -80,3 +80,9 @@ export function getDesktopHubActiveItem(pathname: string) {
   const path = normalizeDesktopPath(pathname);
   return DESKTOP_HUB_NAV.find((item) => isDesktopHubNavActive(path, item.path));
 }
+
+/** Floor staff (PIN session, no manager settings): POS + device printer settings only. */
+export function desktopHubNavForFloorStaff(hardwareOnly: boolean) {
+  if (!hardwareOnly) return DESKTOP_HUB_NAV;
+  return DESKTOP_HUB_NAV.filter((item) => item.id === 'pos' || item.id === 'settings');
+}

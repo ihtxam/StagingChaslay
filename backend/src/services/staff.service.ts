@@ -49,6 +49,19 @@ export class StaffService {
     );
   }
 
+  /** Reason email/password /login must be rejected (null = password check may proceed). */
+  static emailLoginBlockedReason(staff: {
+    pinOnly?: boolean | null;
+    passwordHash?: string | null;
+    pinHash?: string | null;
+  }): string | null {
+    if (staff.pinOnly) return this.PIN_ONLY_LOGIN_MESSAGE;
+    if (!staff.passwordHash) {
+      return staff.pinHash ? this.PIN_ONLY_LOGIN_MESSAGE : this.NO_PASSWORD_LOGIN_MESSAGE;
+    }
+    return null;
+  }
+
   private static normalizeStaffPhone(raw?: string | null): string | null {
     const digits = String(raw || "").replace(/\D/g, "");
     if (!digits) return null;
@@ -614,6 +627,7 @@ export class StaffService {
         extraPermissions: parsePermissions(s.extraPermissions),
         phone: s.phone || null,
         canAccessPanel: s.canAccessPanel,
+        pinOnly: s.pinOnly,
         isActive: s.isActive,
         pinSet: !!s.pinHash,
         pin: s.pinDisplay || null,
@@ -636,6 +650,7 @@ export class StaffService {
       phone?: string;
       password?: string;
       canAccessPanel?: boolean;
+      pinOnly?: boolean;
       loginHome?: StaffLoginHome;
       extraPermissions?: Permission[];
     }
@@ -666,7 +681,13 @@ export class StaffService {
 
     const password = input.password?.trim() || "";
     // Email + password on create always enables official /login (do not require a checkbox).
-    const canAccessPanel = !!input.canAccessPanel || !!(email && password);
+    let canAccessPanel = !!input.canAccessPanel || !!(email && password);
+    let pinOnly =
+      input.pinOnly === true || (!canAccessPanel && !email && !password);
+    if (pinOnly) canAccessPanel = false;
+    if (canAccessPanel && pinOnly) {
+      throw new Error("PIN-only staff cannot use official email login");
+    }
     if (canAccessPanel && !email) {
       throw new Error("Email is required for panel access");
     }
@@ -698,6 +719,7 @@ export class StaffService {
         pinDisplay: pin || null,
         passwordHash: password ? await AuthService.hashPassword(password) : null,
         canAccessPanel,
+        pinOnly,
         loginHome,
         extraPermissions:
           input.extraPermissions !== undefined
@@ -720,6 +742,7 @@ export class StaffService {
       email?: string | null;
       password?: string | null;
       canAccessPanel?: boolean;
+      pinOnly?: boolean;
       isActive?: boolean;
       deliveryHourlyRateOverride?: number | null;
       deliveryPerOrderFeeOverride?: number | null;
@@ -806,8 +829,17 @@ export class StaffService {
     // Setting email + a new password enables official /login even if the checkbox was off.
     if (settingPassword && nextEmail) {
       patch.canAccessPanel = true;
+      patch.pinOnly = false;
     } else if (input.canAccessPanel !== undefined) {
       patch.canAccessPanel = !!input.canAccessPanel;
+      if (patch.canAccessPanel) patch.pinOnly = false;
+    }
+    if (input.pinOnly !== undefined) {
+      patch.pinOnly = !!input.pinOnly;
+      if (patch.pinOnly) {
+        patch.canAccessPanel = false;
+        patch.passwordHash = null;
+      }
     }
 
     const nextCanAccess =
@@ -1057,10 +1089,9 @@ export class StaffService {
       throw new Error("Invalid email or password");
     }
 
-    if (!staff.passwordHash) {
-      throw new Error(
-        staff.pinHash ? this.PIN_ONLY_LOGIN_MESSAGE : this.NO_PASSWORD_LOGIN_MESSAGE
-      );
+    const loginBlocked = this.emailLoginBlockedReason(staff);
+    if (loginBlocked) {
+      throw new Error(loginBlocked);
     }
 
     const ok = await AuthService.comparePassword(password, staff.passwordHash);
@@ -1121,6 +1152,7 @@ export class StaffService {
       extraPermissions: parsePermissions(staff.extraPermissions),
       phone: staff.phone || null,
       canAccessPanel: staff.canAccessPanel,
+      pinOnly: staff.pinOnly,
       isActive: staff.isActive,
       pinSet: !!staff.pinHash,
       pin: staff.pinDisplay || null,

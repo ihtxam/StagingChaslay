@@ -570,6 +570,8 @@ export const merchantStaff = pgTable(
     passwordHash: varchar("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: boolean("can_access_panel").default(false).notNull(),
+    /** When true, /login email+password is blocked even if a password hash exists (POS PIN only). */
+    pinOnly: boolean("pin_only").default(false).notNull(),
     /** After email login: panel (backend), pos (register), or auto (from permissions). */
     loginHome: varchar("login_home", { length: 20 }).default("auto").notNull(),
     /** Adyen POI terminal id preferred by this staff member on WebPOS/waiter. */

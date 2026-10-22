@@ -605,6 +605,10 @@ export function WebPosSettingsDropdown({
   onStaffTestReceipt,
   onStaffReprintLast,
   staffReprintAvailable = false,
+  staffAllowPrinterPick = false,
+  staffSelectedPrinter = '',
+  onStaffPrinterChange,
+  hardwareGearOnly = false,
 }: {
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
@@ -663,6 +667,11 @@ export function WebPosSettingsDropdown({
   onStaffTestReceipt?: () => void;
   onStaffReprintLast?: () => void;
   staffReprintAvailable?: boolean;
+  staffAllowPrinterPick?: boolean;
+  staffSelectedPrinter?: string;
+  onStaffPrinterChange?: (name: string) => void;
+  /** Waiter / floor staff: printers + test print only (no payments, terminals, channels). */
+  hardwareGearOnly?: boolean;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -677,6 +686,42 @@ export function WebPosSettingsDropdown({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5">
+      {hardwareGearOnly ? (
+        <>
+          {showStaffHardwarePanel ? (
+            <WebPosStaffHardwarePanel
+              printers={staffPrinterProfiles}
+              onTestReceipt={onStaffTestReceipt}
+              onReprintLast={onStaffReprintLast}
+              reprintAvailable={staffReprintAvailable}
+              allowPrinterPick={staffAllowPrinterPick}
+              selectedPrinter={staffSelectedPrinter}
+              onPrinterChange={onStaffPrinterChange}
+            />
+          ) : null}
+          <div className="grid grid-cols-2 gap-1.5 border-b border-stone-100 pb-2">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw size={14} />
+              {t('webPosRefreshPage')}
+            </button>
+            {onSendLogs ? (
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
+                onClick={onSendLogs}
+              >
+                {t('webPosSendLogs')}
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+      {!hardwareGearOnly ? (
+      <>
       <div className="space-y-1.5 border-b border-stone-100 pb-2">
         {canShowPanel && onShowPanel ? (
           <button
@@ -1132,6 +1177,8 @@ export function WebPosSettingsDropdown({
           <FileText size={14} />
           {t('webPosSendLogs')}
         </button>
+      ) : null}
+      </>
       ) : null}
       <p className="border-t border-stone-100 pt-1.5 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}

@@ -13,28 +13,52 @@ export function WebPosStaffHardwarePanel({
   onTestReceipt,
   onReprintLast,
   reprintAvailable,
+  allowPrinterPick,
+  selectedPrinter,
+  onPrinterChange,
 }: {
   printers: PrinterProfile[];
   onTestReceipt?: () => void;
   onReprintLast?: () => void;
   reprintAvailable?: boolean;
+  allowPrinterPick?: boolean;
+  selectedPrinter?: string;
+  onPrinterChange?: (name: string) => void;
 }) {
   const { t } = useI18n();
-  if (!printers.length && !onTestReceipt && !onReprintLast) return null;
+  if (!printers.length && !onTestReceipt && !onReprintLast && !allowPrinterPick) return null;
 
   return (
     <div className="space-y-1.5 border-b border-stone-100 pb-2">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
         {t('webPosStaffHardwareTitle')}
       </p>
-      <ul className="space-y-1 text-xs text-stone-700">
-        {printers.map((p) => (
-          <li key={p.id} className="flex items-center gap-1.5 rounded border border-stone-200 px-2 py-1">
-            <Printer size={12} aria-hidden />
-            <span className="truncate">{p.name}</span>
-          </li>
-        ))}
-      </ul>
+      {allowPrinterPick && onPrinterChange && printers.length > 0 ? (
+        <label className="block space-y-1 text-xs">
+          <span className="text-[11px] text-stone-500">{t('desktopSettingsReceiptPrinter')}</span>
+          <select
+            className="input w-full text-xs"
+            value={selectedPrinter || ''}
+            onChange={(e) => onPrinterChange(e.target.value)}
+          >
+            <option value="">{t('webPosTerminalPick')}</option>
+            {printers.map((p) => (
+              <option key={p.id} value={p.name}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <ul className="space-y-1 text-xs text-stone-700">
+          {printers.map((p) => (
+            <li key={p.id} className="flex items-center gap-1.5 rounded border border-stone-200 px-2 py-1">
+              <Printer size={12} aria-hidden />
+              <span className="truncate">{p.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="grid grid-cols-2 gap-1.5">
         {onTestReceipt ? (
           <button

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Banknote, FileText, Monitor, Palette, Printer, RefreshCw, Scale, Settings2, Smartphone } from 'lucide-react';
@@ -45,6 +45,8 @@ import { OnScreenKeyboardToggle, useOnScreenKeyboard } from '@/components/OnScre
 import DeviceEnrollmentWizard from '@/components/settings/DeviceEnrollmentWizard';
 import { fetchDeviceRuntimeConfig } from '@/lib/device-enrollment';
 import { webPosDeviceId } from '@/lib/webpos-print-relay';
+import { hasPermission, hasPosHardwareGearAccess, loadWebPosStaffSession } from '@/lib/permissions';
+import { useAuthStore } from '@/store/auth';
 
 const WEBPOS_GRID_TILE_SIZE_KEY = 'webpos.grid.tileSize';
 const WEBPOS_APPEARANCE_KEY = 'webpos_appearance';
@@ -117,6 +119,24 @@ function readLocalTileSize(): RetailTileSize {
 
 export default function DesktopSettings() {
   const { t, locale, setLocale } = useI18n();
+  const authUser = useAuthStore((s) => s.user);
+  const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
+  const pinSession = loadWebPosStaffSession();
+  const staffHardwareOnly = useMemo(() => {
+    if (!pinSession) return false;
+    return (
+      hasPosHardwareGearAccess(pinSession.permissions, false) &&
+      !hasPermission(pinSession.permissions, 'MANAGE_SETTINGS', false) &&
+      !jwtIsOwner
+    );
+  }, [pinSession, jwtIsOwner]);
+  const visibleSections = useMemo(
+    () =>
+      staffHardwareOnly
+        ? SECTIONS.filter((s) => s.id === 'printer' || s.id === 'drawer')
+        : SECTIONS,
+    [staffHardwareOnly]
+  );
   const { open: keyboardOpen } = useOnScreenKeyboard();
   const { theme, setTheme } = useTheme();
   const [section, setSection] = useState<SectionId>('appearance');
@@ -147,6 +167,12 @@ export default function DesktopSettings() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [autoOpenCashDrawer, setAutoOpenCashDrawer] = useState(true);
   const [enrolledTerminalLabel, setEnrolledTerminalLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (staffHardwareOnly && section !== 'printer' && section !== 'drawer') {
+      setSection('printer');
+    }
+  }, [staffHardwareOnly, section]);
 
   const applyScaleDevice = useCallback((device: ScaleDevice) => {
     const port = formatScalePortLabel(device.port);
@@ -458,10 +484,15 @@ export default function DesktopSettings() {
       <aside className="w-full shrink-0 rounded-xl border border-stone-200 bg-white p-3 shadow-sm dark:border-stone-700 dark:bg-stone-900 md:w-56">
         <div className="mb-3 flex items-center gap-2 px-2 text-sm font-bold text-stone-800 dark:text-stone-100">
           <Settings2 size={16} aria-hidden />
-          {t('desktopSettingsTitle')}
+          {staffHardwareOnly ? t('webPosStaffHardwareTitle') : t('desktopSettingsTitle')}
         </div>
+        {staffHardwareOnly ? (
+          <p className="mb-2 px-2 text-[11px] leading-snug text-stone-500 dark:text-stone-400">
+            {t('webPosStaffHardwareHint')}
+          </p>
+        ) : null}
         <nav className="space-y-1">
-          {SECTIONS.map(({ id, icon: Icon }) => (
+          {visibleSections.map(({ id, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -883,16 +914,18 @@ export default function DesktopSettings() {
               </section>
             )}
 
-            <div className="mt-8 flex justify-end border-t border-stone-100 pt-4 dark:border-stone-700">
-              <button
-                type="button"
-                className="rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-                disabled={saving}
-                onClick={() => void saveMerchantSettings()}
-              >
-                {saving ? t('loading') : t('save')}
-              </button>
-            </div>
+            {!staffHardwareOnly ? (
+              <div className="mt-8 flex justify-end border-t border-stone-100 pt-4 dark:border-stone-700">
+                <button
+                  type="button"
+                  className="rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                  disabled={saving}
+                  onClick={() => void saveMerchantSettings()}
+                >
+                  {saving ? t('loading') : t('save')}
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </main>

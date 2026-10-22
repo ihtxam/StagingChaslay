@@ -346,6 +346,8 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS extra_permissions text",
   merchant_staff_phone:
     "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS phone varchar(32)",
+  merchant_staff_pin_only:
+    "ALTER TABLE merchant_staff ADD COLUMN IF NOT EXISTS pin_only boolean NOT NULL DEFAULT false",
   merchant_staff_phone_uidx:
     "CREATE UNIQUE INDEX IF NOT EXISTS merchant_staff_merchant_phone_idx ON merchant_staff (merchant_id, phone) WHERE phone IS NOT NULL",
   products_visibility:

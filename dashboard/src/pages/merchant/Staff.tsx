@@ -31,6 +31,7 @@ type StaffRow = {
   pinSet: boolean;
   pin?: string | null;
   passwordSet?: boolean;
+  pinOnly?: boolean;
   extraPermissions?: Permission[];
   deliveryHourlyRateOverride?: string | null;
   deliveryPerOrderFeeOverride?: string | null;
@@ -50,6 +51,7 @@ type StaffEditForm = {
   deliveryHourlyRateOverride: string;
   deliveryPerOrderFeeOverride: string;
   loginHome: 'panel' | 'pos';
+  pinOnly: boolean;
   locationIds: string[];
 };
 
@@ -62,6 +64,7 @@ const emptyCreateForm = {
   email: '',
   password: '',
   canAccessPanel: false,
+  pinOnly: true,
   loginHome: 'panel' as 'panel' | 'pos',
 };
 
@@ -192,6 +195,7 @@ export default function StaffPage({
         email,
         password,
         canAccessPanel,
+        pinOnly: canAccessPanel ? false : staffForm.pinOnly,
         loginHome: canAccessPanel ? staffForm.loginHome : undefined,
       });
       toast.success(t('staffUserCreated'));
@@ -237,6 +241,7 @@ export default function StaffPage({
             ) === 'pos'
             ? 'pos'
             : 'panel',
+      pinOnly: row.pinOnly ?? !(row.canAccessPanel || row.email),
       locationIds,
     });
   };
@@ -271,6 +276,7 @@ export default function StaffPage({
         name: editForm.name.trim(),
         roleId: editForm.roleId,
         canAccessPanel: nextOfficial,
+        pinOnly: nextOfficial ? false : editForm.pinOnly,
         email: editForm.email.trim() || null,
         phone: editForm.phone.trim() || null,
         extraPermissions: editForm.extraPermissions,
@@ -468,7 +474,13 @@ export default function StaffPage({
                 <input
                   type="checkbox"
                   checked={staffForm.canAccessPanel}
-                  onChange={(e) => setStaffForm({ ...staffForm, canAccessPanel: e.target.checked })}
+                  onChange={(e) =>
+                    setStaffForm({
+                      ...staffForm,
+                      canAccessPanel: e.target.checked,
+                      pinOnly: e.target.checked ? false : staffForm.pinOnly,
+                    })
+                  }
                 />
                 <span>
                   {t('staffEmailLogin')}
@@ -477,6 +489,21 @@ export default function StaffPage({
                   </span>
                 </span>
               </label>
+              {!staffForm.canAccessPanel ? (
+                <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={staffForm.pinOnly}
+                    onChange={(e) => setStaffForm({ ...staffForm, pinOnly: e.target.checked })}
+                  />
+                  <span>
+                    {t('staffPinOnlyLabel')}
+                    <span className="block text-xs text-[var(--text-muted)] font-normal">
+                      {t('staffPinOnlyHint')}
+                    </span>
+                  </span>
+                </label>
+              ) : null}
               {showCreateLoginHome ? (
                 <fieldset className="block text-sm sm:col-span-2">
                   <legend className="font-medium">{t('staffLoginHome')}</legend>
@@ -851,7 +878,13 @@ export default function StaffPage({
                 <input
                   type="checkbox"
                   checked={editForm.canAccessPanel}
-                  onChange={(e) => setEditForm({ ...editForm, canAccessPanel: e.target.checked })}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      canAccessPanel: e.target.checked,
+                      pinOnly: e.target.checked ? false : editForm.pinOnly,
+                    })
+                  }
                 />
                 <span>
                   {t('staffEmailLogin')}
@@ -860,6 +893,21 @@ export default function StaffPage({
                   </span>
                 </span>
               </label>
+              {!editForm.canAccessPanel ? (
+                <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={editForm.pinOnly}
+                    onChange={(e) => setEditForm({ ...editForm, pinOnly: e.target.checked })}
+                  />
+                  <span>
+                    {t('staffPinOnlyLabel')}
+                    <span className="block text-xs text-[var(--text-muted)] font-normal">
+                      {t('staffPinOnlyHint')}
+                    </span>
+                  </span>
+                </label>
+              ) : null}
               {showEditLoginHome ? (
                 <fieldset className="block text-sm sm:col-span-2">
                   <legend className="font-medium">{t('staffLoginHome')}</legend>
