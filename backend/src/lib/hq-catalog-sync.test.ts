@@ -19,6 +19,20 @@ describe("hq-catalog-sync helpers", () => {
     expect(resolveSyncProductIds(products, [], [])).toEqual(["p1", "p2", "p3"]);
   });
 
+  it("intersects explicit product ids with category scope", () => {
+    expect(resolveSyncProductIds(products, ["p1", "p2", "p3"], ["c1"])).toEqual(["p1", "p2"]);
+    expect(resolveSyncProductIds(products, ["p3"], ["c1"])).toEqual([]);
+  });
+
+  it("includes uncategorized products when sentinel category is selected", () => {
+    const withUncat = [
+      ...products,
+      { id: "p4", categoryId: null, updatedAtMs: 10 },
+    ];
+    expect(resolveSyncProductIds(withUncat, [], ["__uncategorized__"])).toEqual(["p4"]);
+    expect(resolveSyncProductIds(withUncat, ["p4", "p1"], ["c1"])).toEqual(["p1"]);
+  });
+
   it("detects pending when branch uses links and product is missing", () => {
     expect(productPendingForLocation(products[0], undefined, true)).toBe(true);
     expect(productPendingForLocation(products[0], undefined, false)).toBe(false);

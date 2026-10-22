@@ -18,22 +18,78 @@ export type HqSyncLocationRef = {
   linkCount: number;
 };
 
+/** Matches HQ sync UI sentinel for products without a category. */
+export const HQ_SYNC_UNCATEGORIZED = "__uncategorized__";
+
+export function parseSyncCategoryIds(categoryIds: string[]): {
+  categoryIds: Set<string>;
+  includeUncategorized: boolean;
+} {
+  const categoryIdsSet = new Set<string>();
+  let includeUncategorized = false;
+  for (const raw of categoryIds) {
+    const id = String(raw || "").trim();
+    if (!id) continue;
+    if (id === HQ_SYNC_UNCATEGORIZED) includeUncategorized = true;
+    else categoryIdsSet.add(id);
+  }
+  return { categoryIds: categoryIdsSet, includeUncategorized };
+}
+
+export function productMatchesSyncCategories(
+  product: HqSyncProductRef,
+  categoryIds: Set<string>,
+  includeUncategorized: boolean
+): boolean {
+  if (product.categoryId === null || product.categoryId === undefined) {
+    return includeUncategorized;
+  }
+  return categoryIds.has(product.categoryId);
+}
+
 export function resolveSyncProductIds(
   allProducts: HqSyncProductRef[],
   productIds: string[],
   categoryIds: string[]
 ): string[] {
+  const { categoryIds: cats, includeUncategorized } = parseSyncCategoryIds(categoryIds);
+  const hasCategoryScope = cats.size > 0 || includeUncategorized;
+
   const ids = productIds.filter(Boolean);
-  if (ids.length) return [...new Set(ids)];
-  const cats = new Set(categoryIds.filter(Boolean));
-  if (cats.size) {
+  if (ids.length) {
+    const idSet = new Set(ids);
+    if (!hasCategoryScope) return [...idSet];
     return [
       ...new Set(
-        allProducts.filter((p) => p.categoryId && cats.has(p.categoryId)).map((p) => p.id)
+        allProducts
+          .filter((p) => idSet.has(p.id) && productMatchesSyncCategories(p, cats, includeUncategorized))
+          .map((p) => p.id)
+      ),
+    ];
+  }
+
+  if (hasCategoryScope) {
+    return [
+      ...new Set(
+        allProducts
+          .filter((p) => productMatchesSyncCategories(p, cats, includeUncategorized))
+          .map((p) => p.id)
       ),
     ];
   }
   return allProducts.map((p) => p.id);
+}
+
+/** HQ product ids in the selected category scope (for scoped link cleanup). */
+export function productIdsInSyncCategoryScope(
+  allProducts: HqSyncProductRef[],
+  categoryIds: string[]
+): string[] {
+  const { categoryIds: cats, includeUncategorized } = parseSyncCategoryIds(categoryIds);
+  if (!cats.size && !includeUncategorized) return [];
+  return allProducts
+    .filter((p) => productMatchesSyncCategories(p, cats, includeUncategorized))
+    .map((p) => p.id);
 }
 
 export function productPendingForLocation(

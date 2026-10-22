@@ -3,6 +3,8 @@ import { getDb, schema } from "@/db";
 import {
   collectPendingProductIds,
   hasNeverSynced,
+  HQ_SYNC_UNCATEGORIZED,
+  productIdsInSyncCategoryScope,
   resolveSyncProductIds,
   type HqSyncLinkRef,
   type HqSyncLocationRef,
@@ -195,17 +197,54 @@ export class HqCatalogService {
 
   static async createVersion(
     merchantId: string,
-    input: { name?: string; productIds?: string[]; staffId?: string | null }
+    input: {
+      name?: string;
+      productIds?: string[];
+      categoryIds?: string[];
+      staffId?: string | null;
+    }
   ) {
     const db = getDb();
     const products = await db.query.products.findMany({
       where: eq(schema.products.merchantId, merchantId),
     });
 
-    let selected = products;
-    if (input.productIds?.length) {
+    const activeRefs: HqSyncProductRef[] = products
+      .filter((p) => p.isActive !== false)
+      .map((p) => ({
+        id: p.id,
+        categoryId: p.categoryId,
+        updatedAtMs: p.updatedAt?.getTime() || 0,
+      }));
+
+    const scopedIds = resolveSyncProductIds(
+      activeRefs,
+      input.productIds || [],
+      input.categoryIds || []
+    );
+    const scopedSet = new Set(scopedIds);
+
+    let selected = products.filter((p) => scopedSet.has(p.id));
+    if (!selected.length && input.productIds?.length) {
       const set = new Set(input.productIds);
       selected = products.filter((p) => set.has(p.id));
+    }
+
+    const categoryIdsInProducts = new Set(
+      selected.map((p) => p.categoryId).filter(Boolean) as string[]
+    );
+    const requestedCategoryIds = (input.categoryIds || [])
+      .map((id) => String(id || "").trim())
+      .filter((id) => id && id !== HQ_SYNC_UNCATEGORIZED);
+
+    let categories = await db.query.categories.findMany({
+      where: eq(schema.categories.merchantId, merchantId),
+    });
+    if (requestedCategoryIds.length) {
+      const allowed = new Set(requestedCategoryIds);
+      categories = categories.filter((c) => allowed.has(c.id));
+    } else if (scopedSet.size) {
+      categories = categories.filter((c) => categoryIdsInProducts.has(c.id));
     }
 
     const payload = {
@@ -218,9 +257,7 @@ export class HqCatalogService {
         visibility: p.visibility,
         isActive: p.isActive,
       })),
-      categories: await db.query.categories.findMany({
-        where: eq(schema.categories.merchantId, merchantId),
-      }),
+      categories,
     };
 
     const [latest] = await db
@@ -264,6 +301,7 @@ export class HqCatalogService {
       const created = await this.createVersion(merchantId, {
         name: `HQ sync ${new Date().toISOString().slice(0, 10)}`,
         productIds: input.productIds,
+        categoryIds: input.categoryIds,
         staffId: input.staffId || null,
       });
       versionId = created.id;
@@ -497,10 +535,31 @@ export class HqCatalogService {
     }
 
     const productById = new Map(allProducts.map((p) => [p.id, p]));
+    const targetSet = new Set(targetIds);
+    const scopedCategoryIds = (input.categoryIds || []).filter(Boolean);
+    const scopeProductIds =
+      scopedCategoryIds.length > 0
+        ? productIdsInSyncCategoryScope(activeRefs, scopedCategoryIds)
+        : [];
     let linked = 0;
     const { HqMenuService } = await import("@/services/hq-menu.service");
 
     for (const locationId of input.locationIds) {
+      if (scopeProductIds.length > 0) {
+        const toUnlink = scopeProductIds.filter((id) => !targetSet.has(id));
+        if (toUnlink.length) {
+          await db
+            .delete(schema.locationCatalogLinks)
+            .where(
+              and(
+                eq(schema.locationCatalogLinks.merchantId, merchantId),
+                eq(schema.locationCatalogLinks.locationId, locationId),
+                inArray(schema.locationCatalogLinks.hqProductId, toUnlink)
+              )
+            );
+        }
+      }
+
       for (const productId of targetIds) {
         const local = productById.get(productId);
         if (!local || local.isActive === false) continue;
