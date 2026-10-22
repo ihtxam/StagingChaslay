@@ -14,7 +14,7 @@ type AcceptingState = {
  * Header dropdown: quickly pause online orders and/or reservations
  * without turning off the whole shop (visitors still browse, see a call-us message).
  */
-export default function AcceptingMenu() {
+export default function AcceptingMenu({ compact = false }: { compact?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -116,8 +116,8 @@ export default function AcceptingMenu() {
             bothOff ? 'bg-amber-600' : bothOn ? 'bg-emerald-500' : 'bg-amber-500'
           }`}
         />
-        <span>{statusLabel}</span>
-        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+        <span className={compact ? 'hidden sm:inline' : ''}>{statusLabel}</span>
+        <ChevronDown className={`h-3.5 w-3.5 opacity-70 ${compact ? 'sm:ml-0' : ''}`} />
       </button>
 
       {open ? (

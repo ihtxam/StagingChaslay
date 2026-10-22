@@ -9,10 +9,11 @@ import {
 type Props = {
   active: DietaryTagId[];
   onChange: (next: DietaryTagId[]) => void;
+  onApplied?: () => void;
   t: (key: string) => string;
 };
 
-export default function ShopMenuDietaryFilter({ active, onChange, t }: Props) {
+export default function ShopMenuDietaryFilter({ active, onChange, onApplied, t }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -25,8 +26,20 @@ export default function ShopMenuDietaryFilter({ active, onChange, t }: Props) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(() => setOpen(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [open, active]);
+
+  const apply = (next: DietaryTagId[]) => {
+    onChange(next);
+    setOpen(false);
+    window.setTimeout(() => onApplied?.(), 0);
+  };
+
   const toggle = (id: DietaryTagId) => {
-    onChange(active.includes(id) ? active.filter((x) => x !== id) : [...active, id]);
+    apply(active.includes(id) ? active.filter((x) => x !== id) : [...active, id]);
   };
 
   const count = active.length;
@@ -36,16 +49,21 @@ export default function ShopMenuDietaryFilter({ active, onChange, t }: Props) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold ${
+        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold sm:h-9 sm:w-auto sm:gap-1.5 sm:px-3 ${
           count
             ? 'border-stone-900 bg-stone-900 text-white'
             : 'border-stone-200 bg-white text-stone-800 hover:border-stone-400'
         }`}
         aria-expanded={open}
+        aria-label={t('shopDietaryFilter')}
+        title={t('shopDietaryFilter')}
       >
         <SlidersHorizontal className="h-4 w-4" strokeWidth={2} />
-        {t('shopDietaryFilter')}
-        {count ? <span className="text-xs opacity-90">({count})</span> : null}
+        {count ? (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--shop-accent,#e11d48)] px-1 text-[10px] font-bold text-white sm:static sm:h-auto sm:min-w-0 sm:bg-transparent sm:text-xs sm:opacity-90">
+            {count}
+          </span>
+        ) : null}
       </button>
       {open ? (
         <div className="absolute right-0 top-full z-50 mt-2 w-[min(100vw-2rem,20rem)] rounded-xl border border-stone-200 bg-white p-3 shadow-lg">
@@ -82,7 +100,7 @@ export default function ShopMenuDietaryFilter({ active, onChange, t }: Props) {
             <button
               type="button"
               className="mt-2 w-full text-center text-xs font-semibold text-stone-600 hover:text-stone-900"
-              onClick={() => onChange([])}
+              onClick={() => apply([])}
             >
               {t('shopDietaryClearFilters')}
             </button>
