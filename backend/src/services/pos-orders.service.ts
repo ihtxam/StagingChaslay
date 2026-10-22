@@ -298,6 +298,107 @@ async function dropHeldRowsCancelledOnServer(
   return kept;
 }
 
+const HELD_HEAL_TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
+const HELD_HEAL_TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
+
+function paidPosOrderIdentity(order: {
+  notes?: string | null;
+  tableId?: string | null;
+  guestCount?: number | null;
+}): ReturnType<typeof heldIdentity> {
+  const ticketMatch = String(order.notes || "").match(HELD_HEAL_TICKET_NOTE_RE);
+  const tabMatch = String(order.notes || "").match(HELD_HEAL_TAB_NOTE_RE);
+  return {
+    ticketDisplay: ticketMatch?.[1]?.trim() || null,
+    tableId: order.tableId || null,
+    tabNumber:
+      tabMatch?.[1]?.trim() ||
+      (order.guestCount != null && Number(order.guestCount) > 0
+        ? String(order.guestCount)
+        : null),
+  };
+}
+
+function isPaidPosSale(order: { status?: string | null; paymentStatus?: string | null }): boolean {
+  const status = String(order.status || "").toLowerCase();
+  const pay = String(order.paymentStatus || "").toLowerCase();
+  if (status === "cancelled" || pay === "cancelled") return false;
+  return pay === "completed" || pay === "paid";
+}
+
+function isOpenUnpaidPosSale(order: { status?: string | null; paymentStatus?: string | null }): boolean {
+  const status = String(order.status || "").toLowerCase();
+  const pay = String(order.paymentStatus || "").toLowerCase();
+  if (["cancelled", "refunded", "completed"].includes(status)) return false;
+  if (["cancelled", "refunded", "completed", "paid", "partially_refunded"].includes(pay)) {
+    return false;
+  }
+  return true;
+}
+
+/** Drop open held rows whose ticket/table already has a paid POS sale (release missed at checkout). */
+async function dropHeldRowsPaidOnServer(
+  merchantId: string,
+  rows: Array<(typeof schema.heldOrders)["$inferSelect"]>
+) {
+  if (!rows.length) return rows;
+  const db = getDb();
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentSales = await db
+    .select({
+      id: schema.orders.id,
+      notes: schema.orders.notes,
+      tableId: schema.orders.tableId,
+      guestCount: schema.orders.guestCount,
+      total: schema.orders.total,
+      status: schema.orders.status,
+      paymentStatus: schema.orders.paymentStatus,
+    })
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.merchantId, merchantId),
+        eq(schema.orders.orderType, "pos"),
+        gte(schema.orders.createdAt, cutoff)
+      )
+    );
+
+  const kept: typeof rows = [];
+  for (const row of rows) {
+    const ident = heldIdentity(row.cartJson);
+    const rowTicket = normalizeHeldTicket(ident.ticketDisplay || row.label);
+    let paidTotal: number | null = null;
+    let matchedPaid = false;
+    let hasUnpaid = false;
+    for (const sale of recentSales) {
+      const saleIdent = paidPosOrderIdentity(sale);
+      const identityMatch =
+        sameHeldIdentity(ident, saleIdent) ||
+        (rowTicket &&
+          normalizeHeldTicket(saleIdent.ticketDisplay) === rowTicket);
+      if (!identityMatch) continue;
+      if (isPaidPosSale(sale)) {
+        matchedPaid = true;
+        paidTotal = Number(sale.total) || paidTotal;
+      } else if (isOpenUnpaidPosSale(sale)) {
+        hasUnpaid = true;
+      }
+    }
+    if (matchedPaid && !hasUnpaid) {
+      await closeHeldRow(merchantId, row.id, "paid", paidTotal);
+      console.info("[pos-held] closed held row — ticket already paid on server", {
+        merchantId,
+        id: row.id,
+        ticket: rowTicket || ident.ticketDisplay,
+        tableId: ident.tableId,
+      });
+      continue;
+    }
+    kept.push(row);
+  }
+  return kept;
+}
+
 async function closeHeldRow(
   merchantId: string,
   id: string,
@@ -1342,6 +1443,7 @@ export class PosOrdersService {
       orderBy: [desc(schema.heldOrders.updatedAt)],
     });
     rows = await dropHeldRowsCancelledOnServer(merchantId, rows);
+    rows = await dropHeldRowsPaidOnServer(merchantId, rows);
     console.info("[pos-held] list", {
       merchantId,
       count: rows.length,
