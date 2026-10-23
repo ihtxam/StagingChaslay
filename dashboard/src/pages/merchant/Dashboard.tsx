@@ -1,65 +1,74 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import Sidebar from '@/components/Sidebar';
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
-import MerchantSubNav from '@/components/MerchantSubNav';
-import Overview from './Overview';
-import Orders from './Orders';
-import Products from './Products';
-import CateringGuidePage from './CateringGuidePage';
-import Inventory from './Inventory';
-import InventoryLayout from './inventory/InventoryLayout';
-import {
-  InventoryListPage,
-  InboundStockPage,
-  OutboundStockPage,
-  StockCountingPage,
-  StockHistoryPage,
-} from './inventory/ops-pages';
-import {
-  StockItemsPage,
-  StockCategoriesPage,
-  CookbookPage,
-  SuppliersPage,
-  UnitsPage,
-} from './inventory/settings-pages';
-import { InventoryReportPage, ConsumptionReportPage, DeadStockReportPage } from './inventory/report-pages';
-import InventoryTransfersPage from './inventory/InventoryTransfersPage';
-import { InventoryHomePage } from './inventory/home-page';
-import Categories from './Categories';
-import Modifiers from './Modifiers';
-import Customers from './Customers';
-import Members from './Members';
-import Loyalty from './Loyalty';
-import Offers from './Offers';
-import Vouchers from './Vouchers';
-import Terminals from './Terminals';
-import DesktopSettings from './DesktopSettings';
-import DesktopStorePage from './DesktopStorePage';
-import DesktopTimingsPage from './DesktopTimingsPage';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
-import PlatformShop from './PlatformShop';
-import Support from './Support';
 import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
-import Billing from './Billing';
-import OnlineShop from './OnlineShop';
-import Reservations from './Reservations';
-import HostStation from './HostStation';
-import PhoneOrders from './PhoneOrders';
-import ReviewsInbox from './ReviewsInbox';
-import Newsletter from './Newsletter';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import LazyRouteErrorBoundary from '@/components/LazyRouteErrorBoundary';
-import WaiterApp from './WaiterApp';
-import DeliveryDriverPage from './DeliveryDriver';
-import StorekeeperApp from './StorekeeperApp';
-import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
-import WebPosPinModal from '@/components/WebPosPinModal';
-import { useTillPrintHub } from '@/hooks/useTillPrintHub';
-import { isTillPrintHubCandidate } from '@/lib/webpos-print-relay';
-import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
-import Reports from './Reports';
+import { isTillPrintHubCandidate } from '@/lib/till-print-hub-candidate';
+import {
+  Billing,
+  BulkPricingPage,
+  Categories,
+  CateringGuidePage,
+  ConsumptionReportPage,
+  CookbookPage,
+  Customers,
+  DeadStockReportPage,
+  DeliveryDriverPage,
+  DesktopSettings,
+  DesktopStorePage,
+  DesktopTimingsPage,
+  Header,
+  HqDashboardPage,
+  HqSyncMenuPage,
+  HostStation,
+  InboundStockPage,
+  InventoryExpiryAlerts,
+  InventoryHomePage,
+  InventoryLayout,
+  InventoryListPage,
+  InventoryReportPage,
+  InventoryTransfersPage,
+  Loyalty,
+  Members,
+  MerchantOrderAlerts,
+  MerchantSubNav,
+  MerchantTillPrintHub,
+  Modifiers,
+  Newsletter,
+  Offers,
+  OnlineShop,
+  OrderCenterApp,
+  Orders,
+  OutboundStockPage,
+  Overview,
+  PhoneOrders,
+  PizzaBuilderEditorPage,
+  PizzaBuilderPage,
+  PlatformShop,
+  Products,
+  Reports,
+  Reservations,
+  ReviewsInbox,
+  ScheduledMenusPage,
+  Settings,
+  Sidebar,
+  StockCategoriesPage,
+  StockCountingPage,
+  StockHistoryPage,
+  StockItemsPage,
+  StorekeeperApp,
+  SuppliersPage,
+  Support,
+  Terminals,
+  UnitsPage,
+  Vouchers,
+  WaiterApp,
+  WebPos,
+  WebPosPinModal,
+} from './merchant-lazy-routes';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
@@ -157,13 +166,6 @@ import {
   parsePanelNavHidden,
 } from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
-import HqDashboardPage from './HqDashboard';
-import HqSyncMenuPage from './HqSyncMenuPage';
-import BulkPricingPage from './BulkPricingPage';
-import ScheduledMenusPage from './ScheduledMenusPage';
-import PizzaBuilderPage from './PizzaBuilderPage';
-import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
-import OrderCenterApp from './OrderCenterApp';
 import { getSelectedLocationId, useLocationStore } from '@/store/location';
 import { buildWebPosLaunchPath } from '@/lib/webpos-terminal-location';
 import {
@@ -177,9 +179,6 @@ import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
-const Header = lazy(() => import('@/components/Header'));
-const Settings = lazy(() => import('./Settings'));
-const WebPos = lazy(() => import('./WebPos'));
 
 function MerchantLazyFallback({ className }: { className?: string }) {
   return (
@@ -988,7 +987,6 @@ function MerchantShell() {
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
   const tillPrintHubEnabled = !isPosLikeRoute && isTillPrintHubCandidate();
-  useTillPrintHub({ enabled: tillPrintHubEnabled });
   const loadLocations = useLocationStore((s) => s.load);
 
   useEffect(() => {
@@ -1322,21 +1320,23 @@ function MerchantShell() {
   if (showPanelPinGate) {
     return (
       <div className="panel-shell flex h-full max-h-full">
-        <WebPosPinModal
-          open
-          mode="gate"
-          onClose={() => {
-            /* gate cannot be dismissed without PIN */
-          }}
-          onSuccess={onPanelPinSuccess}
-          onLogout={handlePanelPinLogout}
-          productName={pinGateMerchantName(
-            merchantShopName,
-            pinGateSessionMerchantName(user)
-          )}
-          logoUrl={merchantShopLogoUrl}
-          terminalLocationId={panelLocationId || getSelectedLocationId()}
-        />
+        <Suspense fallback={<p className="text-sm muted p-4">{t('loading')}</p>}>
+          <WebPosPinModal
+            open
+            mode="gate"
+            onClose={() => {
+              /* gate cannot be dismissed without PIN */
+            }}
+            onSuccess={onPanelPinSuccess}
+            onLogout={handlePanelPinLogout}
+            productName={pinGateMerchantName(
+              merchantShopName,
+              pinGateSessionMerchantName(user)
+            )}
+            logoUrl={merchantShopLogoUrl}
+            terminalLocationId={panelLocationId || getSelectedLocationId()}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -1346,6 +1346,7 @@ function MerchantShell() {
       {!hideChrome && (
         <>
           <div className="lg:hidden">
+            <Suspense fallback={<MerchantLazyFallback className="h-12" />}>
             <Sidebar
               isOpen={sidebarOpen}
               onToggle={() => setSidebarOpen(!sidebarOpen)}
@@ -1385,8 +1386,10 @@ function MerchantShell() {
                   : null
               }
             />
+            </Suspense>
           </div>
           <div className="hidden lg:flex shrink-0">
+            <Suspense fallback={<MerchantLazyFallback className="w-14" />}>
             <Sidebar
               isOpen
               onToggle={() => setSidebarOpen(!sidebarOpen)}
@@ -1428,6 +1431,7 @@ function MerchantShell() {
               }
             />
             {!panelChromeRestricted ? <MerchantSubNav menuItems={menuItems} /> : null}
+            </Suspense>
           </div>
         </>
       )}
@@ -1449,7 +1453,9 @@ function MerchantShell() {
 
         {!hideChrome ? <PlatformStatusBannerSlot /> : null}
         {!hideChrome && productFlagsReady && allowInventory('/merchant/inventory') ? (
-          <InventoryExpiryAlerts licensed={inventoryLicensed} />
+          <Suspense fallback={null}>
+            <InventoryExpiryAlerts licensed={inventoryLicensed} />
+          </Suspense>
         ) : null}
 
         <main
@@ -1462,6 +1468,7 @@ function MerchantShell() {
                 : 'panel-main flex-1 p-3 sm:p-4'
           }
         >
+          <Suspense fallback={<MerchantLazyFallback />}>
           <Routes>
             <Route
               index
@@ -1874,9 +1881,15 @@ function MerchantShell() {
               }
             />
           </Routes>
+          </Suspense>
         </main>
         {!hideChrome ? <RebornPoweredByFooter variant="panel" className="shrink-0" /> : null}
-        <MerchantOrderAlerts enabled={orderAlertsEnabled} />
+        <Suspense fallback={null}>
+          <MerchantTillPrintHub enabled={tillPrintHubEnabled} />
+        </Suspense>
+        <Suspense fallback={null}>
+          <MerchantOrderAlerts enabled={orderAlertsEnabled} />
+        </Suspense>
       </div>
     </div>
   );

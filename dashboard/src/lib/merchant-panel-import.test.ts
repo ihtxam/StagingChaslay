@@ -23,14 +23,21 @@ describe('merchant panel import graph (no App init-order TDZ)', () => {
     expect(src).toMatch(/<I18nProvider>/);
   });
 
-  it('Dashboard lazy-loads Header, Settings, and WebPos (defer keyboard/settings graph)', () => {
+  it('Dashboard defers route modules via merchant-lazy-routes (no eager page imports)', () => {
+    const dash = readSrc('pages/merchant/Dashboard.tsx');
+    const lazyRoutes = readSrc('pages/merchant/merchant-lazy-routes.tsx');
+    expect(dash).toContain("from './merchant-lazy-routes'");
+    expect(dash).not.toMatch(/import Overview from '\.\/Overview'/);
+    expect(dash).not.toMatch(/import WaiterApp from '\.\/WaiterApp'/);
+    expect(dash).not.toMatch(/from '@\/lib\/webpos-print-relay'/);
+    expect(lazyRoutes).toMatch(/merchantLazy\(\(\) => import\('\.\/WebPos'\)\)/);
+    expect(lazyRoutes).toMatch(/merchantLazy\(\(\) => import\('@\/components\/Header'\)\)/);
+  });
+
+  it('Dashboard shell does not import useTillPrintHub at module init', () => {
     const src = readSrc('pages/merchant/Dashboard.tsx');
-    expect(src).toMatch(/lazy\(\(\) => import\('@\/components\/Header'\)\)/);
-    expect(src).toMatch(/lazy\(\(\) => import\('\.\/Settings'\)\)/);
-    expect(src).toMatch(/lazy\(\(\) => import\('\.\/WebPos'\)\)/);
-    expect(src).not.toMatch(/import Header from '@\/components\/Header'/);
-    expect(src).not.toMatch(/import Settings from '\.\/Settings'/);
-    expect(src).not.toMatch(/import WebPos from '\.\/WebPos'/);
+    expect(src).not.toMatch(/useTillPrintHub/);
+    expect(src).toContain('MerchantTillPrintHub');
   });
 
   it('Header keeps keyboard toggle isolated from OnScreenKeyboard barrel', () => {

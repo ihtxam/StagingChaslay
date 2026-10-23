@@ -44,3 +44,4 @@
 # Deploy 2026-10-23T05:45:00Z — CRITICAL: split Dashboard Header/Settings/WebPos lazy chunks (xs TDZ / MerchantShell)
 # Deploy 2026-10-23T05:50:00Z — RETRY: Dashboard-KLxvyctz.js index-BAKdOiHU.js (891c03bb)
 # Deploy 2026-10-23T05:54:00Z — URGENT: force-recreate dashboard after build (stale BNLO2bvC / TDZ)
+# Deploy 2026-10-23T06:05:00Z — CRITICAL: merchant lazy route graph (Dashboard ~49kb shell, vt TDZ / webpos-print-relay cycle)

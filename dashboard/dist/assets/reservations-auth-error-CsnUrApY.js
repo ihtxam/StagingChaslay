@@ -1,0 +1,1 @@
+function u(n){var t,i,r;const s=n,o=(t=s==null?void 0:s.response)==null?void 0:t.status,a=String(((r=(i=s==null?void 0:s.response)==null?void 0:i.data)==null?void 0:r.error)||"");return o===401||/missing or invalid authorization/i.test(a)}export{u as i};
