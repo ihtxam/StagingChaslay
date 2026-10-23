@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import Sidebar from '@/components/Sidebar';
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import MerchantSubNav from '@/components/MerchantSubNav';
-import Header from '@/components/Header';
 import Overview from './Overview';
 import Orders from './Orders';
 import Products from './Products';
@@ -36,7 +35,6 @@ import Loyalty from './Loyalty';
 import Offers from './Offers';
 import Vouchers from './Vouchers';
 import Terminals from './Terminals';
-import Settings from './Settings';
 import DesktopSettings from './DesktopSettings';
 import DesktopStorePage from './DesktopStorePage';
 import DesktopTimingsPage from './DesktopTimingsPage';
@@ -51,7 +49,6 @@ import HostStation from './HostStation';
 import PhoneOrders from './PhoneOrders';
 import ReviewsInbox from './ReviewsInbox';
 import Newsletter from './Newsletter';
-import WebPos from './WebPos';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import LazyRouteErrorBoundary from '@/components/LazyRouteErrorBoundary';
 import WaiterApp from './WaiterApp';
@@ -180,6 +177,22 @@ import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
+const Header = lazy(() => import('@/components/Header'));
+const Settings = lazy(() => import('./Settings'));
+const WebPos = lazy(() => import('./WebPos'));
+
+function MerchantLazyFallback({ className }: { className?: string }) {
+  return (
+    <div
+      className={
+        className ??
+        'flex min-h-[40vh] items-center justify-center text-sm text-[var(--text-muted)]'
+      }
+    >
+      Loading…
+    </div>
+  );
+}
 
 function LegacyReservationsRedirect() {
   const location = useLocation();
@@ -488,7 +501,10 @@ function MerchantShell() {
 
   const refreshSession = useAuthStore((s) => s.refreshSession);
   useEffect(() => {
-    void refreshSession();
+    const id = window.requestAnimationFrame(() => {
+      void refreshSession();
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [refreshSession]);
 
   useEffect(() => {
@@ -1418,15 +1434,17 @@ function MerchantShell() {
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         {!hideChrome && (
-          <Header
-            title={t('merchantDashboard')}
-            onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            compact
-            storeName={merchantShopName}
-            panelLocationLabels={panelLocationLabels}
-            registerDisplay={registerDisplay}
-            showAcceptingMenu={!isStorekeeperRoute}
-          />
+          <Suspense fallback={<MerchantLazyFallback className="flex h-12 items-center justify-center text-xs text-[var(--text-muted)]" />}>
+            <Header
+              title={t('merchantDashboard')}
+              onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+              compact
+              storeName={merchantShopName}
+              panelLocationLabels={panelLocationLabels}
+              registerDisplay={registerDisplay}
+              showAcceptingMenu={!isStorekeeperRoute}
+            />
+          </Suspense>
         )}
 
         {!hideChrome ? <PlatformStatusBannerSlot /> : null}
@@ -1490,7 +1508,9 @@ function MerchantShell() {
                   <Navigate to={missingPosRedirect} replace />
                 ) : (
                   <WebPosErrorBoundary>
-                    <WebPos appMode={hideChrome} />
+                    <Suspense fallback={<MerchantLazyFallback />}>
+                      <WebPos appMode={hideChrome} />
+                    </Suspense>
                   </WebPosErrorBoundary>
                 )
               }
@@ -1846,7 +1866,9 @@ function MerchantShell() {
                     resetKey="merchant-settings"
                     fallbackText={t('settingsSearchOpenFailed')}
                   >
-                    <Settings />
+                    <Suspense fallback={<MerchantLazyFallback />}>
+                      <Settings />
+                    </Suspense>
                   </SettingsSearchErrorBoundary>
                 </PanelRouteGuard>
               }

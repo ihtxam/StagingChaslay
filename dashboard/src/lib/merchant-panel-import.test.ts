@@ -22,4 +22,20 @@ describe('merchant panel import graph (no App init-order TDZ)', () => {
     expect(src).toContain('export default function MerchantDashboard');
     expect(src).toMatch(/<I18nProvider>/);
   });
+
+  it('Dashboard lazy-loads Header, Settings, and WebPos (defer keyboard/settings graph)', () => {
+    const src = readSrc('pages/merchant/Dashboard.tsx');
+    expect(src).toMatch(/lazy\(\(\) => import\('@\/components\/Header'\)\)/);
+    expect(src).toMatch(/lazy\(\(\) => import\('\.\/Settings'\)\)/);
+    expect(src).toMatch(/lazy\(\(\) => import\('\.\/WebPos'\)\)/);
+    expect(src).not.toMatch(/import Header from '@\/components\/Header'/);
+    expect(src).not.toMatch(/import Settings from '\.\/Settings'/);
+    expect(src).not.toMatch(/import WebPos from '\.\/WebPos'/);
+  });
+
+  it('Header keeps keyboard toggle isolated from OnScreenKeyboard barrel', () => {
+    const src = readSrc('components/Header.tsx');
+    expect(src).toContain("from '@/components/OnScreenKeyboardToggle'");
+    expect(src).not.toMatch(/from '@\/components\/OnScreenKeyboard'/);
+  });
 });
