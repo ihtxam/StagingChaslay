@@ -51,3 +51,4 @@
 # Deploy 2026-10-23T06:09:00Z — RETRY prod: still index-BNLO2bvC / Dashboard-CUWkP6L1 1.3MB (expect f9b2189a CdsGIaaf B4ZRzvar)
 # Deploy 2026-10-23T06:24:00Z — fix merchantSettingsPath TDZ (panelChromeRestricted before use, minified A)
 # Deploy 2026-10-23T06:33:00Z — CRITICAL WebPOS TDZ: canManageSettings before hardwareGearOnly (minified Bf)
+# Deploy 2026-10-23T12:05:00Z — URGENT: Android cash receipt QR garbled strip fix (raster-only QR, #864)
