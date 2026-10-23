@@ -37,3 +37,4 @@
 # Deploy 2026-10-20T05:35:00Z — POS floor stations, Bridge 0.4.46 USB permission, PIN loginHome routing, shop hub landing fix
 # Deploy 2026-10-22T21:46:07Z — staging verified #854-858 (shop assets, branch settings, desktop keyboard, merchant TDZ)
 # Deploy 2026-10-22T21:52:00Z — PIN-only floor staff and hardware gear (#853)
+# Deploy 2026-10-23T05:18:00Z — URGENT: merchant panel TDZ fix (#860) — split OnScreenKeyboardToggle imports
