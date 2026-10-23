@@ -10189,6 +10189,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     : staffConfigured
       ? !!webposStaff && hasPosHardwareGearAccess(staffPerms, false)
       : hasPosHardwareGearAccess(authUser?.permissions as Permission[] | undefined, jwtIsOwner);
+  const canManageSettings = ownerOnRegister
+    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
+    : staffConfigured
+      ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_SETTINGS', false)
+      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
   const hardwareGearOnly =
     !ownerOnRegister &&
     staffConfigured &&
@@ -10206,11 +10211,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const canShowBackOffice =
     impersonating || jwtPanelAccess || canOpenPanel || canManageProducts || canViewOrders;
-  const canManageSettings = ownerOnRegister
-    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
-    : staffConfigured
-      ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_SETTINGS', false)
-      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
   const terminalEnrollmentLocked =
     paymentConfig?.deviceEnrollmentLocked === true && !canManageSettings;
   const canManageOnlineShop = ownerOnRegister
