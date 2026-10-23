@@ -17,6 +17,12 @@ export type ReservationExtras = {
   policyAcceptedAt?: string | null;
   lastGuestSmsAt?: string | null;
   lastGuestSmsKind?: string | null;
+  slotPromo?: {
+    kind: "percent" | "free_wine" | "dine_free";
+    label: string;
+    payCovers?: number;
+    receiveCovers?: number;
+  } | null;
 };
 
 export function clampInt(n: unknown, min: number, max: number, fallback: number) {

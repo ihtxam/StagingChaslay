@@ -2254,11 +2254,18 @@ export type ReservationSettings = {
   slotDiscounts?: Array<{
     id: string;
     name: string;
-    percentOff: number;
+    /** percent (default) | free_wine | dine_free (book N pay M) */
+    kind?: "percent" | "free_wine" | "dine_free";
+    percentOff?: number;
+    payCovers?: number;
+    receiveCovers?: number;
     scheduleMode?: "specific_days" | "whole_week";
     daysOfWeek?: string[]; // mon..sun
     timeStart?: string | null; // HH:mm
     timeEnd?: string | null;
+    /** When set, promotion applies only at these slot times (e.g. 19:00, 19:30). */
+    specificTimes?: string[];
+    peekMessage?: string | null;
     enabled?: boolean;
   }>;
   /** Email merchant account on new / updated reservations (default true) */

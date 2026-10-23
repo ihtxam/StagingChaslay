@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { X } from 'lucide-react';
+import ReservationPromoIcon from '@/components/shop/ReservationPromoIcon';
 import { useI18n } from '@/lib/i18n';
 import { useShopReservationsBooking } from '@/lib/use-shop-reservations-booking';
 
@@ -65,11 +66,25 @@ export default function ShopReservationPeekBar({
       }}
       aria-hidden={!visible}
     >
-      <div
-        className="shop-reservation-peek__card pointer-events-auto w-full max-w-lg overflow-hidden rounded-2xl border border-stone-200/90 bg-white shadow-[0_16px_48px_rgba(15,23,42,0.22)] dark:border-zinc-700 dark:bg-zinc-950"
-        role="complementary"
-        aria-label={t('shopReservationPeekTitle')}
-      >
+      <div className="pointer-events-auto flex w-full max-w-lg flex-col gap-2">
+        {booking.peekBanner ? (
+          <button
+            type="button"
+            className="shop-reservation-peek__banner flex items-start gap-2 rounded-xl border border-amber-200/90 bg-amber-50 px-3 py-2.5 text-left text-xs font-medium leading-snug text-amber-950 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+            onClick={openFull}
+          >
+            <ReservationPromoIcon
+              kind={booking.peekBanner.icon}
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200"
+            />
+            <span>{booking.peekBanner.message}</span>
+          </button>
+        ) : null}
+        <div
+          className="shop-reservation-peek__card overflow-hidden rounded-2xl border border-stone-200/90 bg-white shadow-[0_16px_48px_rgba(15,23,42,0.22)] dark:border-zinc-700 dark:bg-zinc-950"
+          role="complementary"
+          aria-label={t('shopReservationPeekTitle')}
+        >
         <div className="flex w-full items-center gap-3 px-4 py-3">
           <button
             type="button"
@@ -154,6 +169,7 @@ export default function ShopReservationPeekBar({
           >
             {t('shopReservationPeekContinue')}
           </button>
+        </div>
         </div>
       </div>
     </div>
