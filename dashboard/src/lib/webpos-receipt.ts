@@ -22,6 +22,7 @@ import {
   RECEIPT_QR_ESCPOS_MODULE_SIZE,
   giftCardRedeemQrRasterPx,
 } from '@/lib/qr';
+import { isAndroidDevice } from '@/lib/print-agent-platform';
 import {
   escposCp850Encode,
   escposTextEncode,
@@ -627,6 +628,48 @@ export function formatSoldGiftCardsOnReceipt(
   return r;
 }
 
+/** Android Print Bridge corrupts native ESC/POS QR (GS ( k); use raster only. */
+function nativeEscposQrFallback(data: string, moduleSize: number): Uint8Array | null {
+  const trimmed = String(data || '').trim();
+  if (!trimmed || isAndroidDevice()) return null;
+  return escposQrCode(trimmed, moduleSize);
+}
+
+async function resolveReceiptQrRaster(
+  data: string,
+  paper: 58 | 80,
+  label?: string
+): Promise<Uint8Array | null> {
+  const trimmed = String(data || '').trim();
+  if (!trimmed) return null;
+  let raster = await generateReceiptQrRasterEscPos(trimmed, paper);
+  if (!raster?.length && label) {
+    raster = await buildLabeledReceiptQrRasterEscPos({
+      label,
+      data: trimmed,
+      paperWidthMm: paper,
+    });
+  }
+  if (!raster?.length) {
+    raster = nativeEscposQrFallback(trimmed, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  }
+  return raster?.length ? raster : null;
+}
+
+async function resolveDualReceiptQrRaster(
+  left: { label: string; data: string },
+  right: { label: string; data: string },
+  paper: 58 | 80
+): Promise<Uint8Array | null> {
+  const dual = await buildDualReceiptQrRasterEscPos({
+    left,
+    right,
+    paperWidthMm: paper,
+  });
+  if (dual?.length) return dual;
+  return resolveReceiptQrRaster(left.data, paper, left.label);
+}
+
 /** ESC/POS redeem QR (120px) + Code128 for each sold e-gift on an order receipt. */
 export async function buildSoldGiftCardRedeemEscPosSections(
   cards: SoldGiftCardOnReceipt[] | undefined,
@@ -647,8 +690,10 @@ export async function buildSoldGiftCardRedeemEscPosSections(
         qrData,
         paperWidthMm,
         giftCardRedeemQrRasterPx(paperWidthMm)
-      )) || escposQrCode(qrData, 4);
-    parts.push(alignCenter, qrRaster);
+      )) || nativeEscposQrFallback(qrData, 4);
+    if (qrRaster?.length) {
+      parts.push(alignCenter, qrRaster);
+    }
     parts.push(escposCode128(payload, 72, 2));
     if (label.trim()) {
       parts.push(escposCp850Encode(`${label.trim()}\n`));
@@ -684,7 +729,7 @@ export async function buildGiftCardSaleReceiptEscPos(
       paperWidthMm,
       giftCardRedeemQrRasterPx(paperWidthMm)
     )) ||
-    escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    nativeEscposQrFallback(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
   return textToEscPos(text, qrRaster, logoBytes, payload, label);
 }
 
@@ -697,7 +742,8 @@ export function giftCardSaleReceiptEscPos(
   const payload = giftCardSaleBarcodePayload(code);
   const label = buildGiftCardBarcodePayload(code);
   const qrData = buildGiftCardRedeemQrPayload(code);
-  const qrRaster = escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  const qrRaster =
+    nativeEscposQrFallback(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE) ?? new Uint8Array(0);
   return textToEscPos(text, qrRaster, logoBytes, payload, label);
 }
 
@@ -3695,20 +3741,15 @@ export async function buildReceiptEscPos(
 
   if (opts.fastQr !== false) {
     if (digitalData && googleData) {
-      qrRaster =
-        (await buildDualReceiptQrRasterEscPos({
-          left: { label: L.digitalReceiptQrTitle, data: digitalData },
-          right: { label: L.googleReviewQrTitle, data: googleData },
-          paperWidthMm: paper,
-        })) || escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster = await resolveDualReceiptQrRaster(
+        { label: L.digitalReceiptQrTitle, data: digitalData },
+        { label: L.googleReviewQrTitle, data: googleData },
+        paper
+      );
     } else if (digitalData) {
-      qrRaster =
-        (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-        escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster = await resolveReceiptQrRaster(digitalData, paper, L.digitalReceiptQrTitle);
     } else if (googleData) {
-      qrRaster =
-        (await generateReceiptQrRasterEscPos(googleData, paper)) ||
-        escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster = await resolveReceiptQrRaster(googleData, paper, L.googleReviewQrTitle);
     }
   } else if (digitalData && googleData) {
     qrRaster =
@@ -3723,39 +3764,15 @@ export async function buildReceiptEscPos(
         paperWidthMm: paper,
       }));
   } else if (digitalData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.digitalReceiptQrTitle,
-        data: digitalData,
-        paperWidthMm: paper,
-      })) ||
-      (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-      escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(digitalData, paper, L.digitalReceiptQrTitle);
   } else if (googleData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.googleReviewQrTitle,
-        data: googleData,
-        paperWidthMm: paper,
-      })) || escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(googleData, paper, L.googleReviewQrTitle);
   }
 
   if (!qrRaster?.length && digitalData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.digitalReceiptQrTitle,
-        data: digitalData,
-        paperWidthMm: paper,
-      })) ||
-      (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-      escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(digitalData, paper, L.digitalReceiptQrTitle);
   } else if (!qrRaster?.length && googleData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.googleReviewQrTitle,
-        data: googleData,
-        paperWidthMm: paper,
-      })) || escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(googleData, paper, L.googleReviewQrTitle);
   }
 
   const headerLines = opts.headerLines ?? [];
