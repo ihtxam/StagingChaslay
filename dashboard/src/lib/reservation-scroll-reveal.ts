@@ -4,7 +4,21 @@ export const REBORN_RESA_SESSION_AUTO_OPEN = 'reborn_resa_scroll_auto_open_done'
 export const REBORN_RESA_SESSION_DISMISSED = 'reborn_resa_scroll_dismissed';
 
 export const DEFAULT_RESERVATION_SCROLL_THRESHOLD_PX = 320;
+/** Reveal peek/FAB after ~20% of scrollable page (Zhen Chef–style). */
+export const DEFAULT_RESERVATION_SCROLL_RATIO = 0.2;
+/** @deprecated Full-modal auto-open replaced by half-peek bar; kept for embed opt-in. */
 export const DEFAULT_RESERVATION_AUTO_OPEN_DELAY_MS = 2200;
+
+export function resolveReservationScrollThresholdPx(
+  scrollThresholdPx: number,
+  scrollRatio: number,
+  viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0,
+  scrollHeight = typeof document !== 'undefined' ? document.documentElement.scrollHeight : 0,
+): number {
+  const maxScroll = Math.max(0, scrollHeight - viewportHeight);
+  const ratioPx = Math.floor(maxScroll * scrollRatio);
+  return Math.max(scrollThresholdPx, ratioPx);
+}
 
 /** Homepage / CMS surfaces where a one-time gentle auto-open is appropriate. */
 export function isReservationScrollAutoOpenSurface(pathname: string): boolean {
@@ -52,16 +66,24 @@ export function markReservationScrollAutoOpenDone(): void {
 type ScrollRevealConfig = {
   enabled: boolean;
   scrollThresholdPx: number;
-  autoOpenDelayMs: number;
-  allowAutoOpen: boolean;
-  onAutoOpen: () => void;
+  scrollRatio?: number;
+  /** When true, scroll reveal also triggers `onPeekReveal` (half booking bar). */
+  allowAutoPeek?: boolean;
+  onPeekReveal?: () => void;
+  /** Legacy: auto-open full modal after delay (embed script only; off in shop FAB). */
+  autoOpenDelayMs?: number;
+  allowAutoOpen?: boolean;
+  onAutoOpen?: () => void;
 };
 
 export function useReservationScrollReveal({
   enabled,
   scrollThresholdPx,
-  autoOpenDelayMs,
-  allowAutoOpen,
+  scrollRatio = DEFAULT_RESERVATION_SCROLL_RATIO,
+  allowAutoPeek = true,
+  onPeekReveal,
+  autoOpenDelayMs = DEFAULT_RESERVATION_AUTO_OPEN_DELAY_MS,
+  allowAutoOpen = false,
   onAutoOpen,
 }: ScrollRevealConfig) {
   const reducedMotion = useMemo(() => prefersReducedMotion(), []);
@@ -78,7 +100,7 @@ export function useReservationScrollReveal({
   }, []);
 
   const scheduleAutoOpen = useCallback(() => {
-    if (!allowAutoOpen || reducedMotion) return;
+    if (!allowAutoOpen || !onAutoOpen || reducedMotion) return;
     if (readSessionFlag(REBORN_RESA_SESSION_AUTO_OPEN) || readSessionFlag(REBORN_RESA_SESSION_DISMISSED)) {
       return;
     }
@@ -106,12 +128,23 @@ export function useReservationScrollReveal({
     const onScroll = () => {
       if (revealedRef.current) return;
       const y = window.scrollY || document.documentElement.scrollTop || 0;
-      if (y < scrollThresholdPx) return;
+      const threshold = resolveReservationScrollThresholdPx(
+        scrollThresholdPx,
+        scrollRatio,
+        window.innerHeight,
+        document.documentElement.scrollHeight,
+      );
+      if (y < threshold) return;
       revealedRef.current = true;
       setRevealed(true);
       if (!reducedMotion) {
         setPulse(true);
         window.setTimeout(() => setPulse(false), 2400);
+      }
+      if (allowAutoPeek && onPeekReveal) {
+        if (!readSessionFlag(REBORN_RESA_SESSION_DISMISSED)) {
+          onPeekReveal();
+        }
       }
       scheduleAutoOpen();
     };
@@ -122,7 +155,16 @@ export function useReservationScrollReveal({
       window.removeEventListener('scroll', onScroll);
       clearAutoOpenTimer();
     };
-  }, [clearAutoOpenTimer, enabled, reducedMotion, scheduleAutoOpen, scrollThresholdPx]);
+  }, [
+    allowAutoPeek,
+    clearAutoOpenTimer,
+    enabled,
+    onPeekReveal,
+    reducedMotion,
+    scheduleAutoOpen,
+    scrollRatio,
+    scrollThresholdPx,
+  ]);
 
   const onUserOpened = useCallback(() => {
     markReservationScrollAutoOpenDone();

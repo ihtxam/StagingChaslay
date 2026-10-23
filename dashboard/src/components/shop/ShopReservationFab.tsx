@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import DelicateReservationsForm from '@/components/shop/DelicateReservationsForm';
+import ShopReservationPeekBar from '@/components/shop/ShopReservationPeekBar';
 import { useI18n } from '@/lib/i18n';
 import {
-  DEFAULT_RESERVATION_AUTO_OPEN_DELAY_MS,
+  DEFAULT_RESERVATION_SCROLL_RATIO,
   DEFAULT_RESERVATION_SCROLL_THRESHOLD_PX,
   isReservationScrollAutoOpenSurface,
   useReservationScrollReveal,
@@ -16,24 +17,38 @@ type Props = {
   scrollReveal?: boolean;
 };
 
+type BookingSeed = {
+  partySize: number;
+  date: string;
+  time: string;
+};
+
 /**
- * Floating “Réserver une table” control — same UX as the external embed script, inlined on shop surfaces.
+ * Floating reservation control with scroll-triggered half-peek bar (party · today · time),
+ * then full booking modal for guest details — same pattern as external embed + Zhen Chef–style UX.
  */
 export default function ShopReservationFab({ shopKey, accent, scrollReveal = true }: Props) {
   const { t } = useI18n();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
+  const [peekVisible, setPeekVisible] = useState(false);
+  const [peekHalf, setPeekHalf] = useState(true);
+  const [bookingSeed, setBookingSeed] = useState<BookingSeed | null>(null);
   const label = t('shopReservations');
   const fabBg = accent?.trim() || '#1c3557';
 
-  const allowAutoOpen = isReservationScrollAutoOpenSurface(pathname);
+  const allowAutoPeek = isReservationScrollAutoOpenSurface(pathname);
 
   const { revealed, pulse, reducedMotion, onUserOpened, onUserClosed } = useReservationScrollReveal({
     enabled: scrollReveal,
     scrollThresholdPx: DEFAULT_RESERVATION_SCROLL_THRESHOLD_PX,
-    autoOpenDelayMs: DEFAULT_RESERVATION_AUTO_OPEN_DELAY_MS,
-    allowAutoOpen,
-    onAutoOpen: () => setOpen(true),
+    scrollRatio: DEFAULT_RESERVATION_SCROLL_RATIO,
+    allowAutoPeek,
+    onPeekReveal: () => {
+      setPeekHalf(true);
+      setPeekVisible(true);
+    },
+    allowAutoOpen: false,
   });
 
   useEffect(() => {
@@ -47,13 +62,24 @@ export default function ShopReservationFab({ shopKey, accent, scrollReveal = tru
 
   const close = useCallback(() => {
     setOpen(false);
+    setBookingSeed(null);
     onUserClosed();
   }, [onUserClosed]);
 
-  const openDialog = useCallback(() => {
-    onUserOpened();
-    setOpen(true);
-  }, [onUserOpened]);
+  const openDialog = useCallback(
+    (seed?: BookingSeed) => {
+      onUserOpened();
+      if (seed) setBookingSeed(seed);
+      setPeekVisible(false);
+      setOpen(true);
+    },
+    [onUserOpened],
+  );
+
+  const dismissPeek = useCallback(() => {
+    setPeekVisible(false);
+    onUserClosed();
+  }, [onUserClosed]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,10 +90,19 @@ export default function ShopReservationFab({ shopKey, accent, scrollReveal = tru
     return () => window.removeEventListener('keydown', onKey);
   }, [open, close]);
 
-  const fabVisible = !scrollReveal || revealed;
+  const fabVisible = (!scrollReveal || revealed) && !peekVisible && !open;
 
   return (
     <>
+      <ShopReservationPeekBar
+        shopKey={shopKey}
+        accent={accent}
+        visible={peekVisible && !open}
+        halfPeek={peekHalf}
+        onDismiss={dismissPeek}
+        onOpenFull={(seed) => openDialog(seed)}
+      />
+
       <button
         type="button"
         className={[
@@ -85,7 +120,7 @@ export default function ShopReservationFab({ shopKey, accent, scrollReveal = tru
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-hidden={!fabVisible}
-        onClick={openDialog}
+        onClick={() => openDialog()}
       >
         <span
           className="flex h-[1.35rem] w-[1.35rem] shrink-0 items-center justify-center rounded-md bg-white/15 text-xs"
@@ -115,6 +150,7 @@ export default function ShopReservationFab({ shopKey, accent, scrollReveal = tru
                 theme="light"
                 accent={accent}
                 showClose
+                seed={bookingSeed}
                 onClose={close}
                 onSuccess={() => {
                   window.setTimeout(close, 2400);

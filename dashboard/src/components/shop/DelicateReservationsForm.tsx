@@ -1,9 +1,15 @@
-import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ymdZurich } from '@/components/shop/InlineReservationsWidget';
 import { useI18n } from '@/lib/i18n';
 import type { ReservationSlot } from '@/lib/use-shop-reservations-booking';
 import { useShopReservationsBooking } from '@/lib/use-shop-reservations-booking';
 import '@/styles/delicate-reservations.css';
+
+type BookingSeed = {
+  partySize?: number;
+  date?: string;
+  time?: string;
+};
 
 type Props = {
   shopKey: string;
@@ -13,6 +19,8 @@ type Props = {
   showClose?: boolean;
   onClose?: () => void;
   onSuccess?: (payload: { code: string; status: string }) => void;
+  /** Applied once config loads (e.g. from scroll peek bar). */
+  seed?: BookingSeed | null;
 };
 
 function monthDays(year: number, month: number) {
@@ -47,6 +55,7 @@ export default function DelicateReservationsForm({
   showClose,
   onClose,
   onSuccess,
+  seed,
 }: Props) {
   const { t, locale, formatDateTime } = useI18n();
   const booking = useShopReservationsBooking(shopKey, t);
@@ -56,6 +65,15 @@ export default function DelicateReservationsForm({
   const [timeExpanded, setTimeExpanded] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+
+  const seedAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!booking.config || !seed || seedAppliedRef.current) return;
+    seedAppliedRef.current = true;
+    if (seed.partySize != null) booking.setPartySize(seed.partySize);
+    if (seed.date) booking.setDate(seed.date);
+    if (seed.time) booking.setTime(seed.time);
+  }, [booking.config, seed]);
 
   useEffect(() => {
     if (calendarOpen) setCalendarViewYm(booking.date);
