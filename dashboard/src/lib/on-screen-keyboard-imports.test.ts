@@ -27,4 +27,11 @@ describe('on-screen keyboard import graph (no TDZ cycle)', () => {
     expect(src).toContain("from '@/lib/on-screen-keyboard-context'");
     expect(src).not.toMatch(/from '@\/components\/OnScreenKeyboard'/);
   });
+
+  it('App boots keyboard provider without importing LoginPage or OnScreenKeyboard barrel', () => {
+    const src = readSrc('App.tsx');
+    expect(src).toContain("from '@/components/OnScreenKeyboardProvider'");
+    expect(src).not.toMatch(/import LoginPage from/);
+    expect(src).not.toMatch(/from '@\/components\/OnScreenKeyboard'/);
+  });
 });

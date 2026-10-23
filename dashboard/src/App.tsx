@@ -15,7 +15,6 @@ import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 import ShopRouteLayout from '@/components/shop/ShopRouteLayout';
 import ScrollToTop from '@/components/ScrollToTop';
 
-import LoginPage from '@/pages/LoginPage';
 import HostApp from '@/pages/HostApp';
 import SetPasswordPage from '@/pages/SetPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
@@ -49,11 +48,26 @@ import PanelLoginRedirect from '@/components/PanelLoginRedirect';
 import DesktopChromeBar from '@/components/DesktopChromeBar';
 import DesktopLoadingOverlay from '@/components/DesktopLoadingOverlay';
 import DesktopUpdateBanner from '@/components/DesktopUpdateBanner';
-import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboardProvider';
 import { initDesktopAppDetection, shouldAutoOpenOnScreenKeyboard } from '@/lib/platform';
 import { activateWaitingServiceWorker, reloadIfDeployedBuildChanged } from '@/lib/pwa-recover';
 
+const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
+
+function LoginRoute() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#1a2332] text-sm text-white/80">
+          Loading…
+        </div>
+      }
+    >
+      <LoginPage />
+    </Suspense>
+  );
+}
 const ShopLocationsPage = lazy(() => import('@/pages/shop/ShopLocationsPage'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
 const ShopHubLocationRedirect = lazy(() => import('@/pages/shop/ShopHubLocationRedirect'));
@@ -250,7 +264,7 @@ function App() {
               path="/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -260,7 +274,7 @@ function App() {
               path="/signin"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -270,7 +284,7 @@ function App() {
               path="/superadmin/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -280,7 +294,7 @@ function App() {
               path="/reseller/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -290,7 +304,7 @@ function App() {
               path="/merchant/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -311,7 +325,7 @@ function App() {
               path="/forgot-password"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
