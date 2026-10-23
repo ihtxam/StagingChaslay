@@ -42,3 +42,4 @@
 # Deploy 2026-10-23T05:35:00Z — URGENT: lazy merchant panel route (Sr TDZ / index chunk init order)
 # Deploy 2026-10-23T05:40:00Z — RETRY prod deploy: index-Cr6uXlek.js lazy merchant Dashboard chunk
 # Deploy 2026-10-23T05:45:00Z — CRITICAL: split Dashboard Header/Settings/WebPos lazy chunks (xs TDZ / MerchantShell)
+# Deploy 2026-10-23T05:50:00Z — RETRY: Dashboard-KLxvyctz.js index-BAKdOiHU.js (891c03bb)
