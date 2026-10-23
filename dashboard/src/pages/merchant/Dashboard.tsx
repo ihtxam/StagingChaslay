@@ -3,7 +3,6 @@ import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-
 import toast from 'react-hot-toast';
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
-import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import LazyRouteErrorBoundary from '@/components/LazyRouteErrorBoundary';
 import { isTillPrintHubCandidate } from '@/lib/till-print-hub-candidate';
@@ -179,6 +178,9 @@ import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
+const PlatformNotificationsHistory = lazy(
+  () => import('../shared/PlatformNotificationsHistory')
+);
 
 function MerchantLazyFallback({ className }: { className?: string }) {
   return (
@@ -1837,7 +1839,9 @@ function MerchantShell() {
               path="notifications"
               element={
                 <PanelRouteGuard path="/merchant/notifications" allow={allow}>
-                  <PlatformNotificationsHistory />
+                  <Suspense fallback={<MerchantLazyFallback />}>
+                    <PlatformNotificationsHistory />
+                  </Suspense>
                 </PanelRouteGuard>
               }
             />

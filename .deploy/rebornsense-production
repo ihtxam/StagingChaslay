@@ -45,4 +45,5 @@
 # Deploy 2026-10-23T05:50:00Z — RETRY: Dashboard-KLxvyctz.js index-BAKdOiHU.js (891c03bb)
 # Deploy 2026-10-23T05:54:00Z — URGENT: force-recreate dashboard after build (stale BNLO2bvC / TDZ)
 # Deploy 2026-10-23T06:05:00Z — CRITICAL: merchant lazy route graph (Dashboard ~49kb shell, vt TDZ / webpos-print-relay cycle)
+# Deploy 2026-10-23T06:10:00Z — RETRY prod: index-BFeU9EYQ + Dashboard-CxmejqM2.js (replace stale CUWkP6L1 monolith / vt TDZ)
 # Deploy 2026-10-23T06:10:00Z — RETRY: 4136fc66 vt TDZ lazy merchant-lazy-routes (Dashboard-CxmejqM2)
