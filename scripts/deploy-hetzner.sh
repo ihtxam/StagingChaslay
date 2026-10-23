@@ -922,6 +922,9 @@ else
   export VITE_DEPLOY_RING=production
 fi
 dc up -d --build --remove-orphans db api dashboard caddy
+# Dashboard JS/CSS are baked into the image tag :latest — compose can keep an old
+# container running after `docker build` updates the image (stale index-*.js on prod).
+dc up -d --force-recreate dashboard
 
 # Caddyfile is bind-mounted. `caddy reload` can leave stale site blocks (e.g. new
 # order.rebornsense.com hub) — force-recreate when the file changes or reload fails.
