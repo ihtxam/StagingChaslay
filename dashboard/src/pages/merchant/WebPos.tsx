@@ -6804,9 +6804,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     void ensureShift(doAdd);
   };
 
-  const pushCustomAmountLine = (amount: number) => {
-    const price = roundMoney2(amount);
-    if (price <= 0) return;
+  const pushCustomAmountLine = (payload: {
+    amount: number;
+    weightKg?: number;
+    pricePerKg?: number;
+  }) => {
+    const lineTotal = roundMoney2(payload.amount);
+    if (lineTotal <= 0) return;
+    const weightKg =
+      payload.weightKg != null && Number.isFinite(payload.weightKg)
+        ? roundWeightKg(Math.max(0, payload.weightKg))
+        : 0;
+    const weighed = weightKg > 0 && payload.pricePerKg != null;
+    const unitPrice = weighed ? roundMoney2(payload.pricePerKg!) : lineTotal;
     const courseNumber = coursesEnabled ? activeCourse : undefined;
     const lineId = `misc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setCart((prev) => [
@@ -6815,13 +6825,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         lineId,
         productId: '__misc__',
         name: t('webPosCustomAmount'),
-        quantity: 1,
-        unitPrice: price,
-        lineTotal: price,
+        quantity: weighed ? weightKg : 1,
+        unitPrice,
+        lineTotal,
         taxable: true,
         selectedExtras: [],
         comboSelections: [],
         isOpenPrice: true,
+        isWeighed: weighed,
+        weightKg: weighed ? weightKg : undefined,
         courseNumber,
       },
     ]);
@@ -6831,8 +6843,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosView('register');
   };
 
-  const addCustomAmountLine = (amount: number) => {
-    void ensureShift(() => pushCustomAmountLine(amount));
+  const addCustomAmountLine = (payload: {
+    amount: number;
+    weightKg?: number;
+    pricePerKg?: number;
+  }) => {
+    void ensureShift(() => pushCustomAmountLine(payload));
   };
 
   const openCustomAmountModal = () => {
@@ -12674,6 +12690,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         open={customAmountOpen}
         onClose={() => setCustomAmountOpen(false)}
         onConfirm={addCustomAmountLine}
+        scaleEnabled={scaleFeatureEnabled}
+        configuredPort={printSettings?.scaleComPort}
+        configuredUsbAddress={printSettings?.scaleUsbAddress}
+        configuredDeviceName={printSettings?.scaleDeviceName}
+        configuredDeviceId={printSettings?.scaleDeviceId}
+        onPortResolved={healScalePort}
+        onUsbAddressResolved={healScaleUsbAddress}
       />
 
       <WebPosWeightModal
