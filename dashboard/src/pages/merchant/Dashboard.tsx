@@ -369,6 +369,8 @@ function MerchantShell() {
     () => !jwtIsOwner && isWaiterRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
   );
+  const panelChromeRestricted =
+    orderCenterRestricted || kioskRestricted || storekeeperRestricted || waiterRestricted;
   const hideChrome =
     (((isPosRoute || isWaiterRoute || isOrderCenterRoute) && posAppMode) ||
       isStorekeeperRoute ||
@@ -1252,9 +1254,6 @@ function MerchantShell() {
     : waiterRestricted
       ? waiterMenuItems
       : fullMenuItems;
-
-  const panelChromeRestricted =
-    orderCenterRestricted || kioskRestricted || storekeeperRestricted || waiterRestricted;
 
   /** POS / role apps enforce their own fullscreen PIN gate. */
   const routeHasOwnPinGate =

@@ -45,4 +45,13 @@ describe('merchant panel import graph (no App init-order TDZ)', () => {
     expect(src).toContain("from '@/components/OnScreenKeyboardToggle'");
     expect(src).not.toMatch(/from '@\/components\/OnScreenKeyboard'/);
   });
+
+  it('Dashboard declares panelChromeRestricted before merchantSettingsPath (no shell TDZ)', () => {
+    const src = readSrc('pages/merchant/Dashboard.tsx');
+    const restrictedIdx = src.indexOf('const panelChromeRestricted');
+    const settingsPathIdx = src.indexOf('const merchantSettingsPath');
+    expect(restrictedIdx).toBeGreaterThan(-1);
+    expect(settingsPathIdx).toBeGreaterThan(-1);
+    expect(restrictedIdx).toBeLessThan(settingsPathIdx);
+  });
 });
