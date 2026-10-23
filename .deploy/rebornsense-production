@@ -40,3 +40,4 @@
 # Deploy 2026-10-23T05:18:00Z — URGENT: merchant panel TDZ fix (#860) — split OnScreenKeyboardToggle imports
 # Deploy 2026-10-23T05:23:00Z — URGENT: isolate keyboard provider + lazy login (merchant TDZ)
 # Deploy 2026-10-23T05:35:00Z — URGENT: lazy merchant panel route (Sr TDZ / index chunk init order)
+# Deploy 2026-10-23T05:40:00Z — RETRY prod deploy: index-Cr6uXlek.js lazy merchant Dashboard chunk
