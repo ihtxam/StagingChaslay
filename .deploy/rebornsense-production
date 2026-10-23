@@ -48,3 +48,4 @@
 # Deploy 2026-10-23T06:10:00Z — RETRY prod: index-BFeU9EYQ + Dashboard-CxmejqM2.js (replace stale CUWkP6L1 monolith / vt TDZ)
 # Deploy 2026-10-23T06:10:00Z — RETRY: 4136fc66 vt TDZ lazy merchant-lazy-routes (Dashboard-CxmejqM2)
 # Deploy 2026-10-23T06:15:00Z — CRITICAL bbb21f04: slim Dashboard-B4ZRzvar ~49kb index-CdsGIaaf (vt TDZ fix)
+# Deploy 2026-10-23T06:09:00Z — RETRY prod: still index-BNLO2bvC / Dashboard-CUWkP6L1 1.3MB (expect f9b2189a CdsGIaaf B4ZRzvar)
