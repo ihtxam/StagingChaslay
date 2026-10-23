@@ -3122,6 +3122,14 @@ const en: Dict = {
   offerRestaurantTemplatesHint:
     'Start from a playbook, then set products and save. Cart-gift tiers open in a popup for product picks.',
   offerRestaurantTemplatesSeed: 'Import restaurant offer templates',
+  offerPickerTitle: 'Create an offer',
+  offerPickerHint: 'Pick a deal type — settings open in a popup. Nothing stays expanded on this page.',
+  offerPickerQuantityDeals: 'Quantity deals (same product)',
+  offerPickerMoreTypes: 'Other offer types',
+  offerEditorTitleNew: 'New offer',
+  offerEditorTitleEdit: 'Edit offer',
+  offerEditorSaveCreate: 'Create offer',
+  offerEditorSaveUpdate: 'Update offer',
   shopCartFreeGiftHint: 'Spend more to unlock free products — pick them in your cart.',
   shopCartFreeGiftSpendMin:
     'Spend at least {amount} to get a free product. Pick in your cart.',
@@ -8145,6 +8153,15 @@ const fr: Dict = {
   offerRestaurantTemplatesTitle: 'Modèles d’offres restaurant',
   offerRestaurantTemplatesHint:
     'Choisissez un modèle, configurez les produits puis enregistrez. Les paliers s’éditent dans une fenêtre.',
+  offerPickerTitle: 'Créer une offre',
+  offerPickerHint:
+    'Choisissez un type d’offre — les réglages s’ouvrent dans une fenêtre, pas sur toute la page.',
+  offerPickerQuantityDeals: 'Offres quantité (même produit)',
+  offerPickerMoreTypes: 'Autres types d’offres',
+  offerEditorTitleNew: 'Nouvelle offre',
+  offerEditorTitleEdit: 'Modifier l’offre',
+  offerEditorSaveCreate: 'Créer l’offre',
+  offerEditorSaveUpdate: 'Mettre à jour',
   shopCartFreeGiftHint: 'Dépensez plus pour débloquer des produits gratuits — choisissez-les dans le panier.',
   shopCartFreeGiftSpendMin:
     'Dépensez au moins {amount} pour un produit gratuit. Choisissez-le dans le panier.',
@@ -13060,6 +13077,15 @@ const de: Dict = {
   offerRestaurantTemplatesTitle: 'Restaurant-Angebotsvorlagen',
   offerRestaurantTemplatesHint:
     'Vorlage wählen, Produkte setzen, speichern. Stufen bearbeiten Sie im Dialog.',
+  offerPickerTitle: 'Angebot erstellen',
+  offerPickerHint:
+    'Angebotstyp wählen — alle Einstellungen öffnen sich im Dialog, nicht als ganze Seite.',
+  offerPickerQuantityDeals: 'Mengenangebote (gleiches Produkt)',
+  offerPickerMoreTypes: 'Weitere Angebotstypen',
+  offerEditorTitleNew: 'Neues Angebot',
+  offerEditorTitleEdit: 'Angebot bearbeiten',
+  offerEditorSaveCreate: 'Angebot erstellen',
+  offerEditorSaveUpdate: 'Aktualisieren',
   shopCartFreeGiftHint: 'Mehr ausgeben, um Gratisprodukte freizuschalten — im Warenkorb auswählen.',
   shopCartFreeGiftSpendMin:
     'Mindestens {amount} ausgeben für ein Gratisprodukt — im Warenkorb wählen.',
