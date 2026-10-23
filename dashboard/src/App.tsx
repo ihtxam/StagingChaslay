@@ -19,7 +19,7 @@ import HostApp from '@/pages/HostApp';
 import SetPasswordPage from '@/pages/SetPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SuperadminDashboard from '@/pages/superadmin/Dashboard';
-import MerchantDashboard from '@/pages/merchant/Dashboard';
+const MerchantDashboard = lazy(() => import('@/pages/merchant/Dashboard'));
 import ResellerDashboard from '@/pages/reseller/Dashboard';
 import OrderingPage from '@/pages/shop/OrderingPage';
 import CheckoutPage from '@/pages/shop/CheckoutPage';
@@ -65,6 +65,20 @@ function LoginRoute() {
       }
     >
       <LoginPage />
+    </Suspense>
+  );
+}
+
+function MerchantPanelRoute() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] items-center justify-center text-sm text-[var(--text-muted)]">
+          Loading…
+        </div>
+      }
+    >
+      <MerchantDashboard />
     </Suspense>
   );
 }
@@ -1046,7 +1060,7 @@ function App() {
                 path="/merchant/*"
                 element={
                   <ProtectedRoute requiredRole="merchant">
-                    <MerchantDashboard />
+                    <MerchantPanelRoute />
                   </ProtectedRoute>
                 }
               />

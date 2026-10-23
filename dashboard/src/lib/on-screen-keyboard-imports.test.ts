@@ -34,4 +34,10 @@ describe('on-screen keyboard import graph (no TDZ cycle)', () => {
     expect(src).not.toMatch(/import LoginPage from/);
     expect(src).not.toMatch(/from '@\/components\/OnScreenKeyboard'/);
   });
+
+  it('App lazy-loads merchant dashboard (avoids init-order TDZ with keyboard graph)', () => {
+    const src = readSrc('App.tsx');
+    expect(src).toMatch(/lazy\(\(\) => import\('@\/pages\/merchant\/Dashboard'\)\)/);
+    expect(src).not.toMatch(/import MerchantDashboard from '@\/pages\/merchant\/Dashboard'/);
+  });
 });
