@@ -24,7 +24,7 @@ import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 
 const PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH;
 const PIN_MAX_LENGTH = STAFF_PIN_MAX_LENGTH;
-/** Pause so a longer PIN can be typed before verify runs (no OK button in gate mode). */
+/** Brief pause before verify when the fourth digit is entered (no OK button in gate mode). */
 const PIN_AUTO_DELAY_MS = 420;
 
 export type WebPosPinModalMode = 'gate' | 'switch';

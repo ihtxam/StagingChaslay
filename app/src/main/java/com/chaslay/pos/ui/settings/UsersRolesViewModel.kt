@@ -118,7 +118,7 @@ class UsersRolesViewModel @Inject constructor(
                 return@launch
             }
             if (state.formPin.isNotBlank() && !isValidStaffPin(state.formPin)) {
-                _uiState.update { it.copy(message = "PIN must be 4-8 digits") }
+                _uiState.update { it.copy(message = "PIN must be exactly 4 digits") }
                 return@launch
             }
             authRepository.saveUser(
@@ -138,7 +138,7 @@ class UsersRolesViewModel @Inject constructor(
     fun resetPin(userId: Long, newPin: String) {
         viewModelScope.launch {
             if (!isValidStaffPin(newPin)) {
-                _uiState.update { it.copy(message = "PIN must be 4-8 digits") }
+                _uiState.update { it.copy(message = "PIN must be exactly 4 digits") }
                 return@launch
             }
             authRepository.resetUserPin(userId, newPin)
