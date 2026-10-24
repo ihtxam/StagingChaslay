@@ -1,4 +1,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import ReservationsCalendarView from '@/components/reservations/ReservationsCalendarView';
+import {
+  calendarViewYmFromDate,
+  groupReservationsByYmd,
+  monthRangeIso,
+} from '@/lib/reservation-calendar-month';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
@@ -38,7 +44,9 @@ export default function WebPosBookingsView() {
   const [loading, setLoading] = useState(true);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
-  const [scope, setScope] = useState<'today' | 'future'>('today');
+  const [scope, setScope] = useState<'today' | 'future' | 'calendar'>('today');
+  const [calendarViewYm, setCalendarViewYm] = useState(() => calendarViewYmFromDate());
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
   const [autoAccept, setAutoAccept] = useState(false);
   const [autoAcceptSaving, setAutoAcceptSaving] = useState(false);
@@ -68,14 +76,19 @@ export default function WebPosBookingsView() {
       setTables(cfg.data.tables || []);
 
       const today = ymdZurich();
-      const from =
-        scope === 'today'
-          ? zurichDayStartFromYmd(today)
-          : zurichDayStartFromYmd(addDaysYmdZurich(1));
-      const to =
-        scope === 'today'
-          ? zurichDayEndFromYmd(today)
-          : zurichDayEndFromYmd(addDaysYmdZurich(ahead));
+      let from: Date;
+      let to: Date;
+      if (scope === 'calendar') {
+        const range = monthRangeIso(calendarViewYm);
+        from = zurichDayStartFromYmd(range.from);
+        to = zurichDayEndFromYmd(range.to);
+      } else if (scope === 'today') {
+        from = zurichDayStartFromYmd(today);
+        to = zurichDayEndFromYmd(today);
+      } else {
+        from = zurichDayStartFromYmd(addDaysYmdZurich(1));
+        to = zurichDayEndFromYmd(addDaysYmdZurich(ahead));
+      }
 
       const res = await api.get('/merchant/reservations', {
         params: { from: from.toISOString(), to: to.toISOString(), status: 'all' },
@@ -87,7 +100,7 @@ export default function WebPosBookingsView() {
     } finally {
       setLoading(false);
     }
-  }, [scope, t]);
+  }, [scope, calendarViewYm, t]);
 
   useEffect(() => {
     void load();
@@ -97,6 +110,18 @@ export default function WebPosBookingsView() {
     () => reservations.filter((r) => r.status === 'pending').length,
     [reservations]
   );
+
+  const reservationsByDay = useMemo(() => groupReservationsByYmd(reservations), [reservations]);
+
+  const calendarDayReservations = useMemo(() => {
+    if (!selectedCalendarDay) return [];
+    return reservationsByDay.get(selectedCalendarDay) || [];
+  }, [reservationsByDay, selectedCalendarDay]);
+
+  const listReservations = useMemo(() => {
+    if (scope === 'calendar' && selectedCalendarDay) return calendarDayReservations;
+    return reservations;
+  }, [scope, selectedCalendarDay, calendarDayReservations, reservations]);
 
   const toggleAutoAccept = async () => {
     if (autoAcceptSaving) return;
@@ -285,6 +310,20 @@ export default function WebPosBookingsView() {
         >
           {t('reservationsFuture')}
         </button>
+        <button
+          type="button"
+          className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+            scope === 'calendar'
+              ? 'bg-[var(--webpos-accent)] text-white'
+              : 'bg-[var(--webpos-surface-2)] text-[var(--webpos-text-muted)]'
+          }`}
+          onClick={() => {
+            setScope('calendar');
+            setSelectedCalendarDay(null);
+          }}
+        >
+          {t('reservationsCalendar')}
+        </button>
         {!autoAccept && pendingCount > 0 ? (
           <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
             {t('reservationsPendingCount').replace('{n}', String(pendingCount))}
@@ -324,9 +363,66 @@ export default function WebPosBookingsView() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-4 pb-24">
-        {loading ? (
+        {scope === 'calendar' ? (
+          <div className="space-y-4">
+            <ReservationsCalendarView
+              variant="webpos"
+              viewYm={calendarViewYm}
+              onViewYmChange={setCalendarViewYm}
+              byDay={reservationsByDay}
+              selectedYmd={selectedCalendarDay}
+              onSelectDay={setSelectedCalendarDay}
+            />
+            {loading ? (
+              <p className="text-sm text-[var(--webpos-text-muted)]">{t('loading')}</p>
+            ) : !selectedCalendarDay ? (
+              <p className="text-sm text-[var(--webpos-text-muted)]">{t('reservationsCalendarPickDay')}</p>
+            ) : listReservations.length === 0 ? (
+              <p className="text-sm text-[var(--webpos-text-muted)]">{t('reservationsEmpty')}</p>
+            ) : (
+              <ul className="space-y-3">
+                {listReservations.map((r) => (
+                  <li
+                    key={r.id}
+                    className="overflow-hidden rounded-xl border border-[var(--webpos-border)] bg-[var(--webpos-surface)] shadow-sm"
+                  >
+                    <div className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold">{r.guestName}</p>
+                          <p className="text-xs text-[var(--webpos-text-muted)]">
+                            {formatTime(r.reservedAt)} · {r.partySize} {t('reservationsGuests')}
+                          </p>
+                          <p className="text-xs text-[var(--webpos-text-muted)]">{r.guestPhone}</p>
+                        </div>
+                        <div className="text-right text-xs">
+                          <p
+                            className={`inline-block rounded px-2 py-0.5 font-semibold uppercase ${statusBadge(r.status)}`}
+                          >
+                            {r.status}
+                          </p>
+                          <p className="mt-1 text-[var(--webpos-text-muted)]">
+                            {r.tableLabel || t('reservationsNoTable')}
+                          </p>
+                        </div>
+                      </div>
+                      {r.notes ? (
+                        <p className="mt-2 text-xs text-[var(--webpos-text-muted)]">{r.notes}</p>
+                      ) : null}
+                    </div>
+                    {r.status === 'pending' ? (
+                      <div className="border-t border-[var(--webpos-border)] bg-[var(--webpos-surface-2)] px-4 py-3">
+                        {pendingActions(r)}
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : loading ? (
           <p className="text-sm text-[var(--webpos-text-muted)]">{t('loading')}</p>
-        ) : reservations.length === 0 ? (
+        ) : listReservations.length === 0 ? (
           <p className="text-sm text-[var(--webpos-text-muted)]">
             {scope === 'today' ? t('reservationsEmpty') : t('reservationsEmptyFuture')}
           </p>
@@ -345,7 +441,7 @@ export default function WebPosBookingsView() {
                 </tr>
               </thead>
               <tbody>
-                {reservations.map((r) => {
+                {listReservations.map((r) => {
                   const dt = new Date(r.reservedAt);
                   return (
                     <tr key={r.id} className="border-b border-[var(--webpos-border)] last:border-0">
@@ -384,7 +480,7 @@ export default function WebPosBookingsView() {
           </div>
         ) : (
           <ul className="space-y-3">
-            {reservations.map((r) => (
+            {listReservations.map((r) => (
               <li key={r.id} className="overflow-hidden rounded-xl border border-[var(--webpos-border)] bg-[var(--webpos-surface)] shadow-sm">
                 <div className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2">

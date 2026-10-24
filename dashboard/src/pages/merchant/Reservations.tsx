@@ -17,6 +17,12 @@ import {
 } from '@/lib/date-format';
 import { reservationStatusBadgeClass } from '@/lib/reservation-badges';
 import { isMissingAuthorizationError } from '@/lib/reservations-auth-error';
+import ReservationsCalendarView from '@/components/reservations/ReservationsCalendarView';
+import {
+  calendarViewYmFromDate,
+  groupReservationsByYmd,
+  monthRangeIso,
+} from '@/lib/reservation-calendar-month';
 
 type Reservation = {
   id: string;
@@ -48,7 +54,11 @@ export default function Reservations() {
   const [maxDaysAhead, setMaxDaysAhead] = useState(30);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
-  const [bookingsScope, setBookingsScope] = useState<'today' | 'future' | 'past'>('today');
+  const [bookingsScope, setBookingsScope] = useState<'today' | 'future' | 'past' | 'calendar'>(
+    'today'
+  );
+  const [calendarViewYm, setCalendarViewYm] = useState(() => calendarViewYmFromDate());
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState(ymdZurich());
   const [statusFilter, setStatusFilter] = useState('all');
   const [createOpen, setCreateOpen] = useState(false);
@@ -86,6 +96,10 @@ export default function Reservations() {
     } else if (bookingsScope === 'future') {
       from = zurichDayStartFromYmd(addDaysYmdZurich(1));
       to = zurichDayEndFromYmd(addDaysYmdZurich(maxDaysAhead));
+    } else if (bookingsScope === 'calendar') {
+      const range = monthRangeIso(calendarViewYm);
+      from = zurichDayStartFromYmd(range.from);
+      to = zurichDayEndFromYmd(range.to);
     } else {
       from = zurichDayStartFromYmd(addDaysYmdZurich(-90));
       to = zurichDayEndFromYmd(addDaysYmdZurich(-1));
@@ -98,7 +112,7 @@ export default function Reservations() {
       },
     });
     setReservations(res.data.reservations || []);
-  }, [bookingsScope, maxDaysAhead, statusFilter]);
+  }, [bookingsScope, maxDaysAhead, statusFilter, calendarViewYm]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,7 +137,7 @@ export default function Reservations() {
 
   useEffect(() => {
     if (!loading) void loadList().catch(() => undefined);
-  }, [bookingsScope, statusFilter, maxDaysAhead]);
+  }, [bookingsScope, statusFilter, maxDaysAhead, calendarViewYm, loadList, loading]);
 
   const editing = useMemo(
     () => reservations.find((r) => r.id === editId) || null,
@@ -235,17 +249,26 @@ export default function Reservations() {
     [reservations]
   );
 
+  const reservationsByDay = useMemo(() => groupReservationsByYmd(reservations), [reservations]);
+
   const sortedReservations = useMemo(() => {
-    const rows = [...reservations];
+    if (bookingsScope === 'calendar' && !selectedCalendarDay) return [];
+    let rows = [...reservations];
+    if (bookingsScope === 'calendar' && selectedCalendarDay) {
+      rows = rows.filter((r) => ymdZurich(r.reservedAt) === selectedCalendarDay);
+    }
     if (bookingsScope === 'past') {
       rows.sort((a, b) => new Date(b.reservedAt).getTime() - new Date(a.reservedAt).getTime());
     } else {
       rows.sort((a, b) => new Date(a.reservedAt).getTime() - new Date(b.reservedAt).getTime());
     }
     return rows;
-  }, [bookingsScope, reservations]);
+  }, [bookingsScope, reservations, selectedCalendarDay]);
 
-  const useTableLayout = bookingsScope === 'future' || bookingsScope === 'past';
+  const useTableLayout =
+    bookingsScope === 'future' ||
+    bookingsScope === 'past' ||
+    (bookingsScope === 'calendar' && !!selectedCalendarDay);
 
   if (loading) {
     return <div className="p-4 text-sm muted">{t('loading')}</div>;
@@ -324,6 +347,20 @@ export default function Reservations() {
               >
                 {t('reservationsPast')}
               </button>
+              <button
+                type="button"
+                className={`rounded-lg px-3 py-2 text-sm ${
+                  bookingsScope === 'calendar'
+                    ? 'border-[var(--text)] bg-[var(--text)] text-[var(--bg-elevated)]'
+                    : 'border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--bg-muted)]'
+                }`}
+                onClick={() => {
+                  setBookingsScope('calendar');
+                  setSelectedCalendarDay(null);
+                }}
+              >
+                {t('reservationsCalendar')}
+              </button>
             </div>
             <label className="text-sm">
               <span className="muted block mb-1">{t('status')}</span>
@@ -366,8 +403,23 @@ export default function Reservations() {
             onSubmit={createReservation}
           />
 
+          {bookingsScope === 'calendar' ? (
+            <ReservationsCalendarView
+              viewYm={calendarViewYm}
+              onViewYmChange={setCalendarViewYm}
+              byDay={reservationsByDay}
+              selectedYmd={selectedCalendarDay}
+              onSelectDay={setSelectedCalendarDay}
+            />
+          ) : null}
+
           <div className="space-y-2">
-            {sortedReservations.length === 0 && (
+            {bookingsScope === 'calendar' && !selectedCalendarDay ? (
+              <p className="text-sm muted border border-dashed rounded-md p-6 text-center">
+                {t('reservationsCalendarPickDay')}
+              </p>
+            ) : null}
+            {bookingsScope !== 'calendar' && sortedReservations.length === 0 && (
               <p className="text-sm muted border border-dashed rounded-md p-6 text-center">
                 {bookingsScope === 'today'
                   ? t('reservationsEmpty')
@@ -376,6 +428,11 @@ export default function Reservations() {
                     : t('reservationsEmptyPast')}
               </p>
             )}
+            {bookingsScope === 'calendar' && selectedCalendarDay && sortedReservations.length === 0 ? (
+              <p className="text-sm muted border border-dashed rounded-md p-6 text-center">
+                {t('reservationsEmpty')}
+              </p>
+            ) : null}
             {useTableLayout && sortedReservations.length > 0 ? (
               <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--bg)]">
                 <table className="min-w-full text-sm">
