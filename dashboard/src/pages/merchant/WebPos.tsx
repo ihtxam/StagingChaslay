@@ -9,7 +9,7 @@ import { useI18n, type Locale } from '@/lib/i18n';
 import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '@/lib/order-number';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { lineWidthForPaper } from '@/lib/receipt-labels';
-import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
+import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, channelTaxRateFromMerchant } from '@/lib/money';
 import {
   applyTerminalTipToCheckoutExtras,
   normalizePosCheckoutExtras,
@@ -1972,18 +1972,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return retailCounterOnly ? 'in_store' : 'takeaway';
   }, [tableId, channel, isRetail, showChannelTabs, channelTabOptions.length]);
 
-  const taxRate = useMemo(() => {
-    if (!merchant) return 8.1;
-    const vat = merchant.vatRate;
-    const ch = effectiveChannel;
-    if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
-    if (ch === 'delivery') {
-      const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
-      if (delivery > 0) return delivery;
-      return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
-    }
-    return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
-  }, [merchant, effectiveChannel]);
+  const taxRate = useMemo(
+    () => (merchant ? channelTaxRateFromMerchant(merchant, effectiveChannel) : 8.1),
+    [merchant, effectiveChannel]
+  );
 
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
   const orderLabelEnabled = printSettings?.orderLabelEnabled === true;

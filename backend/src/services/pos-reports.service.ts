@@ -214,6 +214,7 @@ export class PosReportsService {
     } | null;
 
     const money = (n: unknown) => Number(n) || 0;
+    const rateStandard = money(merchant?.vatRate) || 8.1;
     const rateTakeaway =
       money(merchant?.taxTakeawayRate) || money(merchant?.vatRate) || 2.6;
     const rateDineIn = money(merchant?.taxDineInRate) || money(merchant?.vatRate) || 8.1;
@@ -428,6 +429,7 @@ export class PosReportsService {
     const rateFor = (ch: string) => {
       if (ch === "dine_in") return rateDineIn;
       if (ch === "delivery") return rateDelivery;
+      if (ch === "in_store" || ch === "pos" || ch === "retail") return rateStandard;
       return rateTakeaway;
     };
 

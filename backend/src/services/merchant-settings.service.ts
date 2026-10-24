@@ -104,7 +104,7 @@ function slugFromName(name: string): string {
   );
 }
 
-export type FulfillmentChannel = "takeaway" | "dine_in" | "delivery";
+export type FulfillmentChannel = "takeaway" | "dine_in" | "delivery" | "in_store";
 export type ChannelSelectMode = "checkout" | "popup_start" | "menu";
 export type ShopCartLayout = "hidden_slide" | "sticky_right";
 
@@ -1099,6 +1099,7 @@ export class MerchantSettingsService {
       const n = parseFloat(String(v));
       return Number.isFinite(n) ? n : null;
     };
+    if (channel === "in_store") return fallback > 0 ? fallback : 8.1;
     if (channel === "dine_in") return pick(merchant.taxDineInRate) ?? fallback;
     if (channel === "delivery") return pick(merchant.taxDeliveryRate) ?? fallback;
     return pick(merchant.taxTakeawayRate) ?? fallback;
