@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   ChevronDown,
@@ -43,6 +44,7 @@ import {
 } from '@/lib/panel-scope-nav';
 import { useLocationStore } from '@/store/location';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
+import { useLockPageScroll } from '@/lib/useLockPageScroll';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import { BarcodePreview } from '@/components/BarcodePreview';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
@@ -413,6 +415,7 @@ export default function Products() {
   const [reordering, setReordering] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
+  const productEditorScrollRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -866,14 +869,7 @@ export default function Products() {
     setRecipeYield('1');
   };
 
-  useEffect(() => {
-    if (!modalOpen || typeof document === 'undefined') return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [modalOpen]);
+  useLockPageScroll(modalOpen, productEditorScrollRef);
 
   const linkedModifierGroups = useMemo(
     () =>
@@ -1967,9 +1963,10 @@ export default function Products() {
         ) : null}
       </section>
 
-      {modalOpen && (
+      {modalOpen && typeof document !== 'undefined'
+        ? createPortal(
         <div
-          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-3 overscroll-none"
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center overflow-hidden bg-black/50 p-0 sm:p-3 touch-none"
           onClick={closeModal}
           onKeyDown={(e) => {
             if (e.key === 'Escape') closeModal();
@@ -1977,7 +1974,7 @@ export default function Products() {
           role="presentation"
         >
           <div
-            className="flex max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl"
+            className="flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl touch-auto"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -1997,7 +1994,8 @@ export default function Products() {
             </div>
 
             <div
-              className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch]"
+              ref={productEditorScrollRef}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 touch-pan-y [-webkit-overflow-scrolling:touch]"
             >
             <form
               id={PRODUCT_EDITOR_FORM_ID}
@@ -3127,8 +3125,10 @@ export default function Products() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+      )
+        : null}
 
       {showBarcodeTools && printOpen && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setPrintOpen(false)}>
