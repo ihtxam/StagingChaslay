@@ -1916,6 +1916,34 @@ button {
     animation: webpos-pin-shake 0.4s ease-in-out;
   }
 
+  /* Phones / narrow portrait: PIN keypad sits above the footer, not under the clock. */
+  @media (max-width: 639px) {
+    .webpos-pin-gate-clock {
+      padding-bottom: 0.25rem;
+    }
+
+    .webpos-pin-gate-entry {
+      justify-content: flex-start;
+    }
+
+    .webpos-pin-gate-keypad-shell {
+      margin-top: auto;
+      width: 100%;
+      padding-top: 1rem;
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+
+    .webpos-pin-gate-keypad {
+      max-width: min(20rem, 92vw);
+      gap: 0.5rem;
+    }
+
+    .webpos-pin-gate-key {
+      height: 3rem;
+      font-size: 1.35rem;
+    }
+  }
+
   /* Small tablets / phones in landscape (e.g. 6" POS) — keep PIN copy and logo visible */
   @media (orientation: landscape) and (max-height: 520px) {
     .webpos-pin-gate-time {

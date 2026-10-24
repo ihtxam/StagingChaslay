@@ -439,8 +439,8 @@ export default function WebPosPinModal({
             </p>
           </section>
 
-          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overscroll-contain px-4 pb-2 pt-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
-            <div className="mb-3 flex w-full max-w-md flex-col items-center gap-1.5 text-center sm:mb-4 sm:gap-2">
+          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-hidden px-4 pb-0 pt-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8">
+            <div className="flex w-full max-w-md shrink-0 flex-col items-center gap-1.5 text-center sm:gap-2">
               {busy ? (
                 <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />
               ) : null}
@@ -452,15 +452,17 @@ export default function WebPosPinModal({
               </p>
             </div>
 
-            <div className="mb-3 sm:mb-4">{pinDots}</div>
+            <div className="mt-2 shrink-0 sm:mt-3">{pinDots}</div>
 
             {error ? (
-              <div className="mb-4 w-full max-w-md rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
+              <div className="mt-3 w-full max-w-md shrink-0 rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
                 <p className="text-base font-semibold text-red-100">{error}</p>
               </div>
             ) : null}
 
-            {gateKeypad}
+            <div className="webpos-pin-gate-keypad-shell mt-auto flex w-full max-w-md flex-1 flex-col justify-end pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-4 min-[640px]:mt-0 min-[640px]:flex-none min-[640px]:justify-center min-[640px]:pb-2 min-[640px]:pt-0">
+              {gateKeypad}
+            </div>
           </section>
         </div>
 

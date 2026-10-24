@@ -64,6 +64,12 @@ assert.match(
   /webpos-pin-gate-entry[\s\S]*min-\[640px\]:justify-center/,
   'desktop keypad column must sit centered with the clock'
 );
+assert.match(modal, /webpos-pin-gate-keypad-shell/, 'mobile keypad shell anchors to bottom');
+assert.match(
+  css,
+  /@media \(max-width: 639px\)[\s\S]*webpos-pin-gate-keypad-shell/,
+  'mobile CSS pins keypad above footer'
+);
 assert.match(
   css,
   /@media \(min-width: 640px\) and \(min-height: 521px\)[\s\S]*webpos-pin-gate-entry[\s\S]*justify-content: center/,
