@@ -543,7 +543,7 @@ button {
     color: var(--webpos-text) !important;
   }
 
-  /* Prevent iOS Safari zoom-on-focus for POS inputs (needs >= 16px). */
+  /* Prevent iOS Safari zoom-on-focus (inputs need >= 16px or the page zooms and feels "stuck"). */
   .webpos-shell input,
   .webpos-shell textarea,
   .webpos-shell select,
@@ -555,6 +555,17 @@ button {
   .kds-shell select {
     font-size: 16px !important;
     touch-action: manipulation;
+  }
+
+  @media (max-width: 1023px) {
+    .panel-shell input,
+    .panel-shell textarea,
+    .panel-shell select,
+    .panel-shell .input,
+    .panel-shell .field-input {
+      font-size: 16px !important;
+      touch-action: manipulation;
+    }
   }
 
   /* Desktop search: smaller text + flexible width so full query stays visible. */

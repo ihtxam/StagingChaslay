@@ -3439,9 +3439,14 @@ export default function Products() {
           border-radius: 0.375rem;
           border: 1px solid var(--border);
           padding: 0.4rem 0.625rem;
-          font-size: 0.8125rem;
+          font-size: 1rem;
           background: var(--bg-elevated);
           color: var(--text);
+        }
+        @media (min-width: 1024px) {
+          .field-input {
+            font-size: 0.8125rem;
+          }
         }
         .field-input:focus {
           outline: none;
