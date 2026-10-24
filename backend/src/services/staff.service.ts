@@ -2,6 +2,12 @@ import { getDb, schema } from "@/db";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { AuthService } from "@/services/auth.service";
 import {
+  assertValidStaffPin,
+  isValidStaffPin,
+  normalizeStaffPinInput,
+  STAFF_PIN_VALIDATION_ERROR,
+} from "@/lib/staff-pin";
+import {
   ALL_PERMISSIONS,
   DEFAULT_ROLE_TEMPLATES,
   applyRolePermissionPolicy,
@@ -275,9 +281,7 @@ export class StaffService {
   }
 
   private static normalizePinInput(pin: unknown): string {
-    return String(pin ?? "")
-      .trim()
-      .replace(/\D/g, "");
+    return normalizeStaffPinInput(pin);
   }
 
   private static async assignStaffPin(merchantId: string, staffId: string, pin: string) {
@@ -674,8 +678,8 @@ export class StaffService {
     }
 
     const pin = input.pin?.trim();
-    if (pin && (pin.length < 4 || pin.length > 8)) {
-      throw new Error("PIN must be 4-8 digits");
+    if (pin && !isValidStaffPin(pin)) {
+      throw new Error(STAFF_PIN_VALIDATION_ERROR);
     }
     if (pin) await this.assertPinUnique(merchantId, pin);
 
@@ -793,7 +797,7 @@ export class StaffService {
         patch.pinDisplay = null;
       } else {
         const pin = String(input.pin).trim();
-        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4-8 digits");
+        if (!isValidStaffPin(pin)) throw new Error(STAFF_PIN_VALIDATION_ERROR);
         await this.assertPinUnique(merchantId, pin, staffId);
         patch.pinHash = await AuthService.hashPassword(pin);
         patch.pinDisplay = pin;
@@ -927,9 +931,7 @@ export class StaffService {
     await this.ensureManagerPosPin(merchantId);
     const normalized = this.normalizePinInput(pin);
     if (!normalized) throw new Error("PIN is required");
-    if (normalized.length < 4 || normalized.length > 8) {
-      throw new Error("PIN must be 4-8 digits");
-    }
+    assertValidStaffPin(normalized);
 
     // Ensure system Waiter privileges stay floor-only before returning PIN session.
     await this.enforceWaiterFloorRestrictions(merchantId);

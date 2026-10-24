@@ -426,7 +426,7 @@ export default function StaffPage({
                   className="input mt-1"
                   inputMode="numeric"
                   pattern="[0-9]{4,8}"
-                  maxLength={8}
+                  maxLength={4}
                   placeholder={t('staffPinPlaceholder')}
                   value={staffForm.pin}
                   onChange={(e) =>
@@ -798,7 +798,7 @@ export default function StaffPage({
                   className="input mt-1"
                   inputMode="numeric"
                   pattern="[0-9]{4,8}"
-                  maxLength={8}
+                  maxLength={4}
                   placeholder={
                     editingStaff.pinSet ? t('staffPinKeepPlaceholder') : t('staffPinPlaceholder')
                   }

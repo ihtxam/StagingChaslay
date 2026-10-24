@@ -1662,7 +1662,7 @@ export default function KioskApp() {
             <input
               type="password"
               inputMode="numeric"
-              maxLength={8}
+              maxLength={4}
               value={adminPin}
               onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, ''))}
               className="mt-4 w-full rounded-xl border-2 border-stone-600 bg-stone-800 px-4 py-3 text-center text-2xl tracking-widest"
@@ -1682,7 +1682,7 @@ export default function KioskApp() {
               </button>
               <button
                 type="button"
-                disabled={adminPin.length < 4 || adminPinSubmitting}
+                disabled={adminPin.length !== 4 || adminPinSubmitting}
                 onClick={() => void submitAdminPin()}
                 className="kiosk-btn-primary flex-1 rounded-xl px-4 py-3 font-semibold disabled:opacity-40"
               >
