@@ -46,6 +46,7 @@ const allTabs = new Set(
     'email',
     'language',
     'users',
+    'extra-modules',
   ] as const
 );
 

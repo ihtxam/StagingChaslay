@@ -22,7 +22,8 @@ export type SettingsTabId =
   | 'kiosk'
   | 'email'
   | 'language'
-  | 'users';
+  | 'users'
+  | 'extra-modules';
 
 export type SettingsSearchEntry = {
   id: string;
