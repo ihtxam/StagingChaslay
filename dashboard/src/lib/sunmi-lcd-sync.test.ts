@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatSunmiLcdLines } from './sunmi-lcd-sync';
+import { formatSunmiLcdLines } from './sunmi-lcd-format';
 
 test('formatSunmiLcdLines shows last item and running total while building', () => {
   const out = formatSunmiLcdLines({
