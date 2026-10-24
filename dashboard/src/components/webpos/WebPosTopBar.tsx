@@ -427,7 +427,7 @@ export default function WebPosTopBar({
             <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
           </button>
 
-          {canDrawer ? (
+          {canDrawer && isLocalPrintStation ? (
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
