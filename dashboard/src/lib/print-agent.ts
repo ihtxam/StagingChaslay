@@ -784,6 +784,17 @@ export function isPrinterDisconnectedError(raw: unknown): boolean {
   );
 }
 
+/** Browser fetch to localhost Print Agent failed (Safari often reports "Load failed"). */
+export function isPrintAgentUnreachableError(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw).toLowerCase();
+  if (!msg) return false;
+  return (
+    /load failed|failed to fetch|networkerror|network error|econnrefused|err_network|print agent offline|127\.0\.0\.1:9101/i.test(
+      msg
+    ) || isPrinterDisconnectedError(raw)
+  );
+}
+
 export function isNoisyPrintAgentDump(raw: unknown): boolean {
   const msg = collectPrintErrorText(raw);
   return /command failed|powershell\.exe|-noprofile|executionpolicy|win-raw-print|win-scale-read|categoryinfo|fullyqualifiederrorid|reborn-print-|manupos-print-|chaslayprintagent|at c:\\|\\temp\\|-\s*file\s+c:\\|\.ps1\b/i.test(

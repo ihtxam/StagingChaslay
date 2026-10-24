@@ -630,7 +630,7 @@ import {
   bootstrapWebPosLocationFromPanel,
   setWebPosTerminalLocationId,
 } from '@/lib/webpos-terminal-location';
-import { openCashDrawerViaAgent } from '@/lib/print-agent';
+import { isPrintAgentUnreachableError, openCashDrawerViaAgent } from '@/lib/print-agent';
 
 type Channel = PosChannel;
 
@@ -7816,11 +7816,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const cashCollect = saleIncludesCashTender(payMethod, payments);
         const kickCashDrawerOnce = async () => {
           if (!cashCollect || !shouldAutoOpenCashDrawer(printSettings)) return;
-          try {
-            await kickConfiguredCashDrawer();
-          } catch (e: unknown) {
-            notifyPrintError(e, 'webPosDrawerFailed');
-          }
+          await kickCashDrawerAfterSale();
         };
         if (
           !skipThermal &&
@@ -7846,7 +7842,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 fastQr: true,
               });
             } catch (e: unknown) {
-              notifyPrintError(e, 'webPosPrintFailed');
+              if (!isPrintAgentUnreachableError(e)) {
+                notifyPrintError(e, 'webPosPrintFailed');
+              }
             } finally {
               await kickCashDrawerOnce();
             }
@@ -7864,9 +7862,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         saleIncludesCashTender(payMethod, payments) &&
         shouldAutoOpenCashDrawer(printSettings)
       ) {
-        void kickConfiguredCashDrawer().catch((e: unknown) =>
-          notifyPrintError(e, 'webPosDrawerFailed')
-        );
+        void kickCashDrawerAfterSale();
       }
       setSuccessInfo({
         amount: ctx.total,
@@ -9191,6 +9187,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPaymentMessage('');
   };
 
+  const canKickDrawerViaAgent = () => isDesktopApp() || agentOk;
+
+  const kickCashDrawerAfterSale = async () => {
+    if (!canKickDrawerViaAgent()) return;
+    try {
+      await kickConfiguredCashDrawer();
+    } catch (e: unknown) {
+      if (isPrintAgentUnreachableError(e)) return;
+      notifyPrintError(e, 'webPosDrawerFailed');
+    }
+  };
+
   /** Receipt printer drives the cash drawer. No kick when that printer is not configured. */
   async function kickConfiguredCashDrawer() {
     const named = printersForRole(printSettings, 'receipt')
@@ -9781,11 +9789,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const cashDrawerKick = saleIncludesCashTender(method, extras?.tenders);
     const kickCashDrawerOnce = async () => {
       if (!cashDrawerKick || !shouldAutoOpenCashDrawer(printSettings)) return;
-      try {
-        await kickConfiguredCashDrawer();
-      } catch (e: unknown) {
-        notifyPrintError(e, 'webPosDrawerFailed');
-      }
+      await kickCashDrawerAfterSale();
     };
     // Send uses fire-and-forget kitchen print; at payment, run kitchen + receipt in parallel when safe.
     if (shouldPrintKitchen || shouldPrintReceipt) {
@@ -9837,13 +9841,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     dataBase64,
                     fastQr: true,
                   });
-                })().catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'))
+                })().catch((e: unknown) => {
+                  if (!isPrintAgentUnreachableError(e)) {
+                    notifyPrintError(e, 'webPosPrintFailed');
+                  }
+                })
               : Promise.resolve(),
           ]);
         } catch (e: unknown) {
           if (shouldPrintKitchen) {
             handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
-          } else {
+          } else if (!isPrintAgentUnreachableError(e)) {
             notifyPrintError(e, 'webPosPrintFailed');
           }
         } finally {

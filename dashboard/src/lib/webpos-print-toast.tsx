@@ -4,6 +4,7 @@ import {
   collectPrintErrorText,
   extractPrinterNameFromError,
   isNoisyPrintAgentDump,
+  isPrintAgentUnreachableError,
   isPrinterDisconnectedError,
 } from '@/lib/print-agent';
 
@@ -17,6 +18,9 @@ export function shortPrintErrorMessage(
   const msg = collectPrintErrorText(raw);
   if (!msg) return t(fallbackKey);
   const lower = msg.toLowerCase();
+  if (isPrintAgentUnreachableError(raw)) {
+    return t('webPosPrintAgentOfflineShort');
+  }
   if (
     /print agent offline|agent offline|start chaslay|127\.0\.0\.1:9101|econnrefused|failed to fetch|networkerror/i.test(
       lower

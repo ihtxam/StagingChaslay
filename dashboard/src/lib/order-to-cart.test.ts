@@ -34,5 +34,8 @@ assert.match(ordersPanel, /queueMicrotask/);
 assert.match(webPos, /catalogLoadSeqRef/);
 assert.match(webPos, /shouldSurfaceCatalogLoadError/);
 assert.match(webPos, /view === 'checkout' \|\| view === 'success'/);
+const printAgent = readFileSync(join(root, 'print-agent.ts'), 'utf8');
+assert.match(printAgent, /export function isPrintAgentUnreachableError/);
+assert.match(webPos, /kickCashDrawerAfterSale/);
 
 console.log('order-to-cart.test.ts OK');
