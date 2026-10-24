@@ -152,6 +152,13 @@ button {
     overscroll-behavior: none;
   }
 
+  @media (max-width: 1023px) {
+    html.panel-vv-sync .panel-shell {
+      height: var(--panel-vvh, 100dvh);
+      max-height: var(--panel-vvh, 100dvh);
+    }
+  }
+
   /* Merchant/reseller/superadmin nav — Reborn burgundy brand gradient */
   .panel-sidebar {
     --sidebar-active: rgba(0, 0, 0, 0.22);

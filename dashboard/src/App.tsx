@@ -35,6 +35,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
 import ReservationsEmbedPage from '@/pages/embed/ReservationsEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
+import PanelMobileViewportSync from '@/components/PanelMobileViewportSync';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
 import OdsDisplayPage from '@/pages/OdsDisplayPage';
 import CustomerDisplayPage from '@/pages/CustomerDisplayPage';
@@ -265,6 +266,7 @@ function App() {
         <DesktopChromeBar />
         <DesktopUpdateBanner />
         <PosViewportManager />
+        <PanelMobileViewportSync />
         <Routes>
           {statusMode && (
             <>

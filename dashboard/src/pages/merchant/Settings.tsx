@@ -2297,7 +2297,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="min-w-0 flex-1 p-4 sm:p-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+            className="min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 sm:p-5 [-webkit-overflow-scrolling:touch] lg:min-h-0"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary
