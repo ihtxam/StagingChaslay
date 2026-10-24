@@ -50,12 +50,9 @@ assert.equal(
   false,
   'top-right must not fall back to the Reborn mark'
 );
-const clockSection = modal.match(
-  /<section className="webpos-pin-gate-clock[\s\S]*?<\/section>/
-)?.[0] || '';
-assert.match(clockSection, /webpos-pin-gate-time/);
+assert.match(modal, /webpos-pin-gate-time/);
 assert.equal(
-  clockSection.includes('<img'),
+  modal.includes('webpos-pin-gate-clock') && /webpos-pin-gate-clock[\s\S]{0,800}<img/.test(modal),
   false,
   'clock column must not show a merchant badge under the time'
 );
@@ -65,10 +62,11 @@ assert.match(
   'desktop keypad column must sit centered with the clock'
 );
 assert.match(modal, /webpos-pin-gate-keypad-shell/, 'mobile keypad shell anchors to bottom');
+assert.match(modal, /webpos-pin-gate-mobile-clock/, 'mobile stacks clock above PIN copy');
 assert.match(
   css,
-  /@media \(max-width: 639px\)[\s\S]*webpos-pin-gate-keypad-shell/,
-  'mobile CSS pins keypad above footer'
+  /@media \(max-width: 639px\)[\s\S]*webpos-pin-gate-keypad-shell[\s\S]*padding-top: 30px/,
+  'mobile CSS keeps 30px between copy and keypad'
 );
 assert.match(
   css,

@@ -302,6 +302,24 @@ export default function WebPosPinModal({
     </div>
   );
 
+  const pinGateClock = (
+    <>
+      <div className="flex items-baseline justify-center gap-1 sm:gap-2">
+        <span className="webpos-pin-gate-time text-[clamp(2.5rem,9vw,5.5rem)] font-extralight leading-none tracking-tight lg:text-[clamp(3.5rem,12vw,7rem)]">
+          {clock.hour}:{clock.minute}
+        </span>
+        {clock.dayPeriod ? (
+          <span className="webpos-pin-gate-ampm text-[clamp(0.85rem,2.5vw,1.35rem)] font-light uppercase tracking-wide text-white/80 lg:text-[clamp(1rem,3vw,1.75rem)]">
+            {clock.dayPeriod}
+          </span>
+        ) : null}
+      </div>
+      <p className="webpos-pin-gate-date mt-2 max-w-md text-[clamp(0.8rem,2vw,1.1rem)] font-light leading-snug text-white/85 lg:mt-4 lg:text-[clamp(0.95rem,2.2vw,1.35rem)]">
+        {clock.dateLabel}
+      </p>
+    </>
+  );
+
   const pinDots = (
     <div className="flex justify-center gap-3">
       {Array.from({ length: dots }).map((_, i) => (
@@ -423,45 +441,41 @@ export default function WebPosPinModal({
             shake ? 'webpos-pin-shake' : ''
           }`}
         >
-          <section className="webpos-pin-gate-clock flex shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
-            <div className="flex items-baseline justify-center gap-1 sm:gap-2">
-              <span className="webpos-pin-gate-time text-[clamp(2.5rem,9vw,5.5rem)] font-extralight leading-none tracking-tight lg:text-[clamp(3.5rem,12vw,7rem)]">
-                {clock.hour}:{clock.minute}
-              </span>
-              {clock.dayPeriod ? (
-                <span className="webpos-pin-gate-ampm text-[clamp(0.85rem,2.5vw,1.35rem)] font-light uppercase tracking-wide text-white/80 lg:text-[clamp(1rem,3vw,1.75rem)]">
-                  {clock.dayPeriod}
-                </span>
-              ) : null}
-            </div>
-            <p className="webpos-pin-gate-date mt-2 max-w-md text-[clamp(0.8rem,2vw,1.1rem)] font-light leading-snug text-white/85 lg:mt-4 lg:text-[clamp(0.95rem,2.2vw,1.35rem)]">
-              {clock.dateLabel}
-            </p>
+          <section
+            className="webpos-pin-gate-clock hidden shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:flex min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8"
+          >
+            {pinGateClock}
           </section>
 
-          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-hidden px-4 pb-0 pt-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8">
-            <div className="flex w-full max-w-md shrink-0 flex-col items-center gap-1.5 text-center sm:gap-2">
-              {busy ? (
-                <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />
-              ) : null}
-              <h1 className="text-lg font-semibold leading-tight tracking-tight sm:text-xl lg:text-2xl">
-                {t('webPosPinGateTitle')}
-              </h1>
-              <p className="max-w-sm text-xs leading-snug text-white/65 sm:text-sm">
-                {t('webPosPinGateHint')}
-              </p>
-            </div>
-
-            <div className="mt-2 shrink-0 sm:mt-3">{pinDots}</div>
-
-            {error ? (
-              <div className="mt-3 w-full max-w-md shrink-0 rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
-                <p className="text-base font-semibold text-red-100">{error}</p>
+          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-end overflow-hidden px-4 pb-0 pt-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8">
+            <div className="webpos-pin-gate-stack flex w-full max-w-md shrink-0 flex-col items-center">
+              <div className="webpos-pin-gate-mobile-clock mb-3 w-full text-center min-[640px]:hidden">
+                {pinGateClock}
               </div>
-            ) : null}
 
-            <div className="webpos-pin-gate-keypad-shell mt-auto flex w-full max-w-md flex-1 flex-col justify-end pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-4 min-[640px]:mt-0 min-[640px]:flex-none min-[640px]:justify-center min-[640px]:pb-2 min-[640px]:pt-0">
-              {gateKeypad}
+              <div className="flex w-full shrink-0 flex-col items-center gap-1.5 text-center sm:gap-2">
+                {busy ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />
+                ) : null}
+                <h1 className="text-lg font-semibold leading-tight tracking-tight sm:text-xl lg:text-2xl">
+                  {t('webPosPinGateTitle')}
+                </h1>
+                <p className="webpos-pin-gate-copy max-w-sm text-xs leading-snug text-white/65 sm:text-sm">
+                  {t('webPosPinGateHint')}
+                </p>
+              </div>
+
+              <div className="mt-2 shrink-0 sm:mt-3">{pinDots}</div>
+
+              {error ? (
+                <div className="mt-3 w-full shrink-0 rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
+                  <p className="text-base font-semibold text-red-100">{error}</p>
+                </div>
+              ) : null}
+
+              <div className="webpos-pin-gate-keypad-shell flex w-full flex-col justify-end pb-[max(0.35rem,env(safe-area-inset-bottom))] min-[640px]:justify-center min-[640px]:pb-2">
+                {gateKeypad}
+              </div>
             </div>
           </section>
         </div>
