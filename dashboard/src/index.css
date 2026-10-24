@@ -1916,14 +1916,22 @@ button {
     animation: webpos-pin-shake 0.4s ease-in-out;
   }
 
-  /* Phones: clock + copy + dots sit in one stack just above the keypad (30px gap). */
+  /* Phones: clock → message → keypad as one block above the footer (30px before keypad). */
   @media (max-width: 639px) {
-    .webpos-pin-gate-entry {
+    .webpos-pin-gate-body {
       justify-content: flex-end;
     }
 
+    .webpos-pin-gate-entry {
+      flex: 0 0 auto;
+    }
+
+    .webpos-pin-gate-stack {
+      width: 100%;
+    }
+
     .webpos-pin-gate-mobile-clock {
-      padding-top: 0.25rem;
+      margin-bottom: 0.75rem;
     }
 
     .webpos-pin-gate-mobile-clock .webpos-pin-gate-time {
@@ -1932,8 +1940,8 @@ button {
 
     .webpos-pin-gate-keypad-shell {
       width: 100%;
-      margin-top: 0;
-      padding-top: 30px;
+      margin-top: 30px;
+      padding-top: 0;
       padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
     }
 
@@ -1968,7 +1976,10 @@ button {
       padding-bottom: 0.25rem;
     }
 
-    .webpos-pin-gate-clock,
+    .webpos-pin-gate-clock {
+      justify-content: flex-start;
+    }
+
     .webpos-pin-gate-entry {
       justify-content: flex-start;
     }

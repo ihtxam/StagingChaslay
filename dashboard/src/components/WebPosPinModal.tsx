@@ -437,7 +437,7 @@ export default function WebPosPinModal({
         ) : null}
 
         <div
-          className={`flex min-h-0 flex-1 flex-col overflow-hidden min-[640px]:flex-row ${
+          className={`webpos-pin-gate-body flex min-h-0 flex-1 flex-col overflow-hidden max-[639px]:justify-end min-[640px]:flex-row ${
             shake ? 'webpos-pin-shake' : ''
           }`}
         >
@@ -447,13 +447,15 @@ export default function WebPosPinModal({
             {pinGateClock}
           </section>
 
-          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-end overflow-hidden px-4 pb-0 pt-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8">
-            <div className="webpos-pin-gate-stack flex w-full max-w-md shrink-0 flex-col items-center">
-              <div className="webpos-pin-gate-mobile-clock mb-3 w-full text-center min-[640px]:hidden">
+          <section
+            className="webpos-pin-gate-entry flex w-full max-[639px]:shrink-0 flex-col items-center overflow-hidden px-4 pb-0 pt-0 min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8"
+          >
+            <div className="webpos-pin-gate-stack flex w-full max-w-md flex-col items-center">
+              <div className="webpos-pin-gate-mobile-clock w-full text-center min-[640px]:hidden">
                 {pinGateClock}
               </div>
 
-              <div className="flex w-full shrink-0 flex-col items-center gap-1.5 text-center sm:gap-2">
+              <div className="webpos-pin-gate-message flex w-full flex-col items-center gap-1.5 text-center sm:gap-2">
                 {busy ? (
                   <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />
                 ) : null}
@@ -463,9 +465,8 @@ export default function WebPosPinModal({
                 <p className="webpos-pin-gate-copy max-w-sm text-xs leading-snug text-white/65 sm:text-sm">
                   {t('webPosPinGateHint')}
                 </p>
+                <div className="mt-1 shrink-0 sm:mt-2">{pinDots}</div>
               </div>
-
-              <div className="mt-2 shrink-0 sm:mt-3">{pinDots}</div>
 
               {error ? (
                 <div className="mt-3 w-full shrink-0 rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">

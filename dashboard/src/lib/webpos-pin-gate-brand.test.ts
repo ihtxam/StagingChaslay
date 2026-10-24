@@ -63,10 +63,12 @@ assert.match(
 );
 assert.match(modal, /webpos-pin-gate-keypad-shell/, 'mobile keypad shell anchors to bottom');
 assert.match(modal, /webpos-pin-gate-mobile-clock/, 'mobile stacks clock above PIN copy');
+assert.match(modal, /webpos-pin-gate-message/, 'mobile groups title, hint, and dots before keypad');
+assert.match(modal, /webpos-pin-gate-body/, 'mobile body anchors the PIN stack above the footer');
 assert.match(
   css,
-  /@media \(max-width: 639px\)[\s\S]*webpos-pin-gate-keypad-shell[\s\S]*padding-top: 30px/,
-  'mobile CSS keeps 30px between copy and keypad'
+  /@media \(max-width: 639px\)[\s\S]*webpos-pin-gate-keypad-shell[\s\S]*margin-top: 30px/,
+  'mobile CSS keeps 30px between message and keypad'
 );
 assert.match(
   css,
