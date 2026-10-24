@@ -679,7 +679,19 @@ export default function WebPosOrdersPanel({
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
+  const openRef = useRef(open);
+  const loadSeqRef = useRef(0);
+  useEffect(() => {
+    openRef.current = open;
+    if (!open) loadSeqRef.current += 1;
+    return () => {
+      openRef.current = false;
+      loadSeqRef.current += 1;
+    };
+  }, [open]);
+
   const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const seq = ++loadSeqRef.current;
     if (!opts?.silent) setLoading(true);
     const params = new URLSearchParams({
       limit: '200',
@@ -695,12 +707,13 @@ export default function WebPosOrdersPanel({
       ordersPromise,
       invoicePromise,
     ]);
+    const reportLoadFailure = !opts?.silent && openRef.current && seq === loadSeqRef.current;
     let nextHeld: HeldRow[] = [];
     let nextOrders: PosOrder[] = [];
     if (heldRes.status === 'fulfilled') {
       nextHeld = asArray<HeldRow>(heldRes.value.data?.held);
     } else {
-      if (!opts?.silent) {
+      if (reportLoadFailure) {
         toastLoadError(heldRes.reason, t('webPosOrdersLoadFailed'));
       }
       console.warn('[WebPOS][orders] held list failed', heldRes.reason);
@@ -710,7 +723,7 @@ export default function WebPosOrdersPanel({
       setReasons(asArray<CancelReason>(ordersRes.value.data?.cancelReasons));
       setRefundReasons(asArray<RefundReasonOption>(ordersRes.value.data?.refundReasons));
     } else if (heldRes.status === 'fulfilled') {
-      if (!opts?.silent) {
+      if (reportLoadFailure) {
         toastLoadError(ordersRes.reason, t('webPosOrdersLoadFailed'));
       }
       console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
@@ -724,6 +737,10 @@ export default function WebPosOrdersPanel({
       nextOrders = [...map.values()];
     }
     nextHeld = filterActiveHeldRows(nextHeld, nextOrders);
+    if (!openRef.current || seq !== loadSeqRef.current) {
+      if (!opts?.silent) setLoading(false);
+      return;
+    }
     console.info('[WebPOS][orders] loaded', {
       held: nextHeld.length,
       posOrders: nextOrders.length,
@@ -1180,7 +1197,7 @@ export default function WebPosOrdersPanel({
         updated ? mergeMerchantOrderDetail(prev, updated) : null
       );
       onOrderActioned?.(collectFor.id);
-      void load();
+      void load({ silent: true });
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
     } finally {

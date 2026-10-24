@@ -28,5 +28,7 @@ assert.match(guard, /action: 'blocked'/);
 assert.match(guard, /export function findPaidOrderForCartLink/);
 assert.match(guard, /export function mergeMerchantOrderDetail/);
 assert.match(ordersPanel, /\(selectedOrder\.items \|\| \[\]\)\.map/);
+assert.match(ordersPanel, /loadSeqRef/);
+assert.match(ordersPanel, /void load\(\{ silent: true \}\)/);
 
 console.log('order-to-cart.test.ts OK');
