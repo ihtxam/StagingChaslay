@@ -56,3 +56,4 @@
 # Deploy 2026-10-24T11:00:00Z — PROD: RebornPOS login DOM credential read (on-screen keyboard vs Chrome)
 # Deploy 2026-10-24T11:05:00Z — PROD: Windows RebornPOS 80mm receipt bitmap header + QR pre-cut feed (not Sunmi-only)
 # Deploy 2026-10-24T23:25:00Z — PROD batch: #878 branch settings, #879 EOD staff perf, #880 4-digit PINs, #881 Settings About, #882 iOS product form zoom, #883 per-location catalog
+# Deploy 2026-10-24T23:28:00Z — RETRY prod deploy after Bridge Sunmi LCD compile fix (unblocks hetzner deploy)

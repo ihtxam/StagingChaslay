@@ -2,7 +2,6 @@ package com.rebornsense.printbridge.print
 
 import android.content.Context
 import android.os.Build
-import com.sunmi.peripheral.printer.InnerLcdCallback
 import com.sunmi.peripheral.printer.InnerPrinterCallback
 import com.sunmi.peripheral.printer.InnerPrinterManager
 import com.sunmi.peripheral.printer.SunmiPrinterService
@@ -127,7 +126,7 @@ class SunmiInternalDriver : PrinterDriver {
         return try {
             val top = sanitizeLcdLine(topText)
             val bottom = sanitizeLcdLine(bottomText)
-            service.sendLCDCommand(2, null)
+            service.sendLCDCommand(2)
             service.sendLCDDoubleString(top, bottom, null)
             lcdAvailable.set(true)
             Result.success(Unit)
@@ -141,7 +140,7 @@ class SunmiInternalDriver : PrinterDriver {
         val service = serviceRef.get()
             ?: return Result.failure(IllegalStateException("Sunmi printer service not connected"))
         return try {
-            service.sendLCDCommand(4, null)
+            service.sendLCDCommand(4)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -150,19 +149,8 @@ class SunmiInternalDriver : PrinterDriver {
 
     private fun probeLcdWake(service: SunmiPrinterService): Boolean {
         return try {
-            val latch = CountDownLatch(1)
-            val ok = AtomicReference(false)
-            service.sendLCDCommand(
-                2,
-                object : InnerLcdCallback() {
-                    override fun onRunResult(isSuccess: Boolean) {
-                        ok.set(isSuccess)
-                        latch.countDown()
-                    }
-                },
-            )
-            latch.await(2, TimeUnit.SECONDS)
-            ok.get()
+            service.sendLCDCommand(2)
+            true
         } catch (_: Throwable) {
             false
         }
