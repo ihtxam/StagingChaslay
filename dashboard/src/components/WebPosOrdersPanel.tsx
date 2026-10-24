@@ -58,7 +58,11 @@ import {
   orderStatusLabel,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { collectPaymentAction, findPaidOrderForCartLink } from '@/lib/order-to-cart';
+import {
+  collectPaymentAction,
+  findPaidOrderForCartLink,
+  mergeMerchantOrderDetail,
+} from '@/lib/order-to-cart';
 import {
   parseHeldCartJson,
   clearLocalHeldDraftForRow,
@@ -1172,7 +1176,9 @@ export default function WebPosOrdersPanel({
         }
       }
       setCollectFor(null);
-      setSelectedOrder(updated || null);
+      setSelectedOrder((prev) =>
+        updated ? mergeMerchantOrderDetail(prev, updated) : null
+      );
       onOrderActioned?.(collectFor.id);
       void load();
     } catch (e: any) {
@@ -1217,9 +1223,7 @@ export default function WebPosOrdersPanel({
         }
       const fresh = updated || order;
       setSelectedOrder((prev) =>
-        prev && prev.id === order.id
-          ? ({ ...prev, ...fresh, items: prev.items } as PosOrder)
-          : ({ ...order, ...fresh } as PosOrder)
+        mergeMerchantOrderDetail(prev && prev.id === order.id ? prev : order, fresh)
       );
       void load();
     } catch (e: any) {
@@ -2394,7 +2398,7 @@ export default function WebPosOrdersPanel({
                     );
                   })()}
                   <ul className="mt-4 space-y-2 text-sm">
-                    {selectedOrder.items.map((i, idx) => (
+                    {(selectedOrder.items || []).map((i, idx) => (
                       <li key={idx} className="flex justify-between gap-2">
                         <span>
                           {i.quantity}× {resolveOrderItemName(i.name)}

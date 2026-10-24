@@ -26,5 +26,7 @@ assert.match(ordersPanel, /findPaidOrderForHeldRow\(h, ordersForList\)/);
 assert.match(guard, /export function resolveCartCheckoutGuard/);
 assert.match(guard, /action: 'blocked'/);
 assert.match(guard, /export function findPaidOrderForCartLink/);
+assert.match(guard, /export function mergeMerchantOrderDetail/);
+assert.match(ordersPanel, /\(selectedOrder\.items \|\| \[\]\)\.map/);
 
 console.log('order-to-cart.test.ts OK');

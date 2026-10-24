@@ -503,6 +503,7 @@ import type { AppliedPayment } from '@/components/webpos/WebPosCheckoutView';
 import {
   collectPaymentAction,
   customerFromOrder,
+  mergeMerchantOrderDetail,
   orderItemsToCartLines,
   orderMatchesCartLink,
   resolveCartCheckoutGuard,
@@ -7334,6 +7335,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     for (const num of nums) void dismissOrderFromOds(num);
   };
 
+  const hydrateOrderForRegister = async (order: MerchantOrder): Promise<MerchantOrder> => {
+    if (order.items?.length || !order.id) return order;
+    try {
+      const res = await api.get(`/merchant/orders/${order.id}`);
+      const fresh = (res.data?.order || res.data) as MerchantOrder;
+      if (fresh?.id) return mergeMerchantOrderDetail(order, fresh);
+    } catch {
+      /* loadOrderIntoRegister surfaces empty-line errors */
+    }
+    return order;
+  };
+
   const loadOrderIntoRegister = (order: MerchantOrder): boolean => {
     if (isPaidOrder(order)) {
       toast.error(
@@ -7382,27 +7395,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return true;
   };
 
-  const loadPosOrderToRegister = (order: MerchantOrder) => {
-    if (!loadOrderIntoRegister(order)) return;
+  const loadPosOrderToRegister = async (order: MerchantOrder) => {
+    const full = await hydrateOrderForRegister(order);
+    if (!loadOrderIntoRegister(full)) return;
     setHighlightOrderId(null);
     setOrdersChannelPref(null);
     setPosTab('register');
     setPosView('register');
   };
 
-  const openOrderCollectCheckout = (
+  const openOrderCollectCheckout = async (
     order: MerchantOrder,
     returnView: 'orders' | 'register' = 'orders'
   ) => {
-    if (!loadOrderIntoRegister(order)) return;
+    const full = await hydrateOrderForRegister(order);
+    if (!loadOrderIntoRegister(full)) return;
     setCollectOrderRef({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      total: Number(order.total),
+      id: full.id,
+      orderNumber: full.orderNumber,
+      status: full.status,
+      total: Number(full.total),
       returnView,
-      isInvoice: isInvoiceOrder(order),
-      isPayLater: isPayLaterPaymentMethod(order.paymentMethod),
+      isInvoice: isInvoiceOrder(full),
+      isPayLater: isPayLaterPaymentMethod(full.paymentMethod),
     });
     setHighlightOrderId(null);
     setOrdersChannelPref(null);
@@ -7505,7 +7520,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         return false;
       }
       if (guard.action === 'collect') {
-        openOrderCollectCheckout(guard.order, 'register');
+        void openOrderCollectCheckout(guard.order, 'register');
         toastInfo(
           t('webPosOrderUseCollect').replace('{number}', orderDisplayLabel(guard.order))
         );
@@ -7618,7 +7633,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           setSearchParams({}, { replace: true });
           return;
         }
-        openOrderCollectCheckout(order, 'register');
+        void openOrderCollectCheckout(order, 'register');
         setSearchParams({}, { replace: true });
       } catch (e: any) {
         toast.error(e.response?.data?.error || e.message || t('webPosOrdersLoadFailed'));
@@ -11731,7 +11746,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 handleKitchenPrintFailure(e, lines.map((l) => l.lineId));
               }
             }}
-            onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
+            onCollectPaymentCheckout={(order) => void openOrderCollectCheckout(order, 'orders')}
             onLoadPosOrder={loadPosOrderToRegister}
             onOrderActioned={markOnlineOrderActioned}
             onOrderPaid={handleOrderPaidElsewhere}

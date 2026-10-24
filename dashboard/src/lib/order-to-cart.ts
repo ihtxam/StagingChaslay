@@ -143,8 +143,24 @@ function lineId(orderItemId?: string, index?: number) {
 }
 
 /** Map persisted order lines into a read-only WebPOS cart for checkout collection. */
+/** Keep line items when a PATCH/action response omits them (common on collect-payment). */
+export function mergeMerchantOrderDetail<T extends MerchantOrder>(
+  base: T | null | undefined,
+  patch: Partial<T> | null | undefined
+): T {
+  const merged = { ...(base || {}), ...(patch || {}) } as T;
+  const items =
+    patch?.items && patch.items.length > 0
+      ? patch.items
+      : base?.items && base.items.length > 0
+        ? base.items
+        : patch?.items ?? base?.items ?? [];
+  merged.items = items ?? [];
+  return merged;
+}
+
 export function orderItemsToCartLines(items: OrderLine[]): CartLine[] {
-  return items.map((item, index) => {
+  return (items || []).map((item, index) => {
     const qty = Number(item.quantity) || 1;
     const totalPrice = Number(item.totalPrice) || 0;
     const unitPrice =
