@@ -5,6 +5,7 @@
 export const SHOP_PRODUCT_SELECT_COLUMNS = [
   "id",
   "merchant_id",
+  "location_id",
   "category_id",
   "name",
   "sku",

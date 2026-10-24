@@ -914,10 +914,13 @@ export default function Products() {
         : form.isOpenPrice
           ? 'open_price'
           : 'standard';
+    const ownerLocationId =
+      locationId && (!isHqView || branchCatalogPanel) ? locationId : undefined;
     return {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       price,
+      ...(ownerLocationId ? { ownerLocationId } : {}),
       cost: form.cost.trim() ? parseMoney(form.cost) : null,
       stock: Math.max(0, Math.floor(Number(form.stock) || 0)),
       sku: form.sku.trim() || undefined,

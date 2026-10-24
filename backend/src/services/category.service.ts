@@ -17,7 +17,8 @@ export class CategoryService {
     merchantId: string,
     name: string,
     description?: string,
-    color?: string
+    color?: string,
+    locationId?: string | null
   ) {
     const db = getDb();
 
@@ -52,6 +53,7 @@ export class CategoryService {
         .insert(schema.categories)
         .values({
           merchantId,
+          locationId: locationId || null,
           name: repairCatalogText(trimmedName),
           description: trimmedDescription
             ? repairCatalogText(trimmedDescription)

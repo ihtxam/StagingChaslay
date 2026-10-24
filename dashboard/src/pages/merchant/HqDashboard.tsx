@@ -36,6 +36,10 @@ export default function HqDashboardPage() {
   const [catalogStats, setCatalogStats] = useState<
     Array<{ locationId: string; name: string; linkedCount: number; pendingCount: number }>
   >([]);
+  const [catalogScopeMode, setCatalogScopeMode] = useState<'per_location' | 'shared'>(
+    'per_location'
+  );
+  const [savingCatalogScope, setSavingCatalogScope] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +54,9 @@ export default function HqDashboardPage() {
       setVersions(rows);
       setAnalytics(analyticsRes.data?.analytics || null);
       setMerchantSlug(settingsRes.data?.merchant?.slug || settingsRes.data?.settings?.slug || '');
+      setCatalogScopeMode(
+        settingsRes.data?.settings?.catalogScopeMode === 'shared' ? 'shared' : 'per_location'
+      );
       setCatalogStats(syncStateRes.data?.state?.locationStats || []);
       if (!selectedVersion && rows[0]) setSelectedVersion(rows[0].id);
     } catch {
@@ -98,6 +105,21 @@ export default function HqDashboardPage() {
     setSelectedLocations((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
+
+  const saveCatalogScope = async (mode: 'per_location' | 'shared') => {
+    setSavingCatalogScope(true);
+    try {
+      await api.put('/merchant/settings', { catalogScopeMode: mode });
+      setCatalogScopeMode(mode);
+      toast.success(t('hqCatalogScopeSaved'));
+    } catch (e: unknown) {
+      toast.error(
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed'
+      );
+    } finally {
+      setSavingCatalogScope(false);
+    }
   };
 
   const multiLocation = locations.length > 1;
@@ -160,6 +182,34 @@ export default function HqDashboardPage() {
         </div>
       ) : (
         <>
+          <div className="rounded-lg border border-[var(--border)] p-4 space-y-3">
+            <h2 className="font-medium">{t('hqCatalogScopeTitle')}</h2>
+            <div className="flex flex-col gap-2 text-sm">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="catalogScope"
+                  className="mt-1"
+                  checked={catalogScopeMode === 'per_location'}
+                  disabled={savingCatalogScope}
+                  onChange={() => void saveCatalogScope('per_location')}
+                />
+                <span>{t('hqCatalogScopePerLocation')}</span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="catalogScope"
+                  className="mt-1"
+                  checked={catalogScopeMode === 'shared'}
+                  disabled={savingCatalogScope}
+                  onChange={() => void saveCatalogScope('shared')}
+                />
+                <span>{t('hqCatalogScopeShared')}</span>
+              </label>
+            </div>
+          </div>
+
           {merchantSlug ? (
             <div className="rounded-lg border border-[var(--border)] p-4 space-y-2">
               <h2 className="font-medium">{t('locationShopUrlsTitle')}</h2>

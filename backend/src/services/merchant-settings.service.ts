@@ -340,6 +340,11 @@ export class MerchantSettingsService {
       minPreOrderDelayMinutes: merchant.minPreOrderDelayMinutes ?? 30,
       deliveryMenuMarkup: merchant.deliveryMenuMarkup ?? "0",
       categoryPricingEnabled: merchant.categoryPricingEnabled === true,
+      catalogScopeMode:
+        String((merchant as { catalogScopeMode?: string }).catalogScopeMode || "per_location")
+          .toLowerCase() === "shared"
+          ? "shared"
+          : "per_location",
       deliveryDriverPayMode: merchant.deliveryDriverPayMode || "both",
       deliveryDriverHourlyRate: merchant.deliveryDriverHourlyRate ?? "0",
       deliveryPerOrderFee: merchant.deliveryPerOrderFee ?? "0",
@@ -514,6 +519,7 @@ export class MerchantSettingsService {
       minPreOrderDelayMinutes?: number;
       deliveryMenuMarkup?: number;
       categoryPricingEnabled?: boolean;
+      catalogScopeMode?: "per_location" | "shared" | string;
       deliveryDriverPayMode?: string;
       deliveryDriverHourlyRate?: number;
       deliveryPerOrderFee?: number;
@@ -698,6 +704,10 @@ export class MerchantSettingsService {
     }
     if (effective.categoryPricingEnabled !== undefined) {
       patch.categoryPricingEnabled = !!effective.categoryPricingEnabled;
+    }
+    if (effective.catalogScopeMode !== undefined) {
+      const { normalizeCatalogScopeMode } = await import("@/lib/catalog-scope");
+      patch.catalogScopeMode = normalizeCatalogScopeMode(effective.catalogScopeMode);
     }
     if (effective.deliveryDriverPayMode !== undefined) {
       const mode = String(effective.deliveryDriverPayMode);

@@ -52,6 +52,7 @@ export class ProductService {
       loyaltyRewardPoints?: number | null;
       brand?: string | null;
       extraBarcodes?: string[];
+      locationId?: string | null;
     }
   ) {
     const db = getDb();
@@ -68,6 +69,7 @@ export class ProductService {
         .insert(schema.products)
         .values({
           merchantId,
+          locationId: extras?.locationId || null,
           name: repairCatalogText(name),
           price: price.toString(),
           categoryId,

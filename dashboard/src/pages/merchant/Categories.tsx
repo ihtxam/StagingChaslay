@@ -8,6 +8,7 @@ import HqPendingCatalogBanner from '@/components/merchant/HqPendingCatalogBanner
 import {
   panelCatalogListParams,
   shouldShowHqCatalogBadges,
+  shouldUseBranchCatalogPanel,
 } from '@/lib/panel-scope-nav';
 import { useLocationStore } from '@/store/location';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
@@ -58,6 +59,7 @@ export default function Categories() {
     locationId,
   };
   const catalogListParams = panelCatalogListParams(panelScopeNavInput);
+  const branchCatalogPanel = shouldUseBranchCatalogPanel(panelScopeNavInput);
   const showHqCatalogBadges = shouldShowHqCatalogBadges(panelScopeNavInput);
   const [hqCategoryIds, setHqCategoryIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
@@ -250,12 +252,15 @@ export default function Categories() {
         });
         toast.success(t('categoryToastUpdated'));
       } else {
+        const ownerLocationId =
+          locationId && (!isHqView || branchCatalogPanel) ? locationId : undefined;
         const created = await api.post('/merchant/categories', {
           name: payload.name,
           description: payload.description,
           color: payload.color,
           visibility,
           shopSchedule,
+          ...(ownerLocationId ? { ownerLocationId } : {}),
         });
         if (imageUrl && created.data?.category?.id) {
           await api.put(`/merchant/categories/${created.data.category.id}`, {
