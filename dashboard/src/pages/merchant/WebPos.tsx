@@ -440,7 +440,10 @@ import {
 import WebPosCashMovementModal from '@/components/webpos/WebPosCashMovementModal';
 import {
   EodIncludeProductsCheckbox,
+  EodIncludeStaffPerformanceCheckbox,
   useEodIncludeProductsSold,
+  useEodIncludeStaffPerformance,
+  type EodPrintOptions,
 } from '@/components/EodIncludeProductsCheckbox';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
@@ -1300,6 +1303,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [panelStaff, setPanelStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [eodPickerOpen, setEodPickerOpen] = useState(false);
   const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
+  const [eodIncludeStaffPerformance, setEodIncludeStaffPerformance] =
+    useEodIncludeStaffPerformance();
   const settingsRef = useRef<HTMLDivElement>(null);
   /** Open carts keyed by table / tab / channel (also mirrored to sessionStorage). */
   const openCartDraftsRef = useRef<Map<string, OpenCartDraft>>(
@@ -4403,6 +4408,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
     channelRows?: Array<{ channel: string; count: number; total: number }>;
     range?: { label: string; from: string; to: string };
+    userPerformance?: Array<{ name: string; salesCount: number; total: number }>;
     shiftCash?: Array<{
       openingFloat: number;
       cashSales: number;
@@ -4438,6 +4444,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ? webposStaff.name
       : null;
 
+  const EOD_UNASSIGNED_STAFF = 'Unassigned';
+  const staffNameForEodReport = (name: string) =>
+    name === EOD_UNASSIGNED_STAFF ? t('reportsUnassignedSales') : name;
+
   /** EOD from POS menu: END_OF_DAY or VIEW_REPORTS (own sales when VIEW_ALL_SALES is off). */
   const canPrintEodReport =
     ownerOnRegister ||
@@ -4455,10 +4465,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const buildClosedShiftPrintPayload = (
     report: PosReportPayload | null,
-    includeProductsSold: boolean,
+    opts: EodPrintOptions,
     reportKind: 'shift' | 'eod',
     label: string
   ) => {
+    const includeProductsSold = opts.includeProductsSold !== false;
+    const includeStaffPerformance =
+      reportKind === 'eod' && opts.includeStaffPerformance === true;
     if (!lastClosedShift) return null;
     const totalSales =
       lastClosedShift.cashSales +
@@ -4538,6 +4551,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               }
           : undefined,
       includeProductsSold,
+      includeStaffPerformance,
+      userPerformance: includeStaffPerformance ? report?.userPerformance : undefined,
+      staffPerformanceTitle: t('reportsTabUsers'),
+      staffNameLabel: staffNameForEodReport,
       reportKind,
     };
     return reportKind === 'shift'
@@ -4546,7 +4563,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   /** Print report for the just-closed shift only (openedAt → closedAt). */
-  const printShiftReport = async (opts?: { includeProductsSold?: boolean }) => {
+  const printShiftReport = async (opts?: EodPrintOptions) => {
     const includeProductsSold = opts?.includeProductsSold !== false;
     if (!lastClosedShift) {
       toast.error(t('webPosShiftNoReport'));
@@ -4568,7 +4585,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       const text = buildClosedShiftPrintPayload(
         report,
-        includeProductsSold,
+        { includeProductsSold },
         'shift',
         t('webPosShiftReportLabel')
       );
@@ -4584,8 +4601,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   /** Print whole-day EOD (all shifts / full calendar day). Managers with View all sales only. */
-  const printDayEodFromShiftClose = async (opts?: { includeProductsSold?: boolean }) => {
-    const includeProductsSold = opts?.includeProductsSold !== false;
+  const printDayEodFromShiftClose = async (opts?: EodPrintOptions) => {
     if (!lastClosedShift) {
       toast.error(t('webPosShiftNoReport'));
       return;
@@ -4608,7 +4624,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       const text = buildClosedShiftPrintPayload(
         report,
-        includeProductsSold,
+        opts || {},
         'eod',
         t('webPosEodReport')
       );
@@ -4640,9 +4656,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const printTodayEod = async (
     scopeStaffId?: string | null,
     scopeStaffName?: string | null,
-    opts?: { includeProductsSold?: boolean }
+    opts?: EodPrintOptions
   ) => {
     const includeProductsSold = opts?.includeProductsSold !== false;
+    const includeStaffPerformance =
+      !scopeStaffId && opts?.includeStaffPerformance === true;
     if (!canPrintEodReport) {
       toast.error(t('webPosEodPermissionDenied'));
       return;
@@ -4689,6 +4707,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         coversServed?: number | null;
         vatRows?: Array<{ label: string; net: number; tva: number; brut: number }>;
         productsSold: Array<{ name: string; quantity: number; total: number }>;
+        userPerformance?: Array<{ name: string; salesCount: number; total: number }>;
         paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
         orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
         channelRows?: Array<{ channel: string; count: number; total: number }>;
@@ -4757,6 +4776,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         footer: printSettings?.receiptFooter,
         ...receiptHeaderFieldsFromPrintSettings(printSettings),
         includeProductsSold,
+        includeStaffPerformance,
+        userPerformance: includeStaffPerformance ? report?.userPerformance : undefined,
+        staffPerformanceTitle: t('reportsTabUsers'),
+        staffNameLabel: staffNameForEodReport,
         reportKind: 'eod',
       });
       await printEscPosToTargets(text, { role: 'eod' });
@@ -10324,7 +10347,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Whole-day EOD: report permission + company-wide sales visibility. */
   const showEodButton = canPrintEodReport;
 
-  const printEodAfterShiftClose = async (opts?: { includeProductsSold?: boolean }) => {
+  const printEodAfterShiftClose = async (opts?: EodPrintOptions) => {
     if (mayPrintWholeDayEod) {
       await printDayEodFromShiftClose(opts);
       return;
@@ -10338,7 +10361,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setEodPickerOpen(true);
       return;
     }
-    void printTodayEod(undefined, undefined, { includeProductsSold: eodIncludeProductsSold });
+    void printTodayEod(undefined, undefined, {
+      includeProductsSold: eodIncludeProductsSold,
+      includeStaffPerformance: eodIncludeStaffPerformance,
+    });
   };
 
   const openCashDrawer = async () => {
@@ -13302,6 +13328,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               checked={eodIncludeProductsSold}
               onChange={setEodIncludeProductsSold}
             />
+            <EodIncludeStaffPerformanceCheckbox
+              className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+              checked={eodIncludeStaffPerformance}
+              onChange={setEodIncludeStaffPerformance}
+            />
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
@@ -13310,6 +13341,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   setEodPickerOpen(false);
                   void printTodayEod(undefined, undefined, {
                     includeProductsSold: eodIncludeProductsSold,
+                    includeStaffPerformance: eodIncludeStaffPerformance,
                   });
                 }}
               >
@@ -13324,6 +13356,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     setEodPickerOpen(false);
                     void printTodayEod(s.id, s.name, {
                       includeProductsSold: eodIncludeProductsSold,
+                      includeStaffPerformance: false,
                     });
                   }}
                 >
@@ -13345,6 +13378,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         open={shiftClosedOpen}
         balanced={shiftBalanced}
         showEodPrint={canPrintEodReport}
+        showStaffPerformanceOption={canViewAllSales && panelStaff.length > 0}
         onPrintShift={(opts) => void printShiftReport(opts)}
         onPrintEod={(opts) => void printEodAfterShiftClose(opts)}
         onRestart={handleRestartShift}

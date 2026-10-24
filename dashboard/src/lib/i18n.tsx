@@ -2683,6 +2683,9 @@ const en: Dict = {
   reportsPrintEod: 'Print',
   eodIncludeProductsSold: 'Include products sold',
   eodIncludeProductsSoldHint: 'Print product breakdown on the thermal report',
+  eodIncludeStaffPerformance: 'Include staff performance',
+  eodIncludeStaffPerformanceHint:
+    'One line per waiter or employee: name, order count, and sales total (no extra detail)',
   reportsPrinted: 'Report sent to printer',
   reportsLoadFailed: 'Failed to load report',
   reportsEmpty: 'No sales in this period',
@@ -7780,6 +7783,9 @@ const fr: Dict = {
   reportsPrintEod: 'Imprimer',
   eodIncludeProductsSold: 'Inclure les produits vendus',
   eodIncludeProductsSoldHint: 'Imprimer le détail des produits sur le ticket thermique',
+  eodIncludeStaffPerformance: 'Inclure la performance du personnel',
+  eodIncludeStaffPerformanceHint:
+    'Une ligne par serveur ou employé : nom, nombre de commandes et total des ventes',
   reportsPrinted: 'Rapport envoyé à l’imprimante',
   reportsLoadFailed: 'Échec du chargement du rapport',
   reportsEmpty: 'Aucune vente sur cette période',
@@ -12765,6 +12771,9 @@ const de: Dict = {
   reportsPrintEod: 'Drucken',
   eodIncludeProductsSold: 'Verkaufte Produkte einschließen',
   eodIncludeProductsSoldHint: 'Produktaufschlüsselung auf dem Thermodruck',
+  eodIncludeStaffPerformance: 'Mitarbeiterleistung einschließen',
+  eodIncludeStaffPerformanceHint:
+    'Eine Zeile pro Kellner oder Mitarbeiter: Name, Bestellanzahl und Umsatz',
   reportsPrinted: 'Bericht an Drucker gesendet',
   reportsLoadFailed: 'Bericht konnte nicht geladen werden',
   reportsEmpty: 'Keine Verkäufe in diesem Zeitraum',
