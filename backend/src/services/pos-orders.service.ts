@@ -305,10 +305,12 @@ const HELD_HEAL_TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 function paidPosOrderIdentity(order: {
   notes?: string | null;
   tableId?: string | null;
+  tableLabel?: string | null;
   guestCount?: number | null;
 }): ReturnType<typeof heldIdentity> {
   const ticketMatch = String(order.notes || "").match(HELD_HEAL_TICKET_NOTE_RE);
   const tabMatch = String(order.notes || "").match(HELD_HEAL_TAB_NOTE_RE);
+  const tableLabel = String(order.tableLabel || "").trim();
   return {
     ticketDisplay: ticketMatch?.[1]?.trim() || null,
     tableId: order.tableId || null,
@@ -316,8 +318,44 @@ function paidPosOrderIdentity(order: {
       tabMatch?.[1]?.trim() ||
       (order.guestCount != null && Number(order.guestCount) > 0
         ? String(order.guestCount)
-        : null),
+        : null) ||
+      (tableLabel ? tableLabel.replace(/^TG/i, "") : null),
   };
+}
+
+function normalizeTableLabel(value?: string | null): string {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+}
+
+/** Dismiss KDS rows stuck in pending/preparing long after service — they block held heal. */
+async function dismissStaleOpenKdsTickets(merchantId: string, cutoff: Date): Promise<number> {
+  const db = getDb();
+  const stale = await db.query.kdsTickets.findMany({
+    where: and(
+      eq(schema.kdsTickets.merchantId, merchantId),
+      inArray(schema.kdsTickets.status, ["pending", "in_progress", "preparing"]),
+      lt(schema.kdsTickets.updatedAt, cutoff)
+    ),
+  });
+  if (!stale.length) return 0;
+  const now = new Date();
+  const ids = stale.map((t) => t.id);
+  await db
+    .update(schema.kdsTickets)
+    .set({ status: "cancelled", completedAt: now, updatedAt: now })
+    .where(inArray(schema.kdsTickets.id, ids));
+  await db
+    .update(schema.kdsTicketItems)
+    .set({ status: "cancelled", readyAt: null })
+    .where(inArray(schema.kdsTicketItems.ticketId, ids));
+  console.info("[pos-held] dismissed stale open KDS tickets", {
+    merchantId,
+    count: stale.length,
+  });
+  return stale.length;
 }
 
 function isPaidPosSale(order: { status?: string | null; paymentStatus?: string | null }): boolean {
@@ -337,12 +375,16 @@ function isOpenUnpaidPosSale(order: { status?: string | null; paymentStatus?: st
   return true;
 }
 
-const HELD_HEAL_SALES_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+const HELD_HEAL_SALES_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+/** Open kitchen / held rows older than this are auto-closed unless a fresh unpaid POS sale exists. */
+const STALE_OPEN_TICKET_HOURS = 48;
+const STALE_EMPTY_CART_HOURS = 24;
 
 type HeldHealPosSale = {
   id: string;
   notes: string | null;
   tableId: string | null;
+  tableLabel: string | null;
   guestCount: number | null;
   total: string | null;
   status: string | null;
@@ -357,6 +399,7 @@ async function loadRecentPosSalesForHeldHeal(merchantId: string): Promise<HeldHe
       id: schema.orders.id,
       notes: schema.orders.notes,
       tableId: schema.orders.tableId,
+      tableLabel: schema.orders.tableLabel,
       guestCount: schema.orders.guestCount,
       total: schema.orders.total,
       status: schema.orders.status,
@@ -409,18 +452,27 @@ async function dropHeldRowsPaidOnServer(
   const recentSales = await loadRecentPosSalesForHeldHeal(merchantId);
 
   const kept: typeof rows = [];
-  for (const row of rows) {
+    for (const row of rows) {
     const ident = heldIdentity(row.cartJson);
+    const meta = normalizeHeldCartJson(row.cartJson);
+    const rowTableLabel =
+      meta && !Array.isArray(meta) && meta.tableLabel
+        ? normalizeTableLabel(meta.tableLabel)
+        : "";
     const rowTicket = normalizeHeldTicket(ident.ticketDisplay || row.label);
     let paidTotal: number | null = null;
     let matchedPaid = false;
     let hasUnpaid = false;
     for (const sale of recentSales) {
       const saleIdent = paidPosOrderIdentity(sale);
-      const identityMatch =
+      let identityMatch =
         sameHeldIdentity(ident, saleIdent) ||
         (rowTicket &&
           normalizeHeldTicket(saleIdent.ticketDisplay) === rowTicket);
+      if (!identityMatch && rowTableLabel) {
+        const saleTable = normalizeTableLabel(sale.tableLabel);
+        if (saleTable && saleTable === rowTableLabel) identityMatch = true;
+      }
       if (!identityMatch) continue;
       if (isPaidPosSale(sale)) {
         matchedPaid = true;
@@ -1255,7 +1307,7 @@ export class PosOrdersService {
    * (partial payment / stale session) but kitchen/ODS still show the ticket.
    * Only POS shout numbers (#6893). Never clone paid sales or web-shop tickets.
    */
-  static async restoreHeldFromOpenKitchen(merchantId: string) {
+  static async restoreHeldFromOpenKitchen(merchantId: string, kdsFreshAfter?: Date) {
     const db = getDb();
     try {
       const tickets = await db.query.kdsTickets.findMany({
@@ -1332,6 +1384,10 @@ export class PosOrdersService {
       const recentSales = await loadRecentPosSalesForHeldHeal(merchantId);
 
       for (const ticket of shoutTickets) {
+        if (kdsFreshAfter) {
+          const at = ticket.updatedAt ? new Date(ticket.updatedAt as Date) : new Date(0);
+          if (at < kdsFreshAfter) continue;
+        }
         const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
         if (!key || existingOrderTickets.has(key)) continue;
         if (
@@ -1392,6 +1448,10 @@ export class PosOrdersService {
         });
 
       for (const ticket of shoutTickets) {
+        if (kdsFreshAfter) {
+          const at = ticket.updatedAt ? new Date(ticket.updatedAt as Date) : new Date(0);
+          if (at < kdsFreshAfter) continue;
+        }
         const key = normalizeHeldTicket(ticket.ticketKey || ticket.orderNumber);
         if (!key || existingOrderTickets.has(key)) continue;
         if (
@@ -1462,8 +1522,11 @@ export class PosOrdersService {
     }
   }
 
-  /** Kitchen tickets left open for days with no KDS row — auto-close so Actives stays truthful. */
-  static async closeStaleKitchenHeldTickets(merchantId: string, maxAgeHours = 48) {
+  /** Kitchen tickets left open for days — auto-close so Actives stays truthful. */
+  static async closeStaleKitchenHeldTickets(
+    merchantId: string,
+    maxAgeHours = STALE_OPEN_TICKET_HOURS
+  ) {
     const db = getDb();
     const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
     const stale = await db.query.heldOrders.findMany({
@@ -1488,7 +1551,10 @@ export class PosOrdersService {
             )
           ),
         });
-        if (openKds) continue;
+        if (openKds) {
+          const kdsAt = openKds.updatedAt ? new Date(openKds.updatedAt as Date) : new Date(0);
+          if (kdsAt >= cutoff) continue;
+        }
       }
       await closeHeldRow(merchantId, row.id, "superseded");
       console.info("[pos-held] auto-closed stale kitchen ticket", {
@@ -1500,8 +1566,42 @@ export class PosOrdersService {
     }
   }
 
+  /** Zero-balance or very old open ledger rows — stop Actives clutter after missed release. */
+  static async closeAbandonedOpenHeldTickets(merchantId: string) {
+    const db = getDb();
+    const staleCutoff = new Date(Date.now() - STALE_OPEN_TICKET_HOURS * 60 * 60 * 1000);
+    const emptyCutoff = new Date(Date.now() - STALE_EMPTY_CART_HOURS * 60 * 60 * 1000);
+    const recentSales = await loadRecentPosSalesForHeldHeal(merchantId);
+    const open = await db.query.heldOrders.findMany({
+      where: openHeldWhere(merchantId),
+    });
+    for (const row of open) {
+      const updated = row.updatedAt ? new Date(row.updatedAt as Date) : new Date(0);
+      const total = heldCartTotal(row.cartJson);
+      const isStale = updated < staleCutoff;
+      const isEmptyStale = total <= 0.05 && updated < emptyCutoff;
+      if (!isStale && !isEmptyStale) continue;
+      const ident = heldIdentity(row.cartJson);
+      const hasOpenUnpaid = recentSales.some(
+        (sale) => isOpenUnpaidPosSale(sale) && paidSaleBlocksHeldIdentity(sale, ident)
+      );
+      if (hasOpenUnpaid) continue;
+      await closeHeldRow(merchantId, row.id, "superseded");
+      console.info("[pos-held] auto-closed abandoned open ticket", {
+        merchantId,
+        id: row.id,
+        label: row.label,
+        total,
+        isStale,
+        isEmptyStale,
+      });
+    }
+  }
+
   /** Heal stale open tickets, then optional KDS restore — see pos-open-ticket.ts protocol. */
   static async reconcileOpenTicketLedger(merchantId: string) {
+    const staleCutoff = new Date(Date.now() - STALE_OPEN_TICKET_HOURS * 60 * 60 * 1000);
+    await dismissStaleOpenKdsTickets(merchantId, staleCutoff);
     await this.closeStaleKitchenHeldTickets(merchantId);
     const db = getDb();
     let rows = await db.query.heldOrders.findMany({
@@ -1510,7 +1610,8 @@ export class PosOrdersService {
     });
     rows = await dropHeldRowsCancelledOnServer(merchantId, rows);
     rows = await dropHeldRowsPaidOnServer(merchantId, rows);
-    await this.restoreHeldFromOpenKitchen(merchantId);
+    await this.closeAbandonedOpenHeldTickets(merchantId);
+    await this.restoreHeldFromOpenKitchen(merchantId, staleCutoff);
   }
 
   static async listHeld(merchantId: string) {

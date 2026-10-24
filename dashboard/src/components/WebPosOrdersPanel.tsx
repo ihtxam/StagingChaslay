@@ -321,6 +321,13 @@ function todayIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
+/** Match server held-heal lookback so paid tickets clear stale kitchen holds. */
+function ordersBoardFromIso(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
+}
+
 /** Held row duplicates a ticket that was already paid at the till. */
 function findPaidOrderForHeldRow(
   held: HeldRow,
@@ -670,7 +677,11 @@ export default function WebPosOrdersPanel({
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
-    const params = new URLSearchParams({ limit: '200', from: todayIso(), to: todayIso() });
+    const params = new URLSearchParams({
+      limit: '200',
+      from: ordersBoardFromIso(),
+      to: todayIso(),
+    });
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
