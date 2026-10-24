@@ -4,6 +4,7 @@ import { Mail, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import MailcoDnsChecklist from '@/components/superadmin/MailcoDnsChecklist';
+import PlatformHtmlEditor from '@/components/admin/PlatformHtmlEditor';
 
 type AdyenHealthIssue = {
   field: string;
@@ -155,6 +156,8 @@ export default function Settings() {
   const [legal, setLegal] = useState<PlatformLegalSettings | null>(null);
   const [legalForm, setLegalForm] = useState({ privacy: '', terms: '', cookies: '' });
   const [savingLegal, setSavingLegal] = useState(false);
+  const [merchantAboutHtml, setMerchantAboutHtml] = useState('');
+  const [savingMerchantAbout, setSavingMerchantAbout] = useState(false);
 
   type DesktopBrandingSettings = {
     splashUrl: string;
@@ -177,12 +180,13 @@ export default function Settings() {
   const load = async () => {
     try {
       setLoading(true);
-      const [adyenRes, brevoRes, mailcoRes, legalRes, desktopRes] = await Promise.all([
+      const [adyenRes, brevoRes, mailcoRes, legalRes, desktopRes, aboutRes] = await Promise.all([
         api.get('/superadmin/platform-settings/adyen'),
         api.get('/superadmin/platform-settings/brevo'),
         api.get('/superadmin/platform-settings/mailco'),
         api.get('/superadmin/platform-settings/legal'),
         api.get('/superadmin/platform-settings/desktop'),
+        api.get('/superadmin/platform-settings/merchant-about'),
       ]);
       const a = adyenRes.data.adyen as AdyenSettings;
       setAdyen(a);
@@ -224,6 +228,7 @@ export default function Settings() {
         tagline: desk.tagline || 'Restaurant POS & online ordering',
         backgroundColor: desk.backgroundColor || '#17252b',
       });
+      setMerchantAboutHtml(String(aboutRes.data?.about?.html || ''));
       await refreshEmailUsage();
     } catch {
       toast.error('Failed to load platform settings');
@@ -1214,6 +1219,41 @@ export default function Settings() {
           <div className="md:col-span-2">
             <button type="submit" className="btn btn-primary" disabled={savingLegal}>
               {savingLegal ? t('saving') : 'Save legal URLs'}
+            </button>
+          </div>
+        </form>
+
+        <form
+          onSubmit={async (e: FormEvent) => {
+            e.preventDefault();
+            try {
+              setSavingMerchantAbout(true);
+              const res = await api.put('/superadmin/platform-settings/merchant-about', {
+                html: merchantAboutHtml,
+              });
+              setMerchantAboutHtml(String(res.data?.about?.html || merchantAboutHtml));
+              toast.success(t('superadminMerchantAboutSaved'));
+            } catch {
+              toast.error(t('superadminMerchantAboutSaveFailed'));
+            } finally {
+              setSavingMerchantAbout(false);
+            }
+          }}
+          className="grid grid-cols-1 gap-4 max-w-3xl border-t border-stone-200 pt-8"
+        >
+          <h3 className="text-lg font-semibold">{t('superadminMerchantAboutTitle')}</h3>
+          <p className="text-sm text-stone-600 md:col-span-2">{t('superadminMerchantAboutHint')}</p>
+          <div className="md:col-span-2">
+            <PlatformHtmlEditor
+              value={merchantAboutHtml}
+              onChange={setMerchantAboutHtml}
+              minHeight={280}
+              placeholder="WebPrintMedia company details, project links…"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <button type="submit" className="btn btn-primary" disabled={savingMerchantAbout}>
+              {savingMerchantAbout ? t('saving') : t('save')}
             </button>
           </div>
         </form>

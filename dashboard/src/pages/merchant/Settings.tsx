@@ -40,6 +40,7 @@ import {
   Award,
   Phone,
   Puzzle,
+  Info,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -131,6 +132,8 @@ import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsAccountingTab from './settings/SettingsAccountingTab';
 import SettingsExtraModulesTab from './settings/SettingsExtraModulesTab';
+import SettingsAboutTab from './settings/SettingsAboutTab';
+import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { isLicensedSettingsAddonTab } from './settings/settings-extra-modules';
 import { isKdsLicensed } from '@/lib/kds-addon';
@@ -435,7 +438,8 @@ type TabId =
   | 'email'
   | 'language'
   | 'users'
-  | 'extra-modules';
+  | 'extra-modules'
+  | 'about';
 
 const SETTINGS_TAB_IDS: TabId[] = [
   'business',
@@ -462,6 +466,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'language',
   'users',
   'extra-modules',
+  'about',
 ];
 
 /** SpotOn-style settings groups: Team / Tables / Service / Guest / Money / Add-ons */
@@ -481,6 +486,7 @@ const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }>
     labelKey: 'settingsGroupAddons',
     ids: ['kiosk', 'signage', 'phone', 'fiscal', 'accounting', 'como', 'extra-modules'],
   },
+  { id: 'about', labelKey: 'settingsGroupAbout', ids: ['about'] },
 ];
 
 const TAX_RATE_MAX = 100;
@@ -522,6 +528,7 @@ function parseSettingsTabFromSearch(search: string): TabId {
     if (q === 'signage') return 'signage';
     if (q === 'kiosk') return 'kiosk';
     if (q === 'extra-modules') return 'extra-modules';
+    if (q === 'about') return 'about';
   } catch {
     /* ignore */
   }
@@ -891,6 +898,12 @@ export default function Settings() {
           navLabel: t('settingsNavExtraModules'),
           icon: Puzzle,
         },
+        {
+          id: 'about' as const,
+          label: t('settingsAbout'),
+          navLabel: t('settingsNavAbout'),
+          icon: Info,
+        },
       ] as const,
     [t]
   );
@@ -974,7 +987,7 @@ export default function Settings() {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
         if (item.id === 'reservations' && !reservationsLicensed) return false;
-        if (item.id === 'extra-modules') return true;
+        if (item.id === 'extra-modules' || item.id === 'about') return true;
         if (
           !isLicensedSettingsAddonTab(item.id, settings, { isRetailMerchant })
         ) {
@@ -2152,7 +2165,7 @@ export default function Settings() {
 
   return (
     <div
-      className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4 lg:h-full lg:min-h-0 lg:overflow-hidden"
+      className="mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col gap-3 sm:gap-4 overflow-hidden"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -2256,8 +2269,8 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="card !p-0 flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
-        <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:flex-row lg:overflow-hidden">
+      <div className="card !p-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           <aside className="sticky top-0 z-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] lg:static lg:z-auto lg:flex lg:w-56 lg:flex-col lg:border-b-0 lg:border-r">
             <nav
               className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 [-webkit-overflow-scrolling:touch] lg:flex lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:overflow-y-auto"
@@ -5584,6 +5597,10 @@ export default function Settings() {
             <SettingsExtraModulesTab settings={settings} isRetailMerchant={isRetailMerchant} />
           ) : null}
 
+          {tab === 'about' && settings ? (
+            <SettingsAboutTab settings={settings} isRetailMerchant={isRetailMerchant} />
+          ) : null}
+
           {tab === 'language' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('language')} subtitle={t('languageSettingsHint')} />
@@ -5646,6 +5663,7 @@ export default function Settings() {
           </div>
         </div>
       </div>
+      <RebornPoweredByFooter variant="panel" className="shrink-0 rounded-b-xl" />
     </div>
   );
 }

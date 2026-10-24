@@ -1963,6 +1963,22 @@ router.get("/software-releases", async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/platform-about
+ * Company / projects copy for Settings → About (editable in superadmin).
+ */
+router.get("/platform-about", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const html = await PlatformSettingsService.getMerchantAboutHtml();
+    res.json({ success: true, html });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load about content",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/settings
  * Get merchant settings
  */
