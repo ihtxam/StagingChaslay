@@ -228,12 +228,14 @@ import { pushOrderToOds, dismissOrderFromOds, fetchOdsStatus, isOdsPollingStoppe
 import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
 import { asArray } from '@/lib/safe-iterables';
 import {
-  openCustomerDisplayWindow,
+  autoOpenCustomerDisplayOnTill,
+  openCustomerDisplayForTill,
   publishCustomerDisplayState,
   subscribeCustomerDisplayRequests,
   isCustomerDisplayLocale,
   type CustomerDisplayPhase,
 } from '@/lib/customer-display-sync';
+import { publishSunmiCustomerLcd } from '@/lib/sunmi-lcd-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -2312,14 +2314,52 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     setSettingsOpen(false);
-    const win = openCustomerDisplayWindow({
+    void openCustomerDisplayForTill({
+      merchantSlug: merchant?.slug,
+      shortCode: cdsShortCode,
+    }).then((result) => {
+      if (result === 'failed') toast.error(t('cdsActionFailed'));
+    });
+  }, [cdsToken, cdsShortCode, cdsEnabled, merchant?.slug, t]);
+
+  /** Sunmi D2S Plus: show CDS on the rear screen when WebPOS PWA opens (Bridge ≥ 0.4.50). */
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    if (!isAndroidWebPosTill()) return;
+    void autoOpenCustomerDisplayOnTill({
       merchantSlug: merchant?.slug,
       shortCode: cdsShortCode,
     });
-    if (!win) {
-      toast.error(t('cdsActionFailed'));
-    }
-  }, [cdsToken, cdsShortCode, cdsEnabled, merchant?.slug, t]);
+  }, [cdsToken, cdsEnabled, merchant?.slug, cdsShortCode]);
+
+  /** Sunmi D3 Mini 58 mm: 7-segment customer display — last item + running total (Bridge ≥ 0.4.51). */
+  useEffect(() => {
+    if (!isAndroidWebPosTill()) return;
+    const thankYou = cdsPhase === 'thankyou';
+    const snap = thankYou ? cdsThankYouSnapshot : null;
+    const saleTotals = snap ?? activeSale.totals;
+    const total = snap?.total ?? successInfo?.amount ?? saleTotals.total;
+    void publishSunmiCustomerLcd({
+      phase: cdsPhase,
+      currency: 'CHF',
+      total,
+      merchantName: merchant?.name || merchant?.businessName,
+      lines: thankYou
+        ? []
+        : activeSale.lines.map((l) => ({
+            name: repairCatalogText(l.name),
+            qty: l.quantity,
+          })),
+    });
+  }, [
+    cdsPhase,
+    cdsThankYouSnapshot,
+    activeSale.lines,
+    activeSale.totals,
+    successInfo?.amount,
+    merchant?.name,
+    merchant?.businessName,
+  ]);
 
   const membershipCheckout = useMemo(() => {
     if (
