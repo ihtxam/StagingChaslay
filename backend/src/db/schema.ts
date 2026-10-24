@@ -213,6 +213,14 @@ export const merchants = pgTable(
      * instead of the flat delivery_menu_markup.
      */
     categoryPricingEnabled: boolean("category_pricing_enabled").default(false).notNull(),
+    /**
+     * Multi-location catalog ownership:
+     * per_location (default) — products/categories belong to one branch;
+     * shared — merchant-wide master menu with optional HQ push to branches.
+     */
+    catalogScopeMode: varchar("catalog_scope_mode", { length: 20 })
+      .default("per_location")
+      .notNull(),
     /** Driver pay: hourly | per_order | both */
     deliveryDriverPayMode: varchar("delivery_driver_pay_mode", { length: 20 })
       .default("both")
@@ -1198,6 +1206,8 @@ export const categories = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    /** When set, category is owned by this branch (per_location catalog mode). */
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
     color: varchar("color", { length: 7 }), // hex color
@@ -1221,6 +1231,10 @@ export const categories = pgTable(
   },
   (table) => ({
     merchantIdIdx: index("categories_merchant_id_idx").on(table.merchantId),
+    merchantLocationIdx: index("categories_merchant_location_idx").on(
+      table.merchantId,
+      table.locationId
+    ),
     clientIdIdx: index("categories_client_id_idx").on(table.clientId),
   })
 );
@@ -1232,6 +1246,8 @@ export const products = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    /** When set, product is owned by this branch (per_location catalog mode). */
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
     name: varchar("name", { length: 255 }).notNull(),
     sku: varchar("sku", { length: 100 }),
@@ -1311,6 +1327,10 @@ export const products = pgTable(
   },
   (table) => ({
     merchantIdIdx: index("products_merchant_id_idx").on(table.merchantId),
+    merchantLocationIdx: index("products_merchant_location_idx").on(
+      table.merchantId,
+      table.locationId
+    ),
     barcodeIdx: index("products_barcode_idx").on(table.barcode),
     barcodeUniqueIdx: uniqueIndex("products_merchant_barcode_uidx")
       .on(table.merchantId, table.barcode)

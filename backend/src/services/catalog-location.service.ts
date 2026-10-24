@@ -5,6 +5,7 @@ import {
   isVisibleOnChannel,
   type CatalogChannel,
 } from "@/lib/catalog-visibility";
+import { CatalogScopeService } from "@/services/catalog-scope.service";
 
 type ProductRow = typeof schema.products.$inferSelect;
 type CategoryRow = typeof schema.categories.$inferSelect;
@@ -116,7 +117,10 @@ export class CatalogLocationService {
       return { categories: [], products: [], locationId: locId };
     }
 
-    const [categories, products, links] = await Promise.all([
+    const scopeMode = await CatalogScopeService.getScopeMode(merchantId);
+    const perLocation = scopeMode === "per_location";
+
+    const [categoryRows, productRows, links] = await Promise.all([
       db.query.categories.findMany({
         where: eq(schema.categories.merchantId, merchantId),
         orderBy: [asc(schema.categories.sortOrder)],
@@ -133,11 +137,19 @@ export class CatalogLocationService {
       }),
     ]);
 
-    let productPool = products;
-    if (links.length) {
-      const allowed = this.resolveLinkedProductIds(links, products);
+    let categories = categoryRows;
+    let productPool = productRows;
+    if (perLocation) {
+      productPool = productRows.filter((p) => String(p.locationId || "") === locId);
+      categories = categoryRows.filter(
+        (c) =>
+          String(c.locationId || "") === locId ||
+          !!(c as { isOffersCategory?: boolean }).isOffersCategory
+      );
+    } else if (links.length) {
+      const allowed = this.resolveLinkedProductIds(links, productRows);
       if (allowed.size > 0) {
-        productPool = products.filter((p) => allowed.has(p.id));
+        productPool = productRows.filter((p) => allowed.has(p.id));
       }
     } else {
       const siblingLink = await db.query.locationCatalogLinks.findFirst({

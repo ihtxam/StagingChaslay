@@ -947,7 +947,20 @@ const en: Dict = {
   default: 'Default',
   navHq: 'HQ',
   hqDashboardTitle: 'HQ dashboard',
-  hqDashboardDescription: 'Central menu control — snapshot and push catalog to selected locations.',
+  hqDashboardDescription:
+    'Manage locations, catalog strategy, and optional HQ menu sync across branches.',
+  hqCatalogScopeTitle: 'Catalog strategy',
+  hqCatalogScopePerLocation:
+    'Separate menus per branch (default) — new products belong to the branch you select in the panel.',
+  hqCatalogScopeShared:
+    'Shared HQ menu — build one master catalog and push/sync to selected branches.',
+  hqCatalogScopeSaved: 'Catalog strategy updated',
+  catalogBelongsToBranch: 'Belongs to branch',
+  catalogBelongsToBranchHint:
+    'This product is only added to the menu of the selected branch (not other locations).',
+  catalogSelectBranch: 'Select branch…',
+  catalogBranchRequired: 'Select which branch this product belongs to',
+  catalogAddingToBranch: 'Adding to branch: {name}',
   hqNeedsMultipleLocations: 'Add a second location above to use HQ menu sync.',
   hqCatalogVersions: 'HQ catalog versions',
   hqCreateSnapshot: 'Create snapshot',

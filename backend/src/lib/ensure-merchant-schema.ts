@@ -148,6 +148,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS min_pre_order_delay_minutes integer DEFAULT 30",
   category_pricing_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS category_pricing_enabled boolean NOT NULL DEFAULT false",
+  catalog_scope_mode:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS catalog_scope_mode varchar(20) NOT NULL DEFAULT 'per_location'",
   webpos_express_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_express_enabled boolean NOT NULL DEFAULT true",
   webpos_cash_enabled:
@@ -361,6 +363,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS time_slot_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
   products_catering_config:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS catering_config jsonb NOT NULL DEFAULT '{}'::jsonb",
+  products_location_id:
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES locations(id) ON DELETE SET NULL",
+  products_merchant_location_idx:
+    "CREATE INDEX IF NOT EXISTS products_merchant_location_idx ON products (merchant_id, location_id)",
   ...SHOP_CATALOG_EXTRA_PATCHES,
   modifier_groups_price_scope:
     "ALTER TABLE modifier_groups ADD COLUMN IF NOT EXISTS price_scope varchar(20) NOT NULL DEFAULT 'fixed'",
@@ -372,6 +378,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS extra_delivery_price numeric(10,2) DEFAULT 0",
   categories_shop_schedule:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS shop_schedule jsonb NOT NULL DEFAULT '{}'::jsonb",
+  categories_location_id:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES locations(id) ON DELETE SET NULL",
+  categories_merchant_location_idx:
+    "CREATE INDEX IF NOT EXISTS categories_merchant_location_idx ON categories (merchant_id, location_id)",
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
   orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
   orders_station_id:
@@ -1759,6 +1769,19 @@ export async function ensureMerchantColumnsSchema(): Promise<void> {
   await runPatch("delivery_driver_pay_mode", "merchants");
   await runPatch("delivery_driver_hourly_rate", "merchants");
   await runPatch("delivery_per_order_fee", "merchants");
+  try {
+    await execSql(`
+      UPDATE merchants m SET catalog_scope_mode = 'shared'
+      WHERE m.catalog_scope_mode = 'per_location'
+      AND (
+        EXISTS (SELECT 1 FROM location_catalog_links l WHERE l.merchant_id = m.id LIMIT 1)
+        OR EXISTS (SELECT 1 FROM products p WHERE p.merchant_id = m.id LIMIT 1)
+        OR EXISTS (SELECT 1 FROM categories c WHERE c.merchant_id = m.id LIMIT 1)
+      )
+    `);
+  } catch {
+    /* columns / tables may not exist yet */
+  }
 }
 
 /** Ensure optional orders columns exist (online shop, QR table, multi-location). */
@@ -2078,6 +2101,7 @@ function isVouchersColumnSchemaError(raw: string): boolean {
 }
 
 const SHOP_CATEGORY_HEAL_COLUMNS = [
+  "location_id",
   "client_id",
   "is_offers_category",
   "sort_order",

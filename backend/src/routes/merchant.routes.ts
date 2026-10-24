@@ -745,6 +745,16 @@ router.post("/products", async (req: Request, res: Response) => {
       }
     }
 
+    const { CatalogScopeService } = await import("@/services/catalog-scope.service");
+    const ownerLocationId = await CatalogScopeService.requireCreateLocationId(merchantId, req);
+    if (ownerLocationId) {
+      await CatalogScopeService.assertCategoryOwnedByLocation(
+        merchantId,
+        categoryId,
+        ownerLocationId
+      );
+    }
+
     const product = await ProductService.createProduct(
       merchantId,
       name,
@@ -758,6 +768,7 @@ router.post("/products", async (req: Request, res: Response) => {
       description,
       imageUrl,
       {
+        locationId: ownerLocationId ?? null,
         productType: productType === "combo" || normalizedComboItems.length ? "combo" : productType,
         isOpenPrice,
         soldByWeight,
@@ -806,6 +817,14 @@ router.post("/products", async (req: Request, res: Response) => {
         patch.dietaryTags = normalizeDietaryTags(dietaryTags);
       }
       await ProductService.updateProduct(merchantId, product.id, patch);
+    }
+
+    if (ownerLocationId) {
+      await CatalogScopeService.bindCatalogItemToLocation(
+        merchantId,
+        ownerLocationId,
+        product.id
+      );
     }
 
     const saved = await ProductService.getProductById(merchantId, product.id);
@@ -1307,11 +1326,15 @@ router.post("/categories", async (req: Request, res: Response) => {
     const normalizedColor =
       color != null && color !== "" ? normalizeHexColor(String(color)) : color;
 
+    const { CatalogScopeService } = await import("@/services/catalog-scope.service");
+    const ownerLocationId = await CatalogScopeService.requireCreateLocationId(merchantId, req);
+
     const category = await CategoryService.createCategory(
       merchantId,
       trimmedName,
       trimmedDescription,
-      normalizedColor
+      normalizedColor,
+      ownerLocationId
     );
 
     if (visibility !== undefined) {

@@ -157,11 +157,13 @@ interface Product {
   }>;
   cateringConfig?: Record<string, unknown>;
   dietaryTags?: string[];
+  locationId?: string | null;
 }
 
 interface Category {
   id: string;
   name: string;
+  locationId?: string | null;
   visibility?: CatalogVisibility;
 }
 
@@ -204,6 +206,8 @@ type FormState = {
   visibility: CatalogVisibility;
   similarProductIds: string[];
   dietaryTags: DietaryTagId[];
+  /** Per-location catalog: owning branch (HQ create/edit). */
+  ownerLocationId: string;
 };
 
 const emptySlot = (name = 'Main'): ComboSlotForm => ({
@@ -252,6 +256,7 @@ const emptyForm = (): FormState => ({
   visibility: { ...DEFAULT_CATALOG_VISIBILITY },
   similarProductIds: [],
   dietaryTags: [],
+  ownerLocationId: '',
 });
 
 const PRODUCTS_PAGE_SIZE = 50;
@@ -451,6 +456,11 @@ export default function Products() {
   const [importProgressOpen, setImportProgressOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<CatalogImportProgress | null>(null);
   const [importFileName, setImportFileName] = useState('');
+  const [catalogScopeMode, setCatalogScopeMode] = useState<'per_location' | 'shared'>(
+    'per_location'
+  );
+  const showCatalogBranchPicker =
+    catalogScopeMode === 'per_location' && locations.length > 1 && isHqView;
   const [productLimit, setProductLimit] = useState<{
     maxProducts: number | null;
     currentCount: number;
@@ -461,6 +471,23 @@ export default function Products() {
   const atProductLimit =
     productLimit?.maxProducts != null &&
     (productLimit.currentCount ?? products.length) >= productLimit.maxProducts;
+
+  const defaultOwnerLocationId = useMemo(() => {
+    if (locationId && (!isHqView || branchCatalogPanel)) return locationId;
+    if (locations.length === 1) return locations[0]?.id || '';
+    return '';
+  }, [locationId, isHqView, branchCatalogPanel, locations]);
+
+  const resolvedOwnerLocationId = showCatalogBranchPicker
+    ? form.ownerLocationId
+    : defaultOwnerLocationId;
+
+  const editorCategories = useMemo(() => {
+    if (catalogScopeMode !== 'per_location' || !resolvedOwnerLocationId) return categories;
+    return categories.filter(
+      (c) => !c.locationId || c.locationId === resolvedOwnerLocationId
+    );
+  }, [categories, catalogScopeMode, resolvedOwnerLocationId]);
 
   const productLimitLabel = useMemo(() => {
     if (!productLimit) return null;
@@ -555,6 +582,7 @@ export default function Products() {
         const setRes = await api.get('/merchant/settings');
         const s = setRes.data?.settings;
         setCateringLicensed(isCateringLicensed(s));
+        setCatalogScopeMode(s?.catalogScopeMode === 'shared' ? 'shared' : 'per_location');
         setStoreName(s?.name || '');
         const ps = s?.posPrintSettings || {};
         setLabelOpts((prev) => ({
@@ -734,6 +762,7 @@ export default function Products() {
     const base = emptyForm();
     setForm({
       ...base,
+      ownerLocationId: showCatalogBranchPicker ? '' : defaultOwnerLocationId,
       specifications: base.specifications.map((spec, i) =>
         i === 0 ? { ...spec, name: t('default') } : spec
       ),
@@ -823,6 +852,7 @@ export default function Products() {
         visibility: normalizeCatalogVisibility(full.visibility),
         similarProductIds: Array.isArray(full.similarProductIds) ? full.similarProductIds : [],
         dietaryTags: normalizeDietaryTags(full.dietaryTags),
+        ownerLocationId: full.locationId || defaultOwnerLocationId,
       });
     } catch {
       const comboSlots = normalizeComboSlotsFromProduct(product.comboItems);
@@ -865,6 +895,7 @@ export default function Products() {
         visibility: normalizeCatalogVisibility(product.visibility),
         similarProductIds: Array.isArray(product.similarProductIds) ? product.similarProductIds : [],
         dietaryTags: normalizeDietaryTags(product.dietaryTags),
+        ownerLocationId: product.locationId || defaultOwnerLocationId,
       });
     }
   };
@@ -914,10 +945,12 @@ export default function Products() {
         : form.isOpenPrice
           ? 'open_price'
           : 'standard';
+    const ownerLocationId = resolvedOwnerLocationId || undefined;
     return {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       price,
+      ...(ownerLocationId ? { ownerLocationId } : {}),
       cost: form.cost.trim() ? parseMoney(form.cost) : null,
       stock: Math.max(0, Math.floor(Number(form.stock) || 0)),
       sku: form.sku.trim() || undefined,
@@ -1018,6 +1051,10 @@ export default function Products() {
     }
     if (!form.categoryId) {
       toast.error(t('selectCategory'));
+      return;
+    }
+    if (showCatalogBranchPicker && !resolvedOwnerLocationId) {
+      toast.error(t('catalogBranchRequired'));
       return;
     }
     if (form.sku.trim().length > SKU_MAX_LEN) {
@@ -2013,6 +2050,47 @@ export default function Products() {
               noValidate
               className="space-y-3"
             >
+              {showCatalogBranchPicker ? (
+                <Field label={`${t('catalogBelongsToBranch')} *`}>
+                  <select
+                    className="field-input"
+                    value={form.ownerLocationId}
+                    required
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        ownerLocationId: e.target.value,
+                        categoryId:
+                          form.categoryId &&
+                          editorCategories.some((c) => c.id === form.categoryId)
+                            ? form.categoryId
+                            : '',
+                      })
+                    }
+                  >
+                    <option value="">{t('catalogSelectBranch')}</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t('catalogBelongsToBranchHint')}
+                  </p>
+                </Field>
+              ) : null}
+              {!showCatalogBranchPicker &&
+              catalogScopeMode === 'per_location' &&
+              defaultOwnerLocationId &&
+              locations.length > 1 ? (
+                <p className="text-xs text-[var(--text-muted)] rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2">
+                  {t('catalogAddingToBranch').replace(
+                    '{name}',
+                    locations.find((l) => l.id === defaultOwnerLocationId)?.name || ''
+                  )}
+                </p>
+              ) : null}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label={`${t('productName')} *`}>
                   <input
@@ -2030,7 +2108,7 @@ export default function Products() {
                     onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
                   >
                     <option value="">{t('selectCategory')}</option>
-                    {categories.map((c) => (
+                    {editorCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
