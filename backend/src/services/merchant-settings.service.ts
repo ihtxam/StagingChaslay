@@ -1099,7 +1099,7 @@ export class MerchantSettingsService {
       const n = parseFloat(String(v));
       return Number.isFinite(n) ? n : null;
     };
-    if (channel === "in_store") return fallback > 0 ? fallback : 8.1;
+    if (channel === "in_store") return pick(merchant.taxTakeawayRate) ?? fallback;
     if (channel === "dine_in") return pick(merchant.taxDineInRate) ?? fallback;
     if (channel === "delivery") return pick(merchant.taxDeliveryRate) ?? fallback;
     return pick(merchant.taxTakeawayRate) ?? fallback;

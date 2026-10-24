@@ -71,13 +71,6 @@ export type MerchantChannelTaxSettings = {
   taxDeliveryRate?: string | number | null;
 };
 
-/** Standard VAT (retail / services / in-store register) — not reduced food takeaway rate. */
-export function standardPosTaxRate(
-  merchant: Pick<MerchantChannelTaxSettings, 'vatRate'>
-): number {
-  return resolvePosTaxRate(null, merchant.vatRate, 8.1);
-}
-
 /** Channel tax rate from merchant settings (matches WebPOS + backend receipts). */
 export function channelTaxRateFromMerchant(
   merchant: MerchantChannelTaxSettings,
@@ -85,15 +78,13 @@ export function channelTaxRateFromMerchant(
 ): number {
   const vat = merchant.vatRate;
   const ch = String(channel || 'takeaway').toLowerCase().replace(/-/g, '_');
-  if (ch === 'in_store' || ch === 'pos' || ch === 'retail') {
-    return standardPosTaxRate(merchant);
-  }
   if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
   if (ch === 'delivery') {
     const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
     if (delivery > 0) return delivery;
     return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
   }
+  // takeaway, in_store (retail counter), and default → reduced / standard POS rate (e.g. 2.6% CH)
   return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
 }
 
