@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:dashboard/dist/assets/ReviewsInbox-BQDnAOJf.js
-import{u as s,j as e}from"./index-BnjIPyv6.js";import{G as a}from"./GoogleReputationPanel-DfHVLAxj.js";function o(){const{t}=s();return e.jsxs("div",{className:"mx-auto max-w-3xl space-y-4 p-4 lg:p-6",children:[e.jsxs("div",{children:[e.jsx("h1",{className:"text-2xl font-extrabold tracking-tight",children:t("reviewsInboxNav")}),e.jsx("p",{className:"text-sm text-[var(--text-muted)]",children:t("shopReviewAskTitle")})]}),e.jsx(a,{})]})}export{o as default};
-========
-import{u as s,j as e}from"./index--y7cCeYL.js";import{G as a}from"./GoogleReputationPanel-BS5xm5XE.js";function o(){const{t}=s();return e.jsxs("div",{className:"mx-auto max-w-3xl space-y-4 p-4 lg:p-6",children:[e.jsxs("div",{children:[e.jsx("h1",{className:"text-2xl font-extrabold tracking-tight",children:t("reviewsInboxNav")}),e.jsx("p",{className:"text-sm text-[var(--text-muted)]",children:t("shopReviewAskTitle")})]}),e.jsx(a,{})]})}export{o as default};
->>>>>>>> origin/cursor/offers-picker-modal-1b4f:dashboard/dist/assets/ReviewsInbox-BU7vFMCC.js

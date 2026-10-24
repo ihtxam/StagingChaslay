@@ -211,6 +211,8 @@ const emptySlot = (name = 'Main'): ComboSlotForm => ({
   options: [],
 });
 
+const PRODUCT_EDITOR_FORM_ID = 'merchant-product-editor-form';
+
 const emptyForm = (): FormState => ({
   name: '',
   description: '',
@@ -863,6 +865,15 @@ export default function Products() {
     setRecipeLines([]);
     setRecipeYield('1');
   };
+
+  useEffect(() => {
+    if (!modalOpen || typeof document === 'undefined') return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [modalOpen]);
 
   const linkedModifierGroups = useMemo(
     () =>
@@ -1958,7 +1969,7 @@ export default function Products() {
 
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-3"
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-3 overscroll-none"
           onClick={closeModal}
           onKeyDown={(e) => {
             if (e.key === 'Escape') closeModal();
@@ -1966,12 +1977,12 @@ export default function Products() {
           role="presentation"
         >
           <div
-            className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl"
+            className="flex max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
               <h2 className="text-base font-semibold">
                 {editingId ? t('editProduct') : t('addProduct')}
               </h2>
@@ -1985,7 +1996,15 @@ export default function Products() {
               </button>
             </div>
 
-            <form onSubmit={onSubmit} noValidate className="space-y-3 px-4 py-3">
+            <div
+              className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch]"
+            >
+            <form
+              id={PRODUCT_EDITOR_FORM_ID}
+              onSubmit={onSubmit}
+              noValidate
+              className="space-y-3"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label={`${t('productName')} *`}>
                   <input
@@ -3086,23 +3105,27 @@ export default function Products() {
                 </div>
               )}
 
-              <div className="flex gap-2 pt-1 sticky bottom-0 bg-[var(--bg-elevated)] pb-1">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="btn-secondary flex-1"
-                >
-                  {t('cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn-primary flex-1"
-                >
-                  {saving ? t('saving') : editingId ? t('save') : t('createProduct')}
-                </button>
-              </div>
             </form>
+            </div>
+            <div
+              className="flex shrink-0 gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+            >
+              <button
+                type="button"
+                onClick={closeModal}
+                className="btn-secondary flex-1"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="submit"
+                form={PRODUCT_EDITOR_FORM_ID}
+                disabled={saving}
+                className="btn-primary flex-1"
+              >
+                {saving ? t('saving') : editingId ? t('save') : t('createProduct')}
+              </button>
+            </div>
           </div>
         </div>
       )}
