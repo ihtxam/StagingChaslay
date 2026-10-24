@@ -22,6 +22,8 @@ export type DeviceBridgeHealth = {
   platform?: string;
   /** Sunmi / dual-screen tablet exposes a rear customer display */
   dualScreenAvailable?: boolean;
+  /** Sunmi D3 Mini 58 mm 7-segment customer display */
+  customerLcdAvailable?: boolean;
   /** Bridge is showing CDS on the secondary display */
   customerDisplayOpen?: boolean;
   /** Device exposes NFC hardware */
@@ -97,6 +99,7 @@ export async function getDeviceBridgeHealth(): Promise<DeviceBridgeHealth> {
       version: data.version != null ? String(data.version) : undefined,
       platform: data.platform != null ? String(data.platform) : undefined,
       dualScreenAvailable: data.dualScreenAvailable === true,
+      customerLcdAvailable: data.customerLcdAvailable === true,
       customerDisplayOpen: data.customerDisplayOpen === true,
       nfcAvailable: data.nfcAvailable === true,
       hasAdyenSdk: data.hasAdyenSdk === true,
@@ -328,6 +331,33 @@ export type BridgeCustomerDisplayResult = {
 };
 
 /** Open merchant CDS on the Sunmi rear / secondary display (Bridge ≥ 0.4.50). */
+export type BridgeCustomerLcdPayload = {
+  topText: string;
+  bottomText: string;
+  clear?: boolean;
+};
+
+/** Sunmi mini-series 7-segment customer display (D3 Mini 58 mm). */
+export async function pushBridgeCustomerLcd(
+  payload: BridgeCustomerLcdPayload
+): Promise<{ ok: boolean }> {
+  try {
+    const res = await fetch(bridgeUrl('/customer-display/lcd'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topText: payload.topText,
+        bottomText: payload.bottomText,
+        clear: payload.clear === true,
+      }),
+    });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    return { ok: data.ok === true };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export async function openBridgeCustomerDisplay(url: string): Promise<BridgeCustomerDisplayResult> {
   const trimmed = String(url || '').trim();
   if (!trimmed.startsWith('http')) {

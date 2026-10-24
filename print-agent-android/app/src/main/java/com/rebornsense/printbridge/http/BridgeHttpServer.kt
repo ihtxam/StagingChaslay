@@ -87,6 +87,8 @@ class BridgeHttpServer(
                 val dualScreen = CustomerDisplayController.dualScreenAvailable(appContext)
                 if (dualScreen) features.put("dual-screen")
                 if (CustomerDisplayController.isOpen()) features.put("customer-display")
+                val customerLcd = registry.sunmiDriver().customerLcdAvailable(appContext)
+                if (customerLcd) features.put("customer-lcd")
 
                 jsonResponse(
                     JSONObject()
@@ -98,6 +100,7 @@ class BridgeHttpServer(
                         .put("model", android.os.Build.MODEL)
                         .put("dualScreenAvailable", dualScreen)
                         .put("customerDisplayOpen", CustomerDisplayController.isOpen())
+                        .put("customerLcdAvailable", customerLcd)
                         .put("features", features)
                         .put("printerReady", registry.hasReadyPrinter(appContext))
                         .put("usbPermissionRequired", registry.usbPermissionPending(appContext))
@@ -437,6 +440,33 @@ class BridgeHttpServer(
             uri == "/customer-display/close" && method == Method.POST -> {
                 CustomerDisplayController.close(appContext)
                 jsonResponse(JSONObject().put("ok", true))
+            }
+
+            uri == "/customer-display/lcd" && method == Method.POST -> {
+                val body = readBody(session)
+                val top = body.optString("topText", body.optString("line1", ""))
+                val bottom = body.optString("bottomText", body.optString("line2", ""))
+                val clear = body.optBoolean("clear", false)
+                val sunmi = registry.sunmiDriver()
+                if (!sunmi.customerLcdAvailable(appContext)) {
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "No Sunmi customer LCD on this device"),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                val outcome = if (clear) {
+                    sunmi.clearCustomerLcd(appContext)
+                } else {
+                    sunmi.showCustomerLcd(appContext, top, bottom)
+                }
+                val lcdPayload = JSONObject().put("ok", outcome.isSuccess)
+                outcome.exceptionOrNull()?.message?.let { lcdPayload.put("error", it) }
+                jsonResponse(
+                    lcdPayload,
+                    if (outcome.isSuccess) Response.Status.OK else Response.Status.BAD_REQUEST,
+                )
             }
 
             uri == "/drawer" && method == Method.POST -> {

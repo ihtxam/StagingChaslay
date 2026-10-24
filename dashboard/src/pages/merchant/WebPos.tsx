@@ -235,6 +235,7 @@ import {
   isCustomerDisplayLocale,
   type CustomerDisplayPhase,
 } from '@/lib/customer-display-sync';
+import { publishSunmiCustomerLcd } from '@/lib/sunmi-lcd-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
@@ -2330,6 +2331,35 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       shortCode: cdsShortCode,
     });
   }, [cdsToken, cdsEnabled, merchant?.slug, cdsShortCode]);
+
+  /** Sunmi D3 Mini 58 mm: 7-segment customer display — last item + running total (Bridge ≥ 0.4.51). */
+  useEffect(() => {
+    if (!isAndroidWebPosTill()) return;
+    const thankYou = cdsPhase === 'thankyou';
+    const snap = thankYou ? cdsThankYouSnapshot : null;
+    const saleTotals = snap ?? activeSale.totals;
+    const total = snap?.total ?? successInfo?.amount ?? saleTotals.total;
+    void publishSunmiCustomerLcd({
+      phase: cdsPhase,
+      currency: 'CHF',
+      total,
+      merchantName: merchant?.name || merchant?.businessName,
+      lines: thankYou
+        ? []
+        : activeSale.lines.map((l) => ({
+            name: repairCatalogText(l.name),
+            qty: l.quantity,
+          })),
+    });
+  }, [
+    cdsPhase,
+    cdsThankYouSnapshot,
+    activeSale.lines,
+    activeSale.totals,
+    successInfo?.amount,
+    merchant?.name,
+    merchant?.businessName,
+  ]);
 
   const membershipCheckout = useMemo(() => {
     if (
