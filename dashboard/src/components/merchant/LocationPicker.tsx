@@ -184,12 +184,12 @@ export function LocationSwitcherChip() {
   if (!maySwitch) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 max-w-[min(12rem,40vw)] px-2 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--bg-muted)]/40 truncate shrink-0 cursor-default select-none"
+        className="inline-flex max-w-[min(14rem,52vw)] items-center gap-1.5 whitespace-nowrap px-2 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--bg-muted)]/40 shrink-0 cursor-default select-none"
         title={label}
         aria-label={label}
       >
         <MapPin className="w-3.5 h-3.5 shrink-0 opacity-80" />
-        <span className="truncate">{label}</span>
+        <span className="min-w-0 truncate">{label}</span>
       </span>
     );
   }
@@ -199,7 +199,7 @@ export function LocationSwitcherChip() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 max-w-[min(9rem,34vw)] sm:max-w-[min(12rem,40vw)] px-2 py-1 rounded-md text-xs border border-[var(--border)] hover:bg-[var(--bg-muted)] truncate shrink-0 cursor-pointer"
+        className="inline-flex max-w-[min(14rem,52vw)] sm:max-w-[min(16rem,44vw)] items-center gap-1.5 whitespace-nowrap px-2 py-1 rounded-md text-xs border border-[var(--border)] hover:bg-[var(--bg-muted)] shrink-0 cursor-pointer"
         title={t('switchLocation')}
       >
         {isHqView ? (
@@ -207,7 +207,7 @@ export function LocationSwitcherChip() {
         ) : (
           <MapPin className="w-3.5 h-3.5 shrink-0" />
         )}
-        <span className="truncate">{label}</span>
+        <span className="min-w-0 truncate">{label}</span>
       </button>
       <LocationPickerModal
         open={open}

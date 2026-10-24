@@ -5,9 +5,15 @@ type Props = {
   labels: PanelLocationHeaderLabels;
   /** compact = top bar; default = sidebar */
   variant?: 'compact' | 'sidebar';
+  /** stacked = title + subtitle; inline = single truncated row (mobile top bar) */
+  lineLayout?: 'stacked' | 'inline';
 };
 
-export default function PanelLocationTitle({ labels, variant = 'compact' }: Props) {
+export default function PanelLocationTitle({
+  labels,
+  variant = 'compact',
+  lineLayout = 'stacked',
+}: Props) {
   const { t } = useI18n();
   if (!labels.primary) return null;
 
@@ -35,14 +41,26 @@ export default function PanelLocationTitle({ labels, variant = 'compact' }: Prop
     ) : null;
 
   const secondaryLine =
-    labels.secondary || (variant === 'compact' && labels.scopeTag)
-      ? [labels.secondary, variant === 'compact' && labels.scopeTag ? labels.scopeTag : null]
-          .filter(Boolean)
-          .join(' · ')
-      : null;
+    lineLayout === 'inline'
+      ? null
+      : labels.secondary || (variant === 'compact' && labels.scopeTag)
+        ? [labels.secondary, variant === 'compact' && labels.scopeTag ? labels.scopeTag : null]
+            .filter(Boolean)
+            .join(' · ')
+        : null;
+
+  const scopeSuffix =
+    lineLayout === 'inline' && labels.scopeTag && variant === 'compact' ? (
+      <span className="shrink-0 text-[10px] font-medium text-[var(--text-muted)]">
+        ({labels.scopeTag})
+      </span>
+    ) : null;
 
   return (
-    <div className="min-w-0 flex flex-col leading-tight" title={labels.primary}>
+    <div
+      className={`min-w-0 leading-tight ${lineLayout === 'inline' ? 'flex items-center gap-1.5' : 'flex flex-col'}`}
+      title={labels.primary}
+    >
       <div className="flex min-w-0 items-center gap-1.5">
         <span className={primaryClass}>{labels.primary}</span>
         {labels.showHqBadge ? (
@@ -56,7 +74,7 @@ export default function PanelLocationTitle({ labels, variant = 'compact' }: Prop
             {t('navHq')}
           </span>
         ) : null}
-        {scopeInline}
+        {lineLayout === 'stacked' ? scopeInline : scopeSuffix}
       </div>
       {secondaryLine ? <span className={secondaryClass}>{secondaryLine}</span> : null}
     </div>
