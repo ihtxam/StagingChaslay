@@ -1,9 +1,16 @@
-import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ymdZurich } from '@/components/shop/InlineReservationsWidget';
 import { useI18n } from '@/lib/i18n';
 import type { ReservationSlot } from '@/lib/use-shop-reservations-booking';
+import ReservationPromoIcon from '@/components/shop/ReservationPromoIcon';
 import { useShopReservationsBooking } from '@/lib/use-shop-reservations-booking';
 import '@/styles/delicate-reservations.css';
+
+type BookingSeed = {
+  partySize?: number;
+  date?: string;
+  time?: string;
+};
 
 type Props = {
   shopKey: string;
@@ -13,6 +20,8 @@ type Props = {
   showClose?: boolean;
   onClose?: () => void;
   onSuccess?: (payload: { code: string; status: string }) => void;
+  /** Applied once config loads (e.g. from scroll peek bar). */
+  seed?: BookingSeed | null;
 };
 
 function monthDays(year: number, month: number) {
@@ -47,6 +56,7 @@ export default function DelicateReservationsForm({
   showClose,
   onClose,
   onSuccess,
+  seed,
 }: Props) {
   const { t, locale, formatDateTime } = useI18n();
   const booking = useShopReservationsBooking(shopKey, t);
@@ -56,6 +66,15 @@ export default function DelicateReservationsForm({
   const [timeExpanded, setTimeExpanded] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+
+  const seedAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!booking.config || !seed || seedAppliedRef.current) return;
+    seedAppliedRef.current = true;
+    if (seed.partySize != null) booking.setPartySize(seed.partySize);
+    if (seed.date) booking.setDate(seed.date);
+    if (seed.time) booking.setTime(seed.time);
+  }, [booking.config, seed]);
 
   useEffect(() => {
     if (calendarOpen) setCalendarViewYm(booking.date);
@@ -148,10 +167,9 @@ export default function DelicateReservationsForm({
   const renderSlotButton = (s: ReservationSlot) => {
     const waitlist = !s.available && !!s.waitlistAvailable;
     const canPick = s.available || waitlist;
-    const discount =
-      s.discountPercent && s.discountPercent > 0
-        ? s.discountLabel || `-${s.discountPercent}%`
-        : null;
+    const promoLabel =
+      s.discountLabel ||
+      (s.discountPercent && s.discountPercent > 0 ? `-${s.discountPercent}%` : null);
     return (
       <button
         key={s.time}
@@ -162,7 +180,12 @@ export default function DelicateReservationsForm({
         onClick={() => booking.setTime(s.time)}
       >
         <span className="rb-time-btn-main">{s.time}</span>
-        {discount ? <span className="rb-time-discount">{discount}</span> : null}
+        {promoLabel ? (
+          <span className="rb-time-discount inline-flex items-center gap-0.5">
+            <ReservationPromoIcon kind={s.promoIcon || 'percent'} className="h-3 w-3" />
+            <span>{promoLabel}</span>
+          </span>
+        ) : null}
       </button>
     );
   };

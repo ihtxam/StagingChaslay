@@ -2149,6 +2149,32 @@ html.shop-shell #root {
   animation: shop-reservation-fab-pulse 1.05s ease-in-out 2;
 }
 
+/* Scroll-reveal booking peek (half dock + full strip) */
+.shop-reservation-peek {
+  opacity: 0;
+  transform: translateY(1.25rem);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+}
+
+.shop-reservation-peek--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.shop-reservation-peek__card {
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shop-reservation-peek--half.shop-reservation-peek--visible .shop-reservation-peek__card {
+  transform: translateY(46%);
+}
+
+.shop-reservation-peek--full.shop-reservation-peek--visible .shop-reservation-peek__card {
+  transform: translateY(0);
+}
+
 .shop-route-layout__footer {
   width: 100%;
   max-width: none;
