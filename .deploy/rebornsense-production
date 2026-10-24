@@ -54,3 +54,4 @@
 # Deploy 2026-10-23T12:05:00Z — URGENT: Android cash receipt QR garbled strip fix (raster-only QR, #864)
 # Deploy 2026-10-24T10:58:00Z — PROD: Sunmi receipt header/QR feed (#868), payment profile Adyen sync, hide single-location enrollment UI
 # Deploy 2026-10-24T11:00:00Z — PROD: RebornPOS login DOM credential read (on-screen keyboard vs Chrome)
+# Deploy 2026-10-24T11:05:00Z — PROD: Windows RebornPOS 80mm receipt bitmap header + QR pre-cut feed (not Sunmi-only)
