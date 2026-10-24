@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import LazyRouteErrorBoundary from '@/components/LazyRouteErrorBoundary';
@@ -1886,7 +1885,6 @@ function MerchantShell() {
           </Routes>
           </Suspense>
         </main>
-        {!hideChrome ? <RebornPoweredByFooter variant="panel" className="shrink-0" /> : null}
         <Suspense fallback={null}>
           <MerchantTillPrintHub enabled={tillPrintHubEnabled} />
         </Suspense>

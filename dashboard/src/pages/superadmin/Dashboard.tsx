@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Sidebar from '@/components/Sidebar';
-import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import Header from '@/components/Header';
 import Overview from './Overview';
 import Merchants from './Merchants';
@@ -109,7 +108,6 @@ function SuperadminShell() {
             <Route path="settings" element={<Settings />} />
           </Routes>
         </main>
-        <RebornPoweredByFooter variant="panel" className="shrink-0" />
       </div>
     </div>
   );
