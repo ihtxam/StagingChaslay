@@ -159,11 +159,57 @@ export class PaymentProfilesService {
     return row.id;
   }
 
+  /** Keep branch profiles aligned when merchant-level Adyen credentials change in Settings. */
+  static async syncAdyenFromMerchant(merchantId: string) {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+    });
+    if (!merchant) return;
+
+    await db
+      .update(schema.paymentProfiles)
+      .set({
+        adyenMerchantAccount: merchant.adyenMerchantAccount,
+        adyenStoreReference: merchant.adyenStoreReference,
+        adyenClientId: merchant.adyenClientId,
+        adyenApiKey: merchant.adyenApiKey,
+        adyenHmacKey: merchant.adyenHmacKey,
+        adyenLiveEnvironment: merchant.adyenLiveEnvironment,
+        adyenLiveUrlPrefix: merchant.adyenLiveUrlPrefix,
+        adyenLiveRegion: merchant.adyenLiveRegion,
+        adyenUseLegacyEndpoint: merchant.adyenUseLegacyEndpoint,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.paymentProfiles.merchantId, merchantId));
+  }
+
+  /** One-time heal when profiles still show a previous merchant account after Settings save. */
+  static async healStaleAdyenFromMerchant(merchantId: string) {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+    });
+    if (!merchant) return;
+
+    const profiles = await db.query.paymentProfiles.findMany({
+      where: eq(schema.paymentProfiles.merchantId, merchantId),
+      columns: { adyenMerchantAccount: true },
+    });
+    const merchantAcct = merchant.adyenMerchantAccount?.trim() || null;
+    const stale = profiles.some(
+      (p) => (p.adyenMerchantAccount?.trim() || null) !== merchantAcct
+    );
+    if (!stale) return;
+    await this.syncAdyenFromMerchant(merchantId);
+  }
+
   static async list(
     merchantId: string,
     filters?: { locationId?: string | null; paymentProfileId?: string | null }
   ): Promise<PaymentProfilePublic[]> {
     await this.ensureDefaultProfile(merchantId);
+    await this.healStaleAdyenFromMerchant(merchantId);
     const db = getDb();
     if (filters?.locationId) {
       const branchProfile = await this.ensureProfileForLocation(

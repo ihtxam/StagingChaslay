@@ -21,6 +21,7 @@ import {
   escposQrCode,
   RECEIPT_QR_ESCPOS_MODULE_SIZE,
   giftCardRedeemQrRasterPx,
+  imageDataToEscPosRaster,
 } from '@/lib/qr';
 import { isAndroidDevice } from '@/lib/print-agent-platform';
 import {
@@ -969,6 +970,45 @@ function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   return parts.length > 1 ? parts : [text];
 }
 
+/**
+ * Split legacy one-line headers: `Store name - Rue … 2000 City`.
+ * Common on migrated merchant settings before receiptHeaderLines existed.
+ */
+export function splitReceiptHeaderNameDashRest(line: string): string[] {
+  const raw = String(line || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return [];
+  const dash = raw.match(/^(.{2,60}?)\s+-\s+(.+)$/);
+  if (!dash) return [raw];
+  const name = dash[1]!.trim();
+  const rest = dash[2]!.trim();
+  if (!name || !rest) return [raw];
+  const looksLikeAddress =
+    /\d{4}\b/.test(rest) ||
+    /(?:rue|rue des|route|avenue|av\.|chemin|place|boulevard|bd\.?|rte|strasse|straße|street)\b/i.test(
+      rest
+    );
+  if (!looksLikeAddress) return [raw];
+  return [name, ...expandReceiptHeaderDetailLines(rest)];
+}
+
+/** Expand settings rows (incl. one mashed line) into logical print lines. */
+export function flattenConfiguredReceiptHeaderLines(configuredLines: string[]): string[] {
+  const out: string[] = [];
+  const single = configuredLines.length === 1;
+  for (const line of configuredLines) {
+    const trimmed = String(line || '').replace(/\s+/g, ' ').trim();
+    if (!trimmed) continue;
+    const pieces = single ? splitReceiptHeaderNameDashRest(trimmed) : [trimmed];
+    for (const piece of pieces) {
+      for (const expanded of expandReceiptHeaderDetailLines(piece)) {
+        const normalized = normalizeHeaderContactLine(expanded);
+        if (normalized) out.push(normalized);
+      }
+    }
+  }
+  return dedupeHeaderLines(out);
+}
+
 /** Split one header detail line so Tel / VAT labels start on their own row. */
 export function splitReceiptHeaderDetailLine(line: string): string[] {
   const raw = String(line || '').replace(/\s+/g, ' ').trim();
@@ -1373,9 +1413,11 @@ export function getReceiptHeaderLines(
   const hasCustomReceiptHeader = configuredLines.length > 0;
   const lines: string[] = [];
   if (hasCustomReceiptHeader) {
-    for (let i = 0; i < configuredLines.length; i++) {
-      push(lines, configuredLines[i]!, i === 0 ? titleWidth : width);
+    const logical = flattenConfiguredReceiptHeaderLines(configuredLines);
+    for (let i = 0; i < logical.length; i++) {
+      push(lines, logical[i]!, i === 0 ? titleWidth : width);
     }
+    appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
     return lines;
   }
   let { title, body } = normalizeReceiptHeaderFields({
@@ -1468,6 +1510,63 @@ export function getReceiptHeaderLines(
     push(lines, storeName, titleWidth);
   }
   return lines;
+}
+
+/** Bitmap header block — matches digital receipt layout on Sunmi / Android Bridge. */
+export async function buildReceiptHeaderRasterEscPos(
+  lines: string[],
+  opts: {
+    paperWidthMm?: 58 | 80;
+    align?: ReceiptHeaderAlign;
+    bold?: boolean;
+    textScale?: 1 | 2 | 3;
+  }
+): Promise<Uint8Array | null> {
+  if (!lines.length || typeof document === 'undefined') return null;
+  const paper = opts.paperWidthMm ?? 80;
+  const canvasWidth = RECEIPT_LOGO_PAPER_MAX[paper];
+  const align = opts.align ?? 'center';
+  const titleScale = opts.textScale === 2 || opts.textScale === 3 ? opts.textScale : 1;
+  const titlePx = paper === 58 ? (titleScale > 1 ? 17 : 15) : titleScale > 1 ? 20 : 16;
+  const bodyPx = paper === 58 ? 13 : 14;
+  const lineGap = paper === 58 ? 3 : 4;
+  const padY = 6;
+  try {
+    const measure = document.createElement('canvas').getContext('2d');
+    if (!measure) return null;
+    const rows: { text: string; px: number; bold: boolean }[] = lines.map((line, i) => ({
+      text: String(line || '').trim(),
+      px: i === 0 ? titlePx : bodyPx,
+      bold: i === 0 && opts.bold === true,
+    }));
+    let height = padY * 2;
+    for (const row of rows) {
+      measure.font = `${row.bold ? 'bold ' : ''}${row.px}px Arial, sans-serif`;
+      height += row.px + lineGap;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = Math.max(16, height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000000';
+    ctx.textBaseline = 'top';
+    let y = padY;
+    for (const row of rows) {
+      if (!row.text) continue;
+      ctx.font = `${row.bold ? 'bold ' : ''}${row.px}px Arial, sans-serif`;
+      ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center';
+      const x = align === 'left' ? 4 : align === 'right' ? canvasWidth - 4 : canvasWidth / 2;
+      ctx.fillText(row.text, x, y);
+      y += row.px + lineGap;
+    }
+    const { data: pixels } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return imageDataToEscPosRaster(pixels, canvas.width, canvas.height, 140);
+  } catch {
+    return null;
+  }
 }
 
 export function buildReceiptHeaderEscPos(
@@ -3697,7 +3796,12 @@ export function textToEscPos(
   if (postBodySections?.length) {
     parts.push(postBodySections);
   }
-  parts.push(escposReceiptFeedAndCut(hasQr ? 5 : 4));
+  const cutFeed =
+    hasQr && isAndroidDevice() ? 10 : hasQr ? 6 : isAndroidDevice() ? 5 : 4;
+  if (hasQr && isAndroidDevice()) {
+    parts.push(new Uint8Array([0x1b, 0x64, 0x03]));
+  }
+  parts.push(escposReceiptFeedAndCut(cutFeed));
   return concatBytes(...parts);
 }
 
@@ -3789,8 +3893,17 @@ export async function buildReceiptEscPos(
   }
   const textEncoding = opts.textEncoding ?? 'cp850';
   const receiptLineWidth = lineWidthForPaper(paper);
+  const headerRaster =
+    headerLines.length > 0 && isAndroidDevice()
+      ? await buildReceiptHeaderRasterEscPos(headerLines, {
+          paperWidthMm: paper,
+          align: opts.headerAlign,
+          bold: opts.headerBold,
+          textScale: opts.headerTextScale,
+        })
+      : null;
   const headerEscPos =
-    headerLines.length > 0
+    headerLines.length > 0 && !headerRaster?.length
       ? buildReceiptHeaderEscPos(headerLines, {
           align: opts.headerAlign,
           bold: opts.headerBold,
@@ -3802,6 +3915,14 @@ export async function buildReceiptEscPos(
 
   const giftCardEscPos = await buildSoldGiftCardRedeemEscPosSections(opts.soldGiftCards, paper);
 
+  const prefixHeader = headerRaster?.length
+    ? concatBytes(
+        new Uint8Array([0x1b, 0x61, 0x01]),
+        headerRaster,
+        new Uint8Array([0x0a, 0x1b, 0x61, 0x00])
+      )
+    : headerEscPos;
+
   return textToEscPos(
     bodyText,
     qrRaster,
@@ -3809,7 +3930,7 @@ export async function buildReceiptEscPos(
     opts.barcodeData,
     opts.barcodeLabel,
     undefined,
-    headerEscPos,
+    prefixHeader,
     giftCardEscPos,
     textEncoding
   );
