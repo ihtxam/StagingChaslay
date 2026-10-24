@@ -1037,6 +1037,22 @@ export class MerchantSettingsService {
       throw new Error("Merchant not found");
     }
 
+    const adyenKeys = [
+      "adyenMerchantAccount",
+      "adyenStoreReference",
+      "adyenClientId",
+      "adyenApiKey",
+      "adyenHmacKey",
+      "adyenLiveEnvironment",
+      "adyenLiveUrlPrefix",
+      "adyenLiveRegion",
+      "adyenUseLegacyEndpoint",
+    ] as const;
+    if (adyenKeys.some((key) => key in patch)) {
+      const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
+      await PaymentProfilesService.syncAdyenFromMerchant(merchantId);
+    }
+
     return this.getMerchantSettings(merchantId);
   }
 
