@@ -40,6 +40,7 @@ interface Category {
   color?: string | null;
   imageUrl?: string | null;
   sortOrder?: number;
+  locationId?: string | null;
   visibility?: CatalogVisibility;
   deliveryPricingEnabled?: boolean;
   extraDeliveryPrice?: number | string | null;
