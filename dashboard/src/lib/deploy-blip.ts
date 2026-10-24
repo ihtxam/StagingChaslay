@@ -34,6 +34,58 @@ export function systemUpdateMessage(locale?: Locale): string {
   return translate(locale ?? panelLocale(), 'systemUpdateWait');
 }
 
+export function apiTryAgainMessage(locale?: Locale): string {
+  return translate(locale ?? panelLocale(), 'apiErrorTryAgain');
+}
+
+/** Axios / proxy noise — never show these strings to staff in the panel. */
+export function isAxiosStatusMessage(message: string): boolean {
+  return /request failed with status code \d{3}/i.test(message.trim());
+}
+
+function looksLikeTechnicalHttpMessage(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  return (
+    isAxiosStatusMessage(text) ||
+    /^5\d{2}(\s|$)/.test(text) ||
+    /bad gateway|service unavailable|gateway timeout/i.test(text)
+  );
+}
+
+/** Map API failures to short, staff-friendly copy (deploy, 5xx, network). */
+export function formatUserFacingApiError(error: unknown, fallback: string, locale?: Locale): string {
+  const loc = locale ?? panelLocale();
+  if (isDeployBlip(error) && deployBlipMatchesClientRing(error)) {
+    return systemUpdateMessage(loc);
+  }
+  const err = error as AxiosLike & { response?: { data?: { error?: string } } };
+  const status = err.response?.status;
+  const apiErr = err.response?.data?.error;
+  if (typeof apiErr === 'string' && apiErr.trim() && !looksLikeTechnicalHttpMessage(apiErr)) {
+    return apiErr.trim();
+  }
+  const msg = String(err.message || '').trim();
+  if (msg && !looksLikeTechnicalHttpMessage(msg) && !isAxiosStatusMessage(msg)) {
+    return msg;
+  }
+  if (status != null && status >= 500) {
+    return apiTryAgainMessage(loc);
+  }
+  if (!err.response) {
+    const code = String(err.code || '');
+    if (
+      code === 'ERR_NETWORK' ||
+      code === 'ERR_BAD_RESPONSE' ||
+      code === 'ECONNRESET' ||
+      /failed to fetch|network error|load failed/i.test(msg)
+    ) {
+      return apiTryAgainMessage(loc);
+    }
+  }
+  return fallback;
+}
+
 export function isHtmlErrorBody(data: unknown): boolean {
   if (typeof data !== 'string') return false;
   const text = data.trim();
@@ -150,15 +202,17 @@ export function toastLoadError(error: unknown, fallback: string): void {
     notifyDeployBlip(error);
     return;
   }
-  const err = error as { response?: { data?: { error?: string } } };
-  const apiError = err.response?.data?.error;
-  toast.error(typeof apiError === 'string' && apiError.trim() ? apiError : fallback);
+  toast.error(formatUserFacingApiError(error, fallback));
 }
 
 function looksLikeLoadFailedToast(message: unknown): boolean {
   const text = typeof message === 'string' ? message : '';
-  return /failed to load|could not load|cannot load|can't load|couldn't load|échec du chargement|impossible de charger|konnten nicht geladen|konnte nicht geladen|nicht geladen werden/i.test(
-    text
+  return (
+    isAxiosStatusMessage(text) ||
+    looksLikeTechnicalHttpMessage(text) ||
+    /failed to load|could not load|cannot load|can't load|couldn't load|échec du chargement|impossible de charger|konnten nicht geladen|konnte nicht geladen|nicht geladen werden/i.test(
+      text
+    )
   );
 }
 
@@ -168,8 +222,11 @@ export function installDeployToastGuard(): void {
   toastGuardInstalled = true;
   const original = toast.error.bind(toast);
   toast.error = ((message, opts) => {
-    if (isDeployToastWindowOpen() && looksLikeLoadFailedToast(message)) {
-      return showSystemUpdateToast({ ...opts, id: DEPLOY_TOAST_ID });
+    if (typeof message === 'string' && looksLikeLoadFailedToast(message)) {
+      if (isDeployToastWindowOpen()) {
+        return showSystemUpdateToast({ ...opts, id: DEPLOY_TOAST_ID });
+      }
+      return original(apiTryAgainMessage(), opts);
     }
     return original(message, opts);
   }) as typeof toast.error;

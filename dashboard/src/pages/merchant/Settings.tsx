@@ -56,6 +56,7 @@ import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRou
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
 import api from '@/lib/api';
+import { formatUserFacingApiError, toastLoadError } from '@/lib/deploy-blip';
 import {
   RECEIPT_LOGO_WIDTH_PX_MAX,
   buildPrinterTestEscPos,
@@ -1226,11 +1227,9 @@ export default function Settings() {
       }
     }
 
-    const err = lastError as { response?: { data?: { error?: string } }; message?: string };
-    const msg = err.response?.data?.error || err.message || t('settingsLoadFailed');
     setSettings(null);
-    setLoadError(msg);
-    toast.error(msg);
+    setLoadError(formatUserFacingApiError(lastError, t('settingsLoadFailed')));
+    toastLoadError(lastError, t('settingsLoadFailed'));
   }, [adyenCredsFromSettings, applyAdyenCreds, setLocale, t]);
 
   useEffect(() => {

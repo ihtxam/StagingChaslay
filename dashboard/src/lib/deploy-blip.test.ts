@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { translate } from './i18n.tsx';
 import {
   deployBlipMatchesClientRing,
+  formatUserFacingApiError,
+  isAxiosStatusMessage,
   isDeployBlip,
   isHtmlErrorBody,
   resetDeployBlipStateForTests,
@@ -69,6 +71,28 @@ assert.equal(translate('en', 'systemUpdateWait'), 'Wait for system update');
 assert.equal(translate('fr', 'systemUpdateWait'), 'Attendez la mise à jour du système');
 assert.equal(translate('de', 'systemUpdateWait'), 'Bitte auf Systemaktualisierung warten');
 assert.equal(systemUpdateMessage('en'), 'Wait for system update');
+assert.equal(isAxiosStatusMessage('Request failed with status code 502'), true);
+assert.equal(
+  formatUserFacingApiError(
+    { response: { status: 502 }, message: 'Request failed with status code 502' },
+    'Could not load settings.'
+  ),
+  'Wait for system update'
+);
+assert.equal(
+  formatUserFacingApiError(
+    { response: { status: 500, data: { error: 'Failed to load customers' } } },
+    'Fallback'
+  ),
+  'Failed to load customers'
+);
+assert.equal(
+  formatUserFacingApiError(
+    { response: { status: 500 }, message: 'Request failed with status code 500' },
+    'Fallback'
+  ),
+  "We couldn't reach the server right now. Please wait a moment and try again."
+);
 assert.equal(translate('en', 'poweredBy'), 'Powered by:');
 assert.equal(translate('fr', 'poweredBy'), 'Propulsé par :');
 

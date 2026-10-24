@@ -2105,6 +2105,8 @@ const en: Dict = {
   customersToastSaveFailed: 'Failed to add customer',
   customersToastLoadFailed: 'Failed to load customers',
   systemUpdateWait: 'Wait for system update',
+  apiErrorTryAgain:
+    "We couldn't reach the server right now. Please wait a moment and try again.",
   poweredBy: 'Powered by:',
   customersNameRequired: 'First name is required (spaces only are not allowed)',
   customersContactRequired: 'Provide a last name, email, or phone (not only spaces)',
@@ -7196,6 +7198,8 @@ const fr: Dict = {
   customersToastSaveFailed: "Échec de l'ajout du client",
   customersToastLoadFailed: 'Échec du chargement des clients',
   systemUpdateWait: 'Attendez la mise à jour du système',
+  apiErrorTryAgain:
+    'Connexion au serveur impossible pour le moment. Patientez un instant et réessayez.',
   poweredBy: 'Propulsé par :',
   customersNameRequired: 'Le prénom est requis (espaces seuls non autorisés)',
   customersContactRequired: 'Indiquez un nom, un e-mail ou un téléphone (pas seulement des espaces)',
@@ -12040,6 +12044,8 @@ const de: Dict = {
   customersToastSaveFailed: 'Kunde konnte nicht hinzugefügt werden',
   customersToastLoadFailed: 'Kunden konnten nicht geladen werden',
   systemUpdateWait: 'Bitte auf Systemaktualisierung warten',
+  apiErrorTryAgain:
+    'Der Server ist gerade nicht erreichbar. Bitte kurz warten und erneut versuchen.',
   poweredBy: 'Powered by:',
   customersNameRequired: 'Vorname ist erforderlich (nur Leerzeichen nicht erlaubt)',
   customersContactRequired: 'Nachname, E-Mail oder Telefon angeben (nicht nur Leerzeichen)',
