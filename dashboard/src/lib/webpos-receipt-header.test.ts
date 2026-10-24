@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import {
   expandReceiptHeaderDetailLines,
+  flattenConfiguredReceiptHeaderLines,
   getReceiptHeaderLines,
   healLegacyMashedReceiptHeaderFields,
   receiptHeaderLinesFromPrintSettings,
   receiptHeaderTxFromPrintSettings,
+  splitReceiptHeaderNameDashRest,
   splitReceiptHeaderTextToLines,
   splitMerchantAddressLines,
   splitReceiptHeaderDetailLine,
@@ -358,5 +360,44 @@ const healedDemoPrint = getReceiptHeaderLines(
   { padLines: false }
 );
 assert.deepEqual(healedDemoPrint, ['KABUL']);
+
+assert.deepEqual(
+  splitReceiptHeaderNameDashRest(
+    'MeliMelo Barbershop - Rue de la Maladière 18, 2000 Neuchâtel'
+  ),
+  ['MeliMelo Barbershop', 'Rue de la Maladière 18', '2000 Neuchâtel']
+);
+
+const melimeloBarbershop = getReceiptHeaderLines(
+  {
+    headerTitle: '',
+    header: 'MeliMelo Barbershop - Rue de la Maladière 18, 2000 Neuchâtel',
+    businessName: 'MeliMelo Barbershop',
+    address: 'Rue de la Maladière 18',
+    city: '2000 Neuchâtel',
+    phone: '032 323 99 88',
+    vatNumber: 'CHE-450.000.636',
+    headerAlign: 'center',
+  },
+  32,
+  { padLines: false }
+);
+assert.equal(melimeloBarbershop[0], 'MeliMelo Barbershop');
+assert.ok(melimeloBarbershop.includes('Rue de la Maladière 18'));
+assert.ok(melimeloBarbershop.includes('2000 Neuchâtel'));
+assert.ok(melimeloBarbershop.includes('Tel: 032 323 99 88'));
+assert.ok(melimeloBarbershop.includes('VAT: CHE-450.000.636'));
+assert.equal(
+  melimeloBarbershop.some((line) => line.includes(' - Rue')),
+  false,
+  'name and street must not stay on one line'
+);
+
+assert.deepEqual(
+  flattenConfiguredReceiptHeaderLines([
+    'MeliMelo Barbershop - Rue de la Maladière 18, 2000 Neuchâtel',
+  ]),
+  ['MeliMelo Barbershop', 'Rue de la Maladière 18', '2000 Neuchâtel']
+);
 
 console.log('webpos-receipt-header.test.ts ok');
