@@ -1,7 +1,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useLocationStore } from '@/store/location';
-import { shouldHideMerchantSettingsInHqView } from '@/lib/panel-scope-nav';
+import {
+  isPanelLocationSwitcherActive,
+  shouldHideMerchantSettingsInHqView,
+} from '@/lib/panel-scope-nav';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -198,6 +201,9 @@ interface SettingsData {
   businessCategory?: 'retail' | 'restaurant' | null;
   editionFeatures?: EditionFeatureKey[] | null;
   inventoryExpiryAlertDays?: number;
+  settingsScope?: 'branch' | 'merchant' | string;
+  settingsBranchLocationId?: string | null;
+  settingsBranchName?: string | null;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
@@ -733,12 +739,18 @@ export default function Settings() {
   const { t, setLocale, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
-  const { isHqView, locations, limits } = useLocationStore();
+  const { isHqView, locations, limits, locationId: panelLocationId, location: panelLocation } =
+    useLocationStore();
+  const branchSwitcher = isPanelLocationSwitcherActive({
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+  });
   const hqSettingsBlocked = shouldHideMerchantSettingsInHqView({
     locationCount: locations.length,
     maxLocations: limits?.maxLocations,
     isHqView,
   });
+  const panelBranchScopeKey = branchSwitcher && !isHqView ? panelLocationId || '' : '';
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
@@ -1221,6 +1233,14 @@ export default function Settings() {
     toast.error(msg);
   }, [adyenCredsFromSettings, applyAdyenCreds, setLocale, t]);
 
+  useEffect(() => {
+    paymentsDataLoadedRef.current = false;
+    receiptCatalogLoadedRef.current = false;
+    emailUsageLoadedRef.current = false;
+    setLoading(true);
+    void loadSettings().finally(() => setLoading(false));
+  }, [panelBranchScopeKey, loadSettings]);
+
   const loadPaymentsData = useCallback(
     async (opts?: { force?: boolean }) => {
       if (paymentsDataLoadedRef.current && !opts?.force) return;
@@ -1287,12 +1307,8 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
-    void loadSettings().finally(() => setLoading(false));
-  }, [loadSettings]);
-
-  useEffect(() => {
-    if (tab === 'payments') void loadPaymentsData();
-  }, [tab, loadPaymentsData]);
+    if (tab === 'payments') void loadPaymentsData({ force: true });
+  }, [tab, loadPaymentsData, panelBranchScopeKey]);
 
   useEffect(() => {
     if (tab === 'receipt') void loadReceiptCatalog();
@@ -2109,10 +2125,19 @@ export default function Settings() {
         <div>
           <h1 className="page-title">{t('settings')}</h1>
           <p className="page-sub">
-            {t('settingsFor')}{' '}
-            <span className="font-medium text-[var(--text)]">
-              {settings?.name || user?.name || '—'}
-            </span>
+            {settings?.settingsScope === 'branch' && (settings.settingsBranchName || panelLocation?.name)
+              ? t('settingsForBranch').replace(
+                  '{branch}',
+                  settings.settingsBranchName || panelLocation?.name || '—'
+                )
+              : (
+                  <>
+                    {t('settingsFor')}{' '}
+                    <span className="font-medium text-[var(--text)]">
+                      {settings?.name || user?.name || '—'}
+                    </span>
+                  </>
+                )}
           </p>
         </div>
         <label className="relative block w-full sm:max-w-sm">
@@ -3950,8 +3975,8 @@ export default function Settings() {
                     <SettingsSaveBar saving={savingWebposPay} />
                   </form>
 
-                  <PaymentProfilesSection />
-                  <DeviceEnrollmentWizard />
+                  {!branchSwitcher ? <PaymentProfilesSection /> : null}
+                  {!branchSwitcher ? <DeviceEnrollmentWizard /> : null}
 
                   <Section
                     id="payments-terminals-list"

@@ -11,12 +11,18 @@ import { getDb, schema } from "@/db";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { AdyenMerchantWebhookService } from "@/services/adyen-merchant-webhook.service";
 import { shouldWriteCredential } from "@/lib/merchant-settings-preserve";
+import { setLocationContext } from "@/middleware/location.middleware";
+import {
+  branchPanelTerminalsContext,
+  resolveBranchPanelSettingsLocationId,
+} from "@/lib/branch-panel-settings";
 
 const router = Router();
 
 router.use(verifyToken);
 router.use(requireMerchant);
 router.use(setMerchantContext);
+router.use(setLocationContext);
 
 function maskSecret(value?: string | null): string | null {
   if (!value) return null;
@@ -44,11 +50,29 @@ function sanitizeTerminal(
 router.get("/", async (req: Request, res: Response) => {
   try {
     const db = getDb();
-    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(req.merchantId!);
-    const terminals = await db.query.paymentTerminals.findMany({
-      where: eq(schema.paymentTerminals.merchantId, req.merchantId!),
+    const merchantId = req.merchantId!;
+    const branchLocationId = resolveBranchPanelSettingsLocationId(
+      req.locationFromHeader,
+      req.locationId
+    );
+    const { profileId: branchProfileId, filterByProfile } = branchLocationId
+      ? await branchPanelTerminalsContext(merchantId, branchLocationId)
+      : {
+          profileId: await PaymentProfilesService.getDefaultProfileId(merchantId),
+          filterByProfile: false,
+        };
+    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(merchantId);
+    let terminals = await db.query.paymentTerminals.findMany({
+      where: eq(schema.paymentTerminals.merchantId, merchantId),
     });
-    const settings = await MerchantSettingsService.getMerchantSettings(req.merchantId!);
+    if (filterByProfile) {
+      terminals = terminals.filter(
+        (t) => (t.paymentProfileId || defaultProfileId) === branchProfileId
+      );
+    }
+    const settings = await MerchantSettingsService.getMerchantSettings(merchantId, {
+      branchLocationId,
+    });
     const webhookUrl = AdyenMerchantWebhookService.webhookUrlFromRequest(req.merchantId!, req);
     res.json({
       success: true,
@@ -78,18 +102,26 @@ router.put("/adyen-credentials", requirePermission("MANAGE_SETTINGS"), async (re
   try {
     const { adyenMerchantAccount, adyenApiKey, adyenClientId, adyenHmacKey, adyenLiveUrlPrefix, adyenStoreReference } =
       req.body;
-    const settings = await MerchantSettingsService.updateMerchantSettings(req.merchantId!, {
-      ...(shouldWriteCredential(adyenMerchantAccount) ? { adyenMerchantAccount } : {}),
-      ...(shouldWriteCredential(adyenApiKey) ? { adyenApiKey } : {}),
-      ...(shouldWriteCredential(adyenClientId) ? { adyenClientId } : {}),
-      ...(shouldWriteCredential(adyenHmacKey) ? { adyenHmacKey } : {}),
-      ...(typeof adyenLiveUrlPrefix === "string" && adyenLiveUrlPrefix.trim()
-        ? { adyenLiveUrlPrefix }
-        : {}),
-      ...(typeof adyenStoreReference === "string" && adyenStoreReference.trim()
-        ? { adyenStoreReference }
-        : {}),
-    });
+    const branchLocationId = resolveBranchPanelSettingsLocationId(
+      req.locationFromHeader,
+      req.locationId
+    );
+    const settings = await MerchantSettingsService.updateMerchantSettings(
+      req.merchantId!,
+      {
+        ...(shouldWriteCredential(adyenMerchantAccount) ? { adyenMerchantAccount } : {}),
+        ...(shouldWriteCredential(adyenApiKey) ? { adyenApiKey } : {}),
+        ...(shouldWriteCredential(adyenClientId) ? { adyenClientId } : {}),
+        ...(shouldWriteCredential(adyenHmacKey) ? { adyenHmacKey } : {}),
+        ...(typeof adyenLiveUrlPrefix === "string" && adyenLiveUrlPrefix.trim()
+          ? { adyenLiveUrlPrefix }
+          : {}),
+        ...(typeof adyenStoreReference === "string" && adyenStoreReference.trim()
+          ? { adyenStoreReference }
+          : {}),
+      },
+      { branchLocationId }
+    );
     res.json({
       success: true,
       adyen: {
@@ -116,7 +148,17 @@ router.put("/adyen-credentials", requirePermission("MANAGE_SETTINGS"), async (re
  */
 router.post("/", requirePermission("MANAGE_SETTINGS"), async (req: Request, res: Response) => {
   try {
-    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(req.merchantId!);
+    const merchantId = req.merchantId!;
+    const branchLocationId = resolveBranchPanelSettingsLocationId(
+      req.locationFromHeader,
+      req.locationId
+    );
+    const { profileId: scopedProfileId } = branchLocationId
+      ? await branchPanelTerminalsContext(merchantId, branchLocationId)
+      : { profileId: await PaymentProfilesService.getDefaultProfileId(merchantId) };
+    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(merchantId);
+    const targetProfileId =
+      req.body.paymentProfileId || scopedProfileId || defaultProfileId;
     const terminalId = String(req.body.terminalId || req.body.serialNumber || "").trim();
     const terminalName = String(req.body.terminalName || terminalId || "").trim();
     const serialNumber = String(req.body.serialNumber || terminalId || "").trim() || null;
@@ -128,7 +170,7 @@ router.post("/", requirePermission("MANAGE_SETTINGS"), async (req: Request, res:
       .insert(schema.paymentTerminals)
       .values({
         merchantId: req.merchantId!,
-        paymentProfileId: req.body.paymentProfileId || defaultProfileId,
+        paymentProfileId: targetProfileId,
         terminalId,
         terminalName: terminalName || terminalId,
         serialNumber,
@@ -145,7 +187,7 @@ router.post("/", requirePermission("MANAGE_SETTINGS"), async (req: Request, res:
           serialNumber,
           status: "active",
           lastHeartbeat: new Date(),
-          paymentProfileId: req.body.paymentProfileId || defaultProfileId,
+          paymentProfileId: targetProfileId,
         },
       })
       .returning();

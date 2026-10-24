@@ -181,7 +181,9 @@ export class PaymentProfilesService {
         adyenUseLegacyEndpoint: merchant.adyenUseLegacyEndpoint,
         updatedAt: new Date(),
       })
-      .where(eq(schema.paymentProfiles.merchantId, merchantId));
+      .where(
+        and(eq(schema.paymentProfiles.merchantId, merchantId), eq(schema.paymentProfiles.isDefault, true))
+      );
   }
 
   /** One-time heal when profiles still show a previous merchant account after Settings save. */
@@ -192,14 +194,17 @@ export class PaymentProfilesService {
     });
     if (!merchant) return;
 
-    const profiles = await db.query.paymentProfiles.findMany({
-      where: eq(schema.paymentProfiles.merchantId, merchantId),
+    const defaultProfile = await db.query.paymentProfiles.findFirst({
+      where: and(
+        eq(schema.paymentProfiles.merchantId, merchantId),
+        eq(schema.paymentProfiles.isDefault, true)
+      ),
       columns: { adyenMerchantAccount: true },
     });
     const merchantAcct = merchant.adyenMerchantAccount?.trim() || null;
-    const stale = profiles.some(
-      (p) => (p.adyenMerchantAccount?.trim() || null) !== merchantAcct
-    );
+    const stale =
+      !!defaultProfile &&
+      (defaultProfile.adyenMerchantAccount?.trim() || null) !== merchantAcct;
     if (!stale) return;
     await this.syncAdyenFromMerchant(merchantId);
   }

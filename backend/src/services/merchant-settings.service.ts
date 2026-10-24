@@ -132,9 +132,18 @@ function normalizeTaxRatePercent(value: number, field: string): string {
   return n.toFixed(2);
 }
 
+export type MerchantSettingsScope = {
+  /** When set, overlay branch payment + print settings for multi-location merchants. */
+  branchLocationId?: string | null;
+};
+
 export class MerchantSettingsService {
-  static async getMerchantSettings(merchantId: string) {
-    return this.buildMerchantSettings(merchantId);
+  static async getMerchantSettings(merchantId: string, scope?: MerchantSettingsScope) {
+    const base = await this.buildMerchantSettings(merchantId);
+    const branchId = String(scope?.branchLocationId || "").trim();
+    if (!branchId) return base;
+    const { applyBranchPanelSettingsOverlay } = await import("@/lib/branch-panel-settings");
+    return applyBranchPanelSettingsOverlay(merchantId, base as Record<string, unknown>, branchId);
   }
 
   private static async buildMerchantSettings(merchantId: string) {
@@ -552,19 +561,28 @@ export class MerchantSettingsService {
       inventoryWasteFactor?: number;
       inventoryAutoReorderEmailEnabled?: boolean;
       inventoryExpiryAlertDays?: number;
-    }
+    },
+    scope?: MerchantSettingsScope
   ) {
     const db = getDb();
 
-    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    let scopedUpdates = updates as Record<string, unknown>;
+    const branchId = String(scope?.branchLocationId || "").trim();
+    if (branchId) {
+      const { splitAndPersistBranchPanelSettings } = await import("@/lib/branch-panel-settings");
+      scopedUpdates = await splitAndPersistBranchPanelSettings(merchantId, branchId, scopedUpdates);
+    }
 
-    if (updates.name !== undefined) {
-      const name = String(updates.name || "").trim().slice(0, 255);
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    const effective = scopedUpdates as typeof updates;
+
+    if (effective.name !== undefined) {
+      const name = String(effective.name || "").trim().slice(0, 255);
       if (!name) throw new Error("Business name is required");
       patch.name = name;
     }
-    if (updates.email !== undefined) {
-      const email = String(updates.email || "").trim().toLowerCase().slice(0, 255);
+    if (effective.email !== undefined) {
+      const email = String(effective.email || "").trim().toLowerCase().slice(0, 255);
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw new Error("Valid email is required");
       }
@@ -575,80 +593,80 @@ export class MerchantSettingsService {
       if (dup) throw new Error("This email is already used by another account");
       patch.email = email;
     }
-    if (updates.phone !== undefined) patch.phone = updates.phone;
-    if (updates.address !== undefined) patch.address = updates.address;
-    if (updates.city !== undefined) patch.city = updates.city;
-    if (updates.country !== undefined) patch.country = updates.country;
-    if (updates.businessLicense !== undefined) patch.businessLicense = updates.businessLicense;
-    if (updates.vatNumber !== undefined) patch.vatNumber = updates.vatNumber;
-    if (updates.vatRate !== undefined) {
-      const vatRate = incomingTaxRateOrPreserve(updates.vatRate, "vatRate");
+    if (effective.phone !== undefined) patch.phone = effective.phone;
+    if (effective.address !== undefined) patch.address = effective.address;
+    if (effective.city !== undefined) patch.city = effective.city;
+    if (effective.country !== undefined) patch.country = effective.country;
+    if (effective.businessLicense !== undefined) patch.businessLicense = effective.businessLicense;
+    if (effective.vatNumber !== undefined) patch.vatNumber = effective.vatNumber;
+    if (effective.vatRate !== undefined) {
+      const vatRate = incomingTaxRateOrPreserve(effective.vatRate, "vatRate");
       if (vatRate !== undefined) patch.vatRate = vatRate;
     }
-    if (updates.taxTakeawayRate !== undefined) {
-      const rate = incomingTaxRateOrPreserve(updates.taxTakeawayRate, "taxTakeawayRate");
+    if (effective.taxTakeawayRate !== undefined) {
+      const rate = incomingTaxRateOrPreserve(effective.taxTakeawayRate, "taxTakeawayRate");
       if (rate !== undefined) patch.taxTakeawayRate = rate;
     }
-    if (updates.taxDineInRate !== undefined) {
-      const rate = incomingTaxRateOrPreserve(updates.taxDineInRate, "taxDineInRate");
+    if (effective.taxDineInRate !== undefined) {
+      const rate = incomingTaxRateOrPreserve(effective.taxDineInRate, "taxDineInRate");
       if (rate !== undefined) patch.taxDineInRate = rate;
     }
-    if (updates.taxDeliveryRate !== undefined) {
-      const rate = incomingTaxRateOrPreserve(updates.taxDeliveryRate, "taxDeliveryRate");
+    if (effective.taxDeliveryRate !== undefined) {
+      const rate = incomingTaxRateOrPreserve(effective.taxDeliveryRate, "taxDeliveryRate");
       if (rate !== undefined) patch.taxDeliveryRate = rate;
     }
-    if (updates.taxIncludedInPrice !== undefined) patch.taxIncludedInPrice = !!updates.taxIncludedInPrice;
-    if (updates.vatAfterDiscount !== undefined) patch.vatAfterDiscount = !!updates.vatAfterDiscount;
-    if (updates.shopEnabled !== undefined) patch.shopEnabled = !!updates.shopEnabled;
-    if (updates.acceptingOrders !== undefined) patch.acceptingOrders = !!updates.acceptingOrders;
-    if (updates.acceptingReservations !== undefined) {
-      patch.acceptingReservations = !!updates.acceptingReservations;
+    if (effective.taxIncludedInPrice !== undefined) patch.taxIncludedInPrice = !!effective.taxIncludedInPrice;
+    if (effective.vatAfterDiscount !== undefined) patch.vatAfterDiscount = !!effective.vatAfterDiscount;
+    if (effective.shopEnabled !== undefined) patch.shopEnabled = !!effective.shopEnabled;
+    if (effective.acceptingOrders !== undefined) patch.acceptingOrders = !!effective.acceptingOrders;
+    if (effective.acceptingReservations !== undefined) {
+      patch.acceptingReservations = !!effective.acceptingReservations;
     }
-    if (updates.pickupEnabled !== undefined) patch.pickupEnabled = !!updates.pickupEnabled;
-    if (updates.dineInEnabled !== undefined) patch.dineInEnabled = !!updates.dineInEnabled;
-    if (updates.deliveryEnabled !== undefined) patch.deliveryEnabled = !!updates.deliveryEnabled;
-    if (updates.deliveryMode !== undefined) {
-      patch.deliveryMode = normalizeDeliveryMode(updates.deliveryMode);
+    if (effective.pickupEnabled !== undefined) patch.pickupEnabled = !!effective.pickupEnabled;
+    if (effective.dineInEnabled !== undefined) patch.dineInEnabled = !!effective.dineInEnabled;
+    if (effective.deliveryEnabled !== undefined) patch.deliveryEnabled = !!effective.deliveryEnabled;
+    if (effective.deliveryMode !== undefined) {
+      patch.deliveryMode = normalizeDeliveryMode(effective.deliveryMode);
     }
-    if (updates.channelSelectMode !== undefined) {
-      patch.channelSelectMode = normalizeChannelSelectMode(updates.channelSelectMode);
+    if (effective.channelSelectMode !== undefined) {
+      patch.channelSelectMode = normalizeChannelSelectMode(effective.channelSelectMode);
     }
-    if (updates.menuShowProductImages !== undefined) {
-      patch.menuShowProductImages = !!updates.menuShowProductImages;
+    if (effective.menuShowProductImages !== undefined) {
+      patch.menuShowProductImages = !!effective.menuShowProductImages;
     }
-    if (updates.menuShowUpsells !== undefined) {
-      patch.menuShowUpsells = !!updates.menuShowUpsells;
+    if (effective.menuShowUpsells !== undefined) {
+      patch.menuShowUpsells = !!effective.menuShowUpsells;
     }
-    if (updates.menuShowCategoryBanners !== undefined) {
-      patch.menuShowCategoryBanners = !!updates.menuShowCategoryBanners;
+    if (effective.menuShowCategoryBanners !== undefined) {
+      patch.menuShowCategoryBanners = !!effective.menuShowCategoryBanners;
     }
-    if (updates.cartLayout !== undefined) {
-      patch.cartLayout = normalizeCartLayout(updates.cartLayout);
+    if (effective.cartLayout !== undefined) {
+      patch.cartLayout = normalizeCartLayout(effective.cartLayout);
     }
-    if (updates.scheduledOrdersEnabled !== undefined) {
-      patch.scheduledOrdersEnabled = !!updates.scheduledOrdersEnabled;
+    if (effective.scheduledOrdersEnabled !== undefined) {
+      patch.scheduledOrdersEnabled = !!effective.scheduledOrdersEnabled;
     }
-    if (updates.floorPlanEnabled !== undefined) patch.floorPlanEnabled = !!updates.floorPlanEnabled;
-    if (updates.paxOrderingEnabled !== undefined) patch.paxOrderingEnabled = !!updates.paxOrderingEnabled;
-    if (updates.coursesEnabled !== undefined) patch.coursesEnabled = !!updates.coursesEnabled;
-    if (updates.shiftsEnabled !== undefined) patch.shiftsEnabled = !!updates.shiftsEnabled;
-    if (updates.posColorTheme !== undefined) {
-      const theme = String(updates.posColorTheme || "teal").toLowerCase();
+    if (effective.floorPlanEnabled !== undefined) patch.floorPlanEnabled = !!effective.floorPlanEnabled;
+    if (effective.paxOrderingEnabled !== undefined) patch.paxOrderingEnabled = !!effective.paxOrderingEnabled;
+    if (effective.coursesEnabled !== undefined) patch.coursesEnabled = !!effective.coursesEnabled;
+    if (effective.shiftsEnabled !== undefined) patch.shiftsEnabled = !!effective.shiftsEnabled;
+    if (effective.posColorTheme !== undefined) {
+      const theme = String(effective.posColorTheme || "teal").toLowerCase();
       patch.posColorTheme = ["teal", "green", "blue", "violet", "mono"].includes(theme)
         ? theme
         : "teal";
     }
-    if (updates.storeHours !== undefined) patch.storeHours = updates.storeHours;
-    if (updates.shopLogoUrl !== undefined) patch.shopLogoUrl = updates.shopLogoUrl;
-    if (updates.shopBannerUrl !== undefined) patch.shopBannerUrl = updates.shopBannerUrl;
-    if (updates.shopSiteSettings !== undefined) {
+    if (effective.storeHours !== undefined) patch.storeHours = effective.storeHours;
+    if (effective.shopLogoUrl !== undefined) patch.shopLogoUrl = effective.shopLogoUrl;
+    if (effective.shopBannerUrl !== undefined) patch.shopBannerUrl = effective.shopBannerUrl;
+    if (effective.shopSiteSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
         columns: { shopSiteSettings: true },
       });
       const existing = normalizeShopSiteSettings(current?.shopSiteSettings);
-      const incoming = updates.shopSiteSettings && typeof updates.shopSiteSettings === "object"
-        ? updates.shopSiteSettings
+      const incoming = effective.shopSiteSettings && typeof effective.shopSiteSettings === "object"
+        ? effective.shopSiteSettings
         : {};
       const incomingObj = incoming as Partial<ShopSiteSettings>;
       patch.shopSiteSettings = normalizeShopSiteSettings({
@@ -662,53 +680,53 @@ export class MerchantSettingsService {
             : existing.metaDescription,
       });
     }
-    if (updates.latitude !== undefined) {
-      patch.latitude = updates.latitude === null || updates.latitude === "" ? null : String(updates.latitude);
+    if (effective.latitude !== undefined) {
+      patch.latitude = effective.latitude === null || effective.latitude === "" ? null : String(effective.latitude);
     }
-    if (updates.longitude !== undefined) {
-      patch.longitude = updates.longitude === null || updates.longitude === "" ? null : String(updates.longitude);
+    if (effective.longitude !== undefined) {
+      patch.longitude = effective.longitude === null || effective.longitude === "" ? null : String(effective.longitude);
     }
-    if (updates.pickupEtaMinutes !== undefined) patch.pickupEtaMinutes = updates.pickupEtaMinutes;
-    if (updates.deliveryEtaMinutes !== undefined) patch.deliveryEtaMinutes = updates.deliveryEtaMinutes;
-    if (updates.minPreOrderDelayMinutes !== undefined) {
-      patch.minPreOrderDelayMinutes = Math.max(0, Math.min(240, Number(updates.minPreOrderDelayMinutes) || 0));
+    if (effective.pickupEtaMinutes !== undefined) patch.pickupEtaMinutes = effective.pickupEtaMinutes;
+    if (effective.deliveryEtaMinutes !== undefined) patch.deliveryEtaMinutes = effective.deliveryEtaMinutes;
+    if (effective.minPreOrderDelayMinutes !== undefined) {
+      patch.minPreOrderDelayMinutes = Math.max(0, Math.min(240, Number(effective.minPreOrderDelayMinutes) || 0));
     }
-    if (updates.deliveryMenuMarkup !== undefined) {
-      const n = Number(updates.deliveryMenuMarkup);
+    if (effective.deliveryMenuMarkup !== undefined) {
+      const n = Number(effective.deliveryMenuMarkup);
       if (!Number.isFinite(n) || n < 0) throw new Error("deliveryMenuMarkup must be >= 0");
       patch.deliveryMenuMarkup = n.toFixed(2);
     }
-    if (updates.categoryPricingEnabled !== undefined) {
-      patch.categoryPricingEnabled = !!updates.categoryPricingEnabled;
+    if (effective.categoryPricingEnabled !== undefined) {
+      patch.categoryPricingEnabled = !!effective.categoryPricingEnabled;
     }
-    if (updates.deliveryDriverPayMode !== undefined) {
-      const mode = String(updates.deliveryDriverPayMode);
+    if (effective.deliveryDriverPayMode !== undefined) {
+      const mode = String(effective.deliveryDriverPayMode);
       if (!["hourly", "per_order", "both"].includes(mode)) {
         throw new Error("deliveryDriverPayMode must be hourly, per_order, or both");
       }
       patch.deliveryDriverPayMode = mode;
     }
-    if (updates.deliveryDriverHourlyRate !== undefined) {
-      const n = Number(updates.deliveryDriverHourlyRate);
+    if (effective.deliveryDriverHourlyRate !== undefined) {
+      const n = Number(effective.deliveryDriverHourlyRate);
       if (!Number.isFinite(n) || n < 0) throw new Error("deliveryDriverHourlyRate must be >= 0");
       patch.deliveryDriverHourlyRate = n.toFixed(2);
     }
-    if (updates.deliveryPerOrderFee !== undefined) {
-      const n = Number(updates.deliveryPerOrderFee);
+    if (effective.deliveryPerOrderFee !== undefined) {
+      const n = Number(effective.deliveryPerOrderFee);
       if (!Number.isFinite(n) || n < 0) throw new Error("deliveryPerOrderFee must be >= 0");
       patch.deliveryPerOrderFee = n.toFixed(2);
     }
-    if (shouldWriteCredential(updates.adyenMerchantAccount)) {
-      patch.adyenMerchantAccount = String(updates.adyenMerchantAccount).trim();
+    if (shouldWriteCredential(effective.adyenMerchantAccount)) {
+      patch.adyenMerchantAccount = String(effective.adyenMerchantAccount).trim();
     }
-    if (updates.adyenStoreReference !== undefined) {
-      const storeRef = String(updates.adyenStoreReference || "")
+    if (effective.adyenStoreReference !== undefined) {
+      const storeRef = String(effective.adyenStoreReference || "")
         .trim()
         .slice(0, 255);
       if (storeRef) patch.adyenStoreReference = storeRef;
     }
-    if (shouldWriteCredential(updates.adyenClientId)) {
-      const clientKey = String(updates.adyenClientId).trim();
+    if (shouldWriteCredential(effective.adyenClientId)) {
+      const clientKey = String(effective.adyenClientId).trim();
       if (!isValidAdyenClientKey(clientKey)) {
         throw new Error(
           "Client key must start with test_ or live_. Use the Client Key from Adyen Customer Area → Developers → Client settings — not the API key (AQE…)."
@@ -716,10 +734,10 @@ export class MerchantSettingsService {
       }
       patch.adyenClientId = clientKey;
     }
-    if (updates.tapToPayEnabled !== undefined) patch.tapToPayEnabled = !!updates.tapToPayEnabled;
-    if (updates.adyenLiveEnvironment !== undefined) patch.adyenLiveEnvironment = !!updates.adyenLiveEnvironment;
-    if (updates.adyenLiveUrlPrefix !== undefined) {
-      const prefix = String(updates.adyenLiveUrlPrefix || "")
+    if (effective.tapToPayEnabled !== undefined) patch.tapToPayEnabled = !!effective.tapToPayEnabled;
+    if (effective.adyenLiveEnvironment !== undefined) patch.adyenLiveEnvironment = !!effective.adyenLiveEnvironment;
+    if (effective.adyenLiveUrlPrefix !== undefined) {
+      const prefix = String(effective.adyenLiveUrlPrefix || "")
         .trim()
         .replace(/^https?:\/\//, "")
         .replace(/-checkout-live.*$/i, "")
@@ -728,23 +746,23 @@ export class MerchantSettingsService {
         .slice(0, 255);
       if (prefix) patch.adyenLiveUrlPrefix = prefix;
     }
-    if (updates.adyenLiveRegion !== undefined) {
-      const region = String(updates.adyenLiveRegion || "EU").toUpperCase();
+    if (effective.adyenLiveRegion !== undefined) {
+      const region = String(effective.adyenLiveRegion || "EU").toUpperCase();
       patch.adyenLiveRegion = ["EU", "US", "AU", "APSE"].includes(region) ? region : "EU";
     }
-    if (updates.adyenUseLegacyEndpoint !== undefined) {
-      patch.adyenUseLegacyEndpoint = !!updates.adyenUseLegacyEndpoint;
+    if (effective.adyenUseLegacyEndpoint !== undefined) {
+      patch.adyenUseLegacyEndpoint = !!effective.adyenUseLegacyEndpoint;
     }
-    if (updates.fiskalySettings !== undefined) {
+    if (effective.fiskalySettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
       });
       patch.fiskalySettings = mergeFiskalySettings(
         (current as { fiskalySettings?: FiskalySettings | null } | undefined)?.fiskalySettings,
-        updates.fiskalySettings
+        effective.fiskalySettings
       );
     }
-    if (updates.comoSettings !== undefined) {
+    if (effective.comoSettings !== undefined) {
       const { ensureComoSchema } = await import("@/lib/ensure-merchant-schema");
       await ensureComoSchema();
       const current = await db.query.merchants.findFirst({
@@ -752,10 +770,10 @@ export class MerchantSettingsService {
       });
       patch.comoSettings = mergeComoSettings(
         (current as { comoSettings?: ComoSettings | null } | undefined)?.comoSettings,
-        updates.comoSettings
+        effective.comoSettings
       );
     }
-    if (updates.phoneOrderingSettings !== undefined) {
+    if (effective.phoneOrderingSettings !== undefined) {
       const { ensurePhoneOrderingSchema } = await import("@/lib/ensure-merchant-schema");
       await ensurePhoneOrderingSchema();
       const current = await db.query.merchants.findFirst({
@@ -771,20 +789,20 @@ export class MerchantSettingsService {
       const nextPhone = mergePhoneOrderingSettings(
         (current as { phoneOrderingSettings?: PhoneOrderingSettings | null } | undefined)
           ?.phoneOrderingSettings,
-        updates.phoneOrderingSettings
+        effective.phoneOrderingSettings
       );
       patch.phoneOrderingSettings = nextPhone;
       if (nextPhone.phoneNumber && !current?.phone) {
         patch.phone = nextPhone.phoneNumber;
       }
     }
-    if (updates.webposExpressEnabled !== undefined) patch.webposExpressEnabled = !!updates.webposExpressEnabled;
-    if (updates.webposCashEnabled !== undefined) patch.webposCashEnabled = !!updates.webposCashEnabled;
-    if (updates.webposCardEnabled !== undefined) patch.webposCardEnabled = !!updates.webposCardEnabled;
-    if (updates.webposTerminalEnabled !== undefined) patch.webposTerminalEnabled = !!updates.webposTerminalEnabled;
-    if (updates.webposGiftCardEnabled !== undefined) {
-      patch.webposGiftCardEnabled = !!updates.webposGiftCardEnabled;
-      if (updates.webposGiftCardEnabled) {
+    if (effective.webposExpressEnabled !== undefined) patch.webposExpressEnabled = !!effective.webposExpressEnabled;
+    if (effective.webposCashEnabled !== undefined) patch.webposCashEnabled = !!effective.webposCashEnabled;
+    if (effective.webposCardEnabled !== undefined) patch.webposCardEnabled = !!effective.webposCardEnabled;
+    if (effective.webposTerminalEnabled !== undefined) patch.webposTerminalEnabled = !!effective.webposTerminalEnabled;
+    if (effective.webposGiftCardEnabled !== undefined) {
+      patch.webposGiftCardEnabled = !!effective.webposGiftCardEnabled;
+      if (effective.webposGiftCardEnabled) {
         const currentMerchant = await db.query.merchants.findFirst({
           where: eq(schema.merchants.id, merchantId),
           columns: { giftCardSettings: true },
@@ -795,67 +813,67 @@ export class MerchantSettingsService {
         }
       }
     }
-    if (updates.webposInvoiceEnabled !== undefined) patch.webposInvoiceEnabled = !!updates.webposInvoiceEnabled;
-    if (updates.bankIban !== undefined) {
-      patch.bankIban = updates.bankIban ? String(updates.bankIban).replace(/\s+/g, "").toUpperCase().slice(0, 34) : null;
+    if (effective.webposInvoiceEnabled !== undefined) patch.webposInvoiceEnabled = !!effective.webposInvoiceEnabled;
+    if (effective.bankIban !== undefined) {
+      patch.bankIban = effective.bankIban ? String(effective.bankIban).replace(/\s+/g, "").toUpperCase().slice(0, 34) : null;
     }
-    if (updates.bankQrIban !== undefined) {
-      patch.bankQrIban = updates.bankQrIban
-        ? String(updates.bankQrIban).replace(/\s+/g, "").toUpperCase().slice(0, 34)
+    if (effective.bankQrIban !== undefined) {
+      patch.bankQrIban = effective.bankQrIban
+        ? String(effective.bankQrIban).replace(/\s+/g, "").toUpperCase().slice(0, 34)
         : null;
     }
-    if (updates.bankName !== undefined) {
-      patch.bankName = updates.bankName ? String(updates.bankName).trim().slice(0, 255) : null;
+    if (effective.bankName !== undefined) {
+      patch.bankName = effective.bankName ? String(effective.bankName).trim().slice(0, 255) : null;
     }
-    if (updates.bankAccountHolder !== undefined) {
-      patch.bankAccountHolder = updates.bankAccountHolder
-        ? String(updates.bankAccountHolder).trim().slice(0, 255)
+    if (effective.bankAccountHolder !== undefined) {
+      patch.bankAccountHolder = effective.bankAccountHolder
+        ? String(effective.bankAccountHolder).trim().slice(0, 255)
         : null;
     }
-    if (updates.onlineCardFeeFixed !== undefined) {
-      const n = Number(updates.onlineCardFeeFixed);
+    if (effective.onlineCardFeeFixed !== undefined) {
+      const n = Number(effective.onlineCardFeeFixed);
       if (!Number.isFinite(n) || n < 0) throw new Error("onlineCardFeeFixed must be >= 0");
       patch.onlineCardFeeFixed = n.toFixed(2);
     }
-    if (updates.onlineCardFeePercent !== undefined) {
-      const n = Number(updates.onlineCardFeePercent);
+    if (effective.onlineCardFeePercent !== undefined) {
+      const n = Number(effective.onlineCardFeePercent);
       if (!Number.isFinite(n) || n < 0 || n > 100) {
         throw new Error("onlineCardFeePercent must be between 0 and 100");
       }
       patch.onlineCardFeePercent = n.toFixed(3);
     }
-    if (updates.panelLanguage !== undefined) {
-      const lang = updates.panelLanguage.toLowerCase();
+    if (effective.panelLanguage !== undefined) {
+      const lang = effective.panelLanguage.toLowerCase();
       if (!["en", "fr", "de"].includes(lang)) {
         throw new Error("panelLanguage must be en, fr, or de");
       }
       patch.panelLanguage = lang;
     }
-    if (updates.shopLanguage !== undefined) {
-      const lang = updates.shopLanguage.toLowerCase();
+    if (effective.shopLanguage !== undefined) {
+      const lang = effective.shopLanguage.toLowerCase();
       if (!["en", "fr", "de"].includes(lang)) {
         throw new Error("shopLanguage must be en, fr, or de");
       }
       patch.shopLanguage = lang;
     }
-    if (shouldWriteCredential(updates.adyenApiKey)) {
-      patch.adyenApiKey = String(updates.adyenApiKey).trim();
+    if (shouldWriteCredential(effective.adyenApiKey)) {
+      patch.adyenApiKey = String(effective.adyenApiKey).trim();
     }
-    if (shouldWriteCredential(updates.adyenHmacKey)) {
-      patch.adyenHmacKey = String(updates.adyenHmacKey).trim();
+    if (shouldWriteCredential(effective.adyenHmacKey)) {
+      patch.adyenHmacKey = String(effective.adyenHmacKey).trim();
     }
 
-    if (updates.slug !== undefined) {
-      patch.slug = normalizeSubdomain(updates.slug) || null;
+    if (effective.slug !== undefined) {
+      patch.slug = normalizeSubdomain(effective.slug) || null;
     }
-    if (updates.subdomain !== undefined) {
-      patch.subdomain = normalizeSubdomain(updates.subdomain);
+    if (effective.subdomain !== undefined) {
+      patch.subdomain = normalizeSubdomain(effective.subdomain);
     }
-    if (updates.customDomain !== undefined) {
+    if (effective.customDomain !== undefined) {
       if (CustomDomainService.isWizardEnabled()) {
         // Custom domain is managed by /merchant/custom-domain when the wizard is enabled.
       } else {
-        const domainNorm = normalizeCustomDomain(updates.customDomain);
+        const domainNorm = normalizeCustomDomain(effective.customDomain);
         if (domainNorm) {
           const taken = await db.query.merchants.findFirst({
             where: eq(schema.merchants.customDomain, domainNorm),
@@ -867,14 +885,14 @@ export class MerchantSettingsService {
         patch.customDomain = domainNorm;
       }
     }
-    if (updates.cmsHomepageEnabled !== undefined) {
-      patch.cmsHomepageEnabled = !!updates.cmsHomepageEnabled;
+    if (effective.cmsHomepageEnabled !== undefined) {
+      patch.cmsHomepageEnabled = !!effective.cmsHomepageEnabled;
     }
-    if (updates.vacationSettings !== undefined) {
-      patch.vacationSettings = normalizeVacationSettings(updates.vacationSettings);
+    if (effective.vacationSettings !== undefined) {
+      patch.vacationSettings = normalizeVacationSettings(effective.vacationSettings);
     }
-    if (updates.emailSmtpSettings !== undefined) {
-      const next = MarketingService.normalizeSmtp(updates.emailSmtpSettings);
+    if (effective.emailSmtpSettings !== undefined) {
+      const next = MarketingService.normalizeSmtp(effective.emailSmtpSettings);
       if (!next.password) {
         const current = await db.query.merchants.findFirst({
           where: eq(schema.merchants.id, merchantId),
@@ -885,8 +903,8 @@ export class MerchantSettingsService {
       }
       patch.emailSmtpSettings = next;
     }
-    if (updates.emailBrevoSettings !== undefined) {
-      const next = MarketingService.normalizeBrevo(updates.emailBrevoSettings);
+    if (effective.emailBrevoSettings !== undefined) {
+      const next = MarketingService.normalizeBrevo(effective.emailBrevoSettings);
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
         columns: { emailBrevoSettings: true },
@@ -901,53 +919,53 @@ export class MerchantSettingsService {
       next.monthlyPeriod = prev.monthlyPeriod;
       patch.emailBrevoSettings = next;
     }
-    if (updates.emailDeliveryMode !== undefined) {
-      const mode = String(updates.emailDeliveryMode || "platform").toLowerCase();
+    if (effective.emailDeliveryMode !== undefined) {
+      const mode = String(effective.emailDeliveryMode || "platform").toLowerCase();
       patch.emailDeliveryMode = mode === "own" ? "own" : "platform";
     }
-    if (updates.marketingSettings !== undefined) {
-      patch.marketingSettings = MarketingService.normalizeMarketing(updates.marketingSettings);
+    if (effective.marketingSettings !== undefined) {
+      patch.marketingSettings = MarketingService.normalizeMarketing(effective.marketingSettings);
     }
-    if (updates.inventoryWasteFactor !== undefined) {
-      const n = Number(updates.inventoryWasteFactor);
+    if (effective.inventoryWasteFactor !== undefined) {
+      const n = Number(effective.inventoryWasteFactor);
       if (!Number.isFinite(n) || n < 0 || n > 0.5) {
         throw new Error("inventoryWasteFactor must be between 0 and 0.50");
       }
       patch.inventoryWasteFactor = n.toFixed(4);
     }
-    if (updates.inventoryAutoReorderEmailEnabled !== undefined) {
-      patch.inventoryAutoReorderEmailEnabled = !!updates.inventoryAutoReorderEmailEnabled;
+    if (effective.inventoryAutoReorderEmailEnabled !== undefined) {
+      patch.inventoryAutoReorderEmailEnabled = !!effective.inventoryAutoReorderEmailEnabled;
     }
-    if (updates.inventoryExpiryAlertDays !== undefined) {
-      const n = Math.round(Number(updates.inventoryExpiryAlertDays));
+    if (effective.inventoryExpiryAlertDays !== undefined) {
+      const n = Math.round(Number(effective.inventoryExpiryAlertDays));
       if (!Number.isFinite(n) || n < 1 || n > 365) {
         throw new Error("inventoryExpiryAlertDays must be between 1 and 365");
       }
       patch.inventoryExpiryAlertDays = n;
     }
-    if (updates.posPrintSettings !== undefined) {
-      patch.posPrintSettings = normalizePosPrintSettings(updates.posPrintSettings);
+    if (effective.posPrintSettings !== undefined) {
+      patch.posPrintSettings = normalizePosPrintSettings(effective.posPrintSettings);
     }
-    if (updates.tableQrSettings !== undefined) {
-      patch.tableQrSettings = normalizeTableQrSettings(updates.tableQrSettings);
+    if (effective.tableQrSettings !== undefined) {
+      patch.tableQrSettings = normalizeTableQrSettings(effective.tableQrSettings);
     }
-    if (updates.posCheckoutSettings !== undefined) {
+    if (effective.posCheckoutSettings !== undefined) {
       const currentMerchant = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
         columns: { businessCategory: true },
       });
       const locked = normalizeBusinessModule(currentMerchant?.businessCategory);
-      let checkout = normalizePosCheckoutSettings(updates.posCheckoutSettings);
+      let checkout = normalizePosCheckoutSettings(effective.posCheckoutSettings);
       if (locked) {
         checkout = { ...checkout, posMode: posModeForModule(locked) };
       }
       patch.posCheckoutSettings = checkout;
       // Keep legacy webpos_express_enabled in sync with the single express-checkout toggle.
-      if (updates.webposExpressEnabled === undefined) {
+      if (effective.webposExpressEnabled === undefined) {
         patch.webposExpressEnabled = checkout.expressCheckoutEnabled;
       }
     }
-    if (updates.customerDisplaySettings !== undefined) {
+    if (effective.customerDisplaySettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
         columns: { customerDisplaySettings: true },
@@ -955,20 +973,20 @@ export class MerchantSettingsService {
       const existing = normalizeCustomerDisplaySettings(current?.customerDisplaySettings);
       const incoming = normalizeCustomerDisplaySettings({
         ...existing,
-        ...(updates.customerDisplaySettings as object),
+        ...(effective.customerDisplaySettings as object),
       });
       incoming.accessToken = existing.accessToken || incoming.accessToken;
       incoming.shortCode = existing.shortCode || incoming.shortCode;
       patch.customerDisplaySettings = incoming;
     }
-    if (updates.deliveryPlatformSettings !== undefined) {
+    if (effective.deliveryPlatformSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
         columns: { deliveryPlatformSettings: true },
       });
       const merged = mergeDeliveryPlatformSettings(
         current?.deliveryPlatformSettings,
-        updates.deliveryPlatformSettings
+        effective.deliveryPlatformSettings
       );
       const before = normalizeDeliveryPlatformSettings(current?.deliveryPlatformSettings);
       const after = normalizeDeliveryPlatformSettings(merged);
@@ -987,7 +1005,7 @@ export class MerchantSettingsService {
       patch.deliveryPlatformSettings = applyProductionCredentialDefaults(merged);
     }
 
-    if (updates.accountingIntegrationSettings !== undefined) {
+    if (effective.accountingIntegrationSettings !== undefined) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
         columns: {
@@ -998,7 +1016,7 @@ export class MerchantSettingsService {
       });
       const merged = mergeAccountingIntegrationSettings(
         current?.accountingIntegrationSettings,
-        updates.accountingIntegrationSettings
+        effective.accountingIntegrationSettings
       );
       const before = normalizeAccountingIntegrationSettings(
         current?.accountingIntegrationSettings
@@ -1018,7 +1036,7 @@ export class MerchantSettingsService {
     }
 
     // Auto-create slug when enabling shop without one
-    if (updates.shopEnabled && !updates.slug) {
+    if (effective.shopEnabled && !effective.slug) {
       const current = await db.query.merchants.findFirst({
         where: eq(schema.merchants.id, merchantId),
       });
@@ -1048,12 +1066,12 @@ export class MerchantSettingsService {
       "adyenLiveRegion",
       "adyenUseLegacyEndpoint",
     ] as const;
-    if (adyenKeys.some((key) => key in patch)) {
+    if (!branchId && adyenKeys.some((key) => key in patch)) {
       const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
       await PaymentProfilesService.syncAdyenFromMerchant(merchantId);
     }
 
-    return this.getMerchantSettings(merchantId);
+    return this.getMerchantSettings(merchantId, scope);
   }
 
   static channelTaxRate(

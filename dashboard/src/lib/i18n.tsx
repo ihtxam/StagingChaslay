@@ -4495,6 +4495,7 @@ const en: Dict = {
   hqSettingsPickBranchTitle: 'Choose a branch',
   hqSettingsPickBranch:
     'Select a branch to configure payments, printers, and receipts. HQ view is for overview and menu push only.',
+  settingsForBranch: 'Settings for {branch} — payments, printers, and receipts are saved per branch.',
   paymentProfileNewName: 'New profile name',
   paymentProfileNewNamePlaceholder: 'Bar register',
   paymentProfileAdd: 'Add profile',
