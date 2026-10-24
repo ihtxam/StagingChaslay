@@ -909,6 +909,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const [loading, setLoading] = useState(true);
   const catalogBootedRef = useRef(false);
+  const catalogLoadSeqRef = useRef(0);
   const [entitlement, setEntitlement] = useState<WebPosEntitlement | null>(null);
   const [merchant, setMerchant] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -931,6 +932,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const effectiveChannel: Channel = channel ?? 'takeaway';
   const [posTab, setPosTab] = useState<PosTab>('register');
   const [posView, setPosView] = useState<PosView>('register');
+  const posViewRef = useRef(posView);
+  posViewRef.current = posView;
   const [selectedLineId, setSelectedLineId] = useState<string | null>(
     () => bootActive?.selectedLineId ?? null
   );
@@ -2818,6 +2821,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const load = useCallback(async () => {
+    const loadSeq = ++catalogLoadSeqRef.current;
+    const shouldSurfaceCatalogLoadError = () => {
+      if (loadSeq !== catalogLoadSeqRef.current) return false;
+      const view = posViewRef.current;
+      if (view === 'checkout' || view === 'success') return false;
+      return !catalogBootedRef.current;
+    };
     if (!catalogBootedRef.current) setLoading(true);
     let cacheReady = false;
     const offlineBoot = !isBrowserOnline();
@@ -2961,7 +2971,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setStaffRoster(staffList);
         applyStaffRoster(staffList, { openPinGate: !loadWebPosStaffSession() });
       }
-      if (catalogError) {
+      if (catalogError && shouldSurfaceCatalogLoadError()) {
         toast.error(
           catalogError.response?.data?.error || catalogError.message || t('webPosLoadFailed')
         );
@@ -3067,12 +3077,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         );
         cacheReady = hydrated;
       }
-      if (!cacheReady) {
+      if (!cacheReady && shouldSurfaceCatalogLoadError()) {
         logWebPosError('load', 'WebPOS catalog load failed', e, { autoSend: true });
         toast.error(e.response?.data?.error || t('webPosLoadFailed'));
       }
     } finally {
-      setLoading(false);
+      if (loadSeq === catalogLoadSeqRef.current) {
+        setLoading(false);
+      }
       catalogBootedRef.current = true;
     }
   }, [applyCachedOfflineSnapshot, applyStaffRoster, posLocationId, refreshAgent, refreshCurrentShift, t]);

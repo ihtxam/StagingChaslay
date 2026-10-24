@@ -30,5 +30,9 @@ assert.match(guard, /export function mergeMerchantOrderDetail/);
 assert.match(ordersPanel, /\(selectedOrder\.items \|\| \[\]\)\.map/);
 assert.match(ordersPanel, /loadSeqRef/);
 assert.match(ordersPanel, /void load\(\{ silent: true \}\)/);
+assert.match(ordersPanel, /queueMicrotask/);
+assert.match(webPos, /catalogLoadSeqRef/);
+assert.match(webPos, /shouldSurfaceCatalogLoadError/);
+assert.match(webPos, /view === 'checkout' \|\| view === 'success'/);
 
 console.log('order-to-cart.test.ts OK');

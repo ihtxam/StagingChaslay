@@ -714,7 +714,10 @@ export default function WebPosOrdersPanel({
       nextHeld = asArray<HeldRow>(heldRes.value.data?.held);
     } else {
       if (reportLoadFailure) {
-        toastLoadError(heldRes.reason, t('webPosOrdersLoadFailed'));
+        queueMicrotask(() => {
+          if (!openRef.current || seq !== loadSeqRef.current) return;
+          toastLoadError(heldRes.reason, t('webPosOrdersLoadFailed'));
+        });
       }
       console.warn('[WebPOS][orders] held list failed', heldRes.reason);
     }
@@ -724,7 +727,10 @@ export default function WebPosOrdersPanel({
       setRefundReasons(asArray<RefundReasonOption>(ordersRes.value.data?.refundReasons));
     } else if (heldRes.status === 'fulfilled') {
       if (reportLoadFailure) {
-        toastLoadError(ordersRes.reason, t('webPosOrdersLoadFailed'));
+        queueMicrotask(() => {
+          if (!openRef.current || seq !== loadSeqRef.current) return;
+          toastLoadError(ordersRes.reason, t('webPosOrdersLoadFailed'));
+        });
       }
       console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
     }
