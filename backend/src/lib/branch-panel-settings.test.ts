@@ -25,4 +25,8 @@ assert.match(serviceSrc, /branchLocationId/, "merchant settings accepts branch s
 const routesSrc = readFileSync(join(here, "..", "routes", "merchant.routes.ts"), "utf8");
 assert.match(routesSrc, /branch-panel-settings/, "settings routes wire branch overlay");
 
+const overlaySrc = readFileSync(join(here, "branch-panel-settings.ts"), "utf8");
+assert.match(overlaySrc, /BRANCH_LOCATION_COLUMN_KEYS/, "branch overlay includes location business columns");
+assert.match(overlaySrc, /out\.name = location\.name/, "branch overlay maps location name to settings name");
+
 console.log("branch-panel-settings.test.ts: ok");

@@ -15,14 +15,22 @@ export function syncPanelVisualViewportHeight(): void {
   const vv = window.visualViewport;
   if (!vv) {
     root.style.removeProperty('--panel-vvh');
+    root.style.removeProperty('--panel-vv-top');
+    root.classList.remove('panel-kb-open');
     return;
   }
   const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
   if (inset >= KEYBOARD_INSET_THRESHOLD_PX) {
+    root.classList.add('panel-kb-open');
     root.style.setProperty('--panel-vvh', `${Math.round(vv.height)}px`);
+    root.style.setProperty('--panel-vv-top', `${Math.round(vv.offsetTop)}px`);
+    document.body.style.overflow = 'hidden';
     return;
   }
+  root.classList.remove('panel-kb-open');
   root.style.removeProperty('--panel-vvh');
+  root.style.removeProperty('--panel-vv-top');
+  document.body.style.removeProperty('overflow');
   window.scrollTo(0, 0);
   root.scrollTop = 0;
   document.body.scrollTop = 0;
@@ -51,7 +59,10 @@ export function bindPanelMobileViewport(): () => void {
 
   return () => {
     root.classList.remove('panel-vv-sync');
+    root.classList.remove('panel-kb-open');
     root.style.removeProperty('--panel-vvh');
+    root.style.removeProperty('--panel-vv-top');
+    document.body.style.removeProperty('overflow');
     window.visualViewport?.removeEventListener('resize', onChange);
     window.visualViewport?.removeEventListener('scroll', onChange);
     window.removeEventListener('resize', onChange);
