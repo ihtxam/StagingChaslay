@@ -24,6 +24,12 @@ import {
   imageDataToEscPosRaster,
 } from '@/lib/qr';
 import { isAndroidDevice } from '@/lib/print-agent-platform';
+import { isDesktopApp } from '@/lib/platform';
+
+/** Android Bridge + RebornPOS Windows — raster header and extra QR feed before cut. */
+function receiptUsesKioskThermalEscPosTweaks(): boolean {
+  return isAndroidDevice() || isDesktopApp();
+}
 import {
   escposCp850Encode,
   escposTextEncode,
@@ -1512,7 +1518,7 @@ export function getReceiptHeaderLines(
   return lines;
 }
 
-/** Bitmap header block — matches digital receipt layout on Sunmi / Android Bridge. */
+/** Bitmap header block — matches digital receipt layout (Android Bridge, RebornPOS Windows). */
 export async function buildReceiptHeaderRasterEscPos(
   lines: string[],
   opts: {
@@ -3796,9 +3802,9 @@ export function textToEscPos(
   if (postBodySections?.length) {
     parts.push(postBodySections);
   }
-  const cutFeed =
-    hasQr && isAndroidDevice() ? 10 : hasQr ? 6 : isAndroidDevice() ? 5 : 4;
-  if (hasQr && isAndroidDevice()) {
+  const kioskThermal = receiptUsesKioskThermalEscPosTweaks();
+  const cutFeed = hasQr && kioskThermal ? 10 : hasQr ? 6 : kioskThermal ? 5 : 4;
+  if (hasQr && kioskThermal) {
     parts.push(new Uint8Array([0x1b, 0x64, 0x03]));
   }
   parts.push(escposReceiptFeedAndCut(cutFeed));
@@ -3894,7 +3900,7 @@ export async function buildReceiptEscPos(
   const textEncoding = opts.textEncoding ?? 'cp850';
   const receiptLineWidth = lineWidthForPaper(paper);
   const headerRaster =
-    headerLines.length > 0 && isAndroidDevice()
+    headerLines.length > 0 && receiptUsesKioskThermalEscPosTweaks()
       ? await buildReceiptHeaderRasterEscPos(headerLines, {
           paperWidthMm: paper,
           align: opts.headerAlign,
