@@ -2637,6 +2637,7 @@ function formatChannelWhen(
   scheduledFor?: string | number | null
 ): string {
   const ch = channelLabel(L, channel);
+  if (!ch) return '';
   const when = formatKitchenWhen(scheduledFor);
   return `${ch} : ${when || L.asap}`;
 }

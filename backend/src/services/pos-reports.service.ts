@@ -82,6 +82,12 @@ function channelLabel(ch: string): string {
       return "Dine-in";
     case "delivery":
       return "Delivery";
+    case "in_store":
+    case "pos":
+    case "retail":
+      return "In store";
+    case "takeaway":
+      return "Takeaway";
     default:
       return "Takeaway";
   }

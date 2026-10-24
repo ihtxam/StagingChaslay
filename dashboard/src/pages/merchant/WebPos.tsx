@@ -931,8 +931,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => () => clearRetailScanTimer(), [clearRetailScanTimer]);
   const [retailTillSettingsOpen, setRetailTillSettingsOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>(() => normalizeCartLines(bootActive?.cart));
-  const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
-  const effectiveChannel: Channel = channel ?? 'takeaway';
+  const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? null);
   const [posTab, setPosTab] = useState<PosTab>('register');
   const [posView, setPosView] = useState<PosView>('register');
   const posViewRef = useRef(posView);
@@ -1857,19 +1856,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     mobileCartOpen,
   ]);
 
-  const taxRate = useMemo(() => {
-    if (!merchant) return 8.1;
-    const vat = merchant.vatRate;
-    const ch = effectiveChannel;
-    if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
-    if (ch === 'delivery') {
-      const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
-      if (delivery > 0) return delivery;
-      return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
-    }
-    return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
-  }, [merchant, effectiveChannel]);
-
   const merchantTax = useMemo(
     () =>
       merchant
@@ -1978,6 +1964,27 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ...(merchantTakeawayEnabled ? (['takeaway'] as const) : []),
         ...(merchantDeliveryEnabled ? (['delivery'] as const) : []),
       ];
+  const effectiveChannel: Channel = useMemo(() => {
+    if (tableId) return 'dine_in';
+    if (channel) return channel;
+    const retailCounterOnly =
+      isRetail && !showChannelTabs && channelTabOptions.length === 0;
+    return retailCounterOnly ? 'in_store' : 'takeaway';
+  }, [tableId, channel, isRetail, showChannelTabs, channelTabOptions.length]);
+
+  const taxRate = useMemo(() => {
+    if (!merchant) return 8.1;
+    const vat = merchant.vatRate;
+    const ch = effectiveChannel;
+    if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
+    if (ch === 'delivery') {
+      const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
+      if (delivery > 0) return delivery;
+      return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
+    }
+    return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
+  }, [merchant, effectiveChannel]);
+
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
   const orderLabelEnabled = printSettings?.orderLabelEnabled === true;
   const labelOnSend =
@@ -2044,6 +2051,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (channelTabOptions.includes(channel as 'takeaway' | 'delivery' | 'dine_in')) return;
     setChannel(channelTabOptions[0] ?? null);
   }, [isRetail, tableId, channel, channelTabOptions]);
+
+  useEffect(() => {
+    if (!isRetail || tableId) return;
+    if (showChannelTabs) return;
+    if (channel === 'takeaway' || channel === 'delivery' || channel === 'dine_in') {
+      setChannel(null);
+    }
+  }, [isRetail, tableId, showChannelTabs, channel]);
 
   const showFireCourseButton =
     coursesEnabled &&
@@ -10332,6 +10347,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           hasPermission(staffPerms, 'MANAGE_SETTINGS', false))
       : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', jwtIsOwner) ||
         hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
+  /** POS gear: online shop toggle only when the edition includes online shop. */
+  const posGearOnlineShopToggles = canManageOnlineShop && editionAllows('online_shop');
+  /** POS gear: food-service channels (pickup/delivery/dine-in) — not for retail counter POS. */
+  const posGearOrderChannelToggles =
+    canManageOnlineShop &&
+    !isRetail &&
+    (editionAllows('channel_takeaway') || editionAllows('channel_delivery'));
   const canViewAllSales =
     ownerOnRegister ||
     !staffConfigured ||
@@ -11427,7 +11449,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             locale={locale}
             onLanguageChange={(lang) => void changePosLanguage(lang)}
-            canManageChannels={canManageOnlineShop}
+            canManageOnlineShopChannels={posGearOnlineShopToggles}
+            canManageOrderChannels={posGearOrderChannelToggles}
             shopEnabled={!!merchant?.shopEnabled}
             reservationsEnabled={!!merchant?.reservationsEnabled}
             pickupEnabled={merchant?.pickupEnabled !== false}
@@ -11435,25 +11458,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             dineInEnabled={merchant?.dineInEnabled !== false}
             channelsSaving={channelsSaving}
             onShopEnabledChange={
-              canManageOnlineShop ? (enabled) => void toggleShopEnabled(enabled) : undefined
+              posGearOnlineShopToggles ? (enabled) => void toggleShopEnabled(enabled) : undefined
             }
             onReservationsEnabledChange={
-              canManageOnlineShop && reservationsPosUiEnabled
+              posGearOnlineShopToggles && reservationsPosUiEnabled
                 ? (enabled) => void toggleReservationsEnabled(enabled)
                 : undefined
             }
             onPickupEnabledChange={
-              canManageOnlineShop
+              posGearOrderChannelToggles
                 ? (enabled) => void toggleMerchantOrderChannel('pickupEnabled', enabled)
                 : undefined
             }
             onDeliveryEnabledChange={
-              canManageOnlineShop
+              posGearOrderChannelToggles
                 ? (enabled) => void toggleMerchantOrderChannel('deliveryEnabled', enabled)
                 : undefined
             }
             onDineInEnabledChange={
-              canManageOnlineShop
+              posGearOrderChannelToggles
                 ? (enabled) => void toggleMerchantOrderChannel('dineInEnabled', enabled)
                 : undefined
             }

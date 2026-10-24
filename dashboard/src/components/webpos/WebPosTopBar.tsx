@@ -576,6 +576,8 @@ export function WebPosSettingsDropdown({
   locale = 'en',
   onLanguageChange,
   canManageChannels = false,
+  canManageOnlineShopChannels,
+  canManageOrderChannels,
   shopEnabled = false,
   reservationsEnabled = false,
   pickupEnabled = true,
@@ -636,6 +638,10 @@ export function WebPosSettingsDropdown({
   locale?: Locale;
   onLanguageChange?: (lang: Locale) => void;
   canManageChannels?: boolean;
+  /** When set, overrides canManageChannels for the online shop / reservations block. */
+  canManageOnlineShopChannels?: boolean;
+  /** When set, overrides canManageChannels for pickup / delivery / dine-in toggles. */
+  canManageOrderChannels?: boolean;
   shopEnabled?: boolean;
   reservationsEnabled?: boolean;
   pickupEnabled?: boolean;
@@ -679,6 +685,8 @@ export function WebPosSettingsDropdown({
     if (!onTextSizeChange) return;
     onTextSizeChange(cycleWebPosTextSize(textSize, dir));
   };
+  const onlineShopChannelToggles = canManageOnlineShopChannels ?? canManageChannels;
+  const orderChannelToggles = canManageOrderChannels ?? canManageChannels;
 
   return (
     <div
@@ -793,7 +801,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {canManageChannels && (onShopEnabledChange || onReservationsEnabledChange) ? (
+      {onlineShopChannelToggles && (onShopEnabledChange || onReservationsEnabledChange) ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosOnlineChannels')}
@@ -841,7 +849,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {canManageChannels &&
+      {orderChannelToggles &&
       (onPickupEnabledChange || onDeliveryEnabledChange || onDineInEnabledChange) ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
