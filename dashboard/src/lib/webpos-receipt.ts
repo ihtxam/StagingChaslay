@@ -3340,6 +3340,33 @@ export function writeEodIncludeProductsSold(include: boolean): void {
   }
 }
 
+const EOD_INCLUDE_STAFF_PERF_KEY = 'chaslay_eod_include_staff_performance';
+
+/** Company-wide EOD: one line per staff (name, order count, sales). Default OFF. */
+export function readEodIncludeStaffPerformance(): boolean {
+  try {
+    const v = localStorage.getItem(EOD_INCLUDE_STAFF_PERF_KEY);
+    if (v === '1' || v === 'true') return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function writeEodIncludeStaffPerformance(include: boolean): void {
+  try {
+    localStorage.setItem(EOD_INCLUDE_STAFF_PERF_KEY, include ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
+export type EodStaffPerformanceRow = {
+  name: string;
+  salesCount: number;
+  total: number;
+};
+
 export type EodReportPrint = {
   label: string;
   periodFrom?: string;
@@ -3373,6 +3400,12 @@ export type EodReportPrint = {
   productsSold: Array<{ name: string; quantity: number; total: number }>;
   /** When false, omit products-sold section from thermal print (totals unchanged). Default true. */
   includeProductsSold?: boolean;
+  /** Company-wide EOD: compact staff lines (name · orders · total). */
+  includeStaffPerformance?: boolean;
+  userPerformance?: EodStaffPerformanceRow[];
+  /** Optional label for unassigned orders in staff section. */
+  staffNameLabel?: (name: string) => string;
+  staffPerformanceTitle?: string;
   paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
   orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
   channelRows?: Array<{ channel: string; count: number; total: number }>;
@@ -3546,6 +3579,26 @@ export function generateEodReportText(report: EodReportPrint): string {
       ) + '\n';
   }
 
+  const includeStaffPerformance = report.includeStaffPerformance === true;
+  const staffRows = report.userPerformance?.filter((u) => u.salesCount > 0 || u.total > 0) || [];
+  const showStaffBlock =
+    includeStaffPerformance &&
+    staffRows.length > 0 &&
+    !report.scopeStaffName?.trim();
+  if (showStaffBlock) {
+    const staffTitle = (report.staffPerformanceTitle || 'Staff').slice(0, width);
+    const nameFor = (name: string) =>
+      report.staffNameLabel ? report.staffNameLabel(name) : name;
+    r += '\n';
+    r += thin + '\n';
+    r += centerLine(staffTitle, width) + '\n';
+    r += thin + '\n';
+    for (const u of staffRows) {
+      const left = `${nameFor(u.name)} · ${L.orders} ${u.salesCount}`;
+      r += padLine(left.slice(0, Math.max(8, width - 14)), money(u.total), width) + '\n';
+    }
+  }
+
   const includeProductsSold = report.includeProductsSold !== false;
   if (includeProductsSold && report.productsSold.length) {
     r += '\n';
@@ -3674,7 +3727,7 @@ export type RevenuePeriodSummaryPrint = {
   refundTotal: number;
   grandTotal: number;
   paymentRows: Array<{ method: string; count: number; total: number }>;
-  userPerformance?: Array<{ name: string; total: number }>;
+  userPerformance?: Array<{ name: string; total: number; salesCount?: number }>;
   businessName?: string;
   language?: string;
   paperWidthMm?: 58 | 80;
@@ -3737,7 +3790,11 @@ export function generateRevenuePeriodSummaryText(report: RevenuePeriodSummaryPri
     r += centerLine(report.labels.userPerformance, width) + '\n';
     r += thin + '\n';
     for (const u of report.userPerformance) {
-      r += padLine(report.staffNameLabel(u.name), money(u.total), width) + '\n';
+      const meta =
+        u.salesCount != null && u.salesCount > 0
+          ? ` · ${report.labels.qty} ${u.salesCount}`
+          : '';
+      r += padLine(`${report.staffNameLabel(u.name)}${meta}`.slice(0, width - 10), money(u.total), width) + '\n';
     }
   }
   if (report.footer?.trim()) {

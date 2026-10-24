@@ -3,7 +3,10 @@ import { CheckCircle2, X, XCircle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import {
   EodIncludeProductsCheckbox,
+  EodIncludeStaffPerformanceCheckbox,
   useEodIncludeProductsSold,
+  useEodIncludeStaffPerformance,
+  type EodPrintOptions,
 } from '@/components/EodIncludeProductsCheckbox';
 
 /** Integer digits allowed in Start/Close Shift cash amounts (excludes decimals). */
@@ -436,6 +439,7 @@ export function WebPosShiftClosedModal({
   open,
   balanced,
   showEodPrint = false,
+  showStaffPerformanceOption = false,
   onPrintShift,
   onPrintEod,
   onRestart,
@@ -446,14 +450,17 @@ export function WebPosShiftClosedModal({
   balanced: boolean;
   /** EOD after shift close — own sales or whole day depending on permissions. */
   showEodPrint?: boolean;
-  onPrintShift: (opts: { includeProductsSold: boolean }) => void;
-  onPrintEod: (opts: { includeProductsSold: boolean }) => void;
+  /** Company-wide day EOD: optional compact staff summary on the same ticket. */
+  showStaffPerformanceOption?: boolean;
+  onPrintShift: (opts: EodPrintOptions) => void;
+  onPrintEod: (opts: EodPrintOptions) => void;
   onRestart: () => void;
   onStay: () => void;
   onLogout: () => void;
 }) {
   const { t } = useI18n();
   const [includeProductsSold, setIncludeProductsSold] = useEodIncludeProductsSold();
+  const [includeStaffPerformance, setIncludeStaffPerformance] = useEodIncludeStaffPerformance();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4">
@@ -475,6 +482,13 @@ export function WebPosShiftClosedModal({
             checked={includeProductsSold}
             onChange={setIncludeProductsSold}
           />
+          {showStaffPerformanceOption && showEodPrint ? (
+            <EodIncludeStaffPerformanceCheckbox
+              className="mb-3 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5"
+              checked={includeStaffPerformance}
+              onChange={setIncludeStaffPerformance}
+            />
+          ) : null}
           <button
             type="button"
             className="w-full rounded-xl bg-[var(--webpos-accent)] py-3 text-sm font-bold text-white"
@@ -486,7 +500,14 @@ export function WebPosShiftClosedModal({
             <button
               type="button"
               className="btn-secondary w-full py-3 text-sm font-semibold"
-              onClick={() => onPrintEod({ includeProductsSold })}
+              onClick={() =>
+                onPrintEod({
+                  includeProductsSold,
+                  includeStaffPerformance: showStaffPerformanceOption
+                    ? includeStaffPerformance
+                    : false,
+                })
+              }
             >
               {t('webPosShiftPrintEod')}
             </button>
