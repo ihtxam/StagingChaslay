@@ -157,6 +157,19 @@ button {
       height: var(--panel-vvh, 100dvh);
       max-height: var(--panel-vvh, 100dvh);
     }
+
+    html.panel-vv-sync.panel-kb-open .panel-shell {
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: var(--panel-vv-top, 0);
+      width: 100%;
+      z-index: 1;
+    }
+
+    html.panel-vv-sync.panel-kb-open .reborn-powered-by--panel {
+      display: none;
+    }
   }
 
   /* Merchant/reseller/superadmin nav — Reborn burgundy brand gradient */

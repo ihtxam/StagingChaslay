@@ -18,7 +18,15 @@ export type BranchLocationSettingsBlob = {
   bankQrIban?: string | null;
   bankName?: string | null;
   bankAccountHolder?: string | null;
+  /** Per-branch contact / tax identity (falls back to merchant when unset). */
+  phone?: string | null;
+  vatNumber?: string | null;
 };
+
+/** Business tab fields stored on the location row (multi-branch merchants). */
+const BRANCH_LOCATION_COLUMN_KEYS = ["name", "address", "city", "country"] as const;
+
+const BRANCH_BUSINESS_BLOB_KEYS = ["phone", "vatNumber"] as const;
 
 const BRANCH_BLOB_KEYS = [
   "posPrintSettings",
@@ -33,6 +41,7 @@ const BRANCH_BLOB_KEYS = [
   "bankQrIban",
   "bankName",
   "bankAccountHolder",
+  ...BRANCH_BUSINESS_BLOB_KEYS,
 ] as const;
 
 const ADYEN_PROFILE_KEYS = [
@@ -136,6 +145,22 @@ export async function applyBranchPanelSettingsOverlay(
     out.posPrintSettings = normalizePosPrintSettings(blob.posPrintSettings);
   }
 
+  if (location) {
+    out.name = location.name;
+    if (location.address != null && String(location.address).trim()) {
+      out.address = location.address;
+    }
+    if (location.city != null && String(location.city).trim()) {
+      out.city = location.city;
+    }
+    if (location.country != null && String(location.country).trim()) {
+      out.country = location.country;
+    }
+    if (location.status) out.status = location.status;
+  }
+  if (blob.phone !== undefined) out.phone = blob.phone;
+  if (blob.vatNumber !== undefined) out.vatNumber = blob.vatNumber;
+
   out.settingsScope = "branch";
   out.settingsBranchLocationId = branchLocationId;
   out.settingsBranchName = location?.name || null;
@@ -172,6 +197,14 @@ export async function splitAndPersistBranchPanelSettings(
     }
   }
 
+  const locationColumnPatch: Record<string, unknown> = {};
+  for (const key of BRANCH_LOCATION_COLUMN_KEYS) {
+    if (key in updates) {
+      locationColumnPatch[key] = updates[key];
+      delete merchantPatch[key];
+    }
+  }
+
   if (Object.keys(adyenInput).length) {
     const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
     const profileId = await PaymentProfilesService.getProfileIdForLocation(
@@ -181,8 +214,11 @@ export async function splitAndPersistBranchPanelSettings(
     await PaymentProfilesService.update(merchantId, profileId, adyenInput);
   }
 
-  if (Object.keys(blobPatch).length) {
-    const db = getDb();
+  const db = getDb();
+  const needsLocationRow =
+    Object.keys(blobPatch).length > 0 || Object.keys(locationColumnPatch).length > 0;
+
+  if (needsLocationRow) {
     const location = await db.query.locations.findFirst({
       where: and(
         eq(schema.locations.id, branchLocationId),
@@ -191,18 +227,38 @@ export async function splitAndPersistBranchPanelSettings(
     });
     if (!location) throw new Error("Location not found");
 
-    const prev = readBranchBlob(location.settings);
-    let nextBlob: BranchLocationSettingsBlob = { ...prev, ...blobPatch };
-    if (blobPatch.posPrintSettings !== undefined) {
-      nextBlob.posPrintSettings =
-        blobPatch.posPrintSettings === null
-          ? null
-          : normalizePosPrintSettings(blobPatch.posPrintSettings);
+    const rowPatch: Record<string, unknown> = { updatedAt: new Date() };
+    if (locationColumnPatch.name !== undefined) {
+      const name = String(locationColumnPatch.name || "").trim().slice(0, 255);
+      if (!name) throw new Error("Business name is required");
+      rowPatch.name = name;
+    }
+    if (locationColumnPatch.address !== undefined) {
+      rowPatch.address = locationColumnPatch.address;
+    }
+    if (locationColumnPatch.city !== undefined) {
+      rowPatch.city = locationColumnPatch.city;
+    }
+    if (locationColumnPatch.country !== undefined) {
+      rowPatch.country = locationColumnPatch.country;
+    }
+
+    let nextBlob: BranchLocationSettingsBlob | undefined;
+    if (Object.keys(blobPatch).length) {
+      const prev = readBranchBlob(location.settings);
+      nextBlob = { ...prev, ...blobPatch };
+      if (blobPatch.posPrintSettings !== undefined) {
+        nextBlob.posPrintSettings =
+          blobPatch.posPrintSettings === null
+            ? null
+            : normalizePosPrintSettings(blobPatch.posPrintSettings);
+      }
+      rowPatch.settings = nextBlob;
     }
 
     await db
       .update(schema.locations)
-      .set({ settings: nextBlob, updatedAt: new Date() })
+      .set(rowPatch as typeof schema.locations.$inferInsert)
       .where(eq(schema.locations.id, branchLocationId));
   }
 
