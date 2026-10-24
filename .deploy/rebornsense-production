@@ -57,3 +57,5 @@
 # Deploy 2026-10-24T11:05:00Z — PROD: Windows RebornPOS 80mm receipt bitmap header + QR pre-cut feed (not Sunmi-only)
 # Deploy 2026-10-24T23:25:00Z — PROD batch: #878 branch settings, #879 EOD staff perf, #880 4-digit PINs, #881 Settings About, #882 iOS product form zoom, #883 per-location catalog
 # Deploy 2026-10-24T23:28:00Z — RETRY prod deploy after Bridge Sunmi LCD compile fix (unblocks hetzner deploy)
+# Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
+# Last deploy request: 2026-10-24T23:51:20Z — MeliMelo POS retail/EOD/onboarding (#884)
