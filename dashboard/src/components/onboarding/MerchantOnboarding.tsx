@@ -20,6 +20,12 @@ export default function MerchantOnboarding({ enabled = true }: Props) {
     if (onOverview) setDrawerOpen(true);
   }, [enabled, location.pathname, progress.loading, progress.dismissed, progress.allComplete]);
 
+  useEffect(() => {
+    if (!enabled || progress.loading || progress.dismissed || !progress.allComplete) return;
+    progress.dismiss();
+    setDrawerOpen(false);
+  }, [enabled, progress.loading, progress.dismissed, progress.allComplete, progress.dismiss]);
+
   if (!enabled || progress.loading || progress.dismissed || progress.allComplete) {
     return null;
   }

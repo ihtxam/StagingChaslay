@@ -82,13 +82,19 @@ export function useMerchantSetupProgress(): SetupSnapshot {
       const products = productsRes?.data?.products ?? productsRes?.data?.data ?? [];
       const staff = staffRes?.data?.staff ?? [];
       const builders = buildersRes?.data?.data ?? [];
-      const hasActiveBuilder = Array.isArray(builders) && builders.some((b: { is_active?: boolean }) => b.is_active);
+      const builderList = Array.isArray(builders) ? builders : [];
+      const hasActiveBuilder = builderList.some((b: { is_active?: boolean }) => b.is_active);
+      const hasAnyBuilder = builderList.length > 0;
+      const shopLive =
+        s.shopEnabled === true ||
+        s.cmsHomepageEnabled === true ||
+        String(s.shopMenuUrl || s.shopPathUrl || '').trim().length > 0;
       setDetected({
         business_info: Boolean(String(s.name || '').trim() && String(s.address || s.city || '').trim()),
         products: Array.isArray(products) ? products.length > 0 : Number(productsRes?.data?.total || 0) > 0,
         payment_settings: isMerchantPaymentSetupComplete(s),
         staff: Array.isArray(staff) ? staff.length > 0 : false,
-        online_shop: Boolean(s.cmsHomepageEnabled || s.shopEnabled || hasActiveBuilder),
+        online_shop: Boolean(shopLive || hasActiveBuilder || hasAnyBuilder),
       });
     } catch {
       /* keep previous detected state */

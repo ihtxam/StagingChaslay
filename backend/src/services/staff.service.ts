@@ -155,6 +155,7 @@ export class StaffService {
     await this.enforceWaiterFloorRestrictions(merchantId);
     await this.enforceStorekeeperPanelRestrictions(merchantId);
     await this.ensureCashierRolePermissions(merchantId);
+    await this.ensureRegisterStaffEodPermissions(merchantId);
     await this.syncCashierLoginHome(merchantId);
     defaultRolesReady.add(merchantId);
     return db.query.merchantRoles.findMany({
@@ -493,14 +494,45 @@ export class StaffService {
     if (!role) return;
     const current = parsePermissions(role.permissions);
     const required: Permission[] = ["USE_WEBPOS", "USE_POS", "PROCESS_PAYMENTS"];
-    const missing = required.filter((p) => !current.includes(p));
-    if (!missing.length) return;
-    const merged = encodePermissions([...new Set([...current, ...template.permissions])]);
+    const reportKeys: Permission[] = ["VIEW_REPORTS", "END_OF_DAY"];
+    const missingCore = required.filter((p) => !current.includes(p));
+    const missingReports = reportKeys.filter((p) => !current.includes(p));
+    if (!missingCore.length && !missingReports.length) return;
+    const merged = encodePermissions([
+      ...new Set([...current, ...template.permissions, ...reportKeys]),
+    ]);
     if (role.permissions === merged) return;
     await db
       .update(schema.merchantRoles)
       .set({ permissions: merged, updatedAt: new Date() })
       .where(eq(schema.merchantRoles.id, role.id));
+  }
+
+  /**
+   * Register-only roles (POS without back office) need EOD print in the POS gear menu.
+   * Adds VIEW_REPORTS + END_OF_DAY without stripping merchant customizations.
+   */
+  static async ensureRegisterStaffEodPermissions(merchantId: string) {
+    const db = getDb();
+    const roles = await db.query.merchantRoles.findMany({
+      where: eq(schema.merchantRoles.merchantId, merchantId),
+    });
+    const reportKeys: Permission[] = ["VIEW_REPORTS", "END_OF_DAY"];
+    for (const role of roles) {
+      const perms = parsePermissions(role.permissions);
+      const onRegister = perms.includes("USE_WEBPOS") || perms.includes("USE_POS");
+      const hasPanel = perms.includes("ACCESS_PANEL");
+      if (!onRegister || hasPanel) continue;
+      const missing = reportKeys.filter((p) => !perms.includes(p));
+      if (!missing.length) continue;
+      await db
+        .update(schema.merchantRoles)
+        .set({
+          permissions: encodePermissions([...perms, ...missing]),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.merchantRoles.id, role.id));
+    }
   }
 
   /**

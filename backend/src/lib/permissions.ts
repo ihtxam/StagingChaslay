@@ -189,6 +189,7 @@ export const DEFAULT_ROLE_TEMPLATES: DefaultRoleTemplate[] = [
       "VIEW_ORDER_HISTORY",
       "OPEN_CASH_DRAWER",
       "APPLY_DISCOUNTS",
+      "VIEW_REPORTS",
       "END_OF_DAY",
     ],
   },

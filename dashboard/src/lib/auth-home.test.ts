@@ -131,7 +131,7 @@ const WAITER_MENU_PERMS: Permission[] = [
   );
 }
 
-// POS switch user → manager goes to panel
+// POS switch user → manager stays on register (panel home is for email login only)
 {
   assert.equal(
     navigateTargetAfterStaffPin(
@@ -139,7 +139,7 @@ const WAITER_MENU_PERMS: Permission[] = [
       '/merchant/pos',
       'switch'
     ),
-    '/merchant'
+    null
   );
 }
 

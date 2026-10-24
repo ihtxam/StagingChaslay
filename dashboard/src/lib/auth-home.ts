@@ -112,6 +112,9 @@ export function navigateTargetAfterStaffPin(
   if (normDest === normCurrent) return null;
   if (isPosFloorPath(normCurrent) && isPosFloorPath(normDest)) return null;
 
+  // Switching users on the register should not kick staff to the back-office panel.
+  if (mode === 'switch' && isPosFloorPath(normCurrent)) return null;
+
   if (mode === 'switch') return dest;
 
   // Panel PIN gate: send floor staff to their register app when loginHome is POS.

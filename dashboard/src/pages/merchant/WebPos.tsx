@@ -1792,10 +1792,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     const openSettings = () => {
-      if (isDesktopApp()) {
-        navigate('/merchant/desktop-settings');
-        return;
-      }
       setSettingsOpen(true);
     };
     window.addEventListener('webpos:open-settings', openSettings);
@@ -10346,6 +10342,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (!!webposStaff && hasPermission(staffPerms, 'GANDOLA_PURGE', false));
   /** Whole-day EOD: report permission + company-wide sales visibility. */
   const showEodButton = canPrintEodReport;
+  const showPosGearMenu =
+    canShowStaffHardware || showEodButton || shiftsEnabled || canShowBackOffice;
 
   const printEodAfterShiftClose = async (opts?: EodPrintOptions) => {
     if (mayPrintWholeDayEod) {
@@ -11367,9 +11365,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             })
             .catch(() => undefined);
         }}
-        hideSettingsMenu={isDesktop && !canShowStaffHardware}
+        hideSettingsMenu={isDesktop && !showPosGearMenu}
         settingsPanel={
-          isDesktop ? null : (
           <WebPosSettingsDropdown
             onReloadCatalog={() => {
               void load();
@@ -11531,7 +11528,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setTapToPaySetupOpen(true);
             }}
           />
-          )
         }
       />
 
