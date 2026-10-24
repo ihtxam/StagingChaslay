@@ -3,7 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
+import { APP_VERSION } from '@/lib/app-version';
+import {
+  displaySidebarAccountName,
+  displaySidebarShopName,
+  MARKETING_ORIGIN,
+  REBORN_LOGO_WHITE,
+  REBORN_MARK_R_WHITE,
+} from '@/lib/brand';
 import type { PanelLocationHeaderLabels } from '@/lib/panel-location-header';
 import PanelLocationTitle from '@/components/PanelLocationTitle';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -547,6 +554,31 @@ export default function Sidebar({
             );
           })}
         </nav>
+
+        <a
+          href={MARKETING_ORIGIN}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`relative z-10 shrink-0 px-3 py-2 flex items-center gap-2 text-white/60 hover:text-white/85 transition-colors ${
+            railMode
+              ? 'justify-center text-[10px] font-medium tabular-nums'
+              : 'text-[11px] font-medium tracking-wide'
+          }`}
+          title={`${t('poweredBy')} Reborn v${APP_VERSION}`}
+          aria-label={`${t('poweredBy')} Reborn v${APP_VERSION}`}
+        >
+          {!railMode ? <span className="shrink-0">{t('poweredBy')}</span> : null}
+          <img
+            src={REBORN_MARK_R_WHITE}
+            alt=""
+            width={18}
+            height={18}
+            className="h-4 w-auto shrink-0 opacity-80"
+            loading="lazy"
+            decoding="async"
+          />
+          <span className="shrink-0 tabular-nums">v{APP_VERSION}</span>
+        </a>
 
         <div
           className={`panel-sidebar-footer relative z-10 p-3 border-t space-y-2 shrink-0 overflow-visible`}
