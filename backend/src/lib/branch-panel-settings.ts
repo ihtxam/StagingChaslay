@@ -72,14 +72,16 @@ export async function merchantHasMultipleLocations(merchantId: string): Promise<
   return rows.length > 1;
 }
 
-/** Panel sent X-Location-Id for an explicit branch scope (not staff-bound default). */
+/** Panel branch scope: explicit X-Location-Id and/or branchPanel=1 on settings APIs. */
 export function resolveBranchPanelSettingsLocationId(
   locationFromHeader?: boolean,
-  locationId?: string | null
+  locationId?: string | null,
+  opts?: { branchPanelRequested?: boolean }
 ): string | null {
-  if (!locationFromHeader) return null;
   const id = String(locationId || "").trim();
-  return id || null;
+  if (!id) return null;
+  if (locationFromHeader || opts?.branchPanelRequested) return id;
+  return null;
 }
 
 function readBranchBlob(raw: unknown): BranchLocationSettingsBlob {

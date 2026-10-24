@@ -12,6 +12,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 assert.equal(resolveBranchPanelSettingsLocationId(false, "abc"), null);
 assert.equal(resolveBranchPanelSettingsLocationId(true, ""), null);
 assert.equal(resolveBranchPanelSettingsLocationId(true, "loc-1"), "loc-1");
+assert.equal(
+  resolveBranchPanelSettingsLocationId(false, "loc-1", { branchPanelRequested: true }),
+  "loc-1"
+);
 
 assert.equal(adyenUpdatesUseCredentials({ name: "x" }), false);
 assert.equal(adyenUpdatesUseCredentials({ adyenApiKey: "k" }), true);

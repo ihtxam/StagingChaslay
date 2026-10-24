@@ -5,6 +5,7 @@ import {
   isPanelLocationSwitcherActive,
   shouldHideMerchantSettingsInHqView,
 } from '@/lib/panel-scope-nav';
+import { PANEL_LOCATION_SCOPE_EVENT } from '@/lib/panel-location-scope';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -752,6 +753,12 @@ export default function Settings() {
     isHqView,
   });
   const panelBranchScopeKey = branchSwitcher && !isHqView ? panelLocationId || '' : '';
+  const settingsBranchQuery = useMemo(() => {
+    if (branchSwitcher && !isHqView && panelLocationId) {
+      return { branchPanel: '1' };
+    }
+    return null;
+  }, [branchSwitcher, isHqView, panelLocationId]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
@@ -1181,7 +1188,10 @@ export default function Settings() {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const settingsRes = await api.get('/merchant/settings');
+        const settingsRes = await api.get(
+          '/merchant/settings',
+          settingsBranchQuery ? { params: settingsBranchQuery } : undefined
+        );
         const s = settingsRes.data?.settings;
         if (!s) {
           throw new Error('Settings response missing data');
@@ -1230,7 +1240,20 @@ export default function Settings() {
     setSettings(null);
     setLoadError(formatUserFacingApiError(lastError, t('settingsLoadFailed')));
     toastLoadError(lastError, t('settingsLoadFailed'));
-  }, [adyenCredsFromSettings, applyAdyenCreds, setLocale, t]);
+  }, [adyenCredsFromSettings, applyAdyenCreds, setLocale, settingsBranchQuery, t]);
+
+  useEffect(() => {
+    if (!settingsBranchQuery) return;
+    const id = api.interceptors.request.use((config) => {
+      const url = String(config.url || '');
+      if (!/\/merchant\/settings/.test(url)) return config;
+      config.params = { ...(config.params as object), ...settingsBranchQuery };
+      return config;
+    });
+    return () => {
+      api.interceptors.request.eject(id);
+    };
+  }, [settingsBranchQuery]);
 
   useEffect(() => {
     paymentsDataLoadedRef.current = false;
@@ -1239,6 +1262,18 @@ export default function Settings() {
     setLoading(true);
     void loadSettings().finally(() => setLoading(false));
   }, [panelBranchScopeKey, loadSettings]);
+
+  useEffect(() => {
+    const reload = () => {
+      paymentsDataLoadedRef.current = false;
+      receiptCatalogLoadedRef.current = false;
+      emailUsageLoadedRef.current = false;
+      setLoading(true);
+      void loadSettings().finally(() => setLoading(false));
+    };
+    window.addEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
+    return () => window.removeEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
+  }, [loadSettings]);
 
   const loadPaymentsData = useCallback(
     async (opts?: { force?: boolean }) => {

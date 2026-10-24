@@ -42,6 +42,7 @@ import {
   shouldShowHqCatalogBadges,
   shouldUseBranchCatalogPanel,
 } from '@/lib/panel-scope-nav';
+import { PANEL_LOCATION_SCOPE_EVENT } from '@/lib/panel-location-scope';
 import { useLocationStore } from '@/store/location';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
 import { useLockPageScroll } from '@/lib/useLockPageScroll';
@@ -596,6 +597,15 @@ export default function Products() {
         setEditionFeatures(Array.isArray(feats) ? feats : null);
       })
       .catch(() => undefined);
+  }, [locationId, isHqView, locations.length, limits?.maxLocations]);
+
+  useEffect(() => {
+    const reload = () => {
+      setLoading(true);
+      void load();
+    };
+    window.addEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
+    return () => window.removeEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
   }, [locationId, isHqView, locations.length, limits?.maxLocations]);
 
   useEffect(() => {

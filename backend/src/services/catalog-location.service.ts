@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
   filterCatalogForChannel,
@@ -138,6 +138,17 @@ export class CatalogLocationService {
       const allowed = this.resolveLinkedProductIds(links, products);
       if (allowed.size > 0) {
         productPool = products.filter((p) => allowed.has(p.id));
+      }
+    } else {
+      const siblingLink = await db.query.locationCatalogLinks.findFirst({
+        where: and(
+          eq(schema.locationCatalogLinks.merchantId, merchantId),
+          ne(schema.locationCatalogLinks.locationId, locId)
+        ),
+        columns: { id: true },
+      });
+      if (siblingLink) {
+        productPool = [];
       }
     }
 

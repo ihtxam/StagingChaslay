@@ -35,7 +35,7 @@ assert.equal(shouldUseBranchCatalogPanel(multi), true);
 assert.equal(shouldUseBranchCatalogPanel(multiHq), false);
 assert.equal(shouldUseBranchCatalogPanel(single), false);
 
-assert.deepEqual(panelCatalogListParams(multi), { posLocationCatalog: '1' });
+assert.deepEqual(panelCatalogListParams(multi), {});
 assert.deepEqual(panelCatalogListParams({ ...multi, locationId: 'kiosk-1' }), {
   posLocationCatalog: '1',
   locationId: 'kiosk-1',

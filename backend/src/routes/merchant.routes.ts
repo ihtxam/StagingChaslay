@@ -56,6 +56,11 @@ function wantsPosLocationCatalog(req: Request): boolean {
   return raw === "1" || raw.toLowerCase() === "true";
 }
 
+function branchPanelSettingsRequested(req: Request): boolean {
+  const raw = String(req.query.branchPanel ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true";
+}
+
 /**
  * Strict terminal menu isolation applies only to WebPOS (posLocationCatalog=1).
  * HQ/Admin requests often send X-Location-Id for reports but must see the full master catalog.
@@ -1972,7 +1977,8 @@ router.get("/settings", async (req: Request, res: Response) => {
     const { resolveBranchPanelSettingsLocationId } = await import("@/lib/branch-panel-settings");
     const branchLocationId = resolveBranchPanelSettingsLocationId(
       req.locationFromHeader,
-      req.locationId
+      req.locationId,
+      { branchPanelRequested: branchPanelSettingsRequested(req) }
     );
     const settings = await MerchantSettingsService.getMerchantSettings(merchantId, {
       branchLocationId,
@@ -2058,7 +2064,8 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
     } = await import("@/lib/branch-panel-settings");
     const branchLocationId = resolveBranchPanelSettingsLocationId(
       req.locationFromHeader,
-      req.locationId
+      req.locationId,
+      { branchPanelRequested: branchPanelSettingsRequested(req) }
     );
     const panelSettings = (await MerchantSettingsService.getMerchantSettings(merchantId, {
       branchLocationId,
@@ -2454,7 +2461,8 @@ router.put("/settings", async (req: Request, res: Response) => {
     const { resolveBranchPanelSettingsLocationId } = await import("@/lib/branch-panel-settings");
     const branchLocationId = resolveBranchPanelSettingsLocationId(
       req.locationFromHeader,
-      req.locationId
+      req.locationId,
+      { branchPanelRequested: branchPanelSettingsRequested(req) }
     );
     const merchant = await MerchantSettingsService.updateMerchantSettings(merchantId, updates, {
       branchLocationId,
