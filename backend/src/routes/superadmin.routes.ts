@@ -395,6 +395,36 @@ router.put("/platform-settings/legal", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/superadmin/platform-settings/merchant-about
+ */
+router.get("/platform-settings/merchant-about", async (_req: Request, res: Response) => {
+  try {
+    const html = await PlatformSettingsService.getMerchantAboutHtml();
+    res.json({ success: true, about: { html } });
+  } catch (error) {
+    console.error("Error getting merchant about settings:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load merchant about content",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/merchant-about
+ */
+router.put("/platform-settings/merchant-about", async (req: Request, res: Response) => {
+  try {
+    const html = await PlatformSettingsService.updateMerchantAboutHtml(String(req.body?.html ?? ""));
+    res.json({ success: true, about: { html } });
+  } catch (error) {
+    console.error("Error updating merchant about settings:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save merchant about content",
+    });
+  }
+});
+
+/**
  * GET /api/superadmin/email/usage — platform email send statistics
  */
 router.get("/email/usage", async (_req: Request, res: Response) => {

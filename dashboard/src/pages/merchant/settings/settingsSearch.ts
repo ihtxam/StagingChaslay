@@ -23,7 +23,8 @@ export type SettingsTabId =
   | 'email'
   | 'language'
   | 'users'
-  | 'extra-modules';
+  | 'extra-modules'
+  | 'about';
 
 export type SettingsSearchEntry = {
   id: string;

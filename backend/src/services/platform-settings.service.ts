@@ -23,6 +23,10 @@ import {
   resolveDesktopBranding,
   type DesktopBranding,
 } from "@/lib/desktop-branding";
+import {
+  normalizePlatformMerchantAboutHtml,
+  PLATFORM_MERCHANT_ABOUT_KEY,
+} from "@/lib/platform-merchant-about";
 
 export {
   adyenDropinEnvironment,
@@ -604,5 +608,16 @@ export class PlatformSettingsService {
       );
     }
     return this.getDesktopBranding();
+  }
+
+  static async getMerchantAboutHtml(): Promise<string> {
+    const stored = await this.get(PLATFORM_MERCHANT_ABOUT_KEY);
+    return normalizePlatformMerchantAboutHtml(stored);
+  }
+
+  static async updateMerchantAboutHtml(html: string): Promise<string> {
+    const trimmed = String(html ?? "").trim();
+    await this.set(PLATFORM_MERCHANT_ABOUT_KEY, trimmed || null);
+    return this.getMerchantAboutHtml();
   }
 }
