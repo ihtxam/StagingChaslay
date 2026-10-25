@@ -19,6 +19,7 @@ import {
   STAFF_PIN_MAX_LENGTH,
   STAFF_PIN_MIN_LENGTH,
 } from '@/lib/staff-pin';
+import { apiTryAgainMessage, isDeployBlip } from '@/lib/deploy-blip';
 import { isNetworkError } from '@/lib/webpos-offline/network';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 
@@ -26,6 +27,7 @@ const PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH;
 const PIN_MAX_LENGTH = STAFF_PIN_MAX_LENGTH;
 /** Brief pause before verify when the fourth digit is entered (no OK button in gate mode). */
 const PIN_AUTO_DELAY_MS = 420;
+const PIN_VERIFY_TIMEOUT_MS = 12_000;
 
 export type WebPosPinModalMode = 'gate' | 'switch';
 
@@ -125,6 +127,7 @@ export default function WebPosPinModal({
   const [merchantLogoFailed, setMerchantLogoFailed] = useState(false);
   const busyRef = useRef(false);
   const autoTimerRef = useRef<number | null>(null);
+  const verifyAbortRef = useRef<AbortController | null>(null);
   const isGate = mode === 'gate';
   const clock = useLiveClock(locale);
 
@@ -143,6 +146,8 @@ export default function WebPosPinModal({
       setShake(false);
       setMenuOpen(false);
       setMerchantLogoFailed(false);
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
       busyRef.current = false;
       setBusy(false);
     }
@@ -167,8 +172,20 @@ export default function WebPosPinModal({
     if (!navigator.onLine || isNetworkError(error)) {
       return t('webPosPinNoInternet');
     }
-    const err = error as { response?: { data?: { error?: string } } };
+    if (isDeployBlip(error)) {
+      return apiTryAgainMessage(locale);
+    }
+    const err = error as { response?: { data?: { error?: string }; status?: number } };
+    const status = err.response?.status;
+    if (status != null && status >= 500) {
+      return apiTryAgainMessage(locale);
+    }
     return err.response?.data?.error || t('webPosPinInvalid');
+  };
+
+  const releaseBusy = () => {
+    busyRef.current = false;
+    setBusy(false);
   };
 
   const submitPin = async (value: string) => {
@@ -182,21 +199,34 @@ export default function WebPosPinModal({
       failPin(t('webPosPinNoInternet'));
       return;
     }
+    verifyAbortRef.current?.abort();
+    const controller = new AbortController();
+    verifyAbortRef.current = controller;
     busyRef.current = true;
     setBusy(true);
     setError('');
     try {
-      const res = await api.post('/merchant/staff/verify-pin', {
-        pin: value,
-        locationId: terminalLocationId || undefined,
-      });
+      const res = await api.post(
+        '/merchant/staff/verify-pin',
+        {
+          pin: value,
+          locationId: terminalLocationId || undefined,
+        },
+        { signal: controller.signal, timeout: PIN_VERIFY_TIMEOUT_MS }
+      );
+      if (controller.signal.aborted) return;
       onSuccess(res.data.staff);
       if (!isGate) onClose();
     } catch (e: unknown) {
+      if (controller.signal.aborted) return;
+      const err = e as { code?: string; name?: string };
+      if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') return;
       failPin(pinErrorMessage(e));
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      if (verifyAbortRef.current === controller) {
+        verifyAbortRef.current = null;
+      }
+      releaseBusy();
     }
   };
 
@@ -210,7 +240,13 @@ export default function WebPosPinModal({
   };
 
   const appendDigit = (d: string) => {
-    if (pin.length >= PIN_MAX_LENGTH || busyRef.current) return;
+    setMenuOpen(false);
+    if (pin.length >= PIN_MAX_LENGTH) return;
+    if (busyRef.current) {
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
+      releaseBusy();
+    }
     clearAutoTimer();
     const next = pin + d;
     setPin(next);
@@ -225,17 +261,32 @@ export default function WebPosPinModal({
   };
 
   const backspace = () => {
-    if (busyRef.current) return;
+    setMenuOpen(false);
+    if (busyRef.current) {
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
+      releaseBusy();
+    }
     clearAutoTimer();
     setPin((p) => p.slice(0, -1));
     setError('');
   };
 
   const handleGateKey = (key: GateKey) => {
+    setMenuOpen(false);
     if (key === 'clear') backspace();
     else if (key === 'enter') void submitPin(pin);
     else appendDigit(key);
   };
+
+  /** Fire on pointer down so taps work on touch devices (touchStart preventDefault blocks click). */
+  const activateKey =
+    (action: () => void) => (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (!e.isPrimary) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      action();
+    };
 
   const switchKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'] as const;
 
@@ -256,9 +307,9 @@ export default function WebPosPinModal({
         <button
           key={key}
           type="button"
-          disabled={busy}
-          onClick={() => handleGateKey(key)}
-          className="webpos-pin-gate-key flex h-[2.75rem] w-full items-center justify-center rounded-xl bg-[#B8324A] text-xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:h-[3.25rem] sm:text-2xl md:h-12 lg:h-14 lg:text-[1.65rem]"
+          disabled={busy && (key === 'enter' || key === 'clear')}
+          onPointerDown={activateKey(() => handleGateKey(key))}
+          className="webpos-pin-gate-key touch-manipulation flex h-[2.75rem] w-full select-none items-center justify-center rounded-xl bg-[#B8324A] text-xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:h-[3.25rem] sm:text-2xl md:h-12 lg:h-14 lg:text-[1.65rem]"
           aria-label={
             key === 'clear'
               ? t('webPosPinClear')
@@ -287,13 +338,13 @@ export default function WebPosPinModal({
         <button
           key={key}
           type="button"
-          disabled={busy}
-          onClick={() => {
+          disabled={busy && (key === 'OK' || key === '⌫')}
+          onPointerDown={activateKey(() => {
             if (key === '⌫') backspace();
             else if (key === 'OK') void submitPin(pin);
             else appendDigit(key);
-          }}
-          className={`font-semibold disabled:opacity-50 ${
+          })}
+          className={`touch-manipulation select-none font-semibold disabled:opacity-50 ${
             key === 'OK'
               ? 'webpos-accent-btn rounded-xl py-3 text-lg'
               : 'webpos-keypad-key'
@@ -399,7 +450,7 @@ export default function WebPosPinModal({
               <>
                 <button
                   type="button"
-                  className="fixed inset-0 z-10 cursor-default"
+                  className="fixed inset-0 z-[115] cursor-default bg-black/20"
                   aria-label={t('close')}
                   onClick={() => setMenuOpen(false)}
                 />
@@ -451,7 +502,7 @@ export default function WebPosPinModal({
           </section>
 
           <section
-            className="webpos-pin-gate-entry flex w-full max-[639px]:shrink-0 flex-col items-center overflow-hidden px-4 pb-0 pt-0 min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8"
+            className="webpos-pin-gate-entry relative z-[118] flex w-full max-[639px]:shrink-0 flex-col items-center overflow-hidden px-4 pb-0 pt-0 min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8"
           >
             <div className="webpos-pin-gate-stack flex w-full max-w-md flex-col items-center">
               <div className="webpos-pin-gate-mobile-clock w-full text-center min-[640px]:hidden">

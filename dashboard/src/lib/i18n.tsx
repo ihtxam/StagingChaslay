@@ -2150,7 +2150,7 @@ const en: Dict = {
   customersToastCreated: 'Customer added',
   customersToastSaveFailed: 'Failed to add customer',
   customersToastLoadFailed: 'Failed to load customers',
-  systemUpdateWait: 'Wait for system update',
+  systemUpdateWait: 'Server temporarily unavailable. Please try again in a moment.',
   apiErrorTryAgain:
     "We couldn't reach the server right now. Please wait a moment and try again.",
   poweredBy: 'Powered by:',
@@ -7281,7 +7281,7 @@ const fr: Dict = {
   customersToastCreated: 'Client ajouté',
   customersToastSaveFailed: "Échec de l'ajout du client",
   customersToastLoadFailed: 'Échec du chargement des clients',
-  systemUpdateWait: 'Attendez la mise à jour du système',
+  systemUpdateWait: 'Serveur temporairement indisponible. Réessayez dans un instant.',
   apiErrorTryAgain:
     'Connexion au serveur impossible pour le moment. Patientez un instant et réessayez.',
   poweredBy: 'Propulsé par :',
@@ -12165,7 +12165,7 @@ const de: Dict = {
   customersToastCreated: 'Kunde hinzugefügt',
   customersToastSaveFailed: 'Kunde konnte nicht hinzugefügt werden',
   customersToastLoadFailed: 'Kunden konnten nicht geladen werden',
-  systemUpdateWait: 'Bitte auf Systemaktualisierung warten',
+  systemUpdateWait: 'Server vorübergehend nicht erreichbar. Bitte gleich erneut versuchen.',
   apiErrorTryAgain:
     'Der Server ist gerade nicht erreichbar. Bitte kurz warten und erneut versuchen.',
   poweredBy: 'Powered by:',

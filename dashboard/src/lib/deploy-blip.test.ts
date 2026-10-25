@@ -67,17 +67,29 @@ assert.equal(
   false
 );
 
-assert.equal(translate('en', 'systemUpdateWait'), 'Wait for system update');
-assert.equal(translate('fr', 'systemUpdateWait'), 'Attendez la mise à jour du système');
-assert.equal(translate('de', 'systemUpdateWait'), 'Bitte auf Systemaktualisierung warten');
-assert.equal(systemUpdateMessage('en'), 'Wait for system update');
+assert.equal(
+  translate('en', 'systemUpdateWait'),
+  'Server temporarily unavailable. Please try again in a moment.'
+);
+assert.equal(
+  translate('fr', 'systemUpdateWait'),
+  'Serveur temporairement indisponible. Réessayez dans un instant.'
+);
+assert.equal(
+  translate('de', 'systemUpdateWait'),
+  'Server vorübergehend nicht erreichbar. Bitte gleich erneut versuchen.'
+);
+assert.equal(
+  systemUpdateMessage('en'),
+  'Server temporarily unavailable. Please try again in a moment.'
+);
 assert.equal(isAxiosStatusMessage('Request failed with status code 502'), true);
 assert.equal(
   formatUserFacingApiError(
     { response: { status: 502 }, message: 'Request failed with status code 502' },
     'Could not load settings.'
   ),
-  'Wait for system update'
+  'Server temporarily unavailable. Please try again in a moment.'
 );
 assert.equal(
   formatUserFacingApiError(
