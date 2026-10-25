@@ -1855,8 +1855,20 @@ export async function ensureSubscriptionPlansSchema(): Promise<void> {
   await runPatch("included_addons", "subscription_plans");
 }
 
+let locationsSchemaPromise: Promise<void> | null = null;
+let posSessionsSchemaPromise: Promise<void> | null = null;
+
 /** Ensure multi-location tables/columns exist and backfill default location per merchant. */
 export async function ensureLocationsSchema(): Promise<void> {
+  if (locationsSchemaPromise) return locationsSchemaPromise;
+  locationsSchemaPromise = ensureLocationsSchemaOnce().catch((err) => {
+    locationsSchemaPromise = null;
+    throw err;
+  });
+  return locationsSchemaPromise;
+}
+
+async function ensureLocationsSchemaOnce(): Promise<void> {
   for (const statement of TABLE_PATCHES) {
     if (!LOCATIONS_SCHEMA_PATTERN.test(statement)) continue;
     try {
@@ -1989,6 +2001,15 @@ export async function ensurePaymentProfilesSchema(): Promise<void> {
 
 /** Add columns that drizzle-kit often skips on pos_sessions (OOM / old CREATE TABLE). */
 export async function ensurePosSessionsSchema(): Promise<void> {
+  if (posSessionsSchemaPromise) return posSessionsSchemaPromise;
+  posSessionsSchemaPromise = ensurePosSessionsSchemaOnce().catch((err) => {
+    posSessionsSchemaPromise = null;
+    throw err;
+  });
+  return posSessionsSchemaPromise;
+}
+
+async function ensurePosSessionsSchemaOnce(): Promise<void> {
   if (!(await tableExists("pos_sessions"))) {
     patchedTables = false;
     await ensureMerchantTables();
@@ -2005,10 +2026,6 @@ export async function ensurePosSessionsSchema(): Promise<void> {
       console.warn("[schema] pos_sessions patch failed:", err);
     }
   }
-  patchedColumns.delete("pos_sessions.location_id");
-  patchedColumns.delete("pos_sessions.print_agent_online");
-  patchedColumns.delete("pos_sessions_location_id");
-  patchedColumns.delete("pos_sessions_print_agent_online");
   await runPatch("location_id", "pos_sessions");
   await runPatch("print_agent_online", "pos_sessions");
 }
