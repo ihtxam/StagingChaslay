@@ -79,6 +79,7 @@ import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import {
   shouldShowOnlineReservationsToggle,
   shouldShowReservationsSettings,
+  shouldShowShopSettings,
 } from '@/lib/pos-hub-visibility';
 import {
   findPrinterHealCandidates,
@@ -940,6 +941,11 @@ export default function Settings() {
     [isRetailMerchant, settings?.editionFeatures, settings?.reservationsEnabled]
   );
 
+  const showShopSettings = useMemo(
+    () => shouldShowShopSettings(settings?.editionFeatures),
+    [settings?.editionFeatures]
+  );
+
   const showReservationsChannelToggle = useMemo(
     () =>
       shouldShowOnlineReservationsToggle({
@@ -983,6 +989,7 @@ export default function Settings() {
       tabs.filter((item) => {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
+        if (item.id === 'shop' && !showShopSettings) return false;
         if (item.id === 'reservations' && !reservationsLicensed) return false;
         if (item.id === 'extra-modules' || item.id === 'about') return true;
         if (
@@ -992,7 +999,15 @@ export default function Settings() {
         }
         return true;
       }),
-    [canOpenSettingsTab, isRetailMerchant, reservationsLicensed, showTablesSettings, settings, tabs]
+    [
+      canOpenSettingsTab,
+      isRetailMerchant,
+      reservationsLicensed,
+      showShopSettings,
+      showTablesSettings,
+      settings,
+      tabs,
+    ]
   );
 
   const selectTab = useCallback(
@@ -1059,6 +1074,7 @@ export default function Settings() {
     if (!settings) return;
     const redirect = nextTabForHiddenRetailSettings(tab as SettingsTabId, {
       showTablesSettings,
+      showShopSettings,
       isRetailMerchant,
       reservationsLicensed,
       query: settingsQuery || normalizedQuery,
@@ -1067,6 +1083,7 @@ export default function Settings() {
   }, [
     tab,
     showTablesSettings,
+    showShopSettings,
     isRetailMerchant,
     reservationsLicensed,
     settings,

@@ -277,6 +277,15 @@ test('retail tables→pos redirect is skipped when search query is set', () => {
     }),
     'business'
   );
+  assert.equal(
+    nextTabForHiddenRetailSettings('shop', {
+      showTablesSettings: true,
+      showShopSettings: false,
+      isRetailMerchant: false,
+      query: '',
+    }),
+    'business'
+  );
 });
 
 test('scrollToSettingsSearchSection never throws on missing section', () => {

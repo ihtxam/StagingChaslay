@@ -153,6 +153,7 @@ export function nextTabForHiddenRetailSettings(
   tab: SettingsTabId,
   ctx: {
     showTablesSettings: boolean;
+    showShopSettings?: boolean;
     isRetailMerchant: boolean;
     reservationsLicensed?: boolean;
     query?: string | null;
@@ -160,6 +161,7 @@ export function nextTabForHiddenRetailSettings(
 ): SettingsTabId | null {
   if (isSettingsSearchQueryActive(ctx.query)) return null;
   if (tab === 'tables' && !ctx.showTablesSettings) return 'pos';
+  if (tab === 'shop' && ctx.showShopSettings === false) return 'business';
   if (tab === 'reservations' && (ctx.isRetailMerchant || ctx.reservationsLicensed === false)) {
     return 'business';
   }
