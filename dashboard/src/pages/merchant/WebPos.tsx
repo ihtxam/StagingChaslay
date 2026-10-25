@@ -1772,6 +1772,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       navigate('/merchant');
       return;
     }
+    window.dispatchEvent(new CustomEvent('webpos:show-panel'));
     navigate(backOfficeHomePath(access.permissions, false));
   }, [
     impersonating,

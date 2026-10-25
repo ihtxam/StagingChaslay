@@ -511,6 +511,25 @@ function MerchantShell() {
     }
   }, [location.pathname, isPosLikeRoute, isStorekeeperRoute]);
 
+  /** POS chrome toggled off while URL is still /merchant/pos → panel sidebar + embedded WebPOS (demo/backoffice bug). */
+  useEffect(() => {
+    if (posAppMode || isPosEmbed) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (path !== '/merchant/pos' && path !== '/merchant/waiter') return;
+    const dest = jwtIsOwner
+      ? '/merchant'
+      : backOfficeHomePath(effective.permissions, effective.isOwner);
+    navigate(dest, { replace: true });
+  }, [
+    posAppMode,
+    isPosEmbed,
+    location.pathname,
+    jwtIsOwner,
+    effective.permissions,
+    effective.isOwner,
+    navigate,
+  ]);
+
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
   }, []);
