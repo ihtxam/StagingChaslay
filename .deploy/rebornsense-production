@@ -59,3 +59,4 @@
 # Deploy 2026-10-24T23:28:00Z — RETRY prod deploy after Bridge Sunmi LCD compile fix (unblocks hetzner deploy)
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
 # Last deploy request: 2026-10-24T23:51:20Z — MeliMelo POS retail/EOD/onboarding (#884)
+# Deploy 2026-10-25T00:01:09Z — cashier EOD in hardware gear menu
