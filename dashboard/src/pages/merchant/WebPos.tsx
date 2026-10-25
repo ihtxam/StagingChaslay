@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { toastInfo } from '@/lib/toast-notify';
+import { toastInfo, toastOrderAlreadyPaid } from '@/lib/toast-notify';
 import { RefreshCw, Truck } from 'lucide-react';
 import api, { resolveApiOriginForBridge } from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
@@ -7387,7 +7387,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const loadOrderIntoRegister = (order: MerchantOrder): boolean => {
     if (isPaidOrder(order)) {
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
       );
       return false;
@@ -7552,7 +7552,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       if (guard.action === 'blocked') {
         releasePaidCartSession(guard.order);
-        toast.error(
+        toastOrderAlreadyPaid(
           t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
         );
         return false;
@@ -7583,7 +7583,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!orderMatchesCartLink(order, currentCartOrderLink())) return;
       if (!isPaidOrder(order)) return;
       releasePaidCartSession(order);
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
       );
     },
@@ -7622,7 +7622,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         if (guard.action === 'blocked') {
           releasePaidCartSession(guard.order);
-          toast.error(
+          toastOrderAlreadyPaid(
             t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
           );
           return;
@@ -7662,7 +7662,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const order = (res.data?.order || res.data) as MerchantOrder;
         if (!order?.id) throw new Error('Order not found');
         if (isPaidOrder(order)) {
-          toast.error(
+          toastOrderAlreadyPaid(
             t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
           );
           setHighlightOrderId(order.id);
@@ -11518,7 +11518,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                         buildPrinterTestEscPos({ printerName: name, merchantName: merchant?.name })
                       ),
                       quiet: true,
-                    });
+                    }).catch((e: unknown) => notifyPrintError(e, 'testPrinterFailed'));
                   }
                 : undefined
             }

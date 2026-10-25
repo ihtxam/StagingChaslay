@@ -13,7 +13,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { toastInfo } from '@/lib/toast-notify';
+import { toastInfo, toastOrderAlreadyPaid } from '@/lib/toast-notify';
 import { toastPrintError } from '@/lib/webpos-print-toast';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -489,7 +489,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
             guard.order.ticketDisplay?.trim() ||
             guard.order.orderNumber?.trim() ||
             '';
-          toast.error(t('webPosOrderAlreadyPaid').replace('{number}', num));
+          toastOrderAlreadyPaid(t('webPosOrderAlreadyPaid').replace('{number}', num));
           clearPaidWaiterSession(guard.order);
         }
       } catch {

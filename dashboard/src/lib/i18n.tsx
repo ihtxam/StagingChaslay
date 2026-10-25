@@ -2847,6 +2847,8 @@ const en: Dict = {
   webPosPrintPrinterIssueShort: 'Printer issue — check Settings → Receipts & printers',
   webPosPrinterNotFound: 'Printer {name} not found or disconnected',
   webPosPrinterNotFoundGeneric: 'Printer not found or disconnected',
+  webPosPrintSocketClosed:
+    'Printer link closed early — if the receipt printed, you can ignore this. Otherwise test the printer again.',
   webPosAgentRunningShort: 'Print Agent running',
   webPosAgentNotRunningShort: 'Print Agent not running',
   webPosMainTillOfflineShort: 'Main till offline',
@@ -7981,6 +7983,8 @@ const fr: Dict = {
   webPosPrintPrinterIssueShort: 'Problème imprimante — vérifiez Paramètres → Reçus',
   webPosPrinterNotFound: 'Imprimante {name} introuvable ou déconnectée',
   webPosPrinterNotFoundGeneric: 'Imprimante introuvable ou déconnectée',
+  webPosPrintSocketClosed:
+    'Connexion imprimante coupée — si le reçu est sorti, ignorez. Sinon, refaites un test d’impression.',
   webPosAgentRunningShort: 'Agent d’impression actif',
   webPosAgentNotRunningShort: 'Agent d’impression arrêté',
   webPosMainTillOfflineShort: 'Caisse principale hors ligne',
@@ -13002,6 +13006,8 @@ const de: Dict = {
   webPosPrintPrinterIssueShort: 'Druckerproblem — Einstellungen → Belege prüfen',
   webPosPrinterNotFound: 'Drucker {name} nicht gefunden oder getrennt',
   webPosPrinterNotFoundGeneric: 'Drucker nicht gefunden oder getrennt',
+  webPosPrintSocketClosed:
+    'Druckerverbindung vorzeitig beendet — wenn der Beleg gedruckt wurde, ignorieren. Sonst Drucker testen.',
   webPosAgentRunningShort: 'Druckagent aktiv',
   webPosAgentNotRunningShort: 'Druckagent nicht gestartet',
   webPosMainTillOfflineShort: 'Hauptkasse offline',

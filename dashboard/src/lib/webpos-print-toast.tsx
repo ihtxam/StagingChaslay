@@ -6,6 +6,7 @@ import {
   isNoisyPrintAgentDump,
   isPrintAgentUnreachableError,
   isPrinterDisconnectedError,
+  isPrinterSocketIoError,
 } from '@/lib/print-agent';
 
 export { isPrinterDisconnectedError };
@@ -33,6 +34,9 @@ export function shortPrintErrorMessage(
   }
   if (/onenote|pdf|xps|unsuitable|esc-pos|virtual|corrupted printer/i.test(lower)) {
     return t('webPosPrintPrinterIssueShort');
+  }
+  if (isPrinterSocketIoError(msg)) {
+    return t('webPosPrintSocketClosed');
   }
   if (isPrinterDisconnectedError(msg)) {
     const name = extractPrinterNameFromError(msg);

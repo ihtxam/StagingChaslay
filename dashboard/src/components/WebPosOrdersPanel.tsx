@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
+import { toastOrderAlreadyPaid } from '@/lib/toast-notify';
 import { useI18n } from '@/lib/i18n';
 import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { isPaidOnlineEcommerceOrder } from '@/lib/online-payment';
@@ -1287,7 +1288,7 @@ export default function WebPosOrdersPanel({
   const startCollectPayment = (order: PosOrder) => {
     setPaymentEditFor(null);
     if (isPaidOrder(order)) {
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderListPrimaryLabel(order))
       );
       return;
@@ -1316,7 +1317,7 @@ export default function WebPosOrdersPanel({
   const openHeldInCart = (h: HeldRow) => {
     const paid = findPaidOrderForHeldRow(h, ordersForList);
     if (paid) {
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderListPrimaryLabel(paid))
       );
       return;

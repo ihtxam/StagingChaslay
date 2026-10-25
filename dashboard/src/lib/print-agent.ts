@@ -775,9 +775,20 @@ function win32CodeFromPrintError(msg: string): number {
   return generic ? Number(generic[1]) || 0 : 0;
 }
 
+/** Sunmi / Bluetooth SPP: read after print when the device closed the socket early. */
+export function isPrinterSocketIoError(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw).toLowerCase();
+  if (!msg) return false;
+  return (
+    /read failed.*socket|socket might closed|socket.*timeout|read ret:\s*-1/i.test(msg) ||
+    (/socket/.test(msg) && /closed|timeout/.test(msg))
+  );
+}
+
 /** Win32 1801/1905/1906 — agent is up, printer queue is missing or unusable. */
 export function isPrinterDisconnectedError(raw: unknown): boolean {
   const msg = collectPrintErrorText(raw);
+  if (isPrinterSocketIoError(msg)) return true;
   if (WIN32_PRINTER_UNAVAILABLE.has(win32CodeFromPrintError(msg))) return true;
   return /error_invalid_printer_name|error_printer_deleted|error_invalid_printer_state|not found or disconnected|openprinter failed|startdocprinter failed|GLPrinter\d*|ERROR_INVALID_PRINTER_NAME/i.test(
     msg
