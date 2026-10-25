@@ -422,9 +422,11 @@ export default function WebPosTopBar({
               onSwitchUser();
             }}
           >
-            <UserCircle2 size={18} className="shrink-0 lg:hidden" />
-            <UserCircle2 size={16} className="hidden shrink-0 lg:inline" />
-            <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
+            <UserCircle2 size={18} className="shrink-0 sm:hidden" />
+            <UserCircle2 size={16} className="hidden shrink-0 sm:inline" />
+            <span className="hidden max-w-[5.5rem] truncate sm:inline sm:max-w-[7rem] lg:max-w-[9rem]">
+              {staffName || t('webPosSwitchUser')}
+            </span>
           </button>
 
           {canDrawer && isLocalPrintStation ? (
@@ -576,6 +578,7 @@ function WebPosEodGearSection({
 }
 
 export function WebPosSettingsDropdown({
+  staffName,
   onReloadCatalog,
   shiftsEnabled,
   shiftOpen,
@@ -638,6 +641,7 @@ export function WebPosSettingsDropdown({
   onStaffPrinterChange,
   hardwareGearOnly = false,
 }: {
+  staffName?: string | null;
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
   shiftOpen?: boolean;
@@ -713,12 +717,21 @@ export function WebPosSettingsDropdown({
   };
   const onlineShopChannelToggles = canManageOnlineShopChannels ?? canManageChannels;
   const orderChannelToggles = canManageOrderChannels ?? canManageChannels;
+  const signedInLabel = staffName?.trim()
+    ? t('webPosSignedInAs').replace('{name}', staffName.trim())
+    : null;
 
   return (
     <div
       className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(78vh,32rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {signedInLabel ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-stone-100 bg-stone-50 px-3 py-2.5">
+          <UserCircle2 size={18} className="shrink-0 text-stone-500" aria-hidden />
+          <p className="min-w-0 truncate text-sm font-semibold text-stone-800">{signedInLabel}</p>
+        </div>
+      ) : null}
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5">
       {hardwareGearOnly ? (
         <>

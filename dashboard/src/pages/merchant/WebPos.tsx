@@ -11382,6 +11382,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         hideSettingsMenu={isDesktop && !showPosGearMenu}
         settingsPanel={
           <WebPosSettingsDropdown
+            staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
             onReloadCatalog={() => {
               void load();
               setSettingsOpen(false);
@@ -12885,6 +12886,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           paymentConfig?.shopLogoUrl
         }
         terminalLocationId={posLocationId}
+        currentStaffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
       />
 
       <LocationPickerModal

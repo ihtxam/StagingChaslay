@@ -87,6 +87,7 @@ export default function WebPosPinModal({
   productName,
   logoUrl,
   terminalLocationId,
+  currentStaffName,
 }: {
   open: boolean;
   /** `gate` = fullscreen unlock before register; `switch` = compact switch-user modal */
@@ -112,6 +113,8 @@ export default function WebPosPinModal({
   logoUrl?: string | null;
   /** Locked WebPOS location — PIN must be valid for this branch (does not change panel location). */
   terminalLocationId?: string | null;
+  /** Staff currently signed in on this register (shown on switch-user keypad). */
+  currentStaffName?: string | null;
 }) {
   const { t, locale } = useI18n();
   const [pin, setPin] = useState('');
@@ -510,15 +513,22 @@ export default function WebPosPinModal({
           shake ? 'webpos-pin-shake' : ''
         }`}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[var(--webpos-text,var(--text))]">
-            <UserCircle2 className="h-5 w-5" />
-            <h2 className="font-semibold">{t('webPosPinTitle')}</h2>
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[var(--webpos-text,var(--text))]">
+              <UserCircle2 className="h-5 w-5 shrink-0" />
+              <h2 className="font-semibold">{t('webPosPinTitle')}</h2>
+            </div>
+            {currentStaffName?.trim() ? (
+              <p className="mt-1 truncate text-sm text-[var(--webpos-text-muted,var(--text-muted))]">
+                {t('webPosSignedInAs').replace('{name}', currentStaffName.trim())}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
+            className="shrink-0 rounded-lg p-1 text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
           >
             <X className="h-4 w-4" />
           </button>

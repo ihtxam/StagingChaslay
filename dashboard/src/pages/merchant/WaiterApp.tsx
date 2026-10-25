@@ -1099,6 +1099,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
           pinGateSessionMerchantName(authUser)
         )}
         logoUrl={merchantLogoUrl}
+        currentStaffName={pinModalMode === 'switch' ? staff?.name : undefined}
       />
 
       {pendingPizza && (
