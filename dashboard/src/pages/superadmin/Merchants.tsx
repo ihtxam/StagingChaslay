@@ -73,6 +73,7 @@ interface Merchant {
   cateringAddonEnabled?: boolean;
   smsAddonEnabled?: boolean;
   smsTier?: string;
+  smsUnitPriceCents?: number;
   growthAnalyticsAddonEnabled?: boolean;
   guestCrmAddonEnabled?: boolean;
   phoneOrderingAddonEnabled?: boolean;
@@ -143,6 +144,7 @@ const emptyForm = {
   kioskAddonEnabled: false,
   smsAddonEnabled: false,
   smsTier: 'starter',
+  smsUnitPriceCents: 15,
   growthAnalyticsAddonEnabled: false,
   guestCrmAddonEnabled: false,
   phoneOrderingAddonEnabled: false,
@@ -186,6 +188,7 @@ export default function Merchants() {
     cateringEnabled: boolean;
     smsAddonEnabled: boolean;
     smsTier: string;
+    smsUnitPriceCents: number;
     growthAnalyticsAddonEnabled: boolean;
     guestCrmAddonEnabled: boolean;
     phoneOrderingAddonEnabled: boolean;
@@ -333,6 +336,7 @@ export default function Merchants() {
           res.data.merchant?.cateringAddonEnabled === true,
         smsAddonEnabled: res.data.merchant?.smsAddonEnabled === true,
         smsTier: String(res.data.merchant?.smsTier || 'starter'),
+        smsUnitPriceCents: Number(res.data.merchant?.smsUnitPriceCents) || 15,
         growthAnalyticsAddonEnabled: res.data.merchant?.growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: res.data.merchant?.guestCrmAddonEnabled === true,
         phoneOrderingAddonEnabled: res.data.merchant?.phoneOrderingAddonEnabled === true,
@@ -370,6 +374,7 @@ export default function Merchants() {
         cateringEnabled: !!posLimits.cateringEnabled,
         smsAddonEnabled: !!posLimits.smsAddonEnabled,
         smsTier: posLimits.smsTier || 'starter',
+        smsUnitPriceCents: Number(posLimits.smsUnitPriceCents) || 15,
         growthAnalyticsAddonEnabled: !!posLimits.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!posLimits.guestCrmAddonEnabled,
         phoneOrderingAddonEnabled: !!posLimits.phoneOrderingAddonEnabled,
@@ -408,6 +413,7 @@ export default function Merchants() {
         cateringEnabled: cateringOn,
         smsAddonEnabled: smsOn,
         smsTier: String(saved?.smsTier || posLimits.smsTier || 'starter'),
+        smsUnitPriceCents: Number(saved?.smsUnitPriceCents ?? posLimits.smsUnitPriceCents) || 15,
         growthAnalyticsAddonEnabled: growthAnalyticsOn,
         guestCrmAddonEnabled: guestCrmOn,
         phoneOrderingAddonEnabled: phoneOrderingOn,
@@ -644,6 +650,7 @@ export default function Merchants() {
         kioskAddonEnabled: !!form.kioskAddonEnabled,
         smsAddonEnabled: !!form.smsAddonEnabled,
         smsTier: form.smsTier || 'starter',
+        smsUnitPriceCents: Number(form.smsUnitPriceCents) || 15,
         growthAnalyticsAddonEnabled: !!form.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!form.guestCrmAddonEnabled,
         phoneOrderingAddonEnabled: !!form.phoneOrderingAddonEnabled,
@@ -1445,7 +1452,7 @@ export default function Merchants() {
                   <span>
                     <span className="font-medium block">SMS (Esendex)</span>
                     <span className="text-xs text-gray-500">
-                      Phone login OTP, order/reservation alerts, marketing SMS. Monthly quota by tier.
+                      Phone login OTP, order/reservation alerts, marketing SMS. Billed per segment (default CHF 0.15).
                     </span>
                     <select
                       className="mt-1 border rounded px-2 py-1 text-xs"
@@ -1456,6 +1463,19 @@ export default function Merchants() {
                       <option value="growth">Growth — 500 SMS/mo</option>
                       <option value="pro">Pro — 2000 SMS/mo</option>
                     </select>
+                    <label className="block mt-2 text-xs text-gray-600">
+                      Unit price (Rappen / segment)
+                      <input
+                        type="number"
+                        min={1}
+                        max={500}
+                        className="mt-0.5 border rounded px-2 py-1 w-24"
+                        value={form.smsUnitPriceCents ?? 15}
+                        onChange={(e) =>
+                          setForm({ ...form, smsUnitPriceCents: Number(e.target.value) || 15 })
+                        }
+                      />
+                    </label>
                   </span>
                 </label>
                 <label className="flex items-start gap-2 text-sm pt-2">
@@ -2082,6 +2102,22 @@ export default function Merchants() {
                         <option value="growth">Growth — 500 SMS/mo</option>
                         <option value="pro">Pro — 2000 SMS/mo</option>
                       </select>
+                      <label className="block mt-2 text-xs text-gray-600">
+                        Unit price (Rappen / segment)
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          className="mt-0.5 border rounded px-2 py-1 w-24"
+                          value={posLimits.smsUnitPriceCents ?? 15}
+                          onChange={(e) =>
+                            setPosLimits({
+                              ...posLimits,
+                              smsUnitPriceCents: Number(e.target.value) || 15,
+                            })
+                          }
+                        />
+                      </label>
                       <span
                         className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                           posLimits.smsAddonEnabled

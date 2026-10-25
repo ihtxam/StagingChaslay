@@ -27,6 +27,21 @@ type Usage = {
   sent: number;
   remaining: number;
   overQuota: boolean;
+  unitPriceCents?: number;
+  unitPriceChf?: string;
+  billableCents?: number;
+  billableChf?: string;
+  segmentsBilled?: number;
+};
+
+type SmsMessageRow = {
+  id: string;
+  createdAt: string;
+  toE164: string;
+  type: string;
+  event: string;
+  segments: number;
+  status: string;
 };
 
 type Campaign = {
@@ -80,7 +95,8 @@ export default function SmsPage() {
   const [campaignBody, setCampaignBody] = useState('');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [audience, setAudience] = useState<AudienceRow[]>([]);
-  const [tab, setTab] = useState<'settings' | 'marketing'>('settings');
+  const [tab, setTab] = useState<'settings' | 'marketing' | 'history'>('settings');
+  const [messages, setMessages] = useState<SmsMessageRow[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -91,12 +107,14 @@ export default function SmsPage() {
       setUsage(res.data.usage || null);
       setSettings(res.data.settings || null);
       if (res.data.licensed) {
-        const [cRes, aRes] = await Promise.all([
+        const [cRes, aRes, mRes] = await Promise.all([
           api.get('/merchant/sms/campaigns'),
           api.get('/merchant/sms/audience'),
+          api.get('/merchant/sms/messages', { params: { limit: 100 } }),
         ]);
         setCampaigns(cRes.data.campaigns || []);
         setAudience(aRes.data.audience || []);
+        setMessages(mRes.data.messages || []);
       }
     } catch (err: any) {
       toast.error(err.response?.data?.error || t('smsLoadFailed'));
@@ -176,11 +194,19 @@ export default function SmsPage() {
         <p className="text-stone-600 mt-1">{t('smsHint')}</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Stat label={t('smsTier')} value={(usage?.tier || 'starter').toUpperCase()} />
         <Stat label={t('smsSent')} value={String(usage?.sent ?? 0)} />
         <Stat label={t('smsRemaining')} value={String(usage?.remaining ?? 0)} />
         <Stat label={t('smsPeriod')} value={usage?.periodYm || '—'} />
+        <Stat
+          label={t('smsUnitPrice')}
+          value={usage?.unitPriceChf ? `CHF ${usage.unitPriceChf}` : '—'}
+        />
+        <Stat
+          label={t('smsBillable')}
+          value={usage?.billableChf ? `CHF ${usage.billableChf}` : 'CHF 0.00'}
+        />
       </div>
       {!configured ? (
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -199,6 +225,9 @@ export default function SmsPage() {
         </TabBtn>
         <TabBtn active={tab === 'marketing'} onClick={() => setTab('marketing')}>
           {t('smsTabMarketing')}
+        </TabBtn>
+        <TabBtn active={tab === 'history'} onClick={() => setTab('history')}>
+          {t('smsTabHistory')}
         </TabBtn>
       </div>
 
@@ -350,6 +379,52 @@ export default function SmsPage() {
               </ul>
             )}
           </div>
+        </div>
+      ) : null}
+
+      {tab === 'history' ? (
+        <div className="space-y-3">
+          <p className="text-sm text-stone-600">{t('smsHistoryHint')}</p>
+          {messages.length === 0 ? (
+            <p className="text-sm text-stone-500">{t('smsNoCampaigns')}</p>
+          ) : (
+            <div className="overflow-x-auto border border-stone-200 rounded-xl">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="bg-stone-50 text-left">
+                  <tr>
+                    <th className="px-3 py-2">{t('smsColWhen')}</th>
+                    <th className="px-3 py-2">{t('smsColTo')}</th>
+                    <th className="px-3 py-2">{t('smsColType')}</th>
+                    <th className="px-3 py-2">{t('smsColSegments')}</th>
+                    <th className="px-3 py-2">{t('smsColCost')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {messages.map((m) => {
+                    const segs = Math.max(1, Number(m.segments) || 1);
+                    const unit = usage?.unitPriceCents ?? 15;
+                    const cost = ((segs * unit) / 100).toFixed(2);
+                    const when = m.createdAt ? new Date(m.createdAt).toLocaleString() : '—';
+                    return (
+                      <tr key={m.id} className="border-t border-stone-100">
+                        <td className="px-3 py-2 whitespace-nowrap">{when}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{m.toE164}</td>
+                        <td className="px-3 py-2">
+                          {m.type}
+                          {m.event ? ` · ${m.event}` : ''}
+                          {m.status !== 'sent' ? ` (${m.status})` : ''}
+                        </td>
+                        <td className="px-3 py-2">{segs}</td>
+                        <td className="px-3 py-2">
+                          {m.status === 'sent' ? cost : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

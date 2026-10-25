@@ -321,6 +321,33 @@ router.put("/platform-settings/esendex", async (req: Request, res: Response) => 
   }
 });
 
+/** Monthly SMS usage billing for all merchants with the Esendex addon. */
+router.get("/sms-billing", async (req: Request, res: Response) => {
+  try {
+    const { SmsBillingService } = await import("@/services/sms-billing.service");
+    const month = String(req.query.month || "").trim() || undefined;
+    const summary = await SmsBillingService.listAddonMerchantsBilling(month);
+    res.json({ success: true, ...summary });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to load SMS billing",
+    });
+  }
+});
+
+router.get("/merchants/:merchantId/sms-billing", async (req: Request, res: Response) => {
+  try {
+    const { SmsBillingService } = await import("@/services/sms-billing.service");
+    const month = String(req.query.month || "").trim() || undefined;
+    const report = await SmsBillingService.getMonthlyReport(req.params.merchantId, month);
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to load SMS billing",
+    });
+  }
+});
+
 /**
  * GET /api/superadmin/platform-settings/desktop
  */
@@ -791,7 +818,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.marketingAutomationAddonEnabled != null ||
       updates.smartSegmentsAddonEnabled != null ||
       updates.reservationCampaignsAddonEnabled != null ||
-      updates.aiCoachAddonEnabled != null
+      updates.aiCoachAddonEnabled != null ||
+      updates.smsAddonEnabled != null ||
+      updates.smsTier != null ||
+      updates.smsUnitPriceCents != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -875,6 +905,11 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : undefined,
         aiCoachAddonEnabled:
           updates.aiCoachAddonEnabled != null ? updates.aiCoachAddonEnabled === true : undefined,
+        smsAddonEnabled:
+          updates.smsAddonEnabled != null ? updates.smsAddonEnabled === true : undefined,
+        smsTier: updates.smsTier != null ? String(updates.smsTier) : undefined,
+        smsUnitPriceCents:
+          updates.smsUnitPriceCents != null ? Number(updates.smsUnitPriceCents) : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -903,6 +938,9 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.smartSegmentsAddonEnabled;
       delete updates.reservationCampaignsAddonEnabled;
       delete updates.aiCoachAddonEnabled;
+      delete updates.smsAddonEnabled;
+      delete updates.smsTier;
+      delete updates.smsUnitPriceCents;
     }
 
     const merchant =
