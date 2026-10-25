@@ -583,6 +583,21 @@ export function buildSettingsSearchIndex(
       keywords: ['reservations', 'booking', 'slots', t('settingsReservations'), t('reservationsEnable')],
     },
     {
+      id: 'print-bridge-download',
+      tab: 'receipt',
+      keywords: [
+        'bridge',
+        'print bridge',
+        'android',
+        'apk',
+        'download',
+        'rebornprint',
+        t('downloadPrintBridge'),
+        t('installPrintBridge'),
+        t('kioskPrintBridgeTitle'),
+      ],
+    },
+    {
       id: 'receipt-print',
       tab: 'receipt',
       keywords: [

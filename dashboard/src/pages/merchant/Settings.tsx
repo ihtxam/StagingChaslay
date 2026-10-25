@@ -109,10 +109,6 @@ import {
   fetchPrintAgentManifest,
   fetchRebornPosManifest,
   isAndroidDevice,
-  openPrintBridgeApkInstall,
-  printAgentDownloadUrl,
-  printBridgeDownloadUrl,
-  preferredPrintCompanion,
   type DownloadManifest,
 } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -132,6 +128,7 @@ import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsAccountingTab from './settings/SettingsAccountingTab';
 import SettingsExtraModulesTab from './settings/SettingsExtraModulesTab';
+import SettingsPrintCompanionSection from '@/components/settings/SettingsPrintCompanionSection';
 import SettingsAboutTab from './settings/SettingsAboutTab';
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
@@ -4386,6 +4383,17 @@ export default function Settings() {
                   </button>
                 }
               />
+              <SettingsPrintCompanionSection
+                printBridgeManifest={printBridgeManifest}
+                printAgentManifest={printAgentManifest}
+                printAgentOk={printAgentOk}
+                printAgentHealthChecked={printAgentHealthChecked}
+                installedPrintCompanionVersion={installedPrintCompanionVersion}
+                printAgentOutdated={printAgentOutdated}
+                desktopBundledSidecarOk={desktopBundledSidecarOk}
+                onRefresh={() => void refreshPrintAgentPrinters()}
+                refreshing={refreshingPrinters}
+              />
               <Section icon={Printer} accent={settingsDash.accent} title={t('settingsReceipt')}>
                 <Field label={t('receiptLanguage')}>
                   <select
@@ -5088,37 +5096,6 @@ export default function Settings() {
                   </span>
                 </label>
               </Section>
-
-              {!printAgentOk ? (
-                <Section icon={Printer} accent={settingsDash.info} title={t('printerProfiles')}>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <p className="text-sm m-0 text-[var(--text-muted)]">{t('webPosAgentOffline')}</p>
-                    {preferredPrintCompanion() !== 'android-bridge' &&
-                    !(isDesktopApp() && desktopBundledSidecarOk) ? (
-                      <a
-                        className="btn-secondary inline-flex text-sm"
-                        href={printAgentDownloadUrl()}
-                        download="reborn-print-agent-setup.exe"
-                      >
-                        {t('downloadPrintAgent')}
-                      </a>
-                    ) : null}
-                    {isAndroidDevice() && preferredPrintCompanion() !== 'windows-agent' ? (
-                      <button
-                        type="button"
-                        className="btn-secondary inline-flex text-sm"
-                        onClick={() =>
-                          openPrintBridgeApkInstall(
-                            printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
-                          )
-                        }
-                      >
-                        {t('installPrintBridge')}
-                      </button>
-                    ) : null}
-                  </div>
-                </Section>
-              ) : null}
 
               <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')}>
                 <div className="flex flex-wrap items-center gap-3 mb-3">
