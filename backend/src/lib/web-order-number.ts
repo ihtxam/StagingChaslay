@@ -7,6 +7,7 @@ type Db = ReturnType<typeof getDb>;
 const SHORT_WEB_RE = /^WEB-(\d{1,6})$/;
 const SCOPED_WEB_RE = /^WEB-([A-Z0-9]{4})-(\d{1,6})$/;
 const LEGACY_WEB_RE = /^WEB-(\d{10,})(?:-([A-F0-9]{4,8}))?$/i;
+const SCOPED_KIOSK_RE = /^KIOSK-([A-Z0-9]{4})-(\d{1,6})$/;
 
 /** Stable 4-char merchant code for globally unique WEB order numbers. */
 export function merchantWebOrderCode(merchantId: string): string {
@@ -47,6 +48,17 @@ function scopedWebOrderNumber(merchantId: string, seq: number): string {
   return `WEB-${merchantWebOrderCode(merchantId)}-${seq}`;
 }
 
+function scopedKioskOrderNumber(merchantId: string, seq: number): string {
+  return `KIOSK-${merchantWebOrderCode(merchantId)}-${seq}`;
+}
+
+function parseShortKioskSeq(orderNumber: string): number | null {
+  const scoped = orderNumber.match(SCOPED_KIOSK_RE);
+  if (!scoped) return null;
+  const seq = parseInt(scoped[2], 10);
+  return Number.isFinite(seq) ? seq : null;
+}
+
 /** Next short WEB-xxxx number for a merchant (daily sequence, Europe/Zurich). */
 export async function generateWebOrderNumber(db: Db, merchantId: string): Promise<string> {
   const { start, end } = zurichDayBounds(ymdZurich());
@@ -81,4 +93,40 @@ export async function generateWebOrderNumber(db: Db, merchantId: string): Promis
 
   const rand = Math.random().toString(36).substring(2, 5).toUpperCase();
   return `WEB-${merchantCode}-${maxSeq + 1}${rand}`;
+}
+
+/** Next short KIOSK-xxxx number for a merchant (daily sequence, Europe/Zurich). */
+export async function generateKioskOrderNumber(db: Db, merchantId: string): Promise<string> {
+  const { start, end } = zurichDayBounds(ymdZurich());
+  const merchantCode = merchantWebOrderCode(merchantId);
+
+  const rows = await db
+    .select({ orderNumber: schema.orders.orderNumber })
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.merchantId, merchantId),
+        eq(schema.orders.orderSource, "kiosk"),
+        gte(schema.orders.createdAt, start),
+        lte(schema.orders.createdAt, end)
+      )
+    );
+
+  let maxSeq = 0;
+  for (const row of rows) {
+    const seq = parseShortKioskSeq(row.orderNumber);
+    if (seq != null) maxSeq = Math.max(maxSeq, seq);
+  }
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const seq = maxSeq + 1 + attempt;
+    const candidate = scopedKioskOrderNumber(merchantId, seq);
+    const exists = await db.query.orders.findFirst({
+      where: eq(schema.orders.orderNumber, candidate),
+    });
+    if (!exists) return candidate;
+  }
+
+  const rand = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `KIOSK-${merchantCode}-${maxSeq + 1}${rand}`;
 }

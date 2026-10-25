@@ -45,7 +45,7 @@ import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { normalizeDietaryTags } from "@/lib/product-dietary";
-import { generateWebOrderNumber } from "@/lib/web-order-number";
+import { generateKioskOrderNumber, generateWebOrderNumber } from "@/lib/web-order-number";
 import {
   inStockProductSpecifications,
   SHOP_SIZE_MODIFIER_GROUP_ID,
@@ -3355,7 +3355,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     if (trimmedGiftCode && giftCardPreviewBalance > 0) {
       giftCardDiscount = roundMoney2(Math.min(giftCardPreviewBalance, preGiftTotal));
     }
-    const orderNumber = await generateWebOrderNumber(db, merchant.id);
+    const orderNumber = isKioskOrder
+      ? await generateKioskOrderNumber(db, merchant.id)
+      : await generateWebOrderNumber(db, merchant.id);
     const comoDiscount = isKioskOrder
       ? roundMoney2(Math.max(0, Math.min(Number(comoDiscountAmountRaw) || 0, preGiftTotal)))
       : 0;
