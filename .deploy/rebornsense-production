@@ -68,3 +68,4 @@
 # Deploy 2026-10-25T22:45:00Z — PROD: API auto-heal, SMS metered billing, POS→backoffice nav fix (demo@chaslay.com)
 # Deploy 2026-10-25T23:05:00Z — fix: kiosk orders use KIOSK-xxxx-nnn (not WEB-xxxx)
 # Deploy 2026-10-25T23:15:00Z — fix: hide Shop settings tab when edition lacks online_shop (POS-only)
+# Deploy 2026-10-25T23:20:00Z — fix: restart workflow health check (node fetch, not wget in API image)

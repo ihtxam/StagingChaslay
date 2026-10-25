@@ -37,9 +37,9 @@ jobs:
             sleep 5
             dc up -d --force-recreate api dashboard caddy
             sleep 25
-            dc exec -T api wget -qO- http://127.0.0.1:3000/health || true
-            curl -sf https://api.rebornsense.com/health || curl -sf https://app.rebornsense.com/api/health || true
-            echo
+            dc exec -T api node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+            curl -sf --max-time 45 "https://app.rebornsense.com/api/health?deep=1" | grep -q '"database":"ok"'
+            echo "Public deep health OK"
             SHOP_HUB_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://order.rebornsense.com/api/health 2>/dev/null || echo "000")"
             echo "shop hub https://order.rebornsense.com/api/health HTTP ${SHOP_HUB_CODE}"
             dc ps
