@@ -143,6 +143,7 @@ export default function Settings() {
     passwordMasked: string;
     passwordSet: boolean;
     configured: boolean;
+    usingEnvFallback?: boolean;
   } | null>(null);
   const [esendexForm, setEsendexForm] = useState({
     user: '',
@@ -1221,11 +1222,70 @@ export default function Settings() {
           className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl border-t border-stone-200 pt-8"
         >
           <h3 className="md:col-span-2 text-lg font-semibold">Esendex SMS</h3>
-          <p className="text-sm text-stone-600 md:col-span-2">
-            Platform credentials for merchant SMS (OTP, order/reservation alerts, marketing). Env
-            fallbacks: ESENDEX_API_USER, ESENDEX_API_PASSWORD or ESENDEX_API_KEY, ESENDEX_ACCOUNT_REF.
-            {esendex?.configured ? ' Status: configured.' : ' Status: not configured.'}
-          </p>
+          <div className="md:col-span-2 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700 space-y-3">
+            <p>
+              Set platform SMS credentials here (same values as{' '}
+              <code className="text-xs bg-white px-1 py-0.5 rounded border">backend/.env.example</code>
+              ). Saved settings override server env on this host — no redeploy needed for staging.
+            </p>
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-stone-200">
+                  <th className="py-1.5 pr-3 font-semibold">Env variable (optional fallback)</th>
+                  <th className="py-1.5 font-semibold">Superadmin field below</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono">
+                <tr className="border-b border-stone-100">
+                  <td className="py-1.5 pr-3">ESENDEX_API_USER</td>
+                  <td className="py-1.5">API user</td>
+                </tr>
+                <tr className="border-b border-stone-100">
+                  <td className="py-1.5 pr-3">ESENDEX_API_PASSWORD or ESENDEX_API_KEY</td>
+                  <td className="py-1.5">API password / key</td>
+                </tr>
+                <tr className="border-b border-stone-100">
+                  <td className="py-1.5 pr-3">ESENDEX_ACCOUNT_REF</td>
+                  <td className="py-1.5">Account reference</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 pr-3">ESENDEX_DEFAULT_ORIGINATOR</td>
+                  <td className="py-1.5">Default sender name (max 11)</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Inbound STOP / opt-out webhook (Esendex push notifications):{' '}
+              <code className="text-xs bg-white px-1 py-0.5 rounded border">
+                POST /api/webhooks/esendex
+              </code>
+            </p>
+            <p>
+              Enable SMS per merchant: <strong>Merchants</strong> → merchant →{' '}
+              <strong>SMS (Esendex)</strong> + tier. Merchant panel: <strong>SMS</strong> menu when
+              licensed.
+            </p>
+            <p className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  esendex?.configured
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-900'
+                }`}
+              >
+                {esendex?.configured ? 'Ready to send' : 'Not configured'}
+              </span>
+              {esendex?.usingEnvFallback ? (
+                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-900">
+                  Using server env fallback (form empty)
+                </span>
+              ) : esendex?.passwordSet ? (
+                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-200 text-stone-800">
+                  Stored in platform settings
+                </span>
+              ) : null}
+            </p>
+          </div>
           <label className="block">
             <span className="text-sm font-medium">API user</span>
             <input
