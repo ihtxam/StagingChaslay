@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
@@ -493,9 +493,19 @@ function MerchantShell() {
     };
   }, [user]);
 
+  const prevPanelPathRef = useRef(location.pathname);
   useEffect(() => {
-    if (isPosLikeRoute || isStorekeeperRoute) setPosAppMode(true);
-  }, [isPosLikeRoute, isStorekeeperRoute]);
+    const prev = prevPanelPathRef.current;
+    prevPanelPathRef.current = location.pathname;
+    const norm = (p: string) => p.replace(/\/$/, '') || '/merchant';
+    const wasPosLike =
+      /^\/merchant\/(pos|waiter|storekeeper|kiosk)(\/|$)/.test(norm(prev)) ||
+      norm(prev) === '/merchant/storekeeper';
+    const nowPosLike = isPosLikeRoute || isStorekeeperRoute;
+    if (nowPosLike && !wasPosLike) {
+      setPosAppMode(true);
+    }
+  }, [location.pathname, isPosLikeRoute, isStorekeeperRoute]);
 
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
@@ -560,6 +570,8 @@ function MerchantShell() {
   // Restricted PIN: stay on role app (POS, driver, storekeeper) unless they may open panel pages.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenPanel) return;
+    const panelPath = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (panelPath === '/merchant' && effective.canOpenPanel) return;
     if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
     if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
     if (effective.canOpenReports && isReportsPanelPath(location.pathname)) return;
@@ -938,6 +950,9 @@ function MerchantShell() {
       return;
     }
     if (normalizeStaffLoginHome(user?.loginHome) === 'pos') {
+      if (effective.canOpenBackOffice) {
+        return;
+      }
       if (!isAppShellRoute) {
         const dest = homePathForUser({
           role: 'staff',
@@ -967,6 +982,7 @@ function MerchantShell() {
     user?.permissions,
     jwtIsOwner,
     isAppShellRoute,
+    effective.canOpenBackOffice,
     location.pathname,
     navigate,
   ]);
