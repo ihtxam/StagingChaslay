@@ -112,7 +112,11 @@ order.rebornsense.com {
 		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {
@@ -205,7 +209,11 @@ status.rebornsense.com {
 		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {
@@ -253,7 +261,11 @@ https:// {
 		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {
