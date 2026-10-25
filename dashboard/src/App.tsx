@@ -31,6 +31,7 @@ import GiftCardViewPage from '@/pages/shop/GiftCardViewPage';
 import AccountPage from '@/pages/shop/AccountPage';
 import ReservationsPage from '@/pages/shop/ReservationsPage';
 import ReceiptPage from '@/pages/ReceiptPage';
+import PlatformLegalPageView from '@/pages/PlatformLegalPageView';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
 import ReservationsEmbedPage from '@/pages/embed/ReservationsEmbedPage';
@@ -369,6 +370,8 @@ function App() {
             }
           />
           <Route path="/receipts/:saleId" element={<LegacyReceiptRedirect />} />
+          <Route path="/legal/:pageSlug" element={<PlatformLegalPageView />} />
+          <Route path="/legal" element={<Navigate to="/legal/privacy-policy" replace />} />
           <Route
             path="/kds/:token"
             element={

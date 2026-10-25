@@ -850,6 +850,26 @@ router.get("/platform/legal", async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/shop/platform/legal/pages/:pageSlug — hosted platform legal HTML (privacy, terms, cookies).
+ */
+router.get("/platform/legal/pages/:pageSlug", async (req: Request, res: Response) => {
+  try {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const page = await PlatformSettingsService.getPlatformLegalPageBySlug(
+      String(req.params.pageSlug || "")
+    );
+    if (!page) {
+      return res.status(404).json({ error: "Page not found" });
+    }
+    res.json({ success: true, data: page });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load platform legal page",
+    });
+  }
+});
+
 router.get("/tls-ask", async (req: Request, res: Response) => {
   try {
     const domain = String(req.query.domain || "").toLowerCase().split(":")[0];

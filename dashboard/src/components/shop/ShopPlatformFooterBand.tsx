@@ -13,6 +13,13 @@ export default function ShopPlatformFooterBand() {
   const legalLinkClass =
     'text-stone-400 underline-offset-2 hover:text-white hover:underline transition-colors';
 
+  const legalLinkProps = (href: string) => {
+    const hosted = href.startsWith('/legal/');
+    return hosted
+      ? { href, target: undefined, rel: undefined }
+      : { href, target: '_blank' as const, rel: 'noopener noreferrer' };
+  };
+
   return (
     <div className="shop-platform-footer__band relative z-[1] mt-8 border-t border-white/10">
       <div className="shop-platform-footer__inner shop-page-content py-6">
@@ -37,34 +44,19 @@ export default function ShopPlatformFooterBand() {
             </a>
             <nav className="text-xs sm:text-sm" aria-label={t('shopFooterPlatformLegal')}>
               <p className="flex flex-wrap items-center gap-x-1 gap-y-1">
-                <a
-                  href={legal.privacy}
-                  className={legalLinkClass}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a {...legalLinkProps(legal.privacy)} className={legalLinkClass}>
                   {t('shopFooterPlatformPrivacy')}
                 </a>
                 <span className="text-stone-600" aria-hidden>
                   |
                 </span>
-                <a
-                  href={legal.terms}
-                  className={legalLinkClass}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a {...legalLinkProps(legal.terms)} className={legalLinkClass}>
                   {t('shopFooterPlatformTerms')}
                 </a>
                 <span className="text-stone-600" aria-hidden>
                   |
                 </span>
-                <a
-                  href={legal.cookies}
-                  className={legalLinkClass}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a {...legalLinkProps(legal.cookies)} className={legalLinkClass}>
                   {t('shopFooterPlatformCookies')}
                 </a>
               </p>

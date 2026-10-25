@@ -12,8 +12,16 @@ import {
   validatePlatformAdyenApiKey,
 } from "@/lib/platform-adyen-credentials";
 import {
+  PLATFORM_LEGAL_HTML_KEYS,
+  PLATFORM_LEGAL_SLUG_TO_ID,
+  defaultPlatformLegalPageTitle,
+  normalizePlatformLegalHtml,
+  platformLegalHtmlById,
+} from "@/lib/platform-legal-content";
+import {
   PLATFORM_LEGAL_SETTING_KEYS,
-  resolvePlatformLegalUrls,
+  resolvePlatformLegalSettings,
+  type PlatformLegalSettings,
   type PlatformLegalUrls,
 } from "@/lib/platform-legal-urls";
 import { DEFAULT_PLATFORM_FROM_NAME, resolveMailcoFromName } from "@/lib/mailco-payload";
@@ -538,30 +546,112 @@ export class PlatformSettingsService {
     }
   }
 
-  static async getPlatformLegalUrls(): Promise<PlatformLegalUrls> {
-    const rows = await this.getMany(Object.values(PLATFORM_LEGAL_SETTING_KEYS));
-    return resolvePlatformLegalUrls({
+  private static async loadPlatformLegalRaw() {
+    const keys = [
+      ...Object.values(PLATFORM_LEGAL_SETTING_KEYS),
+      ...Object.values(PLATFORM_LEGAL_HTML_KEYS),
+    ];
+    const rows = await this.getMany(keys);
+    return {
       privacyUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.privacyUrl],
       termsUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.termsUrl],
       cookiesUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl],
-    });
+      privacyHtml: rows[PLATFORM_LEGAL_HTML_KEYS.privacy],
+      termsHtml: rows[PLATFORM_LEGAL_HTML_KEYS.terms],
+      cookiesHtml: rows[PLATFORM_LEGAL_HTML_KEYS.cookies],
+    };
   }
 
+  static async getPlatformLegalSettings(): Promise<PlatformLegalSettings> {
+    const raw = await this.loadPlatformLegalRaw();
+    return resolvePlatformLegalSettings(raw);
+  }
+
+  static async getPlatformLegalUrls(): Promise<PlatformLegalUrls> {
+    const settings = await this.getPlatformLegalSettings();
+    return {
+      origin: settings.origin,
+      privacy: settings.privacy,
+      terms: settings.terms,
+      cookies: settings.cookies,
+    };
+  }
+
+  static async updatePlatformLegalSettings(input: {
+    privacyUrl?: string;
+    termsUrl?: string;
+    cookiesUrl?: string;
+    privacy?: string;
+    terms?: string;
+    cookies?: string;
+    privacyHtml?: string;
+    termsHtml?: string;
+    cookiesHtml?: string;
+  }): Promise<PlatformLegalSettings> {
+    const privacyUrl = input.privacyUrl ?? input.privacy;
+    const termsUrl = input.termsUrl ?? input.terms;
+    const cookiesUrl = input.cookiesUrl ?? input.cookies;
+
+    if (privacyUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.privacyUrl, String(privacyUrl).trim() || null);
+    }
+    if (termsUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.termsUrl, String(termsUrl).trim() || null);
+    }
+    if (cookiesUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl, String(cookiesUrl).trim() || null);
+    }
+    if (input.privacyHtml !== undefined) {
+      await this.set(
+        PLATFORM_LEGAL_HTML_KEYS.privacy,
+        normalizePlatformLegalHtml(input.privacyHtml) || null
+      );
+    }
+    if (input.termsHtml !== undefined) {
+      await this.set(
+        PLATFORM_LEGAL_HTML_KEYS.terms,
+        normalizePlatformLegalHtml(input.termsHtml) || null
+      );
+    }
+    if (input.cookiesHtml !== undefined) {
+      await this.set(
+        PLATFORM_LEGAL_HTML_KEYS.cookies,
+        normalizePlatformLegalHtml(input.cookiesHtml) || null
+      );
+    }
+    return this.getPlatformLegalSettings();
+  }
+
+  /** @deprecated use updatePlatformLegalSettings */
   static async updatePlatformLegalUrls(input: {
     privacyUrl?: string;
     termsUrl?: string;
     cookiesUrl?: string;
   }): Promise<PlatformLegalUrls> {
-    if (input.privacyUrl !== undefined) {
-      await this.set(PLATFORM_LEGAL_SETTING_KEYS.privacyUrl, input.privacyUrl.trim() || null);
-    }
-    if (input.termsUrl !== undefined) {
-      await this.set(PLATFORM_LEGAL_SETTING_KEYS.termsUrl, input.termsUrl.trim() || null);
-    }
-    if (input.cookiesUrl !== undefined) {
-      await this.set(PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl, input.cookiesUrl.trim() || null);
-    }
-    return this.getPlatformLegalUrls();
+    const settings = await this.updatePlatformLegalSettings(input);
+    return {
+      origin: settings.origin,
+      privacy: settings.privacy,
+      terms: settings.terms,
+      cookies: settings.cookies,
+    };
+  }
+
+  static async getPlatformLegalPageBySlug(pageSlug: string): Promise<{
+    slug: string;
+    title: string;
+    htmlContent: string;
+  } | null> {
+    const id = PLATFORM_LEGAL_SLUG_TO_ID[pageSlug];
+    if (!id) return null;
+    const settings = await this.getPlatformLegalSettings();
+    const htmlContent = platformLegalHtmlById(settings, id);
+    if (!normalizePlatformLegalHtml(htmlContent)) return null;
+    return {
+      slug: pageSlug,
+      title: defaultPlatformLegalPageTitle(id),
+      htmlContent,
+    };
   }
 
   static async getDesktopBranding(): Promise<DesktopBranding> {

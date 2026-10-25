@@ -369,7 +369,7 @@ router.post(
  */
 router.get("/platform-settings/legal", async (_req: Request, res: Response) => {
   try {
-    const legal = await PlatformSettingsService.getPlatformLegalUrls();
+    const legal = await PlatformSettingsService.getPlatformLegalSettings();
     res.json({ success: true, legal });
   } catch (error) {
     console.error("Error getting platform legal settings:", error);
@@ -384,7 +384,7 @@ router.get("/platform-settings/legal", async (_req: Request, res: Response) => {
  */
 router.put("/platform-settings/legal", async (req: Request, res: Response) => {
   try {
-    const legal = await PlatformSettingsService.updatePlatformLegalUrls(req.body || {});
+    const legal = await PlatformSettingsService.updatePlatformLegalSettings(req.body || {});
     res.json({ success: true, legal });
   } catch (error) {
     console.error("Error updating platform legal settings:", error);

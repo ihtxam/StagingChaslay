@@ -152,9 +152,24 @@ export default function Settings() {
     terms: string;
     cookies: string;
     origin: string;
+    privacyHtml: string;
+    termsHtml: string;
+    cookiesHtml: string;
+    urlOverrides: {
+      privacyUrl: string | null;
+      termsUrl: string | null;
+      cookiesUrl: string | null;
+    };
   };
   const [legal, setLegal] = useState<PlatformLegalSettings | null>(null);
-  const [legalForm, setLegalForm] = useState({ privacy: '', terms: '', cookies: '' });
+  const [legalForm, setLegalForm] = useState({
+    privacyUrl: '',
+    termsUrl: '',
+    cookiesUrl: '',
+    privacyHtml: '',
+    termsHtml: '',
+    cookiesHtml: '',
+  });
   const [savingLegal, setSavingLegal] = useState(false);
   const [merchantAboutHtml, setMerchantAboutHtml] = useState('');
   const [savingMerchantAbout, setSavingMerchantAbout] = useState(false);
@@ -217,9 +232,12 @@ export default function Settings() {
       const leg = legalRes.data.legal as PlatformLegalSettings;
       setLegal(leg);
       setLegalForm({
-        privacy: leg.privacy || '',
-        terms: leg.terms || '',
-        cookies: leg.cookies || '',
+        privacyUrl: leg.urlOverrides?.privacyUrl || '',
+        termsUrl: leg.urlOverrides?.termsUrl || '',
+        cookiesUrl: leg.urlOverrides?.cookiesUrl || '',
+        privacyHtml: leg.privacyHtml || '',
+        termsHtml: leg.termsHtml || '',
+        cookiesHtml: leg.cookiesHtml || '',
       });
       const desk = desktopRes.data.desktop as DesktopBrandingSettings;
       setDesktop(desk);
@@ -1164,11 +1182,14 @@ export default function Settings() {
               const leg = res.data.legal as PlatformLegalSettings;
               setLegal(leg);
               setLegalForm({
-                privacy: leg.privacy || '',
-                terms: leg.terms || '',
-                cookies: leg.cookies || '',
+                privacyUrl: leg.urlOverrides?.privacyUrl || '',
+                termsUrl: leg.urlOverrides?.termsUrl || '',
+                cookiesUrl: leg.urlOverrides?.cookiesUrl || '',
+                privacyHtml: leg.privacyHtml || '',
+                termsHtml: leg.termsHtml || '',
+                cookiesHtml: leg.cookiesHtml || '',
               });
-              toast.success('Platform legal URLs saved');
+              toast.success('Platform legal pages saved');
             } catch {
               toast.error('Failed to save platform legal URLs');
             } finally {
@@ -1179,46 +1200,96 @@ export default function Settings() {
         >
           <h3 className="text-lg font-semibold">Platform legal (shop footer)</h3>
           <p className="text-sm text-stone-600 md:col-span-2">
-            Links shown on every online shop footer (privacy, terms, cookies). Defaults to{' '}
+            Links shown on every online shop footer (privacy, terms, cookies). Write content below to
+            host pages on this app (<code className="text-xs">/legal/…</code>), or paste an external URL
+            to override. With no content and no URL, links default to{' '}
             <code className="text-xs">rebornsense.com</code>. Merchant imprint (VAT, address) stays on
             each shop&apos;s own footer block.
           </p>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-medium">Privacy policy URL</span>
-            <input
-              className="input mt-1"
-              type="url"
-              value={legalForm.privacy}
-              onChange={(e) => setLegalForm({ ...legalForm, privacy: e.target.value })}
-              placeholder="https://rebornsense.com/privacy-policy"
-            />
-          </label>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-medium">Terms of use URL</span>
-            <input
-              className="input mt-1"
-              type="url"
-              value={legalForm.terms}
-              onChange={(e) => setLegalForm({ ...legalForm, terms: e.target.value })}
-              placeholder="https://rebornsense.com/terms-of-use"
-            />
-          </label>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-medium">Cookie policy URL</span>
-            <input
-              className="input mt-1"
-              type="url"
-              value={legalForm.cookies}
-              onChange={(e) => setLegalForm({ ...legalForm, cookies: e.target.value })}
-              placeholder="https://rebornsense.com/cookie-policy"
-            />
-          </label>
+
+          {(
+            [
+              {
+                id: 'privacy' as const,
+                title: 'Privacy policy',
+                urlKey: 'privacyUrl' as const,
+                htmlKey: 'privacyHtml' as const,
+                resolved: legal?.privacy,
+                placeholderUrl: 'https://rebornsense.com/privacy-policy',
+                editorPlaceholder: 'Privacy policy text for all shops…',
+              },
+              {
+                id: 'terms' as const,
+                title: 'Terms of use',
+                urlKey: 'termsUrl' as const,
+                htmlKey: 'termsHtml' as const,
+                resolved: legal?.terms,
+                placeholderUrl: 'https://rebornsense.com/terms-of-use',
+                editorPlaceholder: 'Terms of use text for all shops…',
+              },
+              {
+                id: 'cookies' as const,
+                title: 'Cookie policy',
+                urlKey: 'cookiesUrl' as const,
+                htmlKey: 'cookiesHtml' as const,
+                resolved: legal?.cookies,
+                placeholderUrl: 'https://rebornsense.com/cookie-policy',
+                editorPlaceholder: 'Cookie policy text for all shops…',
+              },
+            ] as const
+          ).map((section) => (
+            <div
+              key={section.id}
+              className="md:col-span-2 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-4"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className="text-base font-semibold m-0">{section.title}</h4>
+                {section.resolved ? (
+                  <a
+                    href={section.resolved}
+                    className="text-xs text-stone-600 underline-offset-2 hover:underline"
+                    target={section.resolved.startsWith('/legal/') ? undefined : '_blank'}
+                    rel={section.resolved.startsWith('/legal/') ? undefined : 'noopener noreferrer'}
+                  >
+                    Footer link: {section.resolved}
+                  </a>
+                ) : null}
+              </div>
+              <div>
+                <span className="text-sm font-medium">Page content</span>
+                <div className="mt-1">
+                  <PlatformHtmlEditor
+                    value={legalForm[section.htmlKey]}
+                    onChange={(html) => setLegalForm({ ...legalForm, [section.htmlKey]: html })}
+                    minHeight={200}
+                    placeholder={section.editorPlaceholder}
+                  />
+                </div>
+              </div>
+              <label className="block">
+                <span className="text-sm font-medium">External URL override (optional)</span>
+                <input
+                  className="input mt-1"
+                  type="url"
+                  value={legalForm[section.urlKey]}
+                  onChange={(e) =>
+                    setLegalForm({ ...legalForm, [section.urlKey]: e.target.value })
+                  }
+                  placeholder={section.placeholderUrl}
+                />
+                <span className="mt-1 block text-xs text-stone-500">
+                  Leave empty to use hosted content when the editor above has text.
+                </span>
+              </label>
+            </div>
+          ))}
+
           {legal?.origin ? (
-            <p className="text-xs text-stone-500 md:col-span-2">Current origin: {legal.origin}</p>
+            <p className="text-xs text-stone-500 md:col-span-2">Resolved origin hint: {legal.origin}</p>
           ) : null}
           <div className="md:col-span-2">
             <button type="submit" className="btn btn-primary" disabled={savingLegal}>
-              {savingLegal ? t('saving') : 'Save legal URLs'}
+              {savingLegal ? t('saving') : 'Save platform legal pages'}
             </button>
           </div>
         </form>

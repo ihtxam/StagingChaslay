@@ -17,4 +17,10 @@ const custom = resolvePlatformLegalUrls({
 assert.equal(custom.privacy, "https://rebornsense.com/custom-privacy");
 assert.equal(custom.terms, defaults.terms);
 
+const hosted = resolvePlatformLegalUrls({
+  privacyHtml: "<p>Our privacy policy</p>",
+});
+assert.equal(hosted.privacy, "/legal/privacy-policy");
+assert.equal(hosted.terms, defaults.terms);
+
 console.log("platform-legal-urls tests passed");
