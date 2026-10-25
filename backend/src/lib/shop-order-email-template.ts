@@ -259,7 +259,8 @@ export function buildShopOrderGuestEmailHtml(input: ShopOrderEmailTemplateInput)
     input.pickupLines.length > 0 ? box(locationTitle, locationBody) : '';
 
   const scheduledBlock =
-    input.scheduledLabel && input.kind === 'received'
+    input.scheduledLabel &&
+    (input.kind === 'received' || (input.kind === 'confirmed' && !input.etaMinutes))
       ? box(
           labels.scheduledFor,
           `<div style="font-size:15px;font-weight:700">${esc(input.scheduledLabel)}</div>`
@@ -283,7 +284,7 @@ export function buildShopOrderGuestEmailHtml(input: ShopOrderEmailTemplateInput)
       : `${itemsTable(labels, input.items)}${totalsBlock(labels, input.subtotal, input.discountTotal, input.total)}`;
 
   const notesBlock =
-    input.notes && input.kind !== 'received'
+    input.notes
       ? `
         <div style="border:1px solid #fde68a;background:#fffbeb;border-radius:10px;padding:14px 16px;margin:12px 0">
           <div style="font-size:11px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#92400e;margin-bottom:8px">⚠ ${esc(labels.orderInstructions)}</div>

@@ -98,7 +98,12 @@ export class ShopOrderEmailService {
     });
     const shop = String(merchant.name || 'Shop');
     const orderNumber = String(order.orderNumber || order.id.slice(0, 8));
-    const copy = shopOrderEmailCopy(kind, shop, orderNumber, guestLocale);
+    const awaitingRestaurantConfirm =
+      kind === 'received' &&
+      (order.status === 'pending_approval' || order.status === 'pending');
+    const copy = shopOrderEmailCopy(kind, shop, orderNumber, guestLocale, {
+      awaitingRestaurantConfirm,
+    });
     const trackLabel = shopOrderTrackLabel(guestLocale);
 
     const scheduledLabel = formatWhen(order.scheduledFor, guestLocale);

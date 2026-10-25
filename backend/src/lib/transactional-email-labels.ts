@@ -153,24 +153,30 @@ const SHOP_ORDER_SUBJECTS: Record<TxLocale, Record<ShopOrderKind, (shop: string,
   },
 };
 
+const SHOP_ORDER_RECEIVED_AWAITING: Record<TxLocale, string> = {
+  en: 'Thank you! We received your order. The restaurant will confirm it shortly with your ready time.',
+  fr: 'Merci ! Nous avons bien reçu votre commande. Le restaurant la confirmera sous peu avec l’heure de préparation.',
+  de: 'Danke! Wir haben Ihre Bestellung erhalten. Das Restaurant bestätigt sie in Kürze mit der Abholzeit.',
+};
+
 const SHOP_ORDER_BODIES: Record<TxLocale, Record<ShopOrderKind, string>> = {
   en: {
     received: 'We have received your order and are preparing it.',
-    confirmed: 'We have received your order and the kitchen has started.',
+    confirmed: 'Your order has been accepted by the restaurant.',
     ready: 'Your order is ready for pickup.',
     out_for_delivery: 'Your driver is on the way.',
     cancelled: 'Your order has been cancelled.',
   },
   fr: {
     received: 'Nous avons bien reçu votre commande et nous la préparons.',
-    confirmed: 'Nous avons bien reçu votre commande et la cuisine a commencé.',
+    confirmed: 'Votre commande a été acceptée par le restaurant.',
     ready: 'Votre commande est prête à être récupérée.',
     out_for_delivery: 'Votre livreur est en route.',
     cancelled: 'Votre commande a été annulée.',
   },
   de: {
     received: 'Wir haben Ihre Bestellung erhalten und bereiten sie vor.',
-    confirmed: 'Wir haben Ihre Bestellung erhalten und die Küche hat begonnen.',
+    confirmed: 'Ihre Bestellung wurde vom Restaurant angenommen.',
     ready: 'Ihre Bestellung ist zur Abholung bereit.',
     out_for_delivery: 'Ihr Fahrer ist unterwegs.',
     cancelled: 'Ihre Bestellung wurde storniert.',
@@ -181,12 +187,17 @@ export function shopOrderEmailCopy(
   kind: ShopOrderKind,
   shop: string,
   orderNumber: string,
-  locale?: string | null
+  locale?: string | null,
+  opts?: { awaitingRestaurantConfirm?: boolean }
 ): { subject: string; body: string } {
   const lang = loc(locale);
+  let body = SHOP_ORDER_BODIES[lang][kind];
+  if (kind === 'received' && opts?.awaitingRestaurantConfirm) {
+    body = SHOP_ORDER_RECEIVED_AWAITING[lang];
+  }
   return {
     subject: SHOP_ORDER_SUBJECTS[lang][kind](shop, orderNumber),
-    body: SHOP_ORDER_BODIES[lang][kind],
+    body,
   };
 }
 
