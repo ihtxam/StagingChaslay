@@ -31,6 +31,11 @@ test('isLicensedSettingsAddonTab gates fiscal and como', () => {
   assert.equal(isLicensedSettingsAddonTab('como', { comoSettings: { configured: true } }, ctx), true);
 });
 
+test('listInactiveExtraModules includes sms when not licensed', () => {
+  const inactive = listInactiveExtraModules({ smsAddonEnabled: false }, { isRetailMerchant: false });
+  assert.ok(inactive.some((m) => m.id === 'sms'));
+});
+
 test('isComoLicensed and isFiskalyLicensed', () => {
   assert.equal(isComoLicensed(null), false);
   assert.equal(isComoLicensed({ comoSettings: { enabled: true } }), true);

@@ -176,6 +176,36 @@ export class ShopOrderEmailService {
       console.warn('[shop-order-email] skip guest email — no customerEmail', orderId);
     }
 
+    const smsEvent =
+      kind === 'confirmed'
+        ? 'orderPlaced'
+        : kind === 'ready'
+          ? 'orderReady'
+          : kind === 'out_for_delivery'
+            ? 'orderOutForDelivery'
+            : null;
+    if (smsEvent && order.customerPhone) {
+      try {
+        const { SmsService } = await import('@/services/sms.service');
+        const pickup =
+          kind === 'ready' && scheduledLabel ? ` at ${scheduledLabel}` : '';
+        await SmsService.sendTransactional(
+          merchantId,
+          smsEvent,
+          order.customerPhone,
+          {
+            firstName: String(order.customerName || '').split(/\s+/)[0] || '',
+            orderNumber,
+            pickupTime: pickup,
+            shopName: shop,
+          },
+          order.customerId
+        );
+      } catch (err) {
+        console.warn('[shop-order-email] guest SMS failed', err);
+      }
+    }
+
     if (kind === 'received' && merchant.email) {
       const merchantCopy = merchantNewOrderEmailCopy(shop, orderNumber, merchant.panelLanguage);
       const channel = String(order.fulfillmentChannel || '');

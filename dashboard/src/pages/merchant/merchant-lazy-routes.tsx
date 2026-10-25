@@ -81,6 +81,7 @@ export const HostStation = merchantLazy(() => import('./HostStation'));
 export const PhoneOrders = merchantLazy(() => import('./PhoneOrders'));
 export const ReviewsInbox = merchantLazy(() => import('./ReviewsInbox'));
 export const Newsletter = merchantLazy(() => import('./Newsletter'));
+export const Sms = merchantLazy(() => import('./Sms'));
 export const WebPos = merchantLazy(() => import('./WebPos'));
 export const WaiterApp = merchantLazy(() => import('./WaiterApp'));
 export const DeliveryDriverPage = merchantLazy(() => import('./DeliveryDriver'));

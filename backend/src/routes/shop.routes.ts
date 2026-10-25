@@ -760,6 +760,7 @@ function shopPageMerchantPayload(
     reservationsEnabled: !!merchant.reservationsEnabled,
     cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
     giftCards: ShopGiftCardService.publicSettings(ShopGiftCardService.settingsFromMerchant(merchant)),
+    smsLoginEnabled: (merchant as { smsAddonEnabled?: boolean }).smsAddonEnabled === true,
     acceptingOrders: merchant.acceptingOrders !== false,
     acceptingReservations: merchant.acceptingReservations !== false,
     vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -998,6 +999,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         giftCards: ShopGiftCardService.publicSettings(
           ShopGiftCardService.settingsFromMerchant(merchant)
         ),
+        smsLoginEnabled: (merchant as { smsAddonEnabled?: boolean }).smsAddonEnabled === true,
         reservationsEnabled: !!merchant.reservationsEnabled,
         cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
         ...(() => {
@@ -1070,6 +1072,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
             giftCards: ShopGiftCardService.publicSettings(
               ShopGiftCardService.settingsFromMerchant(merchant)
             ),
+            smsLoginEnabled: (merchant as { smsAddonEnabled?: boolean }).smsAddonEnabled === true,
             acceptingOrders: merchant.acceptingOrders !== false,
             acceptingReservations: merchant.acceptingReservations !== false,
             vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -1929,6 +1932,43 @@ router.post("/:slug/auth/login", async (req: Request, res: Response) => {
     res.json({ success: true, ...result });
   } catch (error) {
     res.status(401).json({ error: error instanceof Error ? error.message : "Login failed" });
+  }
+});
+
+router.post("/:slug/auth/phone/request", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const { SmsOtpService } = await import("@/services/sms-otp.service");
+    const purpose = String(req.body?.purpose || "login") === "signup" ? "signup" : "login";
+    const result = await SmsOtpService.request({
+      merchantId: merchant.id,
+      phone: String(req.body?.phone || ""),
+      purpose,
+      ip: req.ip,
+      shopName: merchant.name,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Could not send code" });
+  }
+});
+
+router.post("/:slug/auth/phone/verify", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    const { SmsOtpService } = await import("@/services/sms-otp.service");
+    const purpose = String(req.body?.purpose || "login") === "signup" ? "signup" : "login";
+    const result = await SmsOtpService.verify({
+      merchantId: merchant.id,
+      phone: String(req.body?.phone || ""),
+      code: String(req.body?.code || ""),
+      purpose,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Verification failed" });
   }
 });
 

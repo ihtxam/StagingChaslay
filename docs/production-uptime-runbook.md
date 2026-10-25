@@ -32,3 +32,22 @@
 ## Staging first
 
 Validate on `https://app.chaslay.com/api/health?deep=1` before production deploy markers.
+
+## Incident process (login / API / PIN)
+
+For **P0** issues (cannot log in, widespread 502, PIN gate broken):
+
+1. **Fix on `main`** and verify on **staging** (`app.chaslay.com`) — health, login, PIN, one merchant smoke path.
+2. **Same incident window:** schedule **production** deploy (touch `.deploy/rebornsense-production` on `main`) — usually **off-peak** unless prod is already down.
+3. **Do not close** the incident until:
+   - `GET /api/health?deep=1` → 200, `database: ok`
+   - Post-deploy workflow step is green
+   - A human confirms login + PIN on a real merchant account
+4. If deploy fails health gate: use **Restart Rebornsense production**, then re-run deploy or investigate logs — do not leave “merged to GitHub” as the end state.
+
+## Schema maintenance guardrails
+
+- **Never** run full `ensure*` schema walks on every HTTP request — use startup + memoized `ensureLocationContextSchema()` (and column caches in `runPatch`).
+- **Logs:** `[schema-metrics]` warnings when the same `ensure*` or column patch runs more than once per API process.
+- **Probe:** `GET /api/health?deep=1` includes `schemaMetrics` and `schemaMaintenance` (`ok` | `warning`) for ops dashboards.
+- If `schemaMaintenance` is `warning` after deploy, treat as a release blocker on staging before production.

@@ -9,6 +9,7 @@ import {
 import { repairAllChaslayHomepages } from "@/lib/chaslay-homepage-heal";
 import { SHOP_CATALOG_EXTRA_PATCHES, shopProductHealColumnNames } from "@/lib/product-column-patches";
 import { isShopCatalogSchemaError } from "@/lib/public-shop-error";
+import { recordSchemaColumnPatch, recordSchemaEnsureRun } from "@/lib/schema-patch-metrics";
 
 /** Raw pg pool for DDL — Drizzle execute() often fails/no-ops on ALTER TABLE. */
 let ddlPool: Pool | null = null;
@@ -283,12 +284,20 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   como_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS como_settings jsonb",
   phone_ordering_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS phone_ordering_settings jsonb",
+  sms_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_addon_enabled boolean NOT NULL DEFAULT false",
+  sms_tier: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_tier varchar(20) NOT NULL DEFAULT 'starter'",
+  sms_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   customers_crm_tags:
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
+  customers_marketing_sms_opt_in:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS marketing_sms_opt_in boolean NOT NULL DEFAULT false",
+  customers_phone_verified_at:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone_verified_at timestamp",
   chaslay_homepage_builders_last_good_editor_state:
     "ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   chaslay_homepage_builder_pages_last_good_editor_state:
@@ -1507,6 +1516,67 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS device_enrollments_merchant_device_idx ON device_enrollments(merchant_id, device_id)`,
   `CREATE INDEX IF NOT EXISTS device_enrollments_merchant_id_idx ON device_enrollments(merchant_id)`,
+  `CREATE TABLE IF NOT EXISTS sms_messages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
+    campaign_id uuid,
+    to_e164 varchar(20) NOT NULL,
+    type varchar(20) NOT NULL,
+    event varchar(60) NOT NULL,
+    body text NOT NULL,
+    segments integer NOT NULL DEFAULT 1,
+    status varchar(20) NOT NULL DEFAULT 'queued',
+    provider_id varchar(80),
+    provider_batch_id varchar(80),
+    error text,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_merchant_idx ON sms_messages(merchant_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_to_idx ON sms_messages(merchant_id, to_e164)`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_type_idx ON sms_messages(merchant_id, type)`,
+  `CREATE TABLE IF NOT EXISTS sms_otps (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    phone_e164 varchar(20) NOT NULL,
+    purpose varchar(20) NOT NULL,
+    code_hash varchar(64) NOT NULL,
+    meta jsonb,
+    ip varchar(64),
+    attempts integer NOT NULL DEFAULT 0,
+    expires_at timestamp NOT NULL,
+    consumed_at timestamp,
+    created_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_otps_lookup_idx ON sms_otps(merchant_id, phone_e164, purpose)`,
+  `CREATE INDEX IF NOT EXISTS sms_otps_created_idx ON sms_otps(merchant_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS sms_usage (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    period_ym varchar(7) NOT NULL,
+    sent_count integer NOT NULL DEFAULT 0,
+    failed_count integer NOT NULL DEFAULT 0,
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS sms_usage_merchant_period_uq ON sms_usage(merchant_id, period_ym)`,
+  `CREATE TABLE IF NOT EXISTS sms_campaigns (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    title varchar(200) NOT NULL,
+    body text NOT NULL,
+    audience varchar(20) NOT NULL DEFAULT 'all',
+    selected_phones jsonb,
+    status varchar(20) NOT NULL DEFAULT 'draft',
+    recipient_count integer NOT NULL DEFAULT 0,
+    sent_count integer NOT NULL DEFAULT 0,
+    failed_count integer NOT NULL DEFAULT 0,
+    skipped_count integer NOT NULL DEFAULT 0,
+    sent_at timestamp,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_campaigns_merchant_idx ON sms_campaigns(merchant_id, created_at)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1552,12 +1622,16 @@ function resolvePatchStatement(column: string, table?: string | null): string | 
 
 async function runPatch(column: string, table?: string | null): Promise<boolean> {
   const cacheKey = table ? `${table}.${column}` : column;
-  if (patchedColumns.has(cacheKey)) return false;
+  if (patchedColumns.has(cacheKey)) {
+    recordSchemaColumnPatch(cacheKey);
+    return false;
+  }
   const statement = resolvePatchStatement(column, table);
   if (!statement) return false;
   try {
     await execSql(statement);
     patchedColumns.add(cacheKey);
+    recordSchemaColumnPatch(cacheKey);
     console.info(`[schema] patched column ${cacheKey}`);
     return true;
   } catch (err) {
@@ -1761,6 +1835,15 @@ export async function ensurePhoneOrderingSchema(): Promise<void> {
   await ensureMerchantTables();
 }
 
+export async function ensureSmsAddonColumns(): Promise<void> {
+  await runPatch("sms_addon_enabled");
+  await runPatch("sms_tier");
+  await runPatch("sms_settings");
+  await runPatch("customers_marketing_sms_opt_in");
+  await runPatch("customers_phone_verified_at");
+  await ensureMerchantTables();
+}
+
 let merchantColumnsSchemaPromise: Promise<void> | null = null;
 let ordersColumnsSchemaPromise: Promise<void> | null = null;
 let orderItemsColumnsSchemaPromise: Promise<void> | null = null;
@@ -1777,6 +1860,7 @@ export async function ensureMerchantColumnsSchema(): Promise<void> {
 }
 
 async function ensureMerchantColumnsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("merchantColumns");
   for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
     await runPatch(column, "merchants");
   }
@@ -1809,6 +1893,7 @@ export async function ensureOrdersColumnsSchema(): Promise<void> {
 }
 
 async function ensureOrdersColumnsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("ordersColumns");
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
     if (!column.startsWith("orders_")) continue;
     const col = column.slice("orders_".length);
@@ -1831,6 +1916,7 @@ export async function ensureOrderItemsColumnsSchema(): Promise<void> {
 }
 
 async function ensureOrderItemsColumnsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("orderItemsColumns");
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
     if (!column.startsWith("order_items_")) continue;
     const col = column.slice("order_items_".length);
@@ -1896,6 +1982,7 @@ let posSessionsSchemaPromise: Promise<void> | null = null;
 export async function ensureLocationContextSchema(): Promise<void> {
   if (locationContextSchemaPromise) return locationContextSchemaPromise;
   locationContextSchemaPromise = (async () => {
+    recordSchemaEnsureRun("locationContext");
     await ensureMerchantColumnsSchema();
     await ensureOrdersColumnsSchema();
     await ensureOrderItemsColumnsSchema();
@@ -1918,6 +2005,7 @@ export async function ensureLocationsSchema(): Promise<void> {
 }
 
 async function ensureLocationsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("locations");
   for (const statement of TABLE_PATCHES) {
     if (!LOCATIONS_SCHEMA_PATTERN.test(statement)) continue;
     try {

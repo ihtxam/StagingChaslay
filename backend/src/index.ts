@@ -9,6 +9,7 @@ import paymentRoutes from "@/routes/payment.routes";
 import webshopRoutes from "@/routes/webshop.routes";
 import loyaltyRoutes from "@/routes/loyalty.routes";
 import giftCardsRoutes from "@/routes/gift-cards.routes";
+import smsRoutes from "@/routes/sms.routes";
 import syncRoutes from "@/routes/sync.routes";
 import terminalsRoutes from "@/routes/terminals.routes";
 import tapToPayRoutes from "@/routes/tap-to-pay.routes";
@@ -53,6 +54,7 @@ import {
   ensureMerchantSchemaAtStartup,
   ensureAllMerchantSchema,
 } from "@/lib/ensure-merchant-schema";
+import { getSchemaPatchMetrics } from "@/lib/schema-patch-metrics";
 import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
 import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-schema";
 import { sql } from "drizzle-orm";
@@ -170,7 +172,7 @@ app.use("/downloads", downloadsRoutes);
 
 async function respondHealth(req: Request, res: Response) {
   const deep = String(req.query.deep || "") === "1";
-  const body: Record<string, string> = {
+  const body: Record<string, unknown> = {
     status: "ok",
     service: "reborn-backend",
     timestamp: new Date().toISOString(),
@@ -184,7 +186,16 @@ async function respondHealth(req: Request, res: Response) {
     await getDb().execute(sql`SELECT 1`);
     body.database = "ok";
     body.databaseLatencyMs = String(Date.now() - start);
-    res.json(body);
+    const schemaMetrics = getSchemaPatchMetrics();
+    if (
+      schemaMetrics.duplicateEnsureKeys.length > 0 ||
+      schemaMetrics.duplicateColumnKeys.length > 0
+    ) {
+      body.schemaMaintenance = "warning";
+    } else {
+      body.schemaMaintenance = "ok";
+    }
+    res.json({ ...body, schemaMetrics });
   } catch (error) {
     console.error("[health] database probe failed:", error);
     res.status(503).json({
@@ -298,6 +309,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/webshop", webshopRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/gift-cards", giftCardsRoutes);
+app.use("/api/merchant/sms", smsRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/terminals", terminalsRoutes);
 app.use("/api/tap-to-pay", tapToPayRoutes);

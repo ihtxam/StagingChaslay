@@ -7,6 +7,7 @@ import { isKdsLicensed } from '@/lib/kds-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isOdsLicensed } from '@/lib/ods-addon';
 import { isPhoneOrderingLicensed } from '@/lib/phone-ordering-addon';
+import { isSmsLicensed } from '@/lib/sms-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import {
@@ -20,6 +21,7 @@ export type ExtraModuleId =
   | 'storekeeper'
   | 'catering'
   | 'phone'
+  | 'sms'
   | 'signage'
   | 'reservations'
   | 'como'
@@ -54,6 +56,7 @@ export type MerchantAddonSettings = {
   cateringEnabled?: boolean;
   cateringAddonEnabled?: boolean;
   phoneOrderingAddonEnabled?: boolean;
+  smsAddonEnabled?: boolean;
   giftCardAddonEnabled?: boolean;
   kdsAddonEnabled?: boolean;
   kdsEnabled?: boolean;
@@ -128,6 +131,12 @@ export const EXTRA_MODULE_DEFINITIONS: ExtraModuleDefinition[] = [
     titleKey: 'extraModulePhoneTitle',
     descriptionKey: 'extraModulePhoneDesc',
     isActive: (s) => isPhoneOrderingLicensed(s),
+  },
+  {
+    id: 'sms',
+    titleKey: 'extraModuleSmsTitle',
+    descriptionKey: 'extraModuleSmsDesc',
+    isActive: (s) => isSmsLicensed(s),
   },
   {
     id: 'signage',
@@ -224,6 +233,8 @@ export function isLicensedSettingsAddonTab(
       return isSignageLicensed(settings);
     case 'phone':
       return isPhoneOrderingLicensed(settings);
+    case 'sms':
+      return isSmsLicensed(settings);
     case 'accounting':
       return isAccountingLicensed(settings);
     case 'kds':

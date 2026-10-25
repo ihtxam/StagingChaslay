@@ -710,6 +710,7 @@ export class ReservationService {
       await this.sendLifecycleEmail(merchant, row, status === "confirmed" ? "confirmed" : "received");
     } else {
       await this.sendAdminNotifyEmail(merchant, row, status === "confirmed" ? "confirmed" : "received");
+      await this.sendLifecycleSms(merchant, row, status === "confirmed" ? "confirmed" : "received");
     }
 
     if (status === "confirmed") {
@@ -1173,6 +1174,41 @@ export class ReservationService {
     return updated;
   }
 
+  static async sendLifecycleSms(
+    merchant: { id?: string; name?: string | null },
+    reservation: typeof schema.reservations.$inferSelect,
+    kind: "received" | "confirmed" | "rejected" | "cancelled" | "seated" | "reminder"
+  ) {
+    const event =
+      kind === "received"
+        ? "reservationNew"
+        : kind === "confirmed"
+          ? "reservationConfirmed"
+          : kind === "reminder"
+            ? "reservationReminder"
+            : kind === "cancelled" || kind === "rejected"
+              ? "reservationCancelled"
+              : null;
+    if (!event || !merchant.id || !reservation.guestPhone) return;
+    try {
+      const { SmsService } = await import("@/services/sms.service");
+      await SmsService.sendTransactional(
+        merchant.id,
+        event,
+        reservation.guestPhone,
+        {
+          firstName: String(reservation.guestName || "").split(/\s+/)[0] || "",
+          reservationCode: reservation.code,
+          when: formatDateTimeDDMMYYYY(reservation.reservedAt),
+          partySize: reservation.partySize,
+          shopName: merchant.name || "Restaurant",
+        }
+      );
+    } catch (err) {
+      console.warn("[reservations] guest SMS failed", err);
+    }
+  }
+
   static async sendLifecycleEmail(
     merchant: {
       id?: string;
@@ -1188,6 +1224,8 @@ export class ReservationService {
     reservation: typeof schema.reservations.$inferSelect,
     kind: "received" | "confirmed" | "rejected" | "cancelled" | "seated" | "reminder"
   ) {
+    await this.sendLifecycleSms(merchant, reservation, kind);
+
     if (!reservation.guestEmail) {
       await this.sendAdminNotifyEmail(merchant, reservation, kind);
       return;

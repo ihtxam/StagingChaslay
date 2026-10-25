@@ -36,6 +36,7 @@ import {
   MerchantTillPrintHub,
   Modifiers,
   Newsletter,
+  Sms,
   Offers,
   OnlineShop,
   OrderCenterApp,
@@ -277,6 +278,7 @@ function MerchantShell() {
   const [kioskLicensed, setKioskLicensed] = useState(false);
   const [cateringLicensed, setCateringLicensed] = useState(false);
   const [phoneOrderingLicensed, setPhoneOrderingLicensed] = useState(false);
+  const [smsLicensed, setSmsLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -431,6 +433,7 @@ function MerchantShell() {
       cateringEnabled?: boolean;
       cateringAddonEnabled?: boolean;
       phoneOrderingAddonEnabled?: boolean;
+      smsAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
     } | null) => {
@@ -449,6 +452,7 @@ function MerchantShell() {
       setKioskLicensed(isKioskLicensed(settings));
       setCateringLicensed(isCateringLicensed(settings));
       setPhoneOrderingLicensed(isPhoneOrderingLicensed(settings));
+      setSmsLicensed(settings?.smsAddonEnabled === true);
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(
         settings?.name?.trim() ||
@@ -1157,6 +1161,7 @@ function MerchantShell() {
         { label: t('offers'), path: '/merchant/offers', icon: '🏷️' },
         { label: t('vouchers'), path: '/merchant/vouchers', icon: '🎟️' },
         { label: t('newsletter'), path: '/merchant/newsletter', icon: '✉️' },
+        ...(smsLicensed ? [{ label: t('smsNav'), path: '/merchant/sms', icon: '💬' }] : []),
       ].filter((item) => allow(item.path)),
     },
     {
@@ -1668,6 +1673,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/newsletter" allow={allow}>
                   <Newsletter />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="sms"
+              element={
+                <PanelRouteGuard path="/merchant/sms" allow={allow}>
+                  <Sms />
                 </PanelRouteGuard>
               }
             />

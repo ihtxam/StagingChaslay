@@ -1,21 +1,6 @@
 import { Router, Request, Response } from "express";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { AdyenMerchantWebhookService } from "@/services/adyen-merchant-webhook.service";
-import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
-import {
-  extractWebhookSecret,
-  parsePhoneInbound,
-  phoneTicketNotes,
-  PHONE_ORDER_SOURCE,
-} from "@/lib/phone-ordering-webhook";
-import {
-  isPhoneOrderingReady,
-  normalizePhoneOrderingSettings,
-  timingSafeEqualSecret,
-} from "@/lib/phone-ordering-settings";
-import { isPhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
-import { OrderService } from "@/services/order.service";
 
 const router = Router();
 
@@ -119,101 +104,24 @@ router.post("/adyen/:merchantId", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/webhooks/phone/:merchantId
- * Health for the phone-ordering inbound channel (no secret).
+ * POST /api/webhooks/esendex
+ * Inbound SMS (STOP / ARRET / STOPP). Configure in Esendex account push notifications.
+ * @see https://developers.esendex.com/api-reference/
  */
-router.get("/phone/:merchantId", async (req: Request, res: Response) => {
-  const merchantId = String(req.params.merchantId || "").trim();
-  if (!merchantId) return res.status(400).json({ ok: false, error: "Merchant ID is required" });
+router.post("/esendex", async (req: Request, res: Response) => {
   try {
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-      columns: { id: true, phoneOrderingSettings: true, phoneOrderingAddonEnabled: true },
-    });
-    if (!merchant) return res.status(404).json({ ok: false, error: "Merchant not found" });
-    if (!isPhoneOrderingAddonEnabled(merchant.phoneOrderingAddonEnabled)) {
-      return res.status(403).json({ ok: false, error: "Phone ordering add-on is not enabled" });
+    const body = req.body || {};
+    const from = String(body.from || body.originator || body.Originator || "").trim();
+    const text = String(body.body || body.message || body.MessageText || body.summary || "").trim();
+    const merchantId = String(body.merchantId || req.query.merchantId || "").trim() || null;
+    if (from && text) {
+      const { SmsService } = await import("@/services/sms.service");
+      await SmsService.honorInboundStop(from, text, merchantId);
     }
-    const settings = normalizePhoneOrderingSettings(
-      (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
-    );
-    return res.json({
-      ok: true,
-      service: "phone-ordering",
-      enabled: settings.enabled === true,
-      configured: isPhoneOrderingReady(settings),
-    });
+    res.json({ success: true });
   } catch (error) {
-    console.error("Phone ordering health error:", error);
-    return res.status(500).json({ ok: false, error: "Phone ordering health failed" });
-  }
-});
-
-/**
- * POST /api/webhooks/phone/:merchantId
- * Twilio or generic SMS/voice inbound. Creates a phone-source staff ticket.
- */
-router.post("/phone/:merchantId", async (req: Request, res: Response) => {
-  const merchantId = String(req.params.merchantId || "").trim();
-  if (!merchantId) return res.status(400).json({ ok: false, error: "Merchant ID is required" });
-  try {
-    const { ensurePhoneOrderingSchema } = await import("@/lib/ensure-merchant-schema");
-    await ensurePhoneOrderingSchema();
-    const db = getDb();
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(schema.merchants.id, merchantId),
-    });
-    if (!merchant) return res.status(404).json({ ok: false, error: "Merchant not found" });
-    if (
-      !isPhoneOrderingAddonEnabled(
-        (merchant as { phoneOrderingAddonEnabled?: boolean }).phoneOrderingAddonEnabled
-      )
-    ) {
-      return res.status(403).json({ ok: false, error: "Phone ordering add-on is not enabled" });
-    }
-    const settings = normalizePhoneOrderingSettings(
-      (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
-    );
-    if (!settings.enabled) {
-      return res.status(403).json({ ok: false, error: "Phone ordering is disabled" });
-    }
-    if (!settings.webhookSecret) {
-      return res.status(403).json({ ok: false, error: "Phone ordering webhook secret is not set" });
-    }
-    const provided = extractWebhookSecret({
-      headers: req.headers as Record<string, unknown>,
-      query: req.query as Record<string, unknown>,
-      body: (req.body || {}) as Record<string, unknown>,
-    });
-    if (!timingSafeEqualSecret(settings.webhookSecret, provided)) {
-      return res.status(401).json({ ok: false, error: "Invalid webhook secret" });
-    }
-    const inbound = parsePhoneInbound((req.body || {}) as Record<string, unknown>);
-    const order = await OrderService.createOrder(
-      merchantId,
-      [],
-      undefined,
-      "pos",
-      undefined,
-      0,
-      phoneTicketNotes(inbound),
-      null,
-      {
-        orderSource: PHONE_ORDER_SOURCE,
-        customerName: inbound.customerName,
-        customerPhone: inbound.from,
-        status: "pending_approval",
-        paymentStatus: "pending",
-      }
-    );
-    return res.status(201).json({ ok: true, order, inbound });
-  } catch (error) {
-    console.error("Phone ordering webhook error:", error);
-    return res.status(400).json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Failed to create phone order",
-    });
+    console.error("[webhooks] esendex inbound failed", error);
+    res.json({ success: true });
   }
 });
 

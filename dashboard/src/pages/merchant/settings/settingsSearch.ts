@@ -669,10 +669,22 @@ export function buildSettingsSearchIndex(
         'phone',
         'telephone',
         'twilio',
-        'sms',
         'voice',
         'call',
         t('settingsPhoneOrdering'),
+      ],
+    },
+    {
+      id: 'sms-addon',
+      tab: 'extra-modules',
+      keywords: [
+        'sms',
+        'esendex',
+        'text message',
+        'otp',
+        'marketing sms',
+        t('smsTitle'),
+        t('extraModuleSmsTitle'),
       ],
     },
     {
