@@ -33,6 +33,13 @@
 
 Validate on `https://app.chaslay.com/api/health?deep=1` before production deploy markers.
 
+## Esendex SMS (staging / prod)
+
+1. **Superadmin → Settings** → section **Esendex SMS** (maps to `ESENDEX_*` in `backend/.env.example`).
+2. Save API user, account ref, password/key, default sender — or set the same keys in server env.
+3. **Superadmin → Merchants** → enable **SMS (Esendex)** + tier on a test merchant.
+4. Smoke: merchant **SMS** page → send test SMS; shop login OTP if enabled.
+
 ## Incident process (login / API / PIN)
 
 For **P0** issues (cannot log in, widespread 502, PIN gate broken):
