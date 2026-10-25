@@ -1631,7 +1631,6 @@ function resolvePatchStatement(column: string, table?: string | null): string | 
 async function runPatch(column: string, table?: string | null): Promise<boolean> {
   const cacheKey = table ? `${table}.${column}` : column;
   if (patchedColumns.has(cacheKey)) {
-    recordSchemaColumnPatch(cacheKey);
     return false;
   }
   const statement = resolvePatchStatement(column, table);
@@ -2572,7 +2571,7 @@ export async function ensureAllMerchantSchema(): Promise<{
   };
 }
 
-/** Run schema patches at startup — await before accepting traffic. */
+/** Run schema patches once per process (startup background task or explicit await). */
 export function ensureMerchantSchemaAtStartup(): Promise<void> {
   if (!startupPatchPromise) {
     startupPatchPromise = ensureAllMerchantSchema()

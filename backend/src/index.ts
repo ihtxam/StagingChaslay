@@ -50,11 +50,13 @@ import { ensureUploadsRoot } from "@/services/media-upload.service";
 import { MarketingService } from "@/services/marketing.service";
 import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
-import {
-  ensureMerchantSchemaAtStartup,
-  ensureAllMerchantSchema,
-} from "@/lib/ensure-merchant-schema";
+import { ensureAllMerchantSchema } from "@/lib/ensure-merchant-schema";
 import { getSchemaPatchMetrics } from "@/lib/schema-patch-metrics";
+import {
+  getMerchantSchemaStartupState,
+  kickOffMerchantSchemaStartup,
+  merchantSchemaStartupMiddleware,
+} from "@/lib/schema-startup-state";
 import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
 import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-schema";
 import { sql } from "drizzle-orm";
@@ -150,6 +152,8 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
+app.use(merchantSchemaStartupMiddleware);
+
 // Public uploaded media (vacation popup images, etc.)
 const uploadsRoot = ensureUploadsRoot();
 app.use(
@@ -186,8 +190,11 @@ async function respondHealth(req: Request, res: Response) {
     await getDb().execute(sql`SELECT 1`);
     body.database = "ok";
     body.databaseLatencyMs = String(Date.now() - start);
+    body.schemaStartup = getMerchantSchemaStartupState();
     const schemaMetrics = getSchemaPatchMetrics();
-    if (
+    if (body.schemaStartup === "pending") {
+      body.schemaMaintenance = "warming";
+    } else if (
       schemaMetrics.duplicateEnsureKeys.length > 0 ||
       schemaMetrics.duplicateColumnKeys.length > 0
     ) {
@@ -366,16 +373,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-void (async () => {
-  try {
-    console.log("[schema] applying merchant schema patches before listen…");
-    await ensureMerchantSchemaAtStartup();
-    console.log("[schema] merchant schema patches complete");
-  } catch (err) {
-    console.warn("[schema] startup patch error (continuing):", err);
-  }
+kickOffMerchantSchemaStartup();
 
-  app.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`✅ ${APP_NAME} API running on port ${PORT}`);
   console.log(`🏥 Health check: /health`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
@@ -466,7 +466,6 @@ void (async () => {
   };
   setTimeout(() => void tick(), 45_000);
   setInterval(() => void tick(), 60 * 60 * 1000);
-  });
-})();
+});
 
 export default app;

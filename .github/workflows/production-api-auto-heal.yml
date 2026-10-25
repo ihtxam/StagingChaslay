@@ -5,8 +5,12 @@ name: Production API auto-heal
 
 on:
   schedule:
+    # UTC; only runs when this file is on the repo default branch and the workflow is enabled.
     - cron: "*/5 * * * *"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: production-api-auto-heal
