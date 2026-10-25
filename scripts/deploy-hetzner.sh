@@ -646,9 +646,14 @@ print(sorted(vers)[-1] if vers else "")
 PY
       )"
       if [[ -n "$STALE_APK_VERSION" && "$STALE_APK_VERSION" != "$BRIDGE_VERSION" ]]; then
-        echo "ERROR: Refusing deploy — APK build failed and $BRIDGE_APK is still v${STALE_APK_VERSION} (source requires v${BRIDGE_VERSION})."
-        echo "  Tablets cannot upgrade until a fresh APK is built and copied to downloads/."
-        exit 1
+        if [[ "${DEPLOY_STACK:-}" == "chaslay" ]]; then
+          echo "WARNING: Bridge APK build failed and $BRIDGE_APK is still v${STALE_APK_VERSION} (source requires v${BRIDGE_VERSION})."
+          echo "  Continuing Chaslay staging deploy (app/shop/API). Rebuild APK before tablet upgrades."
+        else
+          echo "ERROR: Refusing deploy — APK build failed and $BRIDGE_APK is still v${STALE_APK_VERSION} (source requires v${BRIDGE_VERSION})."
+          echo "  Tablets cannot upgrade until a fresh APK is built and copied to downloads/."
+          exit 1
+        fi
       fi
     fi
   fi

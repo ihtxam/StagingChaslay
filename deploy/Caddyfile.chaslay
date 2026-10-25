@@ -85,6 +85,14 @@ admin.chaslay.com {
 shop.chaslay.com {
 	encode gzip zstd
 
+	handle_errors {
+		@shop_api_down expression `{http.error.status_code} >= 502 && {http.error.status_code} <= 504`
+		handle @shop_api_down {
+			rewrite * /index.html
+			reverse_proxy dashboard:80
+		}
+	}
+
 	handle /api/* {
 		reverse_proxy api:3000
 	}

@@ -58,7 +58,6 @@ import { isCateringAddonEnabled } from "@/lib/catering-addon";
 import { isGrowthAnalyticsAddonEnabled } from "@/lib/growth-analytics-addon";
 import { isGuestCrmAddonEnabled } from "@/lib/guest-crm-addon";
 import { isPhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
-import { isPhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
 import { isMarketingAutomationAddonEnabled } from "@/lib/marketing-automation-addon";
 import { isSmartSegmentsAddonEnabled } from "@/lib/smart-segments-addon";
 import { isReservationCampaignsAddonEnabled } from "@/lib/reservation-campaigns-addon";
