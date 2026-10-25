@@ -69,3 +69,4 @@
 # Deploy 2026-10-25T23:05:00Z — fix: kiosk orders use KIOSK-xxxx-nnn (not WEB-xxxx)
 # Deploy 2026-10-25T23:15:00Z — fix: hide Shop settings tab when edition lacks online_shop (POS-only)
 # Deploy 2026-10-25T23:20:00Z — fix: restart workflow health check (node fetch, not wget in API image)
+# Deploy 2026-10-25T23:50:00Z — PROD #894: listen before merchant schema patches; health-watch scheduled auto-heal

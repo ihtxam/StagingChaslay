@@ -35,7 +35,7 @@
 - **Script:** `scripts/api-auto-heal.sh` on the Hetzner host.
 - **Behaviour:** Every run probes `…/api/health?deep=1`. On success → failure counter = 0. On failure → increment; at **3** failures → **restart API + Caddy** (same as emergency restart), then **1 hour cooldown** before another heal (avoids restart loops during a bad deploy).
 - **Does it prevent login/POS breakups?** It **shortens** outages when the API is **stuck** (event loop blocked, hung process, Caddy 502) but **does not fix** bad code on every request. Schema-storm fixes must still be **deployed**.
-- **GitHub:** workflows **Production API auto-heal** and **Staging API auto-heal** (every 5 minutes via SSH). Ensure `REBORN_HETZNER_*` / `HETZNER_*` secrets are set (same as deploy).
+- **GitHub:** **Production API auto-heal** (every 5 min cron when registered) and **Staging API auto-heal**. Production also runs `api-auto-heal.sh` on the **Production health watch** schedule (every 10 min) so healing works even if the standalone auto-heal cron has not fired yet. Ensure `REBORN_HETZNER_*` / `HETZNER_*` secrets are set (same as deploy).
 - **Scheduled runs not appearing?** Cron workflows only run on the **default branch** (`main`) and must be **enabled** under Actions → the workflow → ⋮ → *Enable workflow*. After the first merge, GitHub can take **5–15 minutes** before the first scheduled run shows; if you only see *Manually run by …* after an hour, check org/repo **Actions** policy (scheduled workflows allowed) and billing. **Belt-and-suspenders:** install host cron from the comment at the top of `scripts/api-auto-heal.sh` on the Hetzner box.
 - **Manual:** `workflow_dispatch` on **Production health watch** with **run auto-heal after failure** after a failed probe.
 
