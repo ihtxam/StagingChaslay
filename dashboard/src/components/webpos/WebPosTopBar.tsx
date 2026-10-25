@@ -549,6 +549,32 @@ export default function WebPosTopBar({
   );
 }
 
+function WebPosEodGearSection({
+  showEodButton,
+  onEodReport,
+}: {
+  showEodButton?: boolean;
+  onEodReport?: () => void;
+}) {
+  const { t } = useI18n();
+  if (!showEodButton || !onEodReport) return null;
+  return (
+    <div className="space-y-1.5 border-b border-stone-100 pb-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+        {t('webPosEodReport')}
+      </p>
+      <button
+        type="button"
+        className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+        onClick={onEodReport}
+      >
+        {t('webPosEodPrint')}
+      </button>
+      <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
+    </div>
+  );
+}
+
 export function WebPosSettingsDropdown({
   onReloadCatalog,
   shiftsEnabled,
@@ -690,7 +716,7 @@ export function WebPosSettingsDropdown({
 
   return (
     <div
-      className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(65vh,26rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
+      className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(78vh,32rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5">
@@ -707,6 +733,7 @@ export function WebPosSettingsDropdown({
               onPrinterChange={onStaffPrinterChange}
             />
           ) : null}
+          <WebPosEodGearSection showEodButton={showEodButton} onEodReport={onEodReport} />
           <div className="grid grid-cols-2 gap-1.5 border-b border-stone-100 pb-2">
             <button
               type="button"
@@ -1210,20 +1237,8 @@ export function WebPosSettingsDropdown({
       </>
       ) : null}
 
-      {showEodButton && onEodReport ? (
-        <div className="space-y-1.5 border-b border-stone-100 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosEodReport')}
-          </p>
-          <button
-            type="button"
-            className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
-            onClick={onEodReport}
-          >
-            {t('webPosEodPrint')}
-          </button>
-          <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
-        </div>
+      {!hardwareGearOnly ? (
+        <WebPosEodGearSection showEodButton={showEodButton} onEodReport={onEodReport} />
       ) : null}
 
       <p className="border-t border-stone-100 pt-1.5 text-center text-[10px] text-stone-400">

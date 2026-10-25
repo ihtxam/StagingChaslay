@@ -70,5 +70,8 @@ jobs:
             export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
             export DEPLOY_STACK=rebornsense
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.rebornsense"
+            # Dashboard/API deploy must not block on Bridge APK when Gradle is broken or stale.
+            export SKIP_ANDROID_BRIDGE_BUILD=1
+            export SKIP_ANDROID_POS_BUILD=1
             bash "$DEPLOY_PATH/scripts/pre-deploy-sanity-check.sh"
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"
