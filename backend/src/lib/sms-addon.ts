@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { ensureSmsAddonColumns } from "@/lib/ensure-merchant-schema";
 import { isGrowthSkuAddonEnabled } from "@/lib/growth-sku-addon-lib";
+import { normalizeSmsUnitPriceCents } from "@/lib/sms-billing";
 import { normalizeSmsTier, type SmsTierKey } from "@/lib/sms-tiers";
 
 export const isSmsAddonEnabled = isGrowthSkuAddonEnabled;
@@ -28,18 +29,37 @@ export async function readSmsAddonEnabled(merchantId: string): Promise<boolean> 
 export async function readSmsAddonState(merchantId: string): Promise<{
   enabled: boolean;
   tier: SmsTierKey;
+  unitPriceCents: number;
 }> {
   await ensureSmsAddonColumns();
   const db = getDb();
   const result = await db.execute(
-    sql`SELECT sms_addon_enabled, sms_tier FROM merchants WHERE id = ${merchantId} LIMIT 1`
+    sql`SELECT sms_addon_enabled, sms_tier, sms_unit_price_cents FROM merchants WHERE id = ${merchantId} LIMIT 1`
   );
   const row = firstRow(result);
   if (!row) throw new Error("Merchant not found");
   return {
     enabled: isSmsAddonEnabled(row.sms_addon_enabled ?? row.smsAddonEnabled),
     tier: normalizeSmsTier(row.sms_tier ?? row.smsTier),
+    unitPriceCents: normalizeSmsUnitPriceCents(
+      row.sms_unit_price_cents ?? row.smsUnitPriceCents
+    ),
   };
+}
+
+export async function readSmsUnitPriceCents(merchantId: string): Promise<number> {
+  const state = await readSmsAddonState(merchantId);
+  return state.unitPriceCents;
+}
+
+export async function writeSmsUnitPriceCents(merchantId: string, cents: unknown): Promise<number> {
+  await ensureSmsAddonColumns();
+  const db = getDb();
+  const next = normalizeSmsUnitPriceCents(cents);
+  await db.execute(
+    sql`UPDATE merchants SET sms_unit_price_cents = ${next}, updated_at = NOW() WHERE id = ${merchantId}`
+  );
+  return next;
 }
 
 export async function writeSmsAddonEnabled(merchantId: string, enabled: boolean): Promise<boolean> {

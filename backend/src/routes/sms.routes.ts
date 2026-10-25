@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchant, setMerchantContext } from "@/middleware/auth.middleware";
 import { SmsService } from "@/services/sms.service";
 import { SmsMarketingService } from "@/services/sms-marketing.service";
+import { SmsBillingService } from "@/services/sms-billing.service";
 
 const router = Router();
 
@@ -24,6 +25,18 @@ router.put("/settings", async (req: Request, res: Response) => {
     if (!licensed) return res.status(403).json({ error: "SMS addon is not enabled" });
     const settings = await SmsService.updateSettings(req.merchantId!, req.body || {});
     res.json({ success: true, settings });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
+  }
+});
+
+router.get("/billing", async (req: Request, res: Response) => {
+  try {
+    const licensed = await SmsService.isLicensed(req.merchantId!);
+    if (!licensed) return res.status(403).json({ error: "SMS addon is not enabled" });
+    const month = String(req.query.month || "").trim() || undefined;
+    const report = await SmsBillingService.getMonthlyReport(req.merchantId!, month);
+    res.json({ success: true, report });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
   }

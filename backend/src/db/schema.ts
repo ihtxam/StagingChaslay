@@ -274,6 +274,8 @@ export const merchants = pgTable(
     smsAddonEnabled: boolean("sms_addon_enabled").default(false).notNull(),
     /** starter | growth | pro — monthly SMS allowance. */
     smsTier: varchar("sms_tier", { length: 20 }).default("starter").notNull(),
+    /** Billable unit price per GSM segment in Rappen (default 15 = CHF 0.15). */
+    smsUnitPriceCents: integer("sms_unit_price_cents").default(15).notNull(),
     /**
      * SMS templates + event toggles:
      * { senderName, defaultCountry, events, templates }
@@ -3902,6 +3904,8 @@ export const smsUsage = pgTable(
     periodYm: varchar("period_ym", { length: 7 }).notNull(),
     sentCount: integer("sent_count").default(0).notNull(),
     failedCount: integer("failed_count").default(0).notNull(),
+    segmentsBilled: integer("segments_billed").default(0).notNull(),
+    billableCents: integer("billable_cents").default(0).notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({

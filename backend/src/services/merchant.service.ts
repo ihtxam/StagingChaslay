@@ -436,6 +436,7 @@ export class MerchantService {
       kioskAddonEnabled?: boolean;
       smsAddonEnabled?: boolean;
       smsTier?: string;
+      smsUnitPriceCents?: number;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
@@ -788,6 +789,7 @@ export class MerchantService {
       kioskAddonEnabled?: boolean;
       smsAddonEnabled?: boolean;
       smsTier?: string;
+      smsUnitPriceCents?: number;
       deliveryPlatformsAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
@@ -854,13 +856,22 @@ export class MerchantService {
       await writeKioskAddonEnabled(merchantId, limits.kioskAddonEnabled);
       wroteAddon = true;
     }
-    if (limits.smsAddonEnabled !== undefined || limits.smsTier !== undefined) {
-      const { writeSmsAddonEnabled, writeSmsTier } = await import("@/lib/sms-addon");
+    if (
+      limits.smsAddonEnabled !== undefined ||
+      limits.smsTier !== undefined ||
+      limits.smsUnitPriceCents !== undefined
+    ) {
+      const { writeSmsAddonEnabled, writeSmsTier, writeSmsUnitPriceCents } = await import(
+        "@/lib/sms-addon"
+      );
       if (limits.smsAddonEnabled !== undefined) {
         await writeSmsAddonEnabled(merchantId, limits.smsAddonEnabled);
       }
       if (limits.smsTier !== undefined) {
         await writeSmsTier(merchantId, limits.smsTier);
+      }
+      if (limits.smsUnitPriceCents !== undefined) {
+        await writeSmsUnitPriceCents(merchantId, limits.smsUnitPriceCents);
       }
       wroteAddon = true;
     }

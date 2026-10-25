@@ -96,7 +96,7 @@ export const MODULE_PRICE_BOOK: ModulePriceEntry[] = [
   {
     key: "sms",
     label: "SMS (Esendex)",
-    description: "Phone login OTP, order/reservation alerts, marketing SMS. Tiered monthly quota.",
+    description: "Phone login OTP, order/reservation alerts, marketing SMS. Billed per segment (default CHF 0.15).",
     group: "guest",
     suggestedMonthlyChf: 19,
     addonKey: "sms",

@@ -287,6 +287,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   sms_addon_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_addon_enabled boolean NOT NULL DEFAULT false",
   sms_tier: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_tier varchar(20) NOT NULL DEFAULT 'starter'",
+  sms_unit_price_cents:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_unit_price_cents integer NOT NULL DEFAULT 15",
   sms_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_settings jsonb",
 };
 
@@ -298,6 +300,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS marketing_sms_opt_in boolean NOT NULL DEFAULT false",
   customers_phone_verified_at:
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone_verified_at timestamp",
+  sms_usage_segments_billed:
+    "ALTER TABLE sms_usage ADD COLUMN IF NOT EXISTS segments_billed integer NOT NULL DEFAULT 0",
+  sms_usage_billable_cents:
+    "ALTER TABLE sms_usage ADD COLUMN IF NOT EXISTS billable_cents integer NOT NULL DEFAULT 0",
   chaslay_homepage_builders_last_good_editor_state:
     "ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   chaslay_homepage_builder_pages_last_good_editor_state:
@@ -1557,6 +1563,8 @@ const TABLE_PATCHES: string[] = [
     period_ym varchar(7) NOT NULL,
     sent_count integer NOT NULL DEFAULT 0,
     failed_count integer NOT NULL DEFAULT 0,
+    segments_billed integer NOT NULL DEFAULT 0,
+    billable_cents integer NOT NULL DEFAULT 0,
     updated_at timestamp NOT NULL DEFAULT now()
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS sms_usage_merchant_period_uq ON sms_usage(merchant_id, period_ym)`,
@@ -1838,9 +1846,12 @@ export async function ensurePhoneOrderingSchema(): Promise<void> {
 export async function ensureSmsAddonColumns(): Promise<void> {
   await runPatch("sms_addon_enabled");
   await runPatch("sms_tier");
+  await runPatch("sms_unit_price_cents");
   await runPatch("sms_settings");
   await runPatch("customers_marketing_sms_opt_in");
   await runPatch("customers_phone_verified_at");
+  await runPatch("sms_usage_segments_billed");
+  await runPatch("sms_usage_billable_cents");
   await ensureMerchantTables();
 }
 

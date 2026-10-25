@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { merchantHasSmsLicense, readSmsAddonState } from "@/lib/sms-addon";
 import {
@@ -16,7 +16,10 @@ import {
   type SmsSettings,
   type SmsTemplateVars,
 } from "@/lib/sms-templates";
+import { formatSmsBillChf, formatSmsUnitPriceChf } from "@/lib/sms-billing";
+import { readSmsUnitPriceCents } from "@/lib/sms-addon";
 import { smsPeriodYm, smsQuotaSnapshot, smsTierAllowance } from "@/lib/sms-tiers";
+import { SmsBillingService } from "@/services/sms-billing.service";
 import { PlatformSettingsService } from "@/services/platform-settings.service";
 
 export type SmsMessageType = "otp" | "transactional" | "marketing";
@@ -61,6 +64,7 @@ async function loadMerchantSms(merchantId: string) {
       country: true,
       smsAddonEnabled: true,
       smsTier: true,
+      smsUnitPriceCents: true,
       smsSettings: true,
     },
   });
@@ -103,61 +107,32 @@ export class SmsService {
     const state = await readSmsAddonState(merchantId);
     const periodYm = smsPeriodYm();
     const db = getDb();
+    const unitPriceCents = state.unitPriceCents;
     const [row] = await db
       .select({
         sentCount: schema.smsUsage.sentCount,
         failedCount: schema.smsUsage.failedCount,
+        segmentsBilled: schema.smsUsage.segmentsBilled,
+        billableCents: schema.smsUsage.billableCents,
       })
       .from(schema.smsUsage)
       .where(and(eq(schema.smsUsage.merchantId, merchantId), eq(schema.smsUsage.periodYm, periodYm)))
       .limit(1);
     const sent = Number(row?.sentCount || 0);
     const allowance = smsTierAllowance(state.tier);
+    const billableCents = Number(row?.billableCents || 0);
+    const segmentsBilled = Number(row?.segmentsBilled || 0);
     return {
       enabled: state.enabled,
       ...smsQuotaSnapshot({ tier: state.tier, sent, at: new Date() }),
       failed: Number(row?.failedCount || 0),
+      unitPriceCents,
+      unitPriceChf: formatSmsUnitPriceChf(unitPriceCents),
+      billableCents,
+      billableChf: formatSmsBillChf(billableCents),
+      segmentsBilled,
+      meteredBilling: true,
     };
-  }
-
-  /**
-   * Atomically consume one SMS from the monthly allowance.
-   * Returns remaining after consume, or null if over quota.
-   */
-  static async consumeQuota(merchantId: string): Promise<{ remaining: number; sent: number } | null> {
-    await this.ensureSchema();
-    const state = await readSmsAddonState(merchantId);
-    const allowance = smsTierAllowance(state.tier);
-    const periodYm = smsPeriodYm();
-    const db = getDb();
-    const result = await db.execute(sql`
-      INSERT INTO sms_usage (merchant_id, period_ym, sent_count, failed_count, updated_at)
-      VALUES (${merchantId}, ${periodYm}, 1, 0, NOW())
-      ON CONFLICT (merchant_id, period_ym)
-      DO UPDATE SET
-        sent_count = sms_usage.sent_count + 1,
-        updated_at = NOW()
-      WHERE sms_usage.sent_count < ${allowance}
-      RETURNING sent_count
-    `);
-    const rows = Array.isArray(result)
-      ? result
-      : ((result as { rows?: Array<{ sent_count?: number; sentCount?: number }> }).rows ?? []);
-    const sent = Number(rows[0]?.sent_count ?? rows[0]?.sentCount);
-    if (!Number.isFinite(sent) || sent < 1) return null;
-    return { sent, remaining: Math.max(0, allowance - sent) };
-  }
-
-  static async refundQuota(merchantId: string) {
-    const periodYm = smsPeriodYm();
-    const db = getDb();
-    await db.execute(sql`
-      UPDATE sms_usage
-      SET sent_count = GREATEST(sent_count - 1, 0),
-          failed_count = failed_count + 1,
-          updated_at = NOW()
-      WHERE merchant_id = ${merchantId} AND period_ym = ${periodYm}
-    `);
   }
 
   static async send(req: SmsSendRequest): Promise<SmsSendOutcome> {
@@ -201,33 +176,9 @@ export class SmsService {
     const creds = await this.resolveCredentials(settings.senderName);
     if (!creds) return { ok: false, status: "skipped", reason: "esendex_not_configured" };
 
-    const quota = await this.consumeQuota(req.merchantId);
-    if (!quota) {
-      const usage = await this.usage(req.merchantId);
-      const db = getDb();
-      const [row] = await db
-        .insert(schema.smsMessages)
-        .values({
-          merchantId: req.merchantId,
-          customerId: req.customerId || null,
-          campaignId: req.campaignId || null,
-          toE164: phone.e164,
-          type: req.type,
-          event: req.event,
-          body,
-          segments: gsmSegmentCount(body),
-          status: "failed",
-          error: "quota_exceeded",
-        })
-        .returning({ id: schema.smsMessages.id });
-      return {
-        ok: false,
-        status: "failed",
-        reason: "quota_exceeded",
-        remaining: usage.remaining,
-        id: row?.id,
-      };
-    }
+    const segmentCount = gsmSegmentCount(body);
+    const unitPriceCents = await readSmsUnitPriceCents(req.merchantId);
+    const usageBefore = await this.usage(req.merchantId);
 
     const db = getDb();
     const [row] = await db
@@ -240,7 +191,7 @@ export class SmsService {
         type: req.type,
         event: req.event,
         body,
-        segments: gsmSegmentCount(body),
+        segments: segmentCount,
         status: "queued",
       })
       .returning({ id: schema.smsMessages.id });
@@ -253,7 +204,7 @@ export class SmsService {
     });
 
     if (!result.ok) {
-      await this.refundQuota(req.merchantId);
+      await SmsBillingService.recordFailedSend(req.merchantId);
       if (row?.id) {
         await db
           .update(schema.smsMessages)
@@ -268,7 +219,7 @@ export class SmsService {
         ok: false,
         status: "failed",
         reason: result.code,
-        remaining: quota.remaining + 1,
+        remaining: usageBefore.remaining,
         id: row?.id,
       };
     }
@@ -285,12 +236,15 @@ export class SmsService {
         .where(eq(schema.smsMessages.id, row.id));
     }
 
+    await SmsBillingService.recordSuccessfulSend(req.merchantId, segmentCount, unitPriceCents);
+    const usageAfter = await this.usage(req.merchantId);
+
     return {
       ok: true,
       status: "sent",
       id: row?.id || "",
       providerId: result.providerId,
-      remaining: quota.remaining,
+      remaining: usageAfter.remaining,
     };
   }
 
