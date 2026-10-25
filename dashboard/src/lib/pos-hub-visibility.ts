@@ -32,6 +32,16 @@ export function shouldShowReservationsSettings(input: ReservationsVisibilityInpu
   );
 }
 
+/** Online shop settings tab — requires edition `online_shop` (hidden for POS-only packaging). */
+export function shouldShowShopSettings(
+  editionFeatures?: readonly string[] | null
+): boolean {
+  return hasEditionFeature(
+    (editionFeatures ?? null) as EditionFeatureKey[] | null,
+    'online_shop'
+  );
+}
+
 /** Hide location / till / terminal / POS-post pickers when there is nothing to choose. */
 export function shouldShowPosOptionChooser(
   optionCount: number,
