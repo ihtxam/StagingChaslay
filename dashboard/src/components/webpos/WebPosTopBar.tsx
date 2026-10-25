@@ -726,6 +726,43 @@ export function WebPosSettingsDropdown({
               </button>
             ) : null}
           </div>
+          {shiftsEnabled ? (
+            <div className="space-y-1.5 border-b border-stone-100 pb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                {t('webPosShiftMenu')}
+              </p>
+              {shiftOpen ? (
+                <button
+                  type="button"
+                  className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+                  onClick={onCloseShift}
+                >
+                  {t('webPosShiftClose')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+                  onClick={onStartShift}
+                >
+                  {t('webPosShiftStart')}
+                </button>
+              )}
+              {shiftOpen && onCashMovement ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  onClick={onCashMovement}
+                >
+                  <ArrowDownUp size={16} />
+                  {t('webPosCashMovementTitle')}
+                </button>
+              ) : null}
+              <p className="text-[10px] text-stone-500">
+                {shiftOpen ? t('webPosShiftOpenHint') : t('webPosShiftClosedHint')}
+              </p>
+            </div>
+          ) : null}
         </>
       ) : null}
       {!hardwareGearOnly ? (
@@ -1043,22 +1080,6 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {showEodButton ? (
-        <div className="space-y-1.5 border-b border-stone-100 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosEodReport')}
-          </p>
-          <button
-            type="button"
-            className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
-            onClick={onEodReport}
-          >
-            {t('webPosEodPrint')}
-          </button>
-          <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
-        </div>
-      ) : null}
-
       {posStations.length >= 2 && onDeviceDefaultStationChange ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
@@ -1188,6 +1209,23 @@ export function WebPosSettingsDropdown({
       ) : null}
       </>
       ) : null}
+
+      {showEodButton && onEodReport ? (
+        <div className="space-y-1.5 border-b border-stone-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+            {t('webPosEodReport')}
+          </p>
+          <button
+            type="button"
+            className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+            onClick={onEodReport}
+          >
+            {t('webPosEodPrint')}
+          </button>
+          <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
+        </div>
+      ) : null}
+
       <p className="border-t border-stone-100 pt-1.5 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>
