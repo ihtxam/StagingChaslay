@@ -168,22 +168,38 @@ app.use("/downloads", downloadsRoutes);
 // ROUTES
 // ============================================================================
 
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
+async function respondHealth(req: Request, res: Response) {
+  const deep = String(req.query.deep || "") === "1";
+  const body: Record<string, string> = {
     status: "ok",
     service: "reborn-backend",
     timestamp: new Date().toISOString(),
-  });
-});
+  };
+  if (!deep) {
+    res.json(body);
+    return;
+  }
+  try {
+    const start = Date.now();
+    await getDb().execute(sql`SELECT 1`);
+    body.database = "ok";
+    body.databaseLatencyMs = String(Date.now() - start);
+    res.json(body);
+  } catch (error) {
+    console.error("[health] database probe failed:", error);
+    res.status(503).json({
+      status: "degraded",
+      service: "reborn-backend",
+      database: "error",
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+app.get("/health", respondHealth);
 
 /** Alias for probes that expect /api/health (dashboard same-origin /api prefix). */
-app.get("/api/health", (_req: Request, res: Response) => {
-  res.json({
-    status: "ok",
-    service: "reborn-backend",
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get("/api/health", respondHealth);
 
 /** Idempotent DB column repair — GET or POST (browser-safe). */
 async function handleSchemaRepair(_req: Request, res: Response) {

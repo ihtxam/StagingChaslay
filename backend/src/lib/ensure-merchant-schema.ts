@@ -1761,8 +1761,22 @@ export async function ensurePhoneOrderingSchema(): Promise<void> {
   await ensureMerchantTables();
 }
 
+let merchantColumnsSchemaPromise: Promise<void> | null = null;
+let ordersColumnsSchemaPromise: Promise<void> | null = null;
+let orderItemsColumnsSchemaPromise: Promise<void> | null = null;
+let locationContextSchemaPromise: Promise<void> | null = null;
+
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */
 export async function ensureMerchantColumnsSchema(): Promise<void> {
+  if (merchantColumnsSchemaPromise) return merchantColumnsSchemaPromise;
+  merchantColumnsSchemaPromise = ensureMerchantColumnsSchemaOnce().catch((err) => {
+    merchantColumnsSchemaPromise = null;
+    throw err;
+  });
+  return merchantColumnsSchemaPromise;
+}
+
+async function ensureMerchantColumnsSchemaOnce(): Promise<void> {
   for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
     await runPatch(column, "merchants");
   }
@@ -1786,6 +1800,15 @@ export async function ensureMerchantColumnsSchema(): Promise<void> {
 
 /** Ensure optional orders columns exist (online shop, QR table, multi-location). */
 export async function ensureOrdersColumnsSchema(): Promise<void> {
+  if (ordersColumnsSchemaPromise) return ordersColumnsSchemaPromise;
+  ordersColumnsSchemaPromise = ensureOrdersColumnsSchemaOnce().catch((err) => {
+    ordersColumnsSchemaPromise = null;
+    throw err;
+  });
+  return ordersColumnsSchemaPromise;
+}
+
+async function ensureOrdersColumnsSchemaOnce(): Promise<void> {
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
     if (!column.startsWith("orders_")) continue;
     const col = column.slice("orders_".length);
@@ -1799,6 +1822,15 @@ export async function ensureOrdersColumnsSchema(): Promise<void> {
 
 /** Ensure optional order_items columns exist. */
 export async function ensureOrderItemsColumnsSchema(): Promise<void> {
+  if (orderItemsColumnsSchemaPromise) return orderItemsColumnsSchemaPromise;
+  orderItemsColumnsSchemaPromise = ensureOrderItemsColumnsSchemaOnce().catch((err) => {
+    orderItemsColumnsSchemaPromise = null;
+    throw err;
+  });
+  return orderItemsColumnsSchemaPromise;
+}
+
+async function ensureOrderItemsColumnsSchemaOnce(): Promise<void> {
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
     if (!column.startsWith("order_items_")) continue;
     const col = column.slice("order_items_".length);
@@ -1857,6 +1889,23 @@ export async function ensureSubscriptionPlansSchema(): Promise<void> {
 
 let locationsSchemaPromise: Promise<void> | null = null;
 let posSessionsSchemaPromise: Promise<void> | null = null;
+
+/**
+ * Panel/POS location middleware: run column + location patches once per process (not per request).
+ */
+export async function ensureLocationContextSchema(): Promise<void> {
+  if (locationContextSchemaPromise) return locationContextSchemaPromise;
+  locationContextSchemaPromise = (async () => {
+    await ensureMerchantColumnsSchema();
+    await ensureOrdersColumnsSchema();
+    await ensureOrderItemsColumnsSchema();
+    await ensureLocationsSchema();
+  })().catch((err) => {
+    locationContextSchemaPromise = null;
+    throw err;
+  });
+  return locationContextSchemaPromise;
+}
 
 /** Ensure multi-location tables/columns exist and backfill default location per merchant. */
 export async function ensureLocationsSchema(): Promise<void> {
