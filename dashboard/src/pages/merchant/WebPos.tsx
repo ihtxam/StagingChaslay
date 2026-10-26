@@ -10810,7 +10810,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !setTableOpen &&
     !setTabOpen &&
     !manualTableOpen &&
-    !cancelModal;
+    !cancelModal &&
+    !scanCreateBarcode;
 
   const { onCaptureInput: onBarcodeCaptureInput, onCaptureKeyDown: onBarcodeCaptureKeyDown } =
     useBarcodeWedge({

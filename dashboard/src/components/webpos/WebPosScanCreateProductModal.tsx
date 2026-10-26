@@ -32,6 +32,7 @@ export default function WebPosScanCreateProductModal({
   const [salePrice, setSalePrice] = useState('');
   const [buyingPrice, setBuyingPrice] = useState('');
   const [stock, setStock] = useState('1');
+  const [expiryDate, setExpiryDate] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -46,6 +47,7 @@ export default function WebPosScanCreateProductModal({
     setSalePrice('');
     setBuyingPrice('');
     setStock('1');
+    setExpiryDate('');
     const fallback =
       (defaultCategoryId && categoryOptions.some((c) => c.id === defaultCategoryId)
         ? defaultCategoryId
@@ -97,6 +99,34 @@ export default function WebPosScanCreateProductModal({
       const product = res.data?.product ?? res.data;
       if (!product?.id) {
         throw new Error(t('webPosScanCreateProductFailed'));
+      }
+      const expiryRaw = expiryDate.trim();
+      if (expiryRaw && stockNum > 0 && normalizedBarcode) {
+        try {
+          const itemsRes = await api.get('/merchant/inventory/items');
+          const items: { id: string; barcode?: string | null }[] = itemsRes.data?.items ?? [];
+          const match = items.find(
+            (item) => String(item.barcode || '').trim() === normalizedBarcode
+          );
+          let itemId = match?.id;
+          if (!itemId) {
+            const itemRes = await api.post('/merchant/inventory/items', {
+              name: trimmedName,
+              barcode: normalizedBarcode,
+              perishable: true,
+              onHand: 0,
+            });
+            itemId = itemRes.data?.item?.id;
+          }
+          if (itemId) {
+            await api.post(`/merchant/inventory/items/${itemId}/stock-in`, {
+              qty: stockNum,
+              expiryDate: expiryRaw,
+            });
+          }
+        } catch {
+          toast.error(t('webPosScanCreateProductExpiryFailed'));
+        }
       }
       toast.success(t('webPosScanCreateProductCreated'));
       onCreated(product as Record<string, unknown>);
@@ -208,6 +238,15 @@ export default function WebPosScanCreateProductModal({
             className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-900"
             value={stock}
             onChange={(e) => setStock(e.target.value.replace(/[^\d]/g, ''))}
+          />
+        </label>
+        <label className="block text-xs font-medium text-stone-600 dark:text-stone-400">
+          {t('storekeeperExpiry')}
+          <input
+            type="date"
+            className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm dark:border-stone-600 dark:bg-stone-900"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
           />
         </label>
       </form>
