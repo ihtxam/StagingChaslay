@@ -4,7 +4,7 @@ import axios from 'axios';
 import { resolveShopKey, shopMenuPathAfterHub } from '@/lib/shop-cart';
 import { loadShopLocationSession } from '@/lib/shop-location-session';
 import { useI18n } from '@/lib/i18n';
-import { customerShopError } from '@/lib/shop-public-error';
+import { customerShopError, isShopOnlineOrdersDisabled } from '@/lib/shop-public-error';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopLocationHubWizard from '@/components/shop/ShopLocationHubWizard';
 import type { ShopPublicLocation } from '@/lib/shop-location-session';
@@ -21,6 +21,7 @@ export default function ShopLocationsPage() {
   const [hasCatering, setHasCatering] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shopOrdersDisabled, setShopOrdersDisabled] = useState(false);
 
   useEffect(() => {
     if (!shopKey) {
@@ -40,7 +41,11 @@ export default function ShopLocationsPage() {
           /* still show wizard for fulfillment + order type */
         }
       } catch (e: any) {
-        if (!cancelled) setError(customerShopError(e.response?.data?.error, t('shopFailedLoad')));
+        if (!cancelled) {
+          const raw = e.response?.data?.error;
+          setShopOrdersDisabled(isShopOnlineOrdersDisabled(raw));
+          setError(customerShopError(raw, t('shopFailedLoad'), t));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -61,8 +66,12 @@ export default function ShopLocationsPage() {
   if (error || !shopKey) {
     return (
       <ShopThemeShell site={site}>
-        <div className="flex min-h-screen items-center justify-center px-4 text-center text-red-700">
-          {error || t('shopNotFound')}
+        <div
+          className={`flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center ${
+            shopOrdersDisabled ? 'text-stone-700' : 'text-red-700'
+          }`}
+        >
+          <p className="max-w-md text-base leading-relaxed">{error || t('shopNotFound')}</p>
         </div>
       </ShopThemeShell>
     );

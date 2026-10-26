@@ -27,7 +27,7 @@ import {
   type ShopSelectedExtra,
 } from '@/lib/shop-cart';
 import { withDeliveryMinOrderStatus } from '@/lib/shop-delivery';
-import { customerShopError } from '@/lib/shop-public-error';
+import { customerShopError, isShopOnlineOrdersDisabled } from '@/lib/shop-public-error';
 import { roundMoney2 } from '@/lib/money';
 import { formatShopChannelEta } from '@/lib/shop-eta';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -197,6 +197,7 @@ export default function OrderingPage() {
   const [loading, setLoading] = useState(true);
   const [hasCmsNav, setHasCmsNav] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shopOrdersDisabled, setShopOrdersDisabled] = useState(false);
   const [cartSlideOpen, setCartSlideOpen] = useState(false);
   const [cartBump, setCartBump] = useState(false);
   const prevItemCountRef = useRef<number | null>(null);
@@ -418,7 +419,9 @@ export default function OrderingPage() {
           }
         }
       } catch (e: any) {
-        setError(customerShopError(e.response?.data?.error, t('shopFailedLoad')));
+        const raw = e.response?.data?.error;
+        setShopOrdersDisabled(isShopOnlineOrdersDisabled(raw));
+        setError(customerShopError(raw, t('shopFailedLoad'), t));
       } finally {
         setLoading(false);
       }
@@ -1411,8 +1414,20 @@ export default function OrderingPage() {
 
   if (error && !merchant) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 text-red-700 font-medium px-4 text-center">
-        {error}
+      <div
+        className={`min-h-screen flex flex-col items-center justify-center gap-4 bg-stone-50 px-4 text-center ${
+          shopOrdersDisabled ? 'text-stone-700' : 'text-red-700 font-medium'
+        }`}
+      >
+        <p className="max-w-md text-base leading-relaxed">{error}</p>
+        {shopOrdersDisabled && shopKey ? (
+          <Link
+            to={shopBasePath(shopKey)}
+            className="font-semibold text-stone-900 underline"
+          >
+            {t('shopBackToMenu')}
+          </Link>
+        ) : null}
       </div>
     );
   }

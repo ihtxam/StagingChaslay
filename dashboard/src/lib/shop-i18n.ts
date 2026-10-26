@@ -51,6 +51,8 @@ export const shopEn: Record<string, string> = {
   shopFulfillment: 'Order type',
   shopLoading: 'Loading shop…',
   shopNotFound: 'Shop not found',
+  shopOnlineOrdersDisabled:
+    'We are not accepting online orders at the moment. Please visit our menu or visit later.',
   shopFailedLoad: 'Failed to load shop',
   shopNoItems: 'No items added yet.',
   shopNoProducts: 'No products in this category.',
@@ -646,6 +648,8 @@ export const shopFr: Record<string, string> = {
   shopFulfillment: 'Type de commande',
   shopLoading: 'Chargement de la boutique…',
   shopNotFound: 'Boutique introuvable',
+  shopOnlineOrdersDisabled:
+    'Nous n’acceptons pas les commandes en ligne pour le moment. Consultez notre menu ou revenez plus tard.',
   shopFailedLoad: 'Échec du chargement de la boutique',
   shopNoItems: 'Aucun article pour le moment.',
   shopNoProducts: 'Aucun produit dans cette catégorie.',
@@ -1226,6 +1230,8 @@ export const shopDe: Record<string, string> = {
   shopFulfillment: 'Bestellart',
   shopLoading: 'Shop wird geladen…',
   shopNotFound: 'Shop nicht gefunden',
+  shopOnlineOrdersDisabled:
+    'Wir nehmen derzeit keine Online-Bestellungen an. Bitte besuchen Sie unser Menü oder kommen Sie später wieder.',
   shopFailedLoad: 'Shop konnte nicht geladen werden',
   shopNoItems: 'Noch keine Artikel.',
   shopNoProducts: 'Keine Produkte in dieser Kategorie.',
