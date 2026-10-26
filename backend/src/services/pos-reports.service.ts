@@ -1,6 +1,7 @@
 import { getDb, schema } from "@/db";
 import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
 import { loadMerchantRowById } from "@/lib/ensure-merchant-schema";
+import { addDaysYmd } from "@/lib/ymd";
 import { normalizePaymentMethod, paymentMethodLabelEn, netPaymentBucketsAfterRefund, refundBucketsFromCumulative, netTaxableSale } from "@/lib/payment-breakdown";
 
 export type ReportPreset =
@@ -55,11 +56,9 @@ function ymdInZurich(d = new Date()): string {
   }).format(d);
 }
 
-function addDaysYmd(ymd: string, delta: number): string {
-  const { start } = zurichDayBounds(ymd);
-  const next = new Date(start.getTime() + delta * 24 * 3600_000);
-  return ymdInZurich(next);
-}
+// Calendar-date stepping lives in @/lib/ymd so it can be unit tested without
+// pulling in the database. See the note there: adding 24h to a Zurich midnight
+// does not advance the date when the clocks go back.
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -797,9 +796,18 @@ export class PosReportsService {
     } else {
       const byDay = new Map<string, number>();
       let cursor = range.from;
-      while (cursor <= range.to) {
+      // Hard stop: a cursor that fails to advance must never pin the event
+      // loop again. Ten years of daily buckets is far beyond any real report.
+      for (let guard = 0; cursor <= range.to && guard < 3700; guard += 1) {
         byDay.set(cursor, 0);
-        cursor = addDaysYmd(cursor, 1);
+        const next = addDaysYmd(cursor, 1);
+        if (next <= cursor) {
+          console.warn(
+            `[reports] day cursor failed to advance at ${cursor} (range ${range.from}..${range.to}); stopping`
+          );
+          break;
+        }
+        cursor = next;
       }
       for (const o of completed) {
         const day = new Intl.DateTimeFormat("en-CA", {
