@@ -541,7 +541,11 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
     });
     if (resolved) {
       const picked = livePrinters.find((ap) => ap.name === resolved);
-      if (resolved === name && picked?.portName === (p.portName ?? null)) return p;
+      // Normalise both sides before comparing: a live printer with no port reports
+      // undefined, while a stored profile holds null. Comparing those directly marked
+      // every profile as changed on each pass, so WebPOS re-saved identical settings
+      // on every agent refresh (Android tills have no port name at all).
+      if (resolved === name && (picked?.portName ?? null) === (p.portName ?? null)) return p;
       changed = true;
       return {
         ...p,
