@@ -34,6 +34,15 @@ app.rebornsense.com {
 				request>headers>Cookie delete
 				request>headers>Set-Cookie delete
 				resp_headers>Set-Cookie delete
+				# This host carries bearer-equivalent secrets in the URL itself, which
+				# header redaction does not touch: ?token= / ?secret= on the password
+				# reset and invite pages, /api/auth/reset-password/<token>,
+				# /api/auth/invite/<token>, and the screen tokens in the first path
+				# segment of /api/kiosk, /api/cds, /api/kds, /api/ods and /api/tv.
+				# Caddy applies one filter per field, so a single regexp covers both
+				# shapes: group 1 matches the query form, group 2 the path form, and
+				# the unmatched group expands to empty.
+				request>uri regexp "(?i)((?:token|secret|apikey|api_key|password)=)[^&]*|(/api/auth/(?:reset-password|invite)/|/api/(?:kiosk|cds|kds|ods|tv)/)[^/?]+" "${1}${2}REDACTED"
 			}
 		}
 	}
