@@ -3784,7 +3784,8 @@ const en: Dict = {
   desktopChromeMinimize: 'Minimize to taskbar',
   desktopSettingsTitle: 'Desktop settings',
   desktopHubNavLabel: 'Desktop menu',
-  desktopHubPanelHint: 'Choose Till, catalog, reports, store details, hours, or device settings. Settings is always last in the list.',
+  desktopHubPanelHint:
+    "Choose Till, products, categories, Extras & No's, reports, store details, hours, or device settings. Settings is always last in the list.",
   desktopHubPos: 'Till',
   desktopHubStore: 'Store',
   desktopHubStoreHint: 'Basic shop details shown on receipts and the online shop.',

@@ -7,6 +7,7 @@ export const DESKTOP_HUB_NAV = [
   { id: 'pos', path: '/merchant/pos', labelKey: 'desktopHubPos' as const },
   { id: 'products', path: '/merchant/products', labelKey: 'products' as const },
   { id: 'categories', path: '/merchant/categories', labelKey: 'categories' as const },
+  { id: 'modifiers', path: '/merchant/modifiers', labelKey: 'modifiers' as const },
   { id: 'reports', path: '/merchant/reports', labelKey: 'reports' as const },
   { id: 'store', path: '/merchant/desktop/store', labelKey: 'desktopHubStore' as const },
   { id: 'timings', path: '/merchant/desktop/timings', labelKey: 'desktopHubTimings' as const },
@@ -19,6 +20,7 @@ const DESKTOP_ALLOWED_EXACT = new Set([
   '/merchant/waiter',
   '/merchant/products',
   '/merchant/categories',
+  '/merchant/modifiers',
   '/merchant/reports',
   '/merchant/desktop-settings',
   '/merchant/desktop/store',
@@ -28,6 +30,7 @@ const DESKTOP_ALLOWED_EXACT = new Set([
 const DESKTOP_ALLOWED_PREFIXES = [
   '/merchant/products/',
   '/merchant/categories/',
+  '/merchant/modifiers/',
 ];
 
 /** Routes the desktop webview may open (POS + basic hub). */
@@ -45,6 +48,8 @@ export function isDesktopHubPanelRoute(pathname: string): boolean {
     path.startsWith('/merchant/products/') ||
     path === '/merchant/categories' ||
     path.startsWith('/merchant/categories/') ||
+    path === '/merchant/modifiers' ||
+    path.startsWith('/merchant/modifiers/') ||
     path === '/merchant/reports' ||
     path === '/merchant/desktop-settings' ||
     path === '/merchant/desktop/store' ||
@@ -63,6 +68,7 @@ export function desktopHubRedirectTarget(pathname: string): string {
   if (path.startsWith('/merchant/reports')) return '/merchant/reports';
   if (path.startsWith('/merchant/products')) return '/merchant/products';
   if (path.startsWith('/merchant/categories')) return '/merchant/categories';
+  if (path.startsWith('/merchant/modifiers')) return '/merchant/modifiers';
   if (path === '/merchant/settings' || path.startsWith('/merchant/settings')) {
     return '/merchant/desktop-settings';
   }
