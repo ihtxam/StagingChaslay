@@ -117,6 +117,7 @@ export const shopEn: Record<string, string> = {
   // Checkout
   shopLoadingCheckout: 'Loading checkout…',
   shopBackToMenu: 'Back to menu',
+  shopBackToHome: 'Back to home',
   shopCheckout: 'checkout',
   shopStepDetails: 'Details',
   shopStepPayment: 'Payment',
@@ -713,6 +714,7 @@ export const shopFr: Record<string, string> = {
 
   shopLoadingCheckout: 'Chargement du paiement…',
   shopBackToMenu: 'Retour au menu',
+  shopBackToHome: "Retour à l'accueil",
   shopCheckout: 'paiement',
   shopStepDetails: 'Détails',
   shopStepPayment: 'Paiement',
@@ -1295,6 +1297,7 @@ export const shopDe: Record<string, string> = {
 
   shopLoadingCheckout: 'Kasse wird geladen…',
   shopBackToMenu: 'Zurück zum Menü',
+  shopBackToHome: 'Zur Startseite',
   shopCheckout: 'Kasse',
   shopStepDetails: 'Details',
   shopStepPayment: 'Zahlung',

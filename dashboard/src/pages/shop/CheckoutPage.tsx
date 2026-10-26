@@ -700,7 +700,13 @@ export default function CheckoutPage() {
   const total = roundTo005(rawTotal);
   const itemCount = draft.items.reduce((sum, item) => sum + item.quantity, 0);
   const checkoutReady = useMemo(() => {
-    if (merchant?.acceptingOrders === false || merchant?.vacation?.active) return false;
+    if (
+      merchant?.shopEnabled === false ||
+      merchant?.acceptingOrders === false ||
+      merchant?.vacation?.active
+    ) {
+      return false;
+    }
     if (!firstName.trim() || !lastName.trim() || !draft.customerPhone.trim()) return false;
     if (!draft.customerEmail.trim()) return false;
     if (whenMode === 'asap' && !channelOpen) return false;
@@ -1166,6 +1172,10 @@ export default function CheckoutPage() {
   };
 
   const placeOrder = async (personal?: ReturnType<typeof resolvePersonalFields>) => {
+    if (merchant?.shopEnabled === false) {
+      showCheckoutError(t('shopOnlineOrdersDisabled'));
+      return;
+    }
     if (merchant?.acceptingOrders === false) {
       showCheckoutError(t('shopNotAcceptingOrders'));
       return;
@@ -1500,9 +1510,14 @@ export default function CheckoutPage() {
   );
 
   const placeOrderDisabled =
-    submitting || !!merchant?.vacation?.active || merchant?.acceptingOrders === false;
+    submitting ||
+    !!merchant?.vacation?.active ||
+    merchant?.shopEnabled === false ||
+    merchant?.acceptingOrders === false;
   const placeOrderLabel =
-    merchant?.acceptingOrders === false
+    merchant?.shopEnabled === false
+      ? t('shopOnlineOrdersDisabled')
+      : merchant?.acceptingOrders === false
       ? t('shopNotAcceptingOrders')
       : merchant?.vacation?.active
         ? formatShopVacationMessage(t, 'header', {
