@@ -10,6 +10,7 @@ import { repairAllChaslayHomepages } from "@/lib/chaslay-homepage-heal";
 import { SHOP_CATALOG_EXTRA_PATCHES, shopProductHealColumnNames } from "@/lib/product-column-patches";
 import { isShopCatalogSchemaError } from "@/lib/public-shop-error";
 import { recordSchemaColumnPatch, recordSchemaEnsureRun } from "@/lib/schema-patch-metrics";
+import { isLazyMerchantSchemaBootstrap } from "@/lib/schema-bootstrap-mode";
 
 /** Raw pg pool for DDL — Drizzle execute() often fails/no-ops on ALTER TABLE. */
 let ddlPool: Pool | null = null;
@@ -1990,6 +1991,7 @@ let posSessionsSchemaPromise: Promise<void> | null = null;
  * Panel/POS location middleware: run column + location patches once per process (not per request).
  */
 export async function ensureLocationContextSchema(): Promise<void> {
+  if (isLazyMerchantSchemaBootstrap()) return;
   if (locationContextSchemaPromise) return locationContextSchemaPromise;
   locationContextSchemaPromise = (async () => {
     recordSchemaEnsureRun("locationContext");
@@ -2573,6 +2575,9 @@ export async function ensureAllMerchantSchema(): Promise<{
 
 /** Run schema patches once per process (startup background task or explicit await). */
 export function ensureMerchantSchemaAtStartup(): Promise<void> {
+  if (isLazyMerchantSchemaBootstrap()) {
+    return Promise.resolve();
+  }
   if (!startupPatchPromise) {
     startupPatchPromise = ensureAllMerchantSchema()
       .then(() => undefined)

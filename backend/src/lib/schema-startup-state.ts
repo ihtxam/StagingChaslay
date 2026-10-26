@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ensureMerchantSchemaAtStartup } from "@/lib/ensure-merchant-schema";
+import { isLazyMerchantSchemaBootstrap } from "@/lib/schema-bootstrap-mode";
 
 export type MerchantSchemaStartupState = "pending" | "ready" | "failed";
 
@@ -18,6 +19,13 @@ function isWarmupExemptPath(req: Request): boolean {
 export function kickOffMerchantSchemaStartup(): void {
   if (kickoffStarted) return;
   kickoffStarted = true;
+  if (isLazyMerchantSchemaBootstrap()) {
+    startupState = "ready";
+    console.log(
+      "[schema] MERCHANT_SCHEMA_BOOTSTRAP=lazy — skipping boot-time ensureAllMerchantSchema (lazy heal only)"
+    );
+    return;
+  }
   console.log("[schema] merchant schema patches running in background…");
   void ensureMerchantSchemaAtStartup()
     .then(() => {

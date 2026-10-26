@@ -46,6 +46,10 @@
    Recreates `api`, `dashboard`, and `caddy` containers, waits, curls `/health`. **Does not** roll back code — fixes **stuck** API, not a broken release.
 3. **Full deploy:** merge to `main`, touch `.deploy/rebornsense-production`, push (triggers deploy + health verify)
 
+## Emergency: still hanging after #894?
+
+See **[schema-heal-lazy-only-rollout.md](./schema-heal-lazy-only-rollout.md)** — set `MERCHANT_SCHEMA_BOOTSTRAP=lazy` on the API container (staging first), recreate `api`, keep deploy `migrate` + `schema-repair`. Roll back by unsetting the env.
+
 ## Should we undo last night’s pushes?
 
 **Usually no.** Outages starting after those pushes were caused by **schema work running too often** (API hang / 502), fixed in `main` by memoized schema + startup-only patches. **Reverting** removes the fix and leaves the old storm behaviour. The right recovery is:

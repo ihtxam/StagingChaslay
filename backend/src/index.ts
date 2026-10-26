@@ -52,6 +52,7 @@ import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
 import { ensureAllMerchantSchema } from "@/lib/ensure-merchant-schema";
 import { getSchemaPatchMetrics } from "@/lib/schema-patch-metrics";
+import { getMerchantSchemaBootstrapMode } from "@/lib/schema-bootstrap-mode";
 import {
   getMerchantSchemaStartupState,
   kickOffMerchantSchemaStartup,
@@ -191,6 +192,7 @@ async function respondHealth(req: Request, res: Response) {
     body.database = "ok";
     body.databaseLatencyMs = String(Date.now() - start);
     body.schemaStartup = getMerchantSchemaStartupState();
+    body.schemaBootstrap = getMerchantSchemaBootstrapMode();
     const schemaMetrics = getSchemaPatchMetrics();
     if (body.schemaStartup === "pending") {
       body.schemaMaintenance = "warming";
