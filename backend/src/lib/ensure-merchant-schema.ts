@@ -1953,8 +1953,19 @@ async function runAlterTablePatches(): Promise<void> {
   }
 }
 
+let subscriptionPlansSchemaPromise: Promise<void> | null = null;
+
 /** Ensure editions + subscription_plans columns exist (plan lookup / POS entitlements). */
 export async function ensureSubscriptionPlansSchema(): Promise<void> {
+  if (subscriptionPlansSchemaPromise) return subscriptionPlansSchemaPromise;
+  subscriptionPlansSchemaPromise = ensureSubscriptionPlansSchemaOnce().catch((err) => {
+    subscriptionPlansSchemaPromise = null;
+    throw err;
+  });
+  return subscriptionPlansSchemaPromise;
+}
+
+async function ensureSubscriptionPlansSchemaOnce(): Promise<void> {
   for (const statement of TABLE_PATCHES) {
     if (!/editions/i.test(statement)) continue;
     try {
@@ -2406,8 +2417,15 @@ export async function backfillKioskCatalogVisibility(): Promise<void> {
   }
 }
 
-/** Apply all idempotent schema patches (safe to run on every boot). */
-export async function ensureAllMerchantSchema(): Promise<{
+export type EnsureAllMerchantSchemaOptions = {
+  /** Only for explicit repair: wipe in-memory patch caches so ALTERs re-run once. */
+  resetPatchCaches?: boolean;
+};
+
+/** Apply all idempotent schema patches (deploy repair or explicit POST /health/schema-repair). */
+export async function ensureAllMerchantSchema(
+  options?: EnsureAllMerchantSchemaOptions
+): Promise<{
   missingBefore: string[];
   missingAfter: string[];
   ordersMissing: string[];
@@ -2418,8 +2436,11 @@ export async function ensureAllMerchantSchema(): Promise<{
   posSessionsMissing: string[];
   chaslayHomepageRepair: Awaited<ReturnType<typeof repairAllChaslayHomepages>>;
 }> {
-  patchedColumns.clear();
-  patchedTables = false;
+  if (options?.resetPatchCaches) {
+    patchedColumns.clear();
+    patchedTables = false;
+    subscriptionPlansSchemaPromise = null;
+  }
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
   await runAlterTablePatches();

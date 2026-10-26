@@ -222,9 +222,12 @@ app.get("/health", respondHealth);
 app.get("/api/health", respondHealth);
 
 /** Idempotent DB column repair — GET or POST (browser-safe). */
-async function handleSchemaRepair(_req: Request, res: Response) {
+async function handleSchemaRepair(req: Request, res: Response) {
   try {
-    const result = await ensureAllMerchantSchema();
+    const force = String(req.query.force || "") === "1";
+    const result = await ensureAllMerchantSchema(
+      force ? { resetPatchCaches: true } : undefined
+    );
     const ok =
       result.missingAfter.length === 0 &&
       result.ordersMissing.length === 0 &&
