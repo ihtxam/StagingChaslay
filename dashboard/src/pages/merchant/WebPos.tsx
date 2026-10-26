@@ -239,6 +239,7 @@ import { publishSunmiCustomerLcd } from '@/lib/sunmi-lcd-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
+import WebPosScanCreateProductModal from '@/components/webpos/WebPosScanCreateProductModal';
 import WebPosCustomAmountModal from '@/components/webpos/WebPosCustomAmountModal';
 import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
@@ -1245,6 +1246,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
   const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
   const [customAmountOpen, setCustomAmountOpen] = useState(false);
+  const [scanCreateBarcode, setScanCreateBarcode] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [channelsSaving, setChannelsSaving] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
@@ -10694,7 +10696,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setTabOpen ||
         manualTableOpen ||
         cancelModal ||
-        expressSuccessOpen
+        expressSuccessOpen ||
+        scanCreateBarcode
       ) {
         return;
       }
@@ -10740,12 +10743,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setSearch('');
         return;
       }
+      if (
+        canManageProducts &&
+        !isWebPosCurrentlyOffline() &&
+        looksLikeRetailBarcodeInput(code)
+      ) {
+        setScanCreateBarcode(code);
+        setSearch('');
+        return;
+      }
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
       setSearch('');
     },
     // onProductClick / attach helpers are stable enough for scan
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      canManageProducts,
       pinGateRequired,
       pinModalOpen,
       posView,
@@ -10766,6 +10779,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       manualTableOpen,
       cancelModal,
       expressSuccessOpen,
+      scanCreateBarcode,
       findProductByScanCode,
       tablesUiEnabled,
       switchToTableOrder,
@@ -12811,6 +12825,40 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         configuredDeviceId={printSettings?.scaleDeviceId}
         onPortResolved={healScalePort}
         onUsbAddressResolved={healScaleUsbAddress}
+      />
+
+      <WebPosScanCreateProductModal
+        open={!!scanCreateBarcode}
+        barcode={scanCreateBarcode || ''}
+        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+        defaultCategoryId={
+          categoryId && categoryId !== POS_GIFT_CARDS_CATEGORY && categoryId !== POS_MOST_SOLD_CATEGORY
+            ? categoryId
+            : categories[0]?.id
+        }
+        onClose={() => setScanCreateBarcode(null)}
+        onCreated={(raw) => {
+          const created: Product = {
+            id: String(raw.id),
+            name: repairCatalogText(String(raw.name || '')),
+            price: Number(raw.price) || 0,
+            categoryId: (raw.categoryId as string) || null,
+            barcode: (raw.barcode as string) || scanCreateBarcode,
+            sku: (raw.sku as string) || null,
+            extraBarcodes: Array.isArray(raw.extraBarcodes) ? raw.extraBarcodes : [],
+            visibility: normalizeCatalogVisibility(raw.visibility),
+            image: (raw.imageUrl as string) || (raw.image as string) || null,
+            stock: raw.stock != null ? Number(raw.stock) : undefined,
+          };
+          setProducts((prev) => {
+            if (prev.some((p) => p.id === created.id)) {
+              return prev.map((p) => (p.id === created.id ? { ...p, ...created } : p));
+            }
+            return [...prev, created];
+          });
+          setScanCreateBarcode(null);
+          onProductClick(created, { fromScan: true });
+        }}
       />
 
       <WebPosWeightModal
