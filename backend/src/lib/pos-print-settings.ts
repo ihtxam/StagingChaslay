@@ -260,34 +260,59 @@ export function healLegacyMashedReceiptHeader(
   return { receiptHeaderTitle: titleTrim, receiptHeader: bodyTrim };
 }
 
+function decodeReceiptHeaderEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&egrave;/gi, "è")
+    .replace(/&eacute;/gi, "é")
+    .replace(/&ecirc;/gi, "ê")
+    .replace(/&agrave;/gi, "à")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+function receiptHeaderHtmlToPlain(text: string): string {
+  const raw = String(text ?? "").trim();
+  if (!raw) return "";
+  if (!/<[a-z]/i.test(raw)) return decodeReceiptHeaderEntities(raw);
+  let html = raw
+    .replace(/\r\n/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*/gi, "\n")
+    .replace(/<\/div>\s*/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  return decodeReceiptHeaderEntities(html).replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function parseReceiptHeaderLines(
   linesRaw: unknown,
   fallbackText: string
 ): string[] {
-  const fromArray = Array.isArray(linesRaw)
-    ? linesRaw
-        .map((line) => String(line ?? "").replace(/\r\n/g, "\n").trim())
-        .filter(Boolean)
-    : [];
-  const text = String(fallbackText ?? "").replace(/\r\n/g, "\n");
+  const plain = receiptHeaderHtmlToPlain(fallbackText);
   const fromText = (() => {
-    if (!text.trim()) return [];
-    const segments = text.includes("\n")
-      ? text.split("\n")
-      : /\\n/.test(text)
-        ? text.split(/\\n/)
-        : [text];
+    if (!plain) return [];
+    const segments = plain.includes("\n")
+      ? plain.split("\n")
+      : /\\n/.test(plain)
+        ? plain.split(/\\n/)
+        : [plain];
     return segments
       .map((line) => line.trim())
       .filter(Boolean)
       .slice(0, 24)
       .map((line) => line.slice(0, 200));
   })();
-  if (!fromArray.length) return fromText;
-  if (!fromText.length) {
-    return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
-  }
-  if (fromText.length > fromArray.length) return fromText;
+  if (plain) return fromText;
+  const fromArray = Array.isArray(linesRaw)
+    ? linesRaw
+        .map((line) => receiptHeaderHtmlToPlain(String(line ?? "")).trim())
+        .filter(Boolean)
+    : [];
   return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
 }
 

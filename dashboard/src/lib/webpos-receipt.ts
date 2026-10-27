@@ -1314,17 +1314,16 @@ export function receiptHeaderLinesFromPrintSettings(
   );
   const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
   const combinedPlain = receiptHeaderContentToPlainText(combined);
-  const fromText = combinedPlain ? splitReceiptHeaderTextToLines(combined) : [];
+  const fromText = combinedPlain ? capReceiptHeaderLines(splitReceiptHeaderTextToLines(combined)) : [];
+  if (combinedPlain) {
+    return fromText;
+  }
   const fromArray = Array.isArray(printSettings?.receiptHeaderLines)
     ? printSettings!.receiptHeaderLines!
-        .map((line) => String(line ?? '').replace(/\r\n/g, '\n').trim())
+        .map((line) => receiptHeaderContentToPlainText(String(line ?? '')).trim())
         .filter(Boolean)
     : [];
-  if (!fromArray.length) return capReceiptHeaderLines(fromText);
-  if (!fromText.length) return capReceiptHeaderLines(fromArray);
-  const flatArray = capReceiptHeaderLines(fromArray);
-  const flatText = capReceiptHeaderLines(fromText);
-  return flatText.length > flatArray.length ? flatText : flatArray;
+  return capReceiptHeaderLines(fromArray);
 }
 
 /** Heal legacy blobs and keep `receiptHeader` + `receiptHeaderLines` in sync (Settings / WebPOS load). */
