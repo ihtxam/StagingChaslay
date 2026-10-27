@@ -54,4 +54,10 @@ describe('merchant panel import graph (no App init-order TDZ)', () => {
     expect(settingsPathIdx).toBeGreaterThan(-1);
     expect(restrictedIdx).toBeLessThan(settingsPathIdx);
   });
+
+  it('Dashboard redirects off POS routes when panel chrome replaces app mode', () => {
+    const src = readSrc('pages/merchant/Dashboard.tsx');
+    expect(src).toContain('const leavePosForPanelPath');
+    expect(src).toMatch(/leavePosForPanelPath \? \([\s\S]*<Navigate to=\{leavePosForPanelPath\} replace \/>/);
+  });
 });

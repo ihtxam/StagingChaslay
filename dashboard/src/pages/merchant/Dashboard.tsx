@@ -380,6 +380,26 @@ function MerchantShell() {
       isDesktopHubPanel) ||
     isPosEmbed;
 
+  /**
+   * Leaving POS app mode while still on /merchant/pos used to render the panel rail +
+   * embedded WebPOS (demo backoffice bug). Navigate synchronously in the route instead.
+   */
+  const leavePosForPanelPath = useMemo(() => {
+    if (posAppMode || isPosEmbed) return null;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (path !== '/merchant/pos' && path !== '/merchant/waiter') return null;
+    return jwtIsOwner
+      ? '/merchant'
+      : backOfficeHomePath(effective.permissions, effective.isOwner);
+  }, [
+    posAppMode,
+    isPosEmbed,
+    location.pathname,
+    jwtIsOwner,
+    effective.permissions,
+    effective.isOwner,
+  ]);
+
   /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
   const isAllowedPinAppRoute = useMemo(() => {
     if (isDeliveryDriverOnlyStaff(effective.permissions, false)) return isDriverRoute;
@@ -510,25 +530,6 @@ function MerchantShell() {
       setPosAppMode(true);
     }
   }, [location.pathname, isPosLikeRoute, isStorekeeperRoute]);
-
-  /** POS chrome toggled off while URL is still /merchant/pos → panel sidebar + embedded WebPOS (demo/backoffice bug). */
-  useEffect(() => {
-    if (posAppMode || isPosEmbed) return;
-    const path = location.pathname.replace(/\/$/, '') || '/merchant';
-    if (path !== '/merchant/pos' && path !== '/merchant/waiter') return;
-    const dest = jwtIsOwner
-      ? '/merchant'
-      : backOfficeHomePath(effective.permissions, effective.isOwner);
-    navigate(dest, { replace: true });
-  }, [
-    posAppMode,
-    isPosEmbed,
-    location.pathname,
-    jwtIsOwner,
-    effective.permissions,
-    effective.isOwner,
-    navigate,
-  ]);
 
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
@@ -1551,7 +1552,9 @@ function MerchantShell() {
             <Route
               path="pos"
               element={
-                missingPosRedirect ? (
+                leavePosForPanelPath ? (
+                  <Navigate to={leavePosForPanelPath} replace />
+                ) : missingPosRedirect ? (
                   <Navigate to={missingPosRedirect} replace />
                 ) : (
                   <WebPosErrorBoundary>
@@ -1565,9 +1568,13 @@ function MerchantShell() {
             <Route
               path="waiter"
               element={
-                <PanelRouteGuard path="/merchant/waiter" allow={allow}>
-                  <WaiterApp appMode={hideChrome} />
-                </PanelRouteGuard>
+                leavePosForPanelPath ? (
+                  <Navigate to={leavePosForPanelPath} replace />
+                ) : (
+                  <PanelRouteGuard path="/merchant/waiter" allow={allow}>
+                    <WaiterApp appMode={hideChrome} />
+                  </PanelRouteGuard>
+                )
               }
             />
             <Route
