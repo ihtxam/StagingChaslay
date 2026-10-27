@@ -429,21 +429,34 @@ assert.deepEqual(
 );
 
 const defaultHeaderSize = receiptHeaderFormatFromSettings(null);
-assert.equal(defaultHeaderSize.titlePx, 16);
-assert.equal(defaultHeaderSize.detailPx, 8);
+assert.equal(defaultHeaderSize.titlePx, 18);
+assert.equal(defaultHeaderSize.detailPx, 18);
+assert.equal(defaultHeaderSize.bold, true);
 assert.equal(defaultHeaderSize.textScale, 1);
 
+const previousDefaults = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 16,
+  receiptHeaderDetailPx: 8,
+  receiptHeaderBold: false,
+});
+assert.equal(previousDefaults.titlePx, 18);
+assert.equal(previousDefaults.detailPx, 18);
+assert.equal(previousDefaults.bold, true);
+
 const customHeaderSize = receiptHeaderFormatFromSettings({
-  receiptHeaderTitlePx: 24,
-  receiptHeaderDetailPx: 12,
+  receiptHeaderTitlePx: 32,
+  receiptHeaderDetailPx: 20,
   receiptHeaderTextScale: 1,
 });
-assert.equal(customHeaderSize.titlePx, 24);
-assert.equal(customHeaderSize.detailPx, 12);
-assert.equal(customHeaderSize.textScale, 1);
+assert.equal(customHeaderSize.titlePx, 32);
+assert.equal(customHeaderSize.detailPx, 20);
+assert.equal(customHeaderSize.textScale, 3);
 
-const legacyLargeTitle = receiptHeaderFormatFromSettings({ receiptHeaderTextScale: 2 });
-assert.equal(legacyLargeTitle.titlePx, 22);
-assert.equal(legacyLargeTitle.detailPx, 8);
+const chosenSixteen = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 16,
+  receiptHeaderDetailPx: 16,
+});
+assert.equal(chosenSixteen.titlePx, 16);
+assert.equal(chosenSixteen.detailPx, 16);
 
 console.log('webpos-receipt-header.test.ts ok');

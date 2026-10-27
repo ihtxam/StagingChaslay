@@ -68,7 +68,9 @@ import {
   splitReceiptHeaderTextToLines,
   clampReceiptHeaderTitlePx,
   clampReceiptHeaderDetailPx,
+  receiptHeaderPixelSizesFromSettings,
   receiptHeaderTextScaleFromTitlePx,
+  RECEIPT_HEADER_PX_CHOICES,
 } from '@/lib/webpos-receipt';
 import { receiptHeaderContentToPlainText, receiptHeaderHtmlForEditor } from '@/lib/receipt-header-html';
 import HugeRteEditor from '@/components/editor/HugeRteEditor';
@@ -1767,14 +1769,11 @@ export default function Settings() {
           ps.receiptHeaderAlign === 'left' || ps.receiptHeaderAlign === 'right'
             ? ps.receiptHeaderAlign
             : 'center',
-        receiptHeaderBold: ps.receiptHeaderBold === true,
-        receiptHeaderTitlePx: clampReceiptHeaderTitlePx(
-          ps.receiptHeaderTitlePx,
-          ps.receiptHeaderTextScale
-        ),
-        receiptHeaderDetailPx: clampReceiptHeaderDetailPx(ps.receiptHeaderDetailPx),
+        receiptHeaderBold: true,
+        receiptHeaderTitlePx: receiptHeaderPixelSizesFromSettings(ps).titlePx,
+        receiptHeaderDetailPx: receiptHeaderPixelSizesFromSettings(ps).detailPx,
         receiptHeaderTextScale: receiptHeaderTextScaleFromTitlePx(
-          clampReceiptHeaderTitlePx(ps.receiptHeaderTitlePx, ps.receiptHeaderTextScale)
+          receiptHeaderPixelSizesFromSettings(ps).titlePx
         ),
         kitchenTicketHeader: ps.kitchenTicketHeader || '',
         kitchenTicketFooter: ps.kitchenTicketFooter || '',
@@ -4813,23 +4812,25 @@ export default function Settings() {
                 <Field label={t('receiptHeaderTextScale')} hint={t('receiptHeaderTitlePxHint')}>
                   <select
                     className="input max-w-xs"
-                    value={clampReceiptHeaderTitlePx(
-                      settings.posPrintSettings?.receiptHeaderTitlePx,
-                      settings.posPrintSettings?.receiptHeaderTextScale
-                    )}
+                    value={receiptHeaderPixelSizesFromSettings(settings.posPrintSettings).titlePx}
                     onChange={(e) => {
                       const receiptHeaderTitlePx = clampReceiptHeaderTitlePx(e.target.value);
+                      const detailPx = receiptHeaderPixelSizesFromSettings(
+                        settings.posPrintSettings
+                      ).detailPx;
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
                           receiptHeaderTitlePx,
+                          receiptHeaderDetailPx: detailPx,
+                          receiptHeaderBold: true,
                           receiptHeaderTextScale: receiptHeaderTextScaleFromTitlePx(receiptHeaderTitlePx),
                         },
                       });
                     }}
                   >
-                    {[12, 16, 20, 22, 24, 28].map((px) => (
+                    {RECEIPT_HEADER_PX_CHOICES.map((px) => (
                       <option key={px} value={px}>
                         {px} px
                       </option>
@@ -4839,40 +4840,30 @@ export default function Settings() {
                 <Field label={t('receiptHeaderDetailPx')} hint={t('receiptHeaderDetailPxHint')}>
                   <select
                     className="input max-w-xs"
-                    value={clampReceiptHeaderDetailPx(settings.posPrintSettings?.receiptHeaderDetailPx)}
-                    onChange={(e) =>
+                    value={receiptHeaderPixelSizesFromSettings(settings.posPrintSettings).detailPx}
+                    onChange={(e) => {
+                      const receiptHeaderDetailPx = clampReceiptHeaderDetailPx(e.target.value);
+                      const titlePx = receiptHeaderPixelSizesFromSettings(
+                        settings.posPrintSettings
+                      ).titlePx;
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
-                          receiptHeaderDetailPx: clampReceiptHeaderDetailPx(e.target.value),
+                          receiptHeaderTitlePx: titlePx,
+                          receiptHeaderDetailPx,
+                          receiptHeaderBold: true,
                         },
-                      })
-                    }
+                      });
+                    }}
                   >
-                    {[8, 10, 12, 14, 16].map((px) => (
+                    {RECEIPT_HEADER_PX_CHOICES.map((px) => (
                       <option key={px} value={px}>
                         {px} px
                       </option>
                     ))}
                   </select>
                 </Field>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settings.posPrintSettings?.receiptHeaderBold === true}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        posPrintSettings: {
-                          ...(settings.posPrintSettings || {}),
-                          receiptHeaderBold: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  {t('receiptHeaderBold')}
-                </label>
                 <Field label={t('receiptFooter')}>
                   <textarea
                     className="input min-h-[4rem]"

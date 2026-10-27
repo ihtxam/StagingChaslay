@@ -162,10 +162,10 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptHeaderLines: [],
   receiptFooter: "Merci / Danke / Thank you",
   receiptHeaderAlign: "center",
-  receiptHeaderBold: false,
+  receiptHeaderBold: true,
   receiptHeaderTextScale: 1,
-  receiptHeaderTitlePx: 16,
-  receiptHeaderDetailPx: 8,
+  receiptHeaderTitlePx: 18,
+  receiptHeaderDetailPx: 18,
   kitchenTicketHeader: "",
   kitchenTicketFooter: "",
   kitchenItemTextScale: 1,
@@ -409,18 +409,19 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     receiptHeaderAlignRaw === "left" || receiptHeaderAlignRaw === "right"
       ? receiptHeaderAlignRaw
       : "center";
-  const receiptHeaderScale = Number(src.receiptHeaderTextScale);
-  const legacyTitlePx = receiptHeaderScale === 3 ? 28 : receiptHeaderScale === 2 ? 22 : 16;
   const titlePxRaw = Number(src.receiptHeaderTitlePx);
-  const receiptHeaderTitlePx =
-    Number.isFinite(titlePxRaw) && titlePxRaw >= 10 && titlePxRaw <= 32
-      ? Math.round(titlePxRaw)
-      : legacyTitlePx;
   const detailPxRaw = Number(src.receiptHeaderDetailPx);
-  const receiptHeaderDetailPx =
-    Number.isFinite(detailPxRaw) && detailPxRaw >= 6 && detailPxRaw <= 20
+  const titleChosen =
+    Number.isFinite(titlePxRaw) && titlePxRaw >= 16 && titlePxRaw <= 32
+      ? Math.round(titlePxRaw)
+      : null;
+  const detailChosen =
+    Number.isFinite(detailPxRaw) && detailPxRaw >= 16 && detailPxRaw <= 32
       ? Math.round(detailPxRaw)
-      : 8;
+      : null;
+  const receiptHeaderTitlePx =
+    (titleChosen == null || titleChosen === 16) && detailChosen == null ? 18 : titleChosen ?? 18;
+  const receiptHeaderDetailPx = detailChosen ?? 18;
   const receiptHeaderTextScale = (
     receiptHeaderTitlePx >= 24 ? 3 : receiptHeaderTitlePx >= 20 ? 2 : 1
   ) as 1 | 2 | 3;
@@ -451,7 +452,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     receiptHeaderLines,
     receiptFooter: String(src.receiptFooter ?? DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
     receiptHeaderAlign,
-    receiptHeaderBold: src.receiptHeaderBold === true,
+    receiptHeaderBold: true,
     receiptHeaderTextScale,
     receiptHeaderTitlePx,
     receiptHeaderDetailPx,

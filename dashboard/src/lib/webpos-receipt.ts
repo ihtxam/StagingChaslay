@@ -823,21 +823,48 @@ function centerLine(text: string, width: number): string {
   return ' '.repeat(pad) + t;
 }
 
-export const RECEIPT_HEADER_TITLE_PX_DEFAULT = 16;
-export const RECEIPT_HEADER_DETAIL_PX_DEFAULT = 8;
+export const RECEIPT_HEADER_TITLE_PX_DEFAULT = 18;
+export const RECEIPT_HEADER_DETAIL_PX_DEFAULT = 18;
+export const RECEIPT_HEADER_PX_CHOICES = [16, 18, 20, 22, 24, 28, 32] as const;
+/** White band above the store name so the logo does not sit on the text. */
+export const RECEIPT_HEADER_LOGO_GAP_PX = 36;
 
-export function clampReceiptHeaderTitlePx(value: unknown, textScale?: number): number {
+function receiptHeaderPxInRange(value: unknown): number | null {
   const n = Number(value);
-  if (Number.isFinite(n) && n >= 10 && n <= 32) return Math.round(n);
-  if (textScale === 3) return 28;
-  if (textScale === 2) return 22;
-  return RECEIPT_HEADER_TITLE_PX_DEFAULT;
+  if (Number.isFinite(n) && n >= 16 && n <= 32) return Math.round(n);
+  return null;
+}
+
+export function clampReceiptHeaderTitlePx(value: unknown): number {
+  return receiptHeaderPxInRange(value) ?? RECEIPT_HEADER_TITLE_PX_DEFAULT;
 }
 
 export function clampReceiptHeaderDetailPx(value: unknown): number {
-  const n = Number(value);
-  if (Number.isFinite(n) && n >= 6 && n <= 20) return Math.round(n);
-  return RECEIPT_HEADER_DETAIL_PX_DEFAULT;
+  return receiptHeaderPxInRange(value) ?? RECEIPT_HEADER_DETAIL_PX_DEFAULT;
+}
+
+/**
+ * Store name and the lines under it. The previous automatic pair (16 px / 8 px)
+ * becomes 18 px / 18 px. A size the merchant picked inside 16–32 px is kept.
+ */
+export function receiptHeaderPixelSizesFromSettings(
+  settings?: {
+    receiptHeaderTitlePx?: number;
+    receiptHeaderDetailPx?: number;
+  } | null
+): { titlePx: number; detailPx: number } {
+  const titleChosen = receiptHeaderPxInRange(settings?.receiptHeaderTitlePx);
+  const detailChosen = receiptHeaderPxInRange(settings?.receiptHeaderDetailPx);
+  if ((titleChosen == null || titleChosen === 16) && detailChosen == null) {
+    return {
+      titlePx: RECEIPT_HEADER_TITLE_PX_DEFAULT,
+      detailPx: RECEIPT_HEADER_DETAIL_PX_DEFAULT,
+    };
+  }
+  return {
+    titlePx: titleChosen ?? RECEIPT_HEADER_TITLE_PX_DEFAULT,
+    detailPx: detailChosen ?? RECEIPT_HEADER_DETAIL_PX_DEFAULT,
+  };
 }
 
 /** ESC/POS character scale that matches a store-name pixel size. */
@@ -867,15 +894,13 @@ export function receiptHeaderFormatFromSettings(
     settings?.receiptHeaderAlign === 'left' || settings?.receiptHeaderAlign === 'right'
       ? settings.receiptHeaderAlign
       : 'center';
-  const scaleRaw = Number(settings?.receiptHeaderTextScale);
-  const textScale = (scaleRaw === 2 || scaleRaw === 3 ? scaleRaw : 1) as 1 | 2 | 3;
-  const titlePx = clampReceiptHeaderTitlePx(settings?.receiptHeaderTitlePx, textScale);
+  const { titlePx, detailPx } = receiptHeaderPixelSizesFromSettings(settings);
   return {
     align,
-    bold: settings?.receiptHeaderBold === true,
-    textScale,
+    bold: true,
+    textScale: receiptHeaderTextScaleFromTitlePx(titlePx),
     titlePx,
-    detailPx: clampReceiptHeaderDetailPx(settings?.receiptHeaderDetailPx),
+    detailPx,
   };
 }
 
@@ -1585,25 +1610,28 @@ export async function buildReceiptHeaderRasterEscPos(
     textScale?: 1 | 2 | 3;
     titlePx?: number;
     detailPx?: number;
+    /** White pixels above the first line. Larger when a logo is printed above. */
+    topGapPx?: number;
   }
 ): Promise<Uint8Array | null> {
   if (!lines.length || typeof document === 'undefined') return null;
   const paper = opts.paperWidthMm ?? 80;
   const canvasWidth = RECEIPT_LOGO_PAPER_MAX[paper];
   const align = opts.align ?? 'center';
-  const titlePx = clampReceiptHeaderTitlePx(opts.titlePx, opts.textScale);
+  const titlePx = clampReceiptHeaderTitlePx(opts.titlePx);
   const detailPx = clampReceiptHeaderDetailPx(opts.detailPx);
-  const lineGap = 2;
-  const padY = 2;
+  const lineGap = 6;
+  const padTop = opts.topGapPx ?? 8;
+  const padBottom = 8;
   try {
     const measure = document.createElement('canvas').getContext('2d');
     if (!measure) return null;
     const rows: { text: string; px: number; bold: boolean }[] = lines.map((line, i) => ({
       text: String(line || '').trim(),
       px: i === 0 ? titlePx : detailPx,
-      bold: i === 0 && opts.bold === true,
+      bold: i === 0,
     }));
-    let height = padY * 2;
+    let height = padTop + padBottom;
     for (const row of rows) {
       measure.font = `${row.bold ? 'bold ' : ''}${row.px}px Arial, sans-serif`;
       height += row.px + lineGap;
@@ -1617,7 +1645,7 @@ export async function buildReceiptHeaderRasterEscPos(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000000';
     ctx.textBaseline = 'top';
-    let y = padY;
+    let y = padTop;
     for (const row of rows) {
       if (!row.text) continue;
       ctx.font = `${row.bold ? 'bold ' : ''}${row.px}px Arial, sans-serif`;
@@ -1676,7 +1704,7 @@ export function buildReceiptHeaderEscPos(
     for (const seg of segments) {
       parts.push(
         escAlign(alignMode),
-        escBold(i === 0 && opts.bold === true && lineScale > 1),
+        escBold(i === 0),
         escKitchenSize(lineScale),
         encode(`${seg}\n`)
       );
@@ -4038,6 +4066,7 @@ export async function buildReceiptEscPos(
           textScale: opts.headerTextScale,
           titlePx: opts.headerTitlePx,
           detailPx: opts.headerDetailPx,
+          topGapPx: opts.logoBytes?.length ? RECEIPT_HEADER_LOGO_GAP_PX : 8,
         })
       : null;
   const headerEscPos =
