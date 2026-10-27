@@ -269,21 +269,26 @@ export function parseReceiptHeaderLines(
         .map((line) => String(line ?? "").replace(/\r\n/g, "\n").trim())
         .filter(Boolean)
     : [];
-  if (fromArray.length) {
+  const text = String(fallbackText ?? "").replace(/\r\n/g, "\n");
+  const fromText = (() => {
+    if (!text.trim()) return [];
+    const segments = text.includes("\n")
+      ? text.split("\n")
+      : /\\n/.test(text)
+        ? text.split(/\\n/)
+        : [text];
+    return segments
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 24)
+      .map((line) => line.slice(0, 200));
+  })();
+  if (!fromArray.length) return fromText;
+  if (!fromText.length) {
     return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
   }
-  const text = String(fallbackText ?? "").replace(/\r\n/g, "\n");
-  if (!text.trim()) return [];
-  const segments = text.includes("\n")
-    ? text.split("\n")
-    : /\\n/.test(text)
-      ? text.split(/\\n/)
-      : [text];
-  return segments
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 24)
-    .map((line) => line.slice(0, 200));
+  if (fromText.length > fromArray.length) return fromText;
+  return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
 }
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {

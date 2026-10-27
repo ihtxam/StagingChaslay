@@ -39,7 +39,6 @@ import {
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
   getReceiptHeaderLines,
-  normalizeReceiptHeaderFields,
   resolveReceiptPaperWidthMm,
   receiptHeaderFormatFromSettings,
   receiptHeaderFieldsFromPrintSettings,
@@ -8246,9 +8245,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       lineWidthForPaper(paper === 58 ? 58 : 80),
       { padLines: false, titleScale: headerFmt.textScale }
     );
-    const headerNorm = normalizeReceiptHeaderFields(
-      receiptHeaderTxFromPrintSettings(printSettings)
-    );
     const receiptTargets = printersForRole(printSettings, 'receipt');
     const primaryReceiptPrinter =
       receiptTargets[0]?.name ||
@@ -8275,7 +8271,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerBold: headerFmt.bold,
       headerTextScale: headerFmt.textScale,
       soldGiftCards: opts.soldGiftCards,
-      titleBodyGap: !!(headerNorm.title && headerNorm.body),
+      titleBodyGap: headerLines.length > 1,
       textEncoding,
     });
     const dataBase64 = uint8ToBase64(escpos);
@@ -8430,9 +8426,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               { padLines: false, titleScale: headerFmt.textScale }
             )
           : [];
-      const headerNorm = normalizeReceiptHeaderFields(
-        receiptHeaderTxFromPrintSettings(printSettings)
-      );
       const primaryReceiptPrinter = targets[0]?.name || fallbackName || '';
       let liveForEncoding = printers;
       if (!liveForEncoding.length) {
@@ -8457,7 +8450,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerBold: headerFmt.bold,
         headerTextScale: headerFmt.textScale,
         soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
-        titleBodyGap: !!(headerNorm.title && headerNorm.body),
+        titleBodyGap: headerLines.length > 1,
         textEncoding,
       });
       dataBase64 = uint8ToBase64(escpos);

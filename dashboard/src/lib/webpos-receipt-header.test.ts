@@ -157,6 +157,15 @@ assert.deepEqual(
   ['pola pola', 'rue des saars 115', '2000 Neuchâtel']
 );
 
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeader: 'pola pola\nrue des saars 115\n2000 Neuchâtel',
+    receiptHeaderLines: ['pola pola rue des saars 115 2000 Neuchâtel'],
+  }),
+  ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+  'multiline receiptHeader must win over stale one-line receiptHeaderLines'
+);
+
 const polaFromArray = getReceiptHeaderLines(
   {
     headerTitle: '',

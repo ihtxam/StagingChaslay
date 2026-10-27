@@ -1301,6 +1301,12 @@ export function splitReceiptHeaderTextToLines(text: string): string[] {
     .map((line) => line.slice(0, 200));
 }
 
+function capReceiptHeaderLines(lines: string[]): string[] {
+  return flattenConfiguredReceiptHeaderLines(lines)
+    .slice(0, 24)
+    .map((line) => line.slice(0, 200));
+}
+
 /** Split settings into explicit receipt header rows (preserves line breaks). */
 export function receiptHeaderLinesFromPrintSettings(
   printSettings?: Pick<
@@ -1308,21 +1314,22 @@ export function receiptHeaderLinesFromPrintSettings(
     'receiptHeaderTitle' | 'receiptHeader' | 'receiptHeaderLines'
   > | null
 ): string[] {
-  const fromArray = Array.isArray(printSettings?.receiptHeaderLines)
-    ? printSettings!.receiptHeaderLines!
-        .map((line) => String(line ?? '').replace(/\r\n/g, '\n').trim())
-        .filter(Boolean)
-    : [];
-  if (fromArray.length) {
-    return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
-  }
   const healed = healLegacyMashedReceiptHeaderFields(
     printSettings?.receiptHeaderTitle,
     printSettings?.receiptHeader
   );
   const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
-  if (!combined.trim()) return [];
-  return splitReceiptHeaderTextToLines(combined);
+  const fromText = combined.trim() ? splitReceiptHeaderTextToLines(combined) : [];
+  const fromArray = Array.isArray(printSettings?.receiptHeaderLines)
+    ? printSettings!.receiptHeaderLines!
+        .map((line) => String(line ?? '').replace(/\r\n/g, '\n').trim())
+        .filter(Boolean)
+    : [];
+  if (!fromArray.length) return capReceiptHeaderLines(fromText);
+  if (!fromText.length) return capReceiptHeaderLines(fromArray);
+  const flatArray = capReceiptHeaderLines(fromArray);
+  const flatText = capReceiptHeaderLines(fromText);
+  return flatText.length > flatArray.length ? flatText : flatArray;
 }
 
 /** Heal legacy blobs and keep `receiptHeader` + `receiptHeaderLines` in sync (Settings / WebPOS load). */
