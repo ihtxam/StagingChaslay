@@ -163,8 +163,8 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptFooter: "Merci / Danke / Thank you",
   receiptHeaderAlign: "center",
   receiptHeaderBold: true,
-  receiptHeaderTextScale: 1,
-  receiptHeaderTitlePx: 18,
+  receiptHeaderTextScale: 2,
+  receiptHeaderTitlePx: 22,
   receiptHeaderDetailPx: 18,
   kitchenTicketHeader: "",
   kitchenTicketFooter: "",
@@ -419,8 +419,11 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     Number.isFinite(detailPxRaw) && detailPxRaw >= 16 && detailPxRaw <= 32
       ? Math.round(detailPxRaw)
       : null;
-  const receiptHeaderTitlePx =
-    (titleChosen == null || titleChosen === 16) && detailChosen == null ? 18 : titleChosen ?? 18;
+  const automaticStoreName =
+    titleChosen == null ||
+    (titleChosen === 16 && detailChosen == null) ||
+    (titleChosen === 18 && (detailChosen == null || detailChosen === 18));
+  const receiptHeaderTitlePx = automaticStoreName ? 22 : titleChosen ?? 22;
   const receiptHeaderDetailPx = detailChosen ?? 18;
   const receiptHeaderTextScale = (
     receiptHeaderTitlePx >= 24 ? 3 : receiptHeaderTitlePx >= 20 ? 2 : 1

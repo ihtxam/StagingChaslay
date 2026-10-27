@@ -823,7 +823,7 @@ function centerLine(text: string, width: number): string {
   return ' '.repeat(pad) + t;
 }
 
-export const RECEIPT_HEADER_TITLE_PX_DEFAULT = 18;
+export const RECEIPT_HEADER_TITLE_PX_DEFAULT = 22;
 export const RECEIPT_HEADER_DETAIL_PX_DEFAULT = 18;
 export const RECEIPT_HEADER_PX_CHOICES = [16, 18, 20, 22, 24, 28, 32] as const;
 /** White band above the store name so the logo does not sit on the text. */
@@ -844,8 +844,9 @@ export function clampReceiptHeaderDetailPx(value: unknown): number {
 }
 
 /**
- * Store name and the lines under it. The previous automatic pair (16 px / 8 px)
- * becomes 18 px / 18 px. A size the merchant picked inside 16–32 px is kept.
+ * Store name and the lines under it.
+ * Automatic store-name sizes (unset, or the earlier 16 px / 18 px defaults
+ * with an automatic detail size) become 22 px. A size the merchant picked is kept.
  */
 export function receiptHeaderPixelSizesFromSettings(
   settings?: {
@@ -855,10 +856,14 @@ export function receiptHeaderPixelSizesFromSettings(
 ): { titlePx: number; detailPx: number } {
   const titleChosen = receiptHeaderPxInRange(settings?.receiptHeaderTitlePx);
   const detailChosen = receiptHeaderPxInRange(settings?.receiptHeaderDetailPx);
-  if ((titleChosen == null || titleChosen === 16) && detailChosen == null) {
+  const automaticStoreName =
+    titleChosen == null ||
+    (titleChosen === 16 && detailChosen == null) ||
+    (titleChosen === 18 && (detailChosen == null || detailChosen === 18));
+  if (automaticStoreName) {
     return {
       titlePx: RECEIPT_HEADER_TITLE_PX_DEFAULT,
-      detailPx: RECEIPT_HEADER_DETAIL_PX_DEFAULT,
+      detailPx: detailChosen ?? RECEIPT_HEADER_DETAIL_PX_DEFAULT,
     };
   }
   return {
