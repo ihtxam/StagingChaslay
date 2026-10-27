@@ -43,6 +43,10 @@ export type PosPrintSettings = {
   receiptHeaderBold?: boolean;
   /** Receipt header text scale: 1=normal, 2=double height, 3=double width+height */
   receiptHeaderTextScale?: 1 | 2 | 3;
+  /** Store-name line size in pixels (default 16). */
+  receiptHeaderTitlePx?: number;
+  /** Address, phone, and VAT size in pixels (default 8). */
+  receiptHeaderDetailPx?: number;
   kitchenTicketHeader?: string;
   kitchenTicketFooter?: string;
   /** Kitchen item text scale: 1=normal (plain), 2=double height, 3=double width+height */
@@ -160,6 +164,8 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptHeaderAlign: "center",
   receiptHeaderBold: false,
   receiptHeaderTextScale: 1,
+  receiptHeaderTitlePx: 16,
+  receiptHeaderDetailPx: 8,
   kitchenTicketHeader: "",
   kitchenTicketFooter: "",
   kitchenItemTextScale: 1,
@@ -404,9 +410,20 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
       ? receiptHeaderAlignRaw
       : "center";
   const receiptHeaderScale = Number(src.receiptHeaderTextScale);
-  const receiptHeaderTextScale = (receiptHeaderScale === 2 || receiptHeaderScale === 3
-    ? receiptHeaderScale
-    : 1) as 1 | 2 | 3;
+  const legacyTitlePx = receiptHeaderScale === 3 ? 28 : receiptHeaderScale === 2 ? 22 : 16;
+  const titlePxRaw = Number(src.receiptHeaderTitlePx);
+  const receiptHeaderTitlePx =
+    Number.isFinite(titlePxRaw) && titlePxRaw >= 10 && titlePxRaw <= 32
+      ? Math.round(titlePxRaw)
+      : legacyTitlePx;
+  const detailPxRaw = Number(src.receiptHeaderDetailPx);
+  const receiptHeaderDetailPx =
+    Number.isFinite(detailPxRaw) && detailPxRaw >= 6 && detailPxRaw <= 20
+      ? Math.round(detailPxRaw)
+      : 8;
+  const receiptHeaderTextScale = (
+    receiptHeaderTitlePx >= 24 ? 3 : receiptHeaderTitlePx >= 20 ? 2 : 1
+  ) as 1 | 2 | 3;
 
   // Legacy default was double-height (2) + bold — migrate to plain full-width tickets.
   if (kitchenItemTextScale === 2 && kitchenHeaderTextScale === 2 && src.kitchenBoldText !== false) {
@@ -436,6 +453,8 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     receiptHeaderAlign,
     receiptHeaderBold: src.receiptHeaderBold === true,
     receiptHeaderTextScale,
+    receiptHeaderTitlePx,
+    receiptHeaderDetailPx,
     kitchenTicketHeader: String(src.kitchenTicketHeader ?? "").slice(0, 2000),
     kitchenTicketFooter: String(src.kitchenTicketFooter ?? "").slice(0, 2000),
     kitchenItemTextScale,

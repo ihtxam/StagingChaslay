@@ -60,11 +60,11 @@ const defaultHeader = getReceiptHeaderLines(
   48,
   { padLines: false }
 );
+assert.equal(defaultHeader[0], 'Demo Cafe');
 assert.ok(defaultHeader.includes('Rue du Lac 12'));
 assert.ok(defaultHeader.includes('Lausanne'));
 assert.ok(defaultHeader.some((l) => /Tel:/i.test(l)));
 assert.ok(defaultHeader.some((l) => /VAT:/i.test(l)));
-assert.equal(defaultHeader.includes('Demo Cafe'), false, 'empty custom header uses shop details, not name');
 
 const htmlHeader = getReceiptHeaderLines(
   {

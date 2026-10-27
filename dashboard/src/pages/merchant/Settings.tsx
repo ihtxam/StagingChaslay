@@ -66,6 +66,9 @@ import {
   uint8ToBase64,
   normalizeClientReceiptHeaderPrintSettings,
   splitReceiptHeaderTextToLines,
+  clampReceiptHeaderTitlePx,
+  clampReceiptHeaderDetailPx,
+  receiptHeaderTextScaleFromTitlePx,
 } from '@/lib/webpos-receipt';
 import { receiptHeaderContentToPlainText, receiptHeaderHtmlForEditor } from '@/lib/receipt-header-html';
 import HugeRteEditor from '@/components/editor/HugeRteEditor';
@@ -332,6 +335,8 @@ interface SettingsData {
     receiptHeaderAlign?: 'left' | 'center' | 'right';
     receiptHeaderBold?: boolean;
     receiptHeaderTextScale?: 1 | 2 | 3;
+    receiptHeaderTitlePx?: number;
+    receiptHeaderDetailPx?: number;
     kitchenTicketHeader?: string;
     kitchenTicketFooter?: string;
     kitchenItemTextScale?: 1 | 2 | 3;
@@ -1763,10 +1768,14 @@ export default function Settings() {
             ? ps.receiptHeaderAlign
             : 'center',
         receiptHeaderBold: ps.receiptHeaderBold === true,
-        receiptHeaderTextScale:
-          ps.receiptHeaderTextScale === 2 || ps.receiptHeaderTextScale === 3
-            ? ps.receiptHeaderTextScale
-            : 1,
+        receiptHeaderTitlePx: clampReceiptHeaderTitlePx(
+          ps.receiptHeaderTitlePx,
+          ps.receiptHeaderTextScale
+        ),
+        receiptHeaderDetailPx: clampReceiptHeaderDetailPx(ps.receiptHeaderDetailPx),
+        receiptHeaderTextScale: receiptHeaderTextScaleFromTitlePx(
+          clampReceiptHeaderTitlePx(ps.receiptHeaderTitlePx, ps.receiptHeaderTextScale)
+        ),
         kitchenTicketHeader: ps.kitchenTicketHeader || '',
         kitchenTicketFooter: ps.kitchenTicketFooter || '',
         kitchenItemTextScale: ps.kitchenItemTextScale === 2 || ps.kitchenItemTextScale === 3 ? ps.kitchenItemTextScale : 1,
@@ -4801,23 +4810,51 @@ export default function Settings() {
                     <option value="right">{t('receiptHeaderAlignRight')}</option>
                   </select>
                 </Field>
-                <Field label={t('receiptHeaderTextScale')} hint={t('kitchenTextScaleHint')}>
+                <Field label={t('receiptHeaderTextScale')} hint={t('receiptHeaderTitlePxHint')}>
                   <select
                     className="input max-w-xs"
-                    value={settings.posPrintSettings?.receiptHeaderTextScale ?? 1}
+                    value={clampReceiptHeaderTitlePx(
+                      settings.posPrintSettings?.receiptHeaderTitlePx,
+                      settings.posPrintSettings?.receiptHeaderTextScale
+                    )}
+                    onChange={(e) => {
+                      const receiptHeaderTitlePx = clampReceiptHeaderTitlePx(e.target.value);
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptHeaderTitlePx,
+                          receiptHeaderTextScale: receiptHeaderTextScaleFromTitlePx(receiptHeaderTitlePx),
+                        },
+                      });
+                    }}
+                  >
+                    {[12, 16, 20, 22, 24, 28].map((px) => (
+                      <option key={px} value={px}>
+                        {px} px
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={t('receiptHeaderDetailPx')} hint={t('receiptHeaderDetailPxHint')}>
+                  <select
+                    className="input max-w-xs"
+                    value={clampReceiptHeaderDetailPx(settings.posPrintSettings?.receiptHeaderDetailPx)}
                     onChange={(e) =>
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
-                          receiptHeaderTextScale: Number(e.target.value) as 1 | 2 | 3,
+                          receiptHeaderDetailPx: clampReceiptHeaderDetailPx(e.target.value),
                         },
                       })
                     }
                   >
-                    <option value={1}>{t('kitchenScaleNormal')}</option>
-                    <option value={2}>{t('kitchenScaleLarge')}</option>
-                    <option value={3}>{t('kitchenScaleXLarge')}</option>
+                    {[8, 10, 12, 14, 16].map((px) => (
+                      <option key={px} value={px}>
+                        {px} px
+                      </option>
+                    ))}
                   </select>
                 </Field>
                 <label className="flex items-center gap-2 text-sm">

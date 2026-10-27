@@ -4,6 +4,7 @@ import {
   flattenConfiguredReceiptHeaderLines,
   getReceiptHeaderLines,
   healLegacyMashedReceiptHeaderFields,
+  receiptHeaderFormatFromSettings,
   receiptHeaderLinesFromPrintSettings,
   receiptHeaderTxFromPrintSettings,
   splitReceiptHeaderNameDashRest,
@@ -351,11 +352,11 @@ const emptyHeaderDefault = getReceiptHeaderLines(
   48,
   { padLines: false }
 );
+assert.equal(emptyHeaderDefault[0], 'KABUL');
 assert.ok(emptyHeaderDefault.includes('Bahnhofstrasse 1'));
 assert.ok(emptyHeaderDefault.includes('Zürich'));
 assert.ok(emptyHeaderDefault.some((l) => /Tel:\s*\+41/.test(l)));
 assert.ok(emptyHeaderDefault.some((l) => /VAT:\s*CHE-123/.test(l)));
-assert.equal(emptyHeaderDefault.includes('KABUL'), false);
 
 assert.deepEqual(
   healLegacyMashedReceiptHeaderFields(
@@ -381,9 +382,9 @@ const healedDemoPrint = getReceiptHeaderLines(
   48,
   { padLines: false }
 );
+assert.equal(healedDemoPrint[0], 'KABUL');
 assert.ok(healedDemoPrint.includes('Bahnhofstrasse 1'));
 assert.ok(healedDemoPrint.some((l) => /Tel:\s*\+41/.test(l)));
-assert.equal(healedDemoPrint.includes('KABUL'), false);
 
 assert.deepEqual(
   splitReceiptHeaderNameDashRest(
@@ -426,5 +427,23 @@ assert.deepEqual(
   ]),
   ['MeliMelo Barbershop', 'Rue de la Maladière 18', '2000 Neuchâtel']
 );
+
+const defaultHeaderSize = receiptHeaderFormatFromSettings(null);
+assert.equal(defaultHeaderSize.titlePx, 16);
+assert.equal(defaultHeaderSize.detailPx, 8);
+assert.equal(defaultHeaderSize.textScale, 1);
+
+const customHeaderSize = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 24,
+  receiptHeaderDetailPx: 12,
+  receiptHeaderTextScale: 1,
+});
+assert.equal(customHeaderSize.titlePx, 24);
+assert.equal(customHeaderSize.detailPx, 12);
+assert.equal(customHeaderSize.textScale, 1);
+
+const legacyLargeTitle = receiptHeaderFormatFromSettings({ receiptHeaderTextScale: 2 });
+assert.equal(legacyLargeTitle.titlePx, 22);
+assert.equal(legacyLargeTitle.detailPx, 8);
 
 console.log('webpos-receipt-header.test.ts ok');

@@ -125,6 +125,8 @@ async function printReceiptText(
     headerAlign: headerFmt.align,
     headerBold: headerFmt.bold,
     headerTextScale: headerFmt.textScale,
+    headerTitlePx: headerFmt.titlePx,
+    headerDetailPx: headerFmt.detailPx,
     titleBodyGap: headerLines.length > 1,
     textEncoding,
   });

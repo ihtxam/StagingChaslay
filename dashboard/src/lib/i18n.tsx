@@ -2639,9 +2639,9 @@ const en: Dict = {
   receiptHeaderMultilineHint:
     'Each line you type prints on its own row. The first line uses the text size and bold options below.',
   receiptHeaderRichHint:
-    'Each paragraph prints on its own line on the receipt. Leave empty to print the receipt logo (if set) and your shop address, VAT, and phone from Business settings.',
+    'Each paragraph prints on its own line. Leave empty to print the store name, then the shop address, VAT, and phone from Business settings.',
   receiptHeaderEmptyUsesShopDetails:
-    'Leave empty to use logo + shop address, VAT, and phone',
+    'Leave empty to print the store name, then address, VAT, and phone',
   receiptHeaderTitle: 'Store name',
   receiptHeaderTitleHint: 'Printed large at the top of the receipt (uses size and bold below)',
   receiptHeaderDetails: 'Address & details',
@@ -2651,6 +2651,9 @@ const en: Dict = {
   receiptHeaderAlignCenter: 'Center',
   receiptHeaderAlignRight: 'Right',
   receiptHeaderTextScale: 'Store name text size',
+  receiptHeaderTitlePxHint: 'Size of the store name on the receipt. Default 16 px.',
+  receiptHeaderDetailPx: 'Address and details text size',
+  receiptHeaderDetailPxHint: 'Size of the address, phone, and VAT under the store name. Default 8 px.',
   receiptHeaderBold: 'Bold store name',
   receiptFooter: 'Receipt footer',
   kitchenTicketHeader: 'Kitchen ticket header',
@@ -7846,9 +7849,9 @@ const fr: Dict = {
   receiptHeaderMultilineHint:
     'Chaque ligne saisie s’imprime sur une ligne du reçu. La première ligne utilise la taille et le gras ci-dessous.',
   receiptHeaderRichHint:
-    'Chaque paragraphe s’imprime sur une ligne du reçu. Laissez vide pour le logo (si défini) et l’adresse, la TVA et le téléphone de l’onglet Commerce.',
+    'Chaque paragraphe s’imprime sur une ligne. Laissez vide pour le nom du magasin, puis l’adresse, la TVA et le téléphone du commerce.',
   receiptHeaderEmptyUsesShopDetails:
-    'Vide : logo + adresse, TVA et téléphone du commerce',
+    'Vide : nom du magasin, puis adresse, TVA et téléphone',
   receiptHeaderTitle: 'Nom du magasin',
   receiptHeaderTitleHint: 'Imprimé en grand en haut du reçu (utilise la taille et le gras ci-dessous)',
   receiptHeaderDetails: 'Adresse et détails',
@@ -7858,6 +7861,9 @@ const fr: Dict = {
   receiptHeaderAlignCenter: 'Centré',
   receiptHeaderAlignRight: 'Droite',
   receiptHeaderTextScale: 'Taille du nom du magasin',
+  receiptHeaderTitlePxHint: 'Taille du nom du magasin sur le reçu. Par défaut 16 px.',
+  receiptHeaderDetailPx: 'Taille de l’adresse et des détails',
+  receiptHeaderDetailPxHint: 'Taille de l’adresse, du téléphone et de la TVA sous le nom. Par défaut 8 px.',
   receiptHeaderBold: 'Nom du magasin en gras',
   receiptFooter: 'Pied de page du reçu',
   kitchenTicketHeader: 'En-tête ticket cuisine',
@@ -12943,9 +12949,9 @@ const de: Dict = {
   receiptHeaderMultilineHint:
     'Jede Zeile wird auf dem Beleg in einer eigenen Zeile gedruckt. Die erste Zeile nutzt Grösse und Fett unten.',
   receiptHeaderRichHint:
-    'Jeder Absatz wird als eigene Zeile gedruckt. Leer lassen für Logo (falls gesetzt) sowie Adresse, MWST und Telefon aus den Geschäftseinstellungen.',
+    'Jeder Absatz wird als eigene Zeile gedruckt. Leer lassen für den Geschäftsnamen, danach Adresse, MWST und Telefon.',
   receiptHeaderEmptyUsesShopDetails:
-    'Leer: Logo + Adresse, MWST und Telefon aus dem Geschäft',
+    'Leer: Geschäftsname, danach Adresse, MWST und Telefon',
   receiptHeaderTitle: 'Geschäftsname',
   receiptHeaderTitleHint: 'Gross oben auf dem Beleg gedruckt (nutzt Grösse und Fett unten)',
   receiptHeaderDetails: 'Adresse & Details',
@@ -12955,6 +12961,9 @@ const de: Dict = {
   receiptHeaderAlignCenter: 'Zentriert',
   receiptHeaderAlignRight: 'Rechts',
   receiptHeaderTextScale: 'Geschäftsname Textgrösse',
+  receiptHeaderTitlePxHint: 'Grösse des Geschäftsnamens auf dem Beleg. Standard 16 px.',
+  receiptHeaderDetailPx: 'Grösse von Adresse und Details',
+  receiptHeaderDetailPxHint: 'Grösse von Adresse, Telefon und MWST unter dem Namen. Standard 8 px.',
   receiptHeaderBold: 'Fetter Geschäftsname',
   receiptFooter: 'Beleg-Fusszeile',
   kitchenTicketHeader: 'Küchenticket Kopfzeile',
