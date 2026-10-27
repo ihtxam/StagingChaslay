@@ -41,6 +41,7 @@ import { resolveOrderItemName } from '@/lib/order-item-name';
 import { normalizePaymentMethod } from '@/lib/payment-breakdown';
 import { maskGiftCardNumberForReceipt } from '@/lib/gift-card-receipt-mask';
 import {
+  decodeHtmlEntities,
   isReceiptHeaderContentConfigured,
   receiptHeaderContentToLines,
   receiptHeaderContentToPlainText,
@@ -1008,7 +1009,11 @@ export function flattenConfiguredReceiptHeaderLines(configuredLines: string[]): 
   const out: string[] = [];
   const single = configuredLines.length === 1;
   for (const line of configuredLines) {
-    const trimmed = String(line || '').replace(/\s+/g, ' ').trim();
+    const trimmed = decodeHtmlEntities(String(line || ''))
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[-–—_=]{3,}\s*$/g, '')
+      .trim();
     if (!trimmed) continue;
     const pieces = single ? splitReceiptHeaderNameDashRest(trimmed) : [trimmed];
     for (const piece of pieces) {
@@ -1658,6 +1663,39 @@ export function resolveReceiptPaperWidthMm(
   const fromPrinter = targets[0]?.paperWidthMm;
   if (fromPrinter === 58 || fromPrinter === 80) return fromPrinter;
   return settings?.paperWidthMm === 58 ? 58 : 80;
+}
+
+/** Remove the plain-text header so only the bitmap header is printed. */
+function dropPlainTextReceiptHeader(bodyText: string, headerLines: string[]): string {
+  if (!headerLines.length) return bodyText;
+  const keys = headerLines
+    .map((line) => decodeHtmlEntities(line).replace(/\s+/g, '').toLowerCase())
+    .filter((key) => key.length >= 3);
+  const lines = bodyText.split('\n');
+  let i = 0;
+  if (/provisional/i.test(lines[0] || '')) i = 1;
+  let removed = 0;
+  while (i < lines.length && removed < headerLines.length + 3) {
+    const trimmed = (lines[i] || '').trim();
+    if (!trimmed) {
+      if (removed) {
+        i += 1;
+        break;
+      }
+      i += 1;
+      continue;
+    }
+    if (/^[-=]{6,}$/.test(trimmed) || /^\d+\s*x\s/i.test(trimmed)) break;
+    const key = decodeHtmlEntities(trimmed).replace(/\s+/g, '').replace(/-+$/g, '').toLowerCase();
+    const matches = keys.some((k) => key.includes(k) || k.includes(key));
+    if (removed === 0 || matches || /&(?:#\d+|[a-z]+);/i.test(trimmed)) {
+      i += 1;
+      removed += 1;
+      continue;
+    }
+    break;
+  }
+  return lines.slice(i).join('\n').replace(/^\n+/, '');
 }
 
 function stripPaddedReceiptHeaderFromText(
@@ -3832,15 +3870,7 @@ export function textToEscPos(
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const parts: Uint8Array[] = [init, codepage];
   if (logoBytes?.length) {
-    // One line after the logo. Extra ESC d feeds left a large blank gap on 58/80mm.
-    parts.push(
-      alignCenter,
-      logoBytes,
-      encode('\n'),
-      new Uint8Array([0x1b, 0x61, 0x00]),
-      new Uint8Array([0x1b, 0x40]),
-      codepage
-    );
+    parts.push(alignCenter, logoBytes, encode('\n'));
   }
   if (prefixAfterLogo?.length) {
     parts.push(prefixAfterLogo);
@@ -3955,11 +3985,12 @@ export async function buildReceiptEscPos(
       opts.headerAlign ?? 'center',
       titleBodyGap
     );
+    bodyText = dropPlainTextReceiptHeader(bodyText, headerLines);
   }
   const textEncoding = opts.textEncoding ?? 'cp850';
   const receiptLineWidth = lineWidthForPaper(paper);
   const headerRaster =
-    headerLines.length > 0 && receiptUsesKioskThermalEscPosTweaks()
+    headerLines.length > 0 && typeof document !== 'undefined'
       ? await buildReceiptHeaderRasterEscPos(headerLines, {
           paperWidthMm: paper,
           align: opts.headerAlign,

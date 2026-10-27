@@ -9,32 +9,34 @@ export function receiptHeaderLooksLikeHtml(value: string): boolean {
 
 /** Decode `&egrave;`, `&#233;`, `&nbsp;`, etc. for thermal print (never print entity literals). */
 export function decodeHtmlEntities(text: string): string {
-  const raw = String(text ?? '');
-  if (!raw || !HTML_ENTITY_RE.test(raw)) return raw;
-  if (typeof document !== 'undefined') {
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = raw;
-    return textarea.value;
+  let raw = String(text ?? '');
+  for (let pass = 0; pass < 3; pass++) {
+    if (!HTML_ENTITY_RE.test(raw)) break;
+    const next = raw
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&egrave;/gi, 'è')
+      .replace(/&eacute;/gi, 'é')
+      .replace(/&ecirc;/gi, 'ê')
+      .replace(/&euml;/gi, 'ë')
+      .replace(/&agrave;/gi, 'à')
+      .replace(/&aacute;/gi, 'á')
+      .replace(/&acirc;/gi, 'â')
+      .replace(/&ccedil;/gi, 'ç')
+      .replace(/&ocirc;/gi, 'ô')
+      .replace(/&ouml;/gi, 'ö')
+      .replace(/&uuml;/gi, 'ü')
+      .replace(/&auml;/gi, 'ä')
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    if (next === raw) break;
+    raw = next;
   }
-  return raw
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&apos;/gi, "'")
-    .replace(/&eacute;/gi, 'é')
-    .replace(/&egrave;/gi, 'è')
-    .replace(/&ecirc;/gi, 'ê')
-    .replace(/&agrave;/gi, 'à')
-    .replace(/&acirc;/gi, 'â')
-    .replace(/&ocirc;/gi, 'ô')
-    .replace(/&uuml;/gi, 'ü')
-    .replace(/&auml;/gi, 'ä')
-    .replace(/&ouml;/gi, 'ö')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  return raw;
 }
 
 /** HTML / plain → one printed row per block (preserves Enter and `<p>` / `<br>`). */
@@ -52,7 +54,10 @@ export function receiptHeaderContentToPlainText(value: string): string {
       .replace(/<\/p>\s*/gi, '</p>\n')
       .replace(/<\/div>\s*/gi, '</div>\n')
       .replace(/<\/h[1-6]>\s*/gi, '\n');
-    const text = (container.innerText || container.textContent || '').replace(/\r\n/g, '\n');
+    const text = decodeHtmlEntities(container.innerText || container.textContent || '').replace(
+      /\r\n/g,
+      '\n'
+    );
     return text.replace(/\n{3,}/g, '\n\n').trim();
   }
   let html = raw

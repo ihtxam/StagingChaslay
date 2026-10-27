@@ -8210,12 +8210,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       soldGiftCards?: SoldGiftCardOnReceipt[];
     } = {}
   ): Promise<string> => {
-    const paper = opts.paperWidthMm || resolveReceiptPaperWidthMm(printSettings);
+    let liveSettings = printSettings;
+    try {
+      const settingsRes = await api.get('/merchant/settings', { timeout: 5000 });
+      const raw = settingsRes.data?.settings?.posPrintSettings;
+      if (raw && typeof raw === 'object') {
+        liveSettings = normalizeClientReceiptHeaderPrintSettings(raw);
+        setPrintSettings(liveSettings);
+      }
+    } catch {
+      /* print with the settings already on screen */
+    }
+    const paper = opts.paperWidthMm || resolveReceiptPaperWidthMm(liveSettings);
     const logoUrl =
-      printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl || null;
+      liveSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl || null;
     let logo: Uint8Array | null = null;
     if (logoUrl) {
-      const logoWidth = resolveReceiptLogoWidthPx(printSettings, paper === 58 ? 58 : 80);
+      const logoWidth = resolveReceiptLogoWidthPx(liveSettings, paper === 58 ? 58 : 80);
       const cacheKey = `${String(logoUrl)}|${paper}|${logoWidth}`;
       if (logoEscPosCacheRef.current?.key === cacheKey) {
         logo = logoEscPosCacheRef.current.bytes;
@@ -8225,13 +8236,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     const qr =
-      opts.forceScannable || printSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
+      opts.forceScannable || liveSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
     const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
-    const lang = resolveReceiptLanguage(printSettings, locale);
-    const headerFmt = receiptHeaderFormatFromSettings(printSettings);
+    const lang = resolveReceiptLanguage(liveSettings, locale);
+    const headerFmt = receiptHeaderFormatFromSettings(liveSettings);
     const headerLines = getReceiptHeaderLines(
       {
-        ...receiptHeaderTxFromPrintSettings(printSettings),
+        ...receiptHeaderTxFromPrintSettings(liveSettings),
         businessName: merchant?.name || APP_NAME,
         address: merchant?.address || '',
         city: merchant?.city || undefined,

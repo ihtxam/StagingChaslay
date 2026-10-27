@@ -14,7 +14,7 @@ assert.match(receiptSrc, /receiptUsesKioskThermalEscPosTweaks/);
 assert.match(receiptSrc, /isDesktopApp\(\)/);
 assert.match(
   receiptSrc,
-  /headerLines\.length > 0 && receiptUsesKioskThermalEscPosTweaks\(\)/
+  /headerLines\.length > 0 && typeof document !== 'undefined'/
 );
 
 console.log('webpos-receipt-thermal-tweaks.test.ts: ok');
