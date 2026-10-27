@@ -4,6 +4,7 @@ import {
   flattenConfiguredReceiptHeaderLines,
   getReceiptHeaderLines,
   healLegacyMashedReceiptHeaderFields,
+  receiptHeaderFormatFromSettings,
   receiptHeaderLinesFromPrintSettings,
   receiptHeaderTxFromPrintSettings,
   splitReceiptHeaderNameDashRest,
@@ -152,9 +153,27 @@ assert.deepEqual(polaCustom, ['pola pola', 'rue des saars 115', '2000 Neuchâtel
 
 assert.deepEqual(
   receiptHeaderLinesFromPrintSettings({
-    receiptHeaderLines: ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+    receiptHeader: 'pola pola\nrue des saars 115\n2000 Neuchâtel',
   }),
   ['pola pola', 'rue des saars 115', '2000 Neuchâtel']
+);
+
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeader: '',
+    receiptHeaderLines: ['pola pola rue des saars 115 2000 Neuchâtel'],
+  }),
+  [],
+  'empty header must ignore stale receiptHeaderLines'
+);
+
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeader: 'pola pola\nrue des saars 115\n2000 Neuchâtel',
+    receiptHeaderLines: ['pola pola rue des saars 115 2000 Neuchâtel'],
+  }),
+  ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+  'multiline receiptHeader must win over stale one-line receiptHeaderLines'
 );
 
 const polaFromArray = getReceiptHeaderLines(
@@ -333,7 +352,11 @@ const emptyHeaderDefault = getReceiptHeaderLines(
   48,
   { padLines: false }
 );
-assert.deepEqual(emptyHeaderDefault, ['KABUL']);
+assert.equal(emptyHeaderDefault[0], 'KABUL');
+assert.ok(emptyHeaderDefault.includes('Bahnhofstrasse 1'));
+assert.ok(emptyHeaderDefault.includes('Zürich'));
+assert.ok(emptyHeaderDefault.some((l) => /Tel:\s*\+41/.test(l)));
+assert.ok(emptyHeaderDefault.some((l) => /VAT:\s*CHE-123/.test(l)));
 
 assert.deepEqual(
   healLegacyMashedReceiptHeaderFields(
@@ -359,7 +382,9 @@ const healedDemoPrint = getReceiptHeaderLines(
   48,
   { padLines: false }
 );
-assert.deepEqual(healedDemoPrint, ['KABUL']);
+assert.equal(healedDemoPrint[0], 'KABUL');
+assert.ok(healedDemoPrint.includes('Bahnhofstrasse 1'));
+assert.ok(healedDemoPrint.some((l) => /Tel:\s*\+41/.test(l)));
 
 assert.deepEqual(
   splitReceiptHeaderNameDashRest(
@@ -385,8 +410,11 @@ const melimeloBarbershop = getReceiptHeaderLines(
 assert.equal(melimeloBarbershop[0], 'MeliMelo Barbershop');
 assert.ok(melimeloBarbershop.includes('Rue de la Maladière 18'));
 assert.ok(melimeloBarbershop.includes('2000 Neuchâtel'));
-assert.ok(melimeloBarbershop.includes('Tel: 032 323 99 88'));
-assert.ok(melimeloBarbershop.includes('VAT: CHE-450.000.636'));
+assert.equal(
+  melimeloBarbershop.some((line) => /Tel:/.test(line)),
+  false,
+  'custom header does not append shop telephone'
+);
 assert.equal(
   melimeloBarbershop.some((line) => line.includes(' - Rue')),
   false,
@@ -399,5 +427,50 @@ assert.deepEqual(
   ]),
   ['MeliMelo Barbershop', 'Rue de la Maladière 18', '2000 Neuchâtel']
 );
+
+const defaultHeaderSize = receiptHeaderFormatFromSettings(null);
+assert.equal(defaultHeaderSize.titlePx, 22);
+assert.equal(defaultHeaderSize.detailPx, 18);
+assert.equal(defaultHeaderSize.bold, true);
+assert.equal(defaultHeaderSize.textScale, 2);
+
+const previousDefaults = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 16,
+  receiptHeaderDetailPx: 8,
+  receiptHeaderBold: false,
+});
+assert.equal(previousDefaults.titlePx, 22);
+assert.equal(previousDefaults.detailPx, 18);
+assert.equal(previousDefaults.bold, true);
+
+const previousEighteen = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 18,
+  receiptHeaderDetailPx: 18,
+});
+assert.equal(previousEighteen.titlePx, 22);
+assert.equal(previousEighteen.detailPx, 18);
+
+const customHeaderSize = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 32,
+  receiptHeaderDetailPx: 20,
+  receiptHeaderTextScale: 1,
+});
+assert.equal(customHeaderSize.titlePx, 32);
+assert.equal(customHeaderSize.detailPx, 20);
+assert.equal(customHeaderSize.textScale, 3);
+
+const chosenSixteen = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 16,
+  receiptHeaderDetailPx: 16,
+});
+assert.equal(chosenSixteen.titlePx, 16);
+assert.equal(chosenSixteen.detailPx, 16);
+
+const chosenEighteenDetail = receiptHeaderFormatFromSettings({
+  receiptHeaderTitlePx: 18,
+  receiptHeaderDetailPx: 16,
+});
+assert.equal(chosenEighteenDetail.titlePx, 18);
+assert.equal(chosenEighteenDetail.detailPx, 16);
 
 console.log('webpos-receipt-header.test.ts ok');
