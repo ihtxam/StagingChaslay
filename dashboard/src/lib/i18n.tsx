@@ -2638,6 +2638,10 @@ const en: Dict = {
   receiptHeader: 'Receipt header',
   receiptHeaderMultilineHint:
     'Each line you type prints on its own row. The first line uses the text size and bold options below.',
+  receiptHeaderRichHint:
+    'Each paragraph prints on its own line on the receipt. Leave empty to print the receipt logo (if set) and your shop address, VAT, and phone from Business settings.',
+  receiptHeaderEmptyUsesShopDetails:
+    'Leave empty to use logo + shop address, VAT, and phone',
   receiptHeaderTitle: 'Store name',
   receiptHeaderTitleHint: 'Printed large at the top of the receipt (uses size and bold below)',
   receiptHeaderDetails: 'Address & details',
@@ -7841,6 +7845,10 @@ const fr: Dict = {
   receiptHeader: 'En-tête du reçu',
   receiptHeaderMultilineHint:
     'Chaque ligne saisie s’imprime sur une ligne du reçu. La première ligne utilise la taille et le gras ci-dessous.',
+  receiptHeaderRichHint:
+    'Chaque paragraphe s’imprime sur une ligne du reçu. Laissez vide pour le logo (si défini) et l’adresse, la TVA et le téléphone de l’onglet Commerce.',
+  receiptHeaderEmptyUsesShopDetails:
+    'Vide : logo + adresse, TVA et téléphone du commerce',
   receiptHeaderTitle: 'Nom du magasin',
   receiptHeaderTitleHint: 'Imprimé en grand en haut du reçu (utilise la taille et le gras ci-dessous)',
   receiptHeaderDetails: 'Adresse et détails',
@@ -12934,6 +12942,10 @@ const de: Dict = {
   receiptHeader: 'Beleg-Kopfzeile',
   receiptHeaderMultilineHint:
     'Jede Zeile wird auf dem Beleg in einer eigenen Zeile gedruckt. Die erste Zeile nutzt Grösse und Fett unten.',
+  receiptHeaderRichHint:
+    'Jeder Absatz wird als eigene Zeile gedruckt. Leer lassen für Logo (falls gesetzt) sowie Adresse, MWST und Telefon aus den Geschäftseinstellungen.',
+  receiptHeaderEmptyUsesShopDetails:
+    'Leer: Logo + Adresse, MWST und Telefon aus dem Geschäft',
   receiptHeaderTitle: 'Geschäftsname',
   receiptHeaderTitleHint: 'Gross oben auf dem Beleg gedruckt (nutzt Grösse und Fett unten)',
   receiptHeaderDetails: 'Adresse & Details',

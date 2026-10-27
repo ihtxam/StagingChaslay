@@ -41,6 +41,12 @@ import { resolveOrderItemName } from '@/lib/order-item-name';
 import { normalizePaymentMethod } from '@/lib/payment-breakdown';
 import { maskGiftCardNumberForReceipt } from '@/lib/gift-card-receipt-mask';
 import {
+  isReceiptHeaderContentConfigured,
+  receiptHeaderContentToLines,
+  receiptHeaderContentToPlainText,
+  receiptHeaderLooksLikeHtml,
+} from '@/lib/receipt-header-html';
+import {
   channelLabel,
   formatPayLaterPaymentLabel,
   lineWidthForPaper,
@@ -1228,7 +1234,7 @@ export function isReceiptHeaderConfigured(
   headerTitle?: string | null,
   header?: string | null
 ): boolean {
-  return !!receiptHeaderCombinedText(headerTitle, header).trim();
+  return isReceiptHeaderContentConfigured(headerTitle, header);
 }
 
 /** Merge store-name + details fields into one multiline receipt header (settings / legacy DB). */
@@ -1284,21 +1290,9 @@ export function healLegacyMashedReceiptHeaderFields(
   return { headerTitle: titleTrim, header: bodyTrim };
 }
 
-/** One settings textarea row → one printed line (real newlines or legacy literal `\\n`). */
+/** One settings row → one printed line (HTML blocks, newlines, or legacy `\\n`). */
 export function splitReceiptHeaderTextToLines(text: string): string[] {
-  const raw = String(text ?? '').replace(/\r\n/g, '\n');
-  const trimmed = raw.trim();
-  if (!trimmed) return [];
-  const segments = raw.includes('\n')
-    ? raw.split('\n')
-    : /\\n/.test(raw)
-      ? raw.split(/\\n/)
-      : [raw];
-  return segments
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 24)
-    .map((line) => line.slice(0, 200));
+  return receiptHeaderContentToLines(text);
 }
 
 function capReceiptHeaderLines(lines: string[]): string[] {
@@ -1319,7 +1313,8 @@ export function receiptHeaderLinesFromPrintSettings(
     printSettings?.receiptHeader
   );
   const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
-  const fromText = combined.trim() ? splitReceiptHeaderTextToLines(combined) : [];
+  const combinedPlain = receiptHeaderContentToPlainText(combined);
+  const fromText = combinedPlain ? splitReceiptHeaderTextToLines(combined) : [];
   const fromArray = Array.isArray(printSettings?.receiptHeaderLines)
     ? printSettings!.receiptHeaderLines!
         .map((line) => String(line ?? '').replace(/\r\n/g, '\n').trim())
@@ -1340,10 +1335,16 @@ export function normalizeClientReceiptHeaderPrintSettings<
   >,
 >(ps: T): T {
   const tx = receiptHeaderTxFromPrintSettings(ps);
+  const rawHeader = String(ps.receiptHeader ?? '');
+  const receiptHeader = receiptHeaderLooksLikeHtml(rawHeader)
+    ? rawHeader
+    : tx.headerLines.length
+      ? tx.headerLines.join('\n')
+      : tx.header;
   return {
     ...ps,
     receiptHeaderTitle: '',
-    receiptHeader: tx.headerLines.length ? tx.headerLines.join('\n') : tx.header,
+    receiptHeader,
     receiptHeaderLines: tx.headerLines,
   };
 }
@@ -1355,9 +1356,14 @@ export function receiptHeaderTxFromPrintSettings(
   > | null
 ): { headerTitle: string; header: string; headerLines: string[] } {
   const headerLines = receiptHeaderLinesFromPrintSettings(printSettings);
+  const healed = healLegacyMashedReceiptHeaderFields(
+    printSettings?.receiptHeaderTitle,
+    printSettings?.receiptHeader
+  );
+  const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
   return {
     headerTitle: '',
-    header: headerLines.join('\n'),
+    header: headerLines.length ? headerLines.join('\n') : receiptHeaderContentToPlainText(combined),
     headerLines,
   };
 }
@@ -1418,10 +1424,7 @@ export function getReceiptHeaderLines(
     explicitLines.length > 0
       ? explicitLines
       : combinedHeader.trim()
-        ? combinedHeader
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter(Boolean)
+        ? receiptHeaderContentToLines(combinedHeader)
         : [];
   const hasCustomReceiptHeader = configuredLines.length > 0;
   const lines: string[] = [];
@@ -1430,7 +1433,14 @@ export function getReceiptHeaderLines(
     for (let i = 0; i < logical.length; i++) {
       push(lines, logical[i]!, i === 0 ? titleWidth : width);
     }
+    return lines;
+  }
+  if (!combinedHeader.trim() && !explicitLines.length) {
     appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
+    if (!lines.length) {
+      const storeName = String(tx.businessName || APP_NAME).trim();
+      if (storeName) push(lines, storeName, titleWidth);
+    }
     return lines;
   }
   let { title, body } = normalizeReceiptHeaderFields({
@@ -2260,17 +2270,13 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.isProvisional) {
     r += centerLine('PROVISIONAL', width) + '\n';
   }
-  const headerNorm = normalizeReceiptHeaderFields({
-    headerTitle: tx.headerTitle,
-    header: tx.header,
-  });
   const headerAlign = tx.headerAlign ?? 'center';
   const unpaddedHeaderLines = getReceiptHeaderLines(tx, width, { padLines: false });
   r += buildReceiptHeaderPlainTextBlock(
     unpaddedHeaderLines,
     width,
     headerAlign,
-    !!(headerNorm.title && headerNorm.body)
+    unpaddedHeaderLines.length > 1
   );
   if (tx.tableLabel) {
     r += `${L.table} ${tx.tableLabel}`;

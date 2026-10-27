@@ -68,6 +68,8 @@ import {
   receiptHeaderCombinedText,
   splitReceiptHeaderTextToLines,
 } from '@/lib/webpos-receipt';
+import { receiptHeaderHtmlForEditor } from '@/lib/receipt-header-html';
+import HugeRteEditor from '@/components/editor/HugeRteEditor';
 import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
 import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
 import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
@@ -1750,10 +1752,7 @@ export default function Settings() {
           : [],
         linkedProductIds: Array.isArray(p.linkedProductIds) ? p.linkedProductIds.filter(Boolean) : [],
       }));
-      const receiptHeader = receiptHeaderCombinedText(
-        ps.receiptHeaderTitle,
-        ps.receiptHeader
-      ).slice(0, 2000);
+      const receiptHeader = String(ps.receiptHeader ?? '').slice(0, 2000);
       const receiptHeaderLines = splitReceiptHeaderTextToLines(receiptHeader);
       return {
         receiptHeaderTitle: '',
@@ -4760,18 +4759,23 @@ export default function Settings() {
                     <span className="text-sm text-[var(--muted-fg)]">px</span>
                   </div>
                 </Field>
-                <Field label={t('receiptHeader')} hint={t('receiptHeaderMultilineHint')}>
-                  <textarea
-                    className="input min-h-[6rem] font-mono text-sm"
-                    value={settings.posPrintSettings?.receiptHeader || ''}
-                    placeholder={settings.name || ''}
-                    onChange={(e) =>
+                <Field label={t('receiptHeader')} hint={t('receiptHeaderRichHint')}>
+                  <HugeRteEditor
+                    variant="compact"
+                    minHeight={160}
+                    placeholder={t('receiptHeaderEmptyUsesShopDetails')}
+                    value={
+                      receiptHeaderHtmlForEditor(settings.posPrintSettings?.receiptHeader) ||
+                      settings.posPrintSettings?.receiptHeader ||
+                      ''
+                    }
+                    onChange={(html) =>
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
                           receiptHeaderTitle: '',
-                          receiptHeader: e.target.value,
+                          receiptHeader: html,
                         },
                       })
                     }
