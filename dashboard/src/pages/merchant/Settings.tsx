@@ -65,10 +65,9 @@ import {
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
   normalizeClientReceiptHeaderPrintSettings,
-  receiptHeaderCombinedText,
   splitReceiptHeaderTextToLines,
 } from '@/lib/webpos-receipt';
-import { receiptHeaderHtmlForEditor } from '@/lib/receipt-header-html';
+import { receiptHeaderContentToPlainText, receiptHeaderHtmlForEditor } from '@/lib/receipt-header-html';
 import HugeRteEditor from '@/components/editor/HugeRteEditor';
 import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
 import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
@@ -4769,16 +4768,18 @@ export default function Settings() {
                       settings.posPrintSettings?.receiptHeader ||
                       ''
                     }
-                    onChange={(html) =>
+                    onChange={(html) => {
+                      const plain = receiptHeaderContentToPlainText(html).trim();
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
                           receiptHeaderTitle: '',
-                          receiptHeader: html,
+                          receiptHeader: plain ? html : '',
+                          receiptHeaderLines: plain ? splitReceiptHeaderTextToLines(html) : [],
                         },
-                      })
-                    }
+                      });
+                    }}
                   />
                 </Field>
                 <Field label={t('receiptHeaderAlign')}>

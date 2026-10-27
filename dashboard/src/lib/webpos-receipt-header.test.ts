@@ -152,9 +152,18 @@ assert.deepEqual(polaCustom, ['pola pola', 'rue des saars 115', '2000 Neuchâtel
 
 assert.deepEqual(
   receiptHeaderLinesFromPrintSettings({
-    receiptHeaderLines: ['pola pola', 'rue des saars 115', '2000 Neuchâtel'],
+    receiptHeader: 'pola pola\nrue des saars 115\n2000 Neuchâtel',
   }),
   ['pola pola', 'rue des saars 115', '2000 Neuchâtel']
+);
+
+assert.deepEqual(
+  receiptHeaderLinesFromPrintSettings({
+    receiptHeader: '',
+    receiptHeaderLines: ['pola pola rue des saars 115 2000 Neuchâtel'],
+  }),
+  [],
+  'empty header must ignore stale receiptHeaderLines'
 );
 
 assert.deepEqual(
@@ -342,7 +351,11 @@ const emptyHeaderDefault = getReceiptHeaderLines(
   48,
   { padLines: false }
 );
-assert.deepEqual(emptyHeaderDefault, ['KABUL']);
+assert.ok(emptyHeaderDefault.includes('Bahnhofstrasse 1'));
+assert.ok(emptyHeaderDefault.includes('Zürich'));
+assert.ok(emptyHeaderDefault.some((l) => /Tel:\s*\+41/.test(l)));
+assert.ok(emptyHeaderDefault.some((l) => /VAT:\s*CHE-123/.test(l)));
+assert.equal(emptyHeaderDefault.includes('KABUL'), false);
 
 assert.deepEqual(
   healLegacyMashedReceiptHeaderFields(
@@ -368,7 +381,9 @@ const healedDemoPrint = getReceiptHeaderLines(
   48,
   { padLines: false }
 );
-assert.deepEqual(healedDemoPrint, ['KABUL']);
+assert.ok(healedDemoPrint.includes('Bahnhofstrasse 1'));
+assert.ok(healedDemoPrint.some((l) => /Tel:\s*\+41/.test(l)));
+assert.equal(healedDemoPrint.includes('KABUL'), false);
 
 assert.deepEqual(
   splitReceiptHeaderNameDashRest(
@@ -394,8 +409,11 @@ const melimeloBarbershop = getReceiptHeaderLines(
 assert.equal(melimeloBarbershop[0], 'MeliMelo Barbershop');
 assert.ok(melimeloBarbershop.includes('Rue de la Maladière 18'));
 assert.ok(melimeloBarbershop.includes('2000 Neuchâtel'));
-assert.ok(melimeloBarbershop.includes('Tel: 032 323 99 88'));
-assert.ok(melimeloBarbershop.includes('VAT: CHE-450.000.636'));
+assert.equal(
+  melimeloBarbershop.some((line) => /Tel:/.test(line)),
+  false,
+  'custom header does not append shop telephone'
+);
 assert.equal(
   melimeloBarbershop.some((line) => line.includes(' - Rue')),
   false,

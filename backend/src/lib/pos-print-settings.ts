@@ -293,27 +293,19 @@ export function parseReceiptHeaderLines(
   linesRaw: unknown,
   fallbackText: string
 ): string[] {
+  void linesRaw;
   const plain = receiptHeaderHtmlToPlain(fallbackText);
-  const fromText = (() => {
-    if (!plain) return [];
-    const segments = plain.includes("\n")
-      ? plain.split("\n")
-      : /\\n/.test(plain)
-        ? plain.split(/\\n/)
-        : [plain];
-    return segments
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, 24)
-      .map((line) => line.slice(0, 200));
-  })();
-  if (plain) return fromText;
-  const fromArray = Array.isArray(linesRaw)
-    ? linesRaw
-        .map((line) => receiptHeaderHtmlToPlain(String(line ?? "")).trim())
-        .filter(Boolean)
-    : [];
-  return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
+  if (!plain) return [];
+  const segments = plain.includes("\n")
+    ? plain.split("\n")
+    : /\\n/.test(plain)
+      ? plain.split(/\\n/)
+      : [plain];
+  return segments
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 24)
+    .map((line) => line.slice(0, 200));
 }
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {

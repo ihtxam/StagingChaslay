@@ -2956,11 +2956,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             ...cfgPs,
             ...merchantPs,
             receiptHeaderTitle: merchantPs.receiptHeaderTitle ?? cfgPs.receiptHeaderTitle,
-            receiptHeader: merchantPs.receiptHeader ?? cfgPs.receiptHeader,
-            receiptHeaderLines:
-              merchantPs.receiptHeaderLines?.length
-                ? merchantPs.receiptHeaderLines
-                : cfgPs.receiptHeaderLines,
+            receiptHeader: merchantPs.receiptHeader ?? cfgPs.receiptHeader ?? '',
+            receiptHeaderLines: undefined,
           });
           setPrintSettings(nextPrintSettings);
           cacheMerchantAutoPrintSettings(nextPrintSettings);

@@ -1023,7 +1023,12 @@ export function flattenConfiguredReceiptHeaderLines(configuredLines: string[]): 
 
 /** Split one header detail line so Tel / VAT labels start on their own row. */
 export function splitReceiptHeaderDetailLine(line: string): string[] {
-  const raw = String(line || '').replace(/\s+/g, ' ').trim();
+  const raw = String(line || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[-–—_=]{3,}\s*$/g, '')
+    .replace(/,\s*$/g, '')
+    .trim();
   if (!raw) return [];
   const spaced = raw.replace(
     /([^\s:])(?=(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone|vat|tva|mwst|uid)\s*:)/gi,
@@ -1035,6 +1040,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
     RECEIPT_GLUED_PHONE_SPLIT_RE,
     RECEIPT_GLUED_NUMBER_CITY_RE,
     RECEIPT_GLUED_PLZ_AFTER_STREET_RE,
+    /(?<=[A-Za-zÀ-ÿ])(?=\d{4}\b)/,
     RECEIPT_GLUED_STREET_LABEL_RE,
     RECEIPT_GLUED_LOWERCASE_RUE_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
@@ -1064,7 +1070,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
 }
 
 function normalizeHeaderContactLine(line: string): string {
-  const text = String(line || '').replace(/\s+/g, ' ').trim();
+  const text = String(line || '').replace(/\s+/g, ' ').trim().replace(/,\s*$/g, '');
   const vat = text.match(/^(?:vat|tva|mwst|uid|n°\s*tva|no\.?\s*tva)\s*:\s*(.+)$/i);
   if (vat) return `VAT: ${vat[1]!.trim()}`;
   const tel = text.match(/^(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone)\s*:\s*(.+)$/i);
@@ -1313,17 +1319,10 @@ export function receiptHeaderLinesFromPrintSettings(
     printSettings?.receiptHeader
   );
   const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
-  const combinedPlain = receiptHeaderContentToPlainText(combined);
-  const fromText = combinedPlain ? capReceiptHeaderLines(splitReceiptHeaderTextToLines(combined)) : [];
-  if (combinedPlain) {
-    return fromText;
-  }
-  const fromArray = Array.isArray(printSettings?.receiptHeaderLines)
-    ? printSettings!.receiptHeaderLines!
-        .map((line) => receiptHeaderContentToPlainText(String(line ?? '')).trim())
-        .filter(Boolean)
-    : [];
-  return capReceiptHeaderLines(fromArray);
+  const combinedPlain = receiptHeaderContentToPlainText(combined).trim();
+  // Empty rich-text box must not fall back to a stale one-line receiptHeaderLines array.
+  if (!combinedPlain) return [];
+  return capReceiptHeaderLines(splitReceiptHeaderTextToLines(combined));
 }
 
 /** Heal legacy blobs and keep `receiptHeader` + `receiptHeaderLines` in sync (Settings / WebPOS load). */
@@ -1642,12 +1641,6 @@ export function buildReceiptHeaderEscPos(
     }
   }
   parts.push(escAlign(0));
-  const lastLine = lines[lines.length - 1] || '';
-  if (isReceiptTelephoneLine(lastLine) || isReceiptVatLine(lastLine)) {
-    parts.push(ESC_POS_FEED_ONE);
-  } else {
-    parts.push(encode('\n\n'));
-  }
   return concatBytes(...parts);
 }
 
@@ -3839,16 +3832,12 @@ export function textToEscPos(
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const parts: Uint8Array[] = [init, codepage];
   if (logoBytes?.length) {
-    // Finish the raster, feed past the logo row, then re-init so text never prints beside the bitmap.
+    // One line after the logo. Extra ESC d feeds left a large blank gap on 58/80mm.
     parts.push(
       alignCenter,
       logoBytes,
       encode('\n'),
-      ESC_POS_BLANK_LINE,
-      ESC_POS_BLANK_LINE,
-      ESC_POS_BLANK_LINE,
       new Uint8Array([0x1b, 0x61, 0x00]),
-      new Uint8Array([0x1b, 0x64, 0x06]),
       new Uint8Array([0x1b, 0x40]),
       codepage
     );
