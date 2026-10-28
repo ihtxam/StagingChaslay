@@ -23,7 +23,8 @@ on:
 
 concurrency:
   group: deploy-rebornsense-production
-  cancel-in-progress: true
+  # Never cancel an in-flight production deploy (back-to-back .deploy touches aborted #903).
+  cancel-in-progress: false
 
 jobs:
   deploy:
