@@ -113,6 +113,22 @@ cd print-agent-android
 
 `scripts/deploy-hetzner.sh` builds in `mingc/android-build-box` unless `SKIP_ANDROID_BRIDGE_BUILD=1`.
 
+Production deploys set **`SKIP_ANDROID_BRIDGE_BUILD=1`** so dashboard/API deploys do not run Gradle on the production VPS (keeps the server responsive).
+
+### Recommended release flow (build off production, publish to merchant panel)
+
+| Step | Where | What |
+|------|--------|------|
+| 1 | **GitHub Actions** `Build Bridge APK` | Gradle on `ubuntu-latest` (or self-hosted runner), SCP to `app.rebornsense.com/downloads/` |
+| 2 | **Or staging VPS** | `bash scripts/build-bridge-on-staging-publish-production.sh` — builds on `staging-chaslay`, copies APK to production downloads |
+| 3 | **Or local** | `bash scripts/build-reborn-print-bridge-apk.sh` then `bash scripts/publish-reborn-print-bridge-download.sh` |
+
+Merchants always download from **`https://app.rebornsense.com/downloads/reborn-print-bridge.apk`** (Settings → Receipts & printers). Staging can host a test copy at `app.chaslay.com/downloads/…` after a staging-only build.
+
+Use `BRIDGE_APK_USE_DOCKER=1` on staging if the host has no Android SDK (uses `mingc/android-build-box`; heavier than Gradle-on-host).
+
+Signing: use `/root/rebornSense/.secrets/bridge-release.keystore` (or GitHub `BRIDGE_KEYSTORE_*` secrets in CI). See `print-agent-android/BRIDGE_APK_SIGNING.md`.
+
 ### Manual upload
 
 ```bash
