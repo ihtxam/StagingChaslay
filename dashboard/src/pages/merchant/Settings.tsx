@@ -90,6 +90,7 @@ import {
 import {
   findPrinterHealCandidates,
   filterAgentPrintersForSettingsPick,
+  formatAgentPrinterOptionLabel,
   formatScaleDeviceLabel,
   formatScalePortLabel,
   compareAgentVersion,
@@ -5230,12 +5231,19 @@ export default function Settings() {
                           value={savedNameMissing ? '' : p.name}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
-                            const picked = agentPrinters.find((ap) => ap.name === e.target.value);
+                            const picked = agentPrinters.find(
+                              (ap) =>
+                                ap.name === e.target.value ||
+                                (ap.id && ap.id === e.target.value)
+                            );
                             printers[idx] = {
                               ...p,
-                              name: e.target.value,
+                              name: picked?.name || e.target.value,
                               portName: picked?.portName || null,
-                              matchHint: picked?.matchHint || picked?.driverName || null,
+                              matchHint:
+                                picked?.connectionType === 'bluetooth' && picked?.address
+                                  ? picked.address
+                                  : picked?.matchHint || picked?.driverName || p.matchHint || null,
                             };
                             setSettings({
                               ...settings,
@@ -5246,9 +5254,10 @@ export default function Settings() {
                           <option value="">{t('webPosDefaultPrinter')}</option>
                           {agentPrintersForPick.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
+                            const optionValue = ap.id || ap.name;
                             return (
-                              <option key={ap.name} value={ap.name}>
-                                {ap.name}
+                              <option key={optionValue} value={optionValue}>
+                                {formatAgentPrinterOptionLabel(ap)}
                                 {ap.portName ? ` · ${ap.portName}` : ''}
                                 {ap.isDefault ? t('webPosDefaultSuffix') : ''}
                                 {bad ? t('webPosPrinterNotThermal') : ''}

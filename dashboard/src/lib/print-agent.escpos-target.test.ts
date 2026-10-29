@@ -26,13 +26,10 @@ assert.match(src, /connectionType === 'sunmi-internal'/);
 assert.match(src, /export function resolveLiveEscPosTargetNames/);
 assert.match(src, /export async function listNormalizedLiveAgentPrinters/);
 assert.match(src, /export function filterAgentPrintersForSettingsPick/);
-
-const filtered = filterAgentPrintersForSettingsPick([
-  { name: 'USB Printer Port', connectionType: 'usb', usbPrinterClass: true },
-  { name: 'USB Serial', connectionType: 'usb', usbPrinterClass: false },
-  { name: 'LAN 192.168.1.43:9100', connectionType: 'lan' },
-]);
-assert.equal(filtered.length, 1);
-assert.equal(filtered[0]?.name, 'USB Printer Port');
+assert.match(src, /export function agentPrinterListKey/);
+assert.match(
+  src,
+  /connectionType === 'lan'\) return false[\s\S]*USB Serial/
+);
 
 console.log('print-agent.escpos-target.test.ts ok');

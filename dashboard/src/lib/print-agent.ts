@@ -36,6 +36,10 @@ export type AgentPrinter = {
   hasPermission?: boolean;
   /** Android Bridge USB: device declares USB printer class (preferred for receipts). */
   usbPrinterClass?: boolean;
+  /** Android Bridge stable id (e.g. bt:MAC, usb:vid:pid). */
+  id?: string;
+  /** Android Bridge Bluetooth MAC — two paired printers may share the same name. */
+  address?: string;
 };
 
 export type ScaleDevice = {
@@ -284,6 +288,12 @@ export function resolveLivePrinterName(
 
   const hintRaw = String(hints?.matchHint || '').trim();
   const hint = isStaleUsbEthernetPrinterName(hintRaw) ? '' : hintRaw;
+  if (hint && /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(hint)) {
+    const byBtMac = live.find(
+      (p) => String(p.address || '').trim().toUpperCase() === hint.toUpperCase()
+    );
+    if (byBtMac?.name && !isStaleUsbEthernetPrinterName(byBtMac.name)) return byBtMac.name;
+  }
   if (hint) {
     const byHint = resolveAgentPrinterName(hint, live);
     if (byHint && !isStaleUsbEthernetPrinterName(byHint)) return byHint;
@@ -497,16 +507,38 @@ export function healStaleReceiptPrinterProfiles<T extends PosPrinterProfileWithR
   return { profiles: next, changed };
 }
 
-/** Dedupe agent enumeration by exact Windows queue name. */
+/** Stable key for deduping Bridge / Windows printer rows (name alone is not unique for BT). */
+export function agentPrinterListKey(p: AgentPrinter): string {
+  const id = String(p.id || '').trim();
+  if (id) return id.toLowerCase();
+  const addr = String(p.address || '').trim();
+  if (p.connectionType === 'bluetooth' && addr) return `bt:${addr.toUpperCase()}`;
+  const name = String(p.name || '').trim();
+  return name.toLowerCase();
+}
+
+/** Dropdown label when two Bluetooth printers share a marketing name. */
+export function formatAgentPrinterOptionLabel(p: AgentPrinter): string {
+  const name = String(p.name || '').trim();
+  if (!name) return '';
+  const addr = String(p.address || '').trim();
+  if (p.connectionType === 'bluetooth' && addr && !name.toUpperCase().includes(addr.replace(/:/g, '').slice(-4))) {
+    return `${name} (${addr})`;
+  }
+  return name;
+}
+
+/** Dedupe agent enumeration by stable id (Windows: queue name). */
 export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinter[] {
   const seen = new Set<string>();
   const out: AgentPrinter[] = [];
   for (const p of printers) {
     const name = String(p.name || '').trim();
-    if (!name || seen.has(name) || isStaleUsbEthernetPrinterName(name)) continue;
+    const key = agentPrinterListKey(p);
+    if (!name || !key || seen.has(key) || isStaleUsbEthernetPrinterName(name)) continue;
     const status = String(p.status || '').trim();
     if (status === '7') continue;
-    seen.add(name);
+    seen.add(key);
     out.push({
       ...p,
       name,
@@ -1284,11 +1316,13 @@ export async function listAgentPrinters(): Promise<AgentPrinter[]> {
   }
   const data = await agentFetch('/printers');
   return normalizeAgentPrinterList(
-    (data.printers || []).map((p: AgentPrinter & { hasPermission?: boolean; usbPrinterClass?: boolean }) => ({
+    (data.printers || []).map((p: AgentPrinter & { hasPermission?: boolean; usbPrinterClass?: boolean; id?: string; address?: string }) => ({
       ...p,
       unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
       hasPermission: p.hasPermission === true,
       usbPrinterClass: p.usbPrinterClass === true,
+      id: p.id ? String(p.id) : undefined,
+      address: p.address ? String(p.address) : undefined,
     }))
   );
 }

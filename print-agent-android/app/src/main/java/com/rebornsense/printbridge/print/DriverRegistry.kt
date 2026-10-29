@@ -45,7 +45,7 @@ class DriverRegistry(
         val others = listOf(sunmi, bluetooth, network).flatMap { driver ->
             runCatching { driver.discover(app) }.getOrElse { emptyList() }
         }
-        val found = usbFound + others
+        val found = disambiguateBluetoothPrinterNames(usbFound + others)
         val previousDefault = runCatching { PrinterPreferences.getDefaultPrinterId(context) }.getOrNull()
         val chosenDefault = StalePrinterSelection.chooseDefaultId(
             previousDefault,

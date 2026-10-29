@@ -116,6 +116,7 @@ class BridgeHttpServer(
             uri == "/printers" && method == Method.GET -> {
                 val printers = registry.refresh(appContext).map { ep ->
                     JSONObject()
+                        .put("id", ep.id)
                         .put("name", ep.name)
                         .put("isDefault", ep.isDefault)
                         .put("connectionType", ep.connectionType)
@@ -125,6 +126,9 @@ class BridgeHttpServer(
                             ep.connectionType != "usb" || ep.meta["hasPermission"] == "true",
                         )
                         .put("usbPrinterClass", ep.meta["usbPrinterClass"] == "true")
+                        .also { json ->
+                            ep.meta["address"]?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("address", it) }
+                        }
                 }
                 val arr = JSONArray()
                 printers.forEach { arr.put(it) }
