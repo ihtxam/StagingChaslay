@@ -3071,6 +3071,9 @@ const en: Dict = {
   posCheckoutSettings: 'POS checkout',
   posCheckoutHint: 'Tips, discounts, quick cash and split bills for Reborn and Android POS',
   tipsEnabled: 'Enable tips',
+  terminalAskGratuityEnabled: 'Tip prompt on card terminal',
+  terminalAskGratuityHint:
+    'When off, Reborn does not send AskGratuity to the Adyen terminal (no tip screen), even if tipping is enabled in Adyen Customer Area. Turn on only when you want guests to enter a tip on the terminal. POS checkout tip buttons are controlled separately above.',
   allowCustomTip: 'Allow custom tip amount',
   discountsEnabled: 'Enable discounts',
   quickCashEnabled: 'Enable quick cash',
@@ -8280,6 +8283,9 @@ const fr: Dict = {
   posCheckoutSettings: 'Encaissement POS',
   posCheckoutHint: 'Pourboires, remises, espèces et partage pour Reborn et Android',
   tipsEnabled: 'Activer les pourboires',
+  terminalAskGratuityEnabled: 'Demander un pourboire sur le terminal carte',
+  terminalAskGratuityHint:
+    'Si désactivé, Reborn n’envoie pas AskGratuity au terminal Adyen (pas d’écran pourboire), même si les pourboires sont activés dans le Customer Area Adyen. Activez seulement si vous voulez que le client saisisse un pourboire sur le terminal. Les pourboires au checkout POS se règlent séparément ci-dessus.',
   allowCustomTip: 'Autoriser un pourboire libre',
   discountsEnabled: 'Activer les remises',
   quickCashEnabled: 'Activer espèces rapides',
@@ -13380,6 +13386,9 @@ const de: Dict = {
   posCheckoutSettings: 'POS-Kasse',
   posCheckoutHint: 'Trinkgeld, Rabatte, Bar und Split für Reborn und Android',
   tipsEnabled: 'Trinkgeld aktivieren',
+  terminalAskGratuityEnabled: 'Trinkgeld am Kartenterminal abfragen',
+  terminalAskGratuityHint:
+    'Wenn aus, sendet Reborn kein AskGratuity an das Adyen-Terminal (kein Trinkgeld-Bildschirm), auch wenn Trinkgeld im Adyen Customer Area aktiv ist. Nur einschalten, wenn Gäste am Terminal Trinkgeld eingeben sollen. Trinkgeld-Buttons im POS-Checkout werden oben separat gesteuert.',
   allowCustomTip: 'Individuelles Trinkgeld erlauben',
   discountsEnabled: 'Rabatte aktivieren',
   quickCashEnabled: 'Schnell-Bar aktivieren',

@@ -71,6 +71,7 @@ import {
 } from '@/lib/adyen-receipt';
 import {
   normalizePosCheckoutSettings,
+  shouldAskGratuityOnTerminal,
   type PosCheckoutSettings,
 } from '@/lib/pos-checkout';
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
@@ -10095,8 +10096,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     try {
       const posTip = roundMoney2(extras?.tipAmount || 0);
-      const askGratuityOnTerminal =
-        checkoutSettings.tipsEnabled !== false && posTip <= 0.001;
+      const askGratuityOnTerminal = shouldAskGratuityOnTerminal(checkoutSettings, {
+        posTipAmount: posTip,
+      });
       const terminalAmount = roundMoney2(
         extras?.total ??
           (collectOrderRef ? collectOrderRef.total : activeSale.totals.total)

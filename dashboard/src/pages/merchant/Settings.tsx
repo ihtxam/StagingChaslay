@@ -216,6 +216,7 @@ interface SettingsData {
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
+    terminalAskGratuityEnabled?: boolean;
     tipPresetsPercent?: number[];
     allowCustomTip?: boolean;
     discountsEnabled?: boolean;
@@ -3578,6 +3579,7 @@ export default function Settings() {
                   {(
                     [
                       ['tipsEnabled', 'tipsEnabled'],
+                      ['terminalAskGratuityEnabled', 'terminalAskGratuityEnabled'],
                       ['allowCustomTip', 'allowCustomTip'],
                       ['discountsEnabled', 'discountsEnabled'],
                       ['quickCashEnabled', 'quickCashEnabled'],
@@ -3591,7 +3593,11 @@ export default function Settings() {
                       <input
                         type="checkbox"
                         className="mt-0.5"
-                        checked={settings.posCheckoutSettings?.[key] !== false}
+                        checked={
+                          key === 'terminalAskGratuityEnabled'
+                            ? settings.posCheckoutSettings?.terminalAskGratuityEnabled === true
+                            : settings.posCheckoutSettings?.[key] !== false
+                        }
                         onChange={(e) =>
                           setSettings({
                             ...settings,
@@ -3606,6 +3612,7 @@ export default function Settings() {
                     </label>
                   ))}
                 </div>
+                <p className="text-xs text-[var(--text-muted)]">{t('terminalAskGratuityHint')}</p>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
                   <input
                     type="checkbox"
