@@ -543,7 +543,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         setHeldRows([]);
       } else {
         const params = new URLSearchParams({
-          limit: '200',
+          limit: purgeMode || statusFilter === 'completed' ? '500' : '200',
           from: dateFrom,
           to: dateTo,
         });
@@ -568,7 +568,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, panelScopeKey, t]);
+  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, panelScopeKey, purgeMode, t]);
 
   useEffect(() => {
     const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
@@ -670,6 +670,10 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     setStatusFilter('completed');
     setPaymentFilter('cash');
     setPurgePaymentFilter('cash');
+    setChannelFilter('all');
+    setTypeFilter('all');
+    setStaffFilter('all');
+    setDatePreset((preset) => (preset === 'today' ? 'last_week' : preset));
     setSelectedPurgeIds(new Set());
     setSelected(null);
     toast.success(t('gandolaPurgeMode'), { duration: 4000 });
@@ -996,12 +1000,19 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
       {!showingInvoices ? (
         <ReportDatePresetFilter
           preset={datePreset}
-          onPresetChange={setDatePreset}
+          onPresetChange={(preset) => {
+            setDatePreset(preset);
+            if (purgeMode) setSelectedPurgeIds(new Set());
+          }}
           customFrom={customFrom}
           customTo={customTo}
           onCustomFromChange={setCustomFrom}
           onCustomToChange={setCustomTo}
-          onApplyCustom={() => void load()}
+          onApplyCustom={() => {
+            if (purgeMode) setSelectedPurgeIds(new Set());
+            void load();
+          }}
+          className={purgeMode ? 'rounded-xl border border-amber-200 bg-amber-50/40 p-2' : ''}
         />
       ) : null}
 

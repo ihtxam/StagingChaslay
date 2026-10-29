@@ -101,6 +101,8 @@ import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
 import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
+import ReportDatePresetFilter from '@/components/reports/ReportDatePresetFilter';
+import { resolveReportPresetRange, type ReportPreset } from '@/lib/report-preset';
 import {
   isGandolaPurgeEligible,
   orderMatchesPaymentFilter,
@@ -322,15 +324,15 @@ type Props = {
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
 
-function todayIso(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
-}
-
 /** Match server held-heal lookback so paid tickets clear stale kitchen holds. */
-function ordersBoardFromIso(): string {
+function ordersBoardDefaultFromIso(): string {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
+}
+
+function ordersBoardDefaultToIso(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
 /** Held row duplicates a ticket that was already paid at the till. */
@@ -605,6 +607,13 @@ export default function WebPosOrdersPanel({
   const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
   const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
   const [purgeBusy, setPurgeBusy] = useState(false);
+  const [datePreset, setDatePreset] = useState<ReportPreset>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const { from: dateFrom, to: dateTo } = useMemo(
+    () => resolveReportPresetRange(datePreset, customFrom, customTo),
+    [datePreset, customFrom, customTo]
+  );
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
   const [kdsByTicket, setKdsByTicket] = useState<
     Record<string, { ready: number; sent: number; readyLineIds: string[] }>
@@ -695,10 +704,14 @@ export default function WebPosOrdersPanel({
     const seq = ++loadSeqRef.current;
     if (!opts?.silent) setLoading(true);
     const params = new URLSearchParams({
-      limit: '200',
-      from: ordersBoardFromIso(),
-      to: todayIso(),
+      limit:
+        purgeMode || statusFilter === 'completed' ? '500' : '200',
+      from: purgeMode ? dateFrom : ordersBoardDefaultFromIso(),
+      to: purgeMode ? dateTo : ordersBoardDefaultToIso(),
     });
+    if (purgeMode || statusFilter === 'completed') {
+      params.set('status', 'completed');
+    }
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
@@ -756,7 +769,7 @@ export default function WebPosOrdersPanel({
     setHeld(nextHeld);
     setOrders(nextOrders);
     if (!opts?.silent) setLoading(false);
-  }, [t, searchQ, channelFilter]);
+  }, [t, searchQ, channelFilter, dateFrom, dateTo, purgeMode, statusFilter]);
 
   useEffect(() => {
     if (open) void load();
@@ -802,7 +815,7 @@ export default function WebPosOrdersPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter, channelFilter, search]);
+  }, [statusFilter, channelFilter, search, datePreset, customFrom, customTo]);
 
   const splitCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -1358,6 +1371,8 @@ export default function WebPosOrdersPanel({
     setPurgeMode(true);
     setStatusFilter('completed');
     setPurgePaymentFilter('cash');
+    setChannelFilter('all');
+    setDatePreset((preset) => (preset === 'today' ? 'last_week' : preset));
     setSelectedPurgeIds(new Set());
     setSelectedOrder(null);
     setSelectedHeld(null);
@@ -1722,21 +1737,40 @@ export default function WebPosOrdersPanel({
           </div>
         </div>
         {purgeMode ? (
-          <GandolaPurgeToolbar
-            selectedCount={selectedPurgeIds.size}
-            visibleCount={displayItems.length}
-            paymentFilter={purgePaymentFilter}
-            onPaymentFilterChange={(value) => {
-              setPurgePaymentFilter(value);
-              setSelectedPurgeIds(new Set());
-              setPage(0);
-            }}
-            onSelectAll={selectAllPurgeVisible}
-            onClearSelection={() => setSelectedPurgeIds(new Set())}
-            onDelete={() => void purgeSelectedOrders()}
-            onExit={exitPurgeMode}
-            deleting={purgeBusy}
-          />
+          <>
+            <GandolaPurgeToolbar
+              selectedCount={selectedPurgeIds.size}
+              visibleCount={displayItems.length}
+              paymentFilter={purgePaymentFilter}
+              onPaymentFilterChange={(value) => {
+                setPurgePaymentFilter(value);
+                setSelectedPurgeIds(new Set());
+                setPage(0);
+              }}
+              onSelectAll={selectAllPurgeVisible}
+              onClearSelection={() => setSelectedPurgeIds(new Set())}
+              onDelete={() => void purgeSelectedOrders()}
+              onExit={exitPurgeMode}
+              deleting={purgeBusy}
+            />
+            <div className="border-b border-amber-100 bg-amber-50/60 px-2 py-2 sm:px-3">
+              <ReportDatePresetFilter
+                preset={datePreset}
+                onPresetChange={(preset) => {
+                  setDatePreset(preset);
+                  setSelectedPurgeIds(new Set());
+                }}
+                customFrom={customFrom}
+                customTo={customTo}
+                onCustomFromChange={setCustomFrom}
+                onCustomToChange={setCustomTo}
+                onApplyCustom={() => {
+                  setSelectedPurgeIds(new Set());
+                  void load();
+                }}
+              />
+            </div>
+          </>
         ) : null}
         <div
           className={`relative flex min-h-0 flex-1 flex-col lg:flex-row ${

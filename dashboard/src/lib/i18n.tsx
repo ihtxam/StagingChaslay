@@ -3289,7 +3289,7 @@ const en: Dict = {
   gandolaPurgeSkipped: 'Deleted {deleted}; {skipped} order(s) were not eligible.',
   staffRoleGandola: 'Gandola',
   staffRoleGandolaHint:
-    'POS orders: tap the search icon five times to delete completed cash sales from history and reports.',
+    'POS orders: tap the search icon five times to delete completed cash sales. Use Yesterday / Last week (or custom dates) to reach older tickets.',
   barcodePlaceholder: 'EAN / UPC or number',
   stockTooManyDigits: 'Stock cannot exceed {n} digits',
   offerPercentRange: 'Percent off must be between 1 and {max}',
