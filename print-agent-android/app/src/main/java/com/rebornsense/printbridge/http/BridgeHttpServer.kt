@@ -124,6 +124,7 @@ class BridgeHttpServer(
                             "hasPermission",
                             ep.connectionType != "usb" || ep.meta["hasPermission"] == "true",
                         )
+                        .put("usbPrinterClass", ep.meta["usbPrinterClass"] == "true")
                 }
                 val arr = JSONArray()
                 printers.forEach { arr.put(it) }

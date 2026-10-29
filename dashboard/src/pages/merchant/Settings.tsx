@@ -89,6 +89,7 @@ import {
 } from '@/lib/pos-hub-visibility';
 import {
   findPrinterHealCandidates,
+  filterAgentPrintersForSettingsPick,
   formatScaleDeviceLabel,
   formatScalePortLabel,
   compareAgentVersion,
@@ -842,6 +843,10 @@ export default function Settings() {
   const [printAgentManifest, setPrintAgentManifest] = useState<DownloadManifest | null>(null);
   const [rebornPosManifest, setRebornPosManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
+  const agentPrintersForPick = useMemo(
+    () => filterAgentPrintersForSettingsPick(agentPrinters),
+    [agentPrinters]
+  );
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [testingPrinterId, setTestingPrinterId] = useState<string | null>(null);
   const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
@@ -5239,7 +5244,7 @@ export default function Settings() {
                           }}
                         >
                           <option value="">{t('webPosDefaultPrinter')}</option>
-                          {agentPrinters.map((ap) => {
+                          {agentPrintersForPick.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
                             return (
                               <option key={ap.name} value={ap.name}>

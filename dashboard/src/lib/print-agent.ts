@@ -32,6 +32,10 @@ export type AgentPrinter = {
   /** Android Bridge Reborn: sunmi-internal | usb | bluetooth | lan */
   connectionType?: string;
   driver?: string;
+  /** Android Bridge: false until the merchant taps Allow on USB attach (e.g. after power-cycling the printer). */
+  hasPermission?: boolean;
+  /** Android Bridge USB: device declares USB printer class (preferred for receipts). */
+  usbPrinterClass?: boolean;
 };
 
 export type ScaleDevice = {
@@ -510,6 +514,36 @@ export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinte
     });
   }
   return out;
+}
+
+/**
+ * Settings → Receipts printer dropdown: hide saved LAN ghosts and generic "USB Serial"
+ * rows when a USB printer-class device (e.g. "USB Printer Port") is on the bus.
+ */
+export function filterAgentPrintersForSettingsPick(printers: AgentPrinter[]): AgentPrinter[] {
+  const list = normalizeAgentPrinterList(printers);
+  if (!list.length) return list;
+
+  const isUsbReceiptCandidate = (p: AgentPrinter) => {
+    if (p.connectionType !== 'usb') return false;
+    if (p.usbPrinterClass === true) return true;
+    if (/printer port/i.test(p.name)) return true;
+    if (/^USB Serial$/i.test(p.name)) return false;
+    return true;
+  };
+
+  const hasUsbPrinterClass = list.some(
+    (p) => p.connectionType === 'usb' && (p.usbPrinterClass === true || /printer port/i.test(p.name))
+  );
+
+  return list.filter((p) => {
+    if (p.connectionType === 'lan') return false;
+    if (!hasUsbPrinterClass || p.connectionType !== 'usb') return true;
+    if (p.usbPrinterClass === true || /printer port/i.test(p.name)) return true;
+    if (/^USB Serial$/i.test(p.name)) return false;
+    if (p.usbPrinterClass === false) return false;
+    return isUsbReceiptCandidate(p);
+  });
 }
 
 export type PosPrinterProfileLike = {
@@ -1250,9 +1284,11 @@ export async function listAgentPrinters(): Promise<AgentPrinter[]> {
   }
   const data = await agentFetch('/printers');
   return normalizeAgentPrinterList(
-    (data.printers || []).map((p: AgentPrinter) => ({
+    (data.printers || []).map((p: AgentPrinter & { hasPermission?: boolean; usbPrinterClass?: boolean }) => ({
       ...p,
       unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
+      hasPermission: p.hasPermission === true,
+      usbPrinterClass: p.usbPrinterClass === true,
     }))
   );
 }
