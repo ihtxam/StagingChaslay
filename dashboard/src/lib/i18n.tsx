@@ -2745,6 +2745,8 @@ const en: Dict = {
   printerName: 'Printer',
   settingsPrinterManualEntry:
     'Reborn Print Agent offline — type the Windows printer name. Install and start the agent on this PC, then click Refresh printers.',
+  settingsPrinterBridgeDefaultHint:
+    'Uses the printer you set as default in Bridge Reborn (tap the device in the Bridge app). Same as before when only one USB printer is connected.',
   printRoleReceipts: 'Receipts',
   printRoleKitchen: 'Kitchen',
   printRoleEod: 'End of day',
@@ -7960,6 +7962,8 @@ const fr: Dict = {
   printerName: 'Nom imprimante Windows',
   settingsPrinterManualEntry:
     'Agent d’impression hors ligne — saisissez le nom Windows exact. Installez et démarrez l’agent sur ce PC, puis Actualiser les imprimantes.',
+  settingsPrinterBridgeDefaultHint:
+    'Utilise l’imprimante définie par défaut dans Bridge Reborn (appuyez sur l’appareil dans l’app Bridge). Comme avant avec une seule imprimante USB.',
   printRoleReceipts: 'Reçus',
   printRoleKitchen: 'Cuisine',
   printRoleEod: 'Fin de journée',
@@ -8501,7 +8505,7 @@ const fr: Dict = {
   gandolaPurgeSkipped: '{deleted} supprimée(s) ; {skipped} non éligible(s).',
   staffRoleGandola: 'Gandola',
   staffRoleGandolaHint:
-    'Commandes POS : appuyez cinq fois sur l\'icône de recherche pour supprimer définitivement les ventes espèces de l\'historique et des rapports.',
+    'Commandes POS : cinq appuis sur l\'icône recherche pour supprimer des ventes espèces. Utilisez Hier / Semaine dernière (ou dates personnalisées) pour les tickets plus anciens.',
   barcodePlaceholder: 'EAN / UPC ou numéro',
   stockTooManyDigits: 'Le stock ne peut pas dépasser {n} chiffres',
   offerPercentRange: 'La remise doit être entre 1 et {max} %',
@@ -13063,6 +13067,8 @@ const de: Dict = {
   printerName: 'Windows-Druckername',
   settingsPrinterManualEntry:
     'Druckagent offline — exakten Windows-Druckernamen eingeben. Agent auf diesem PC installieren und starten, dann Drucker aktualisieren.',
+  settingsPrinterBridgeDefaultHint:
+    'Nutzt den Drucker, den Sie in Bridge Reborn als Standard gesetzt haben (Gerät in der Bridge-App antippen). Wie früher bei nur einem USB-Drucker.',
   printRoleReceipts: 'Belege',
   printRoleKitchen: 'Küche',
   printRoleEod: 'Tagesabschluss',
@@ -13604,7 +13610,7 @@ const de: Dict = {
   gandolaPurgeSkipped: '{deleted} gelöscht; {skipped} nicht berechtigt.',
   staffRoleGandola: 'Gandola',
   staffRoleGandolaHint:
-    'POS-Bestellungen: Erdwurm-Symbol fünfmal tippen, um abgeschlossene Barverkäufe dauerhaft aus Historie und Berichten zu entfernen.',
+    'POS-Bestellungen: Suchsymbol fünfmal tippen, um Barverkäufe zu löschen. Gestern / Letzte Woche (oder eigene Daten) für ältere Belege wählen.',
   barcodePlaceholder: 'EAN / UPC oder Nummer',
   stockTooManyDigits: 'Bestand darf {n} Stellen nicht überschreiten',
   offerPercentRange: 'Rabatt muss zwischen 1 und {max} % liegen',

@@ -517,6 +517,36 @@ export function agentPrinterListKey(p: AgentPrinter): string {
   return name.toLowerCase();
 }
 
+/** Value for `<select>` options — must match resolveAgentPrinterSelectValue. */
+export function agentPrinterOptionValue(p: AgentPrinter): string {
+  return String(p.id || p.name || '').trim();
+}
+
+/** Map saved profile row to `<select value>` for Bridge rows keyed by id. */
+export function resolveAgentPrinterSelectValue(
+  profileName: string,
+  profileMatchHint: string | null | undefined,
+  pickList: AgentPrinter[]
+): string {
+  const name = String(profileName || '').trim();
+  if (!name) return '';
+  const byName = pickList.find((ap) => ap.name === name);
+  if (byName) return agentPrinterOptionValue(byName);
+  const byId = pickList.find((ap) => ap.id && ap.id === name);
+  if (byId) return agentPrinterOptionValue(byId);
+  const hint = String(profileMatchHint || '').trim();
+  if (hint) {
+    const byHint = pickList.find(
+      (ap) =>
+        (ap.id && ap.id === hint) ||
+        (ap.address && ap.address.toUpperCase() === hint.toUpperCase()) ||
+        ap.matchHint === hint
+    );
+    if (byHint) return agentPrinterOptionValue(byHint);
+  }
+  return name;
+}
+
 /** Dropdown label when two Bluetooth printers share a marketing name. */
 export function formatAgentPrinterOptionLabel(p: AgentPrinter): string {
   const name = String(p.name || '').trim();

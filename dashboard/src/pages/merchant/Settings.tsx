@@ -91,6 +91,8 @@ import {
   findPrinterHealCandidates,
   filterAgentPrintersForSettingsPick,
   formatAgentPrinterOptionLabel,
+  agentPrinterOptionValue,
+  resolveAgentPrinterSelectValue,
   formatScaleDeviceLabel,
   formatScalePortLabel,
   compareAgentVersion,
@@ -5216,6 +5218,10 @@ export default function Settings() {
                     ? findPrinterHealCandidates(p.name, agentPrinters)
                     : [];
                   const useDropdown = printAgentOk && agentPrinters.length > 0;
+                  const selectValue =
+                    savedNameMissing || !String(p.name || '').trim()
+                      ? ''
+                      : resolveAgentPrinterSelectValue(p.name, p.matchHint, agentPrintersForPick);
                   return (
                   <div
                     key={p.id}
@@ -5223,28 +5229,43 @@ export default function Settings() {
                   >
                     <Field
                       label={t('printerName')}
-                      hint={useDropdown ? undefined : t('settingsPrinterManualEntry')}
+                      hint={
+                        useDropdown
+                          ? selectValue
+                            ? undefined
+                            : t('settingsPrinterBridgeDefaultHint')
+                          : t('settingsPrinterManualEntry')
+                      }
                     >
                       {useDropdown ? (
                         <select
                           className="input"
-                          value={savedNameMissing ? '' : p.name}
+                          value={selectValue}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
-                            const picked = agentPrinters.find(
-                              (ap) =>
-                                ap.name === e.target.value ||
-                                (ap.id && ap.id === e.target.value)
-                            );
-                            printers[idx] = {
-                              ...p,
-                              name: picked?.name || e.target.value,
-                              portName: picked?.portName || null,
-                              matchHint:
-                                picked?.connectionType === 'bluetooth' && picked?.address
-                                  ? picked.address
-                                  : picked?.matchHint || picked?.driverName || p.matchHint || null,
-                            };
+                            const raw = e.target.value;
+                            if (!raw) {
+                              printers[idx] = {
+                                ...p,
+                                name: '',
+                                portName: null,
+                                matchHint: null,
+                              };
+                            } else {
+                              const picked = agentPrinters.find(
+                                (ap) =>
+                                  ap.name === raw || (ap.id && ap.id === raw)
+                              );
+                              printers[idx] = {
+                                ...p,
+                                name: picked?.name || raw,
+                                portName: picked?.portName || null,
+                                matchHint:
+                                  picked?.connectionType === 'bluetooth' && picked?.address
+                                    ? picked.address
+                                    : picked?.matchHint || picked?.driverName || p.matchHint || null,
+                              };
+                            }
                             setSettings({
                               ...settings,
                               posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
@@ -5254,7 +5275,7 @@ export default function Settings() {
                           <option value="">{t('webPosDefaultPrinter')}</option>
                           {agentPrintersForPick.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
-                            const optionValue = ap.id || ap.name;
+                            const optionValue = agentPrinterOptionValue(ap);
                             return (
                               <option key={optionValue} value={optionValue}>
                                 {formatAgentPrinterOptionLabel(ap)}

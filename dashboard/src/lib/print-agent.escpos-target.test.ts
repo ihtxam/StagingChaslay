@@ -27,6 +27,8 @@ assert.match(src, /export function resolveLiveEscPosTargetNames/);
 assert.match(src, /export async function listNormalizedLiveAgentPrinters/);
 assert.match(src, /export function filterAgentPrintersForSettingsPick/);
 assert.match(src, /export function agentPrinterListKey/);
+assert.match(src, /export function agentPrinterOptionValue/);
+assert.match(src, /export function resolveAgentPrinterSelectValue/);
 assert.match(
   src,
   /connectionType === 'lan'\) return false[\s\S]*USB Serial/
