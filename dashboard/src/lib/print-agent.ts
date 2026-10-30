@@ -579,8 +579,9 @@ export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinte
 }
 
 /**
- * Settings → Receipts printer dropdown: hide saved LAN ghosts and generic "USB Serial"
- * rows when a USB printer-class device (e.g. "USB Printer Port") is on the bus.
+ * Settings → Receipts printer dropdown: hide generic "USB Serial" rows when a USB
+ * printer-class device (e.g. "USB Printer Port") is on the bus. Bridge LAN/network
+ * printers stay visible (stale USB-ethernet dongle names are dropped in normalizeAgentPrinterList).
  */
 export function filterAgentPrintersForSettingsPick(printers: AgentPrinter[]): AgentPrinter[] {
   const list = normalizeAgentPrinterList(printers);
@@ -599,7 +600,6 @@ export function filterAgentPrintersForSettingsPick(printers: AgentPrinter[]): Ag
   );
 
   return list.filter((p) => {
-    if (p.connectionType === 'lan') return false;
     if (!hasUsbPrinterClass || p.connectionType !== 'usb') return true;
     if (p.usbPrinterClass === true || /printer port/i.test(p.name)) return true;
     if (/^USB Serial$/i.test(p.name)) return false;
