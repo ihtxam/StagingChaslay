@@ -541,7 +541,9 @@ export class PosOrdersService {
   ) {
     return withMerchantSchemaRetry(async () => {
     const db = getDb();
-    const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
+    const requestedLimit = Math.max(Number(opts.limit) || 50, 1);
+    const limitCap = opts.status === "completed" ? 500 : 200;
+    const limit = Math.min(requestedLimit, limitCap);
     const conditions = [
       eq(schema.orders.merchantId, merchantId),
       // POS register sales + online shop orders (web_shop + legacy online) for the Orders board

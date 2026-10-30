@@ -160,10 +160,12 @@ button {
 
     html.panel-vv-sync.panel-kb-open .panel-shell {
       position: fixed;
-      left: 0;
-      right: 0;
-      top: var(--panel-vv-top, 0);
-      width: 100%;
+      top: var(--panel-vv-top, 0px);
+      left: var(--panel-vv-left, 0px);
+      width: var(--panel-vvw, 100%);
+      height: var(--panel-vvh, 100dvh);
+      max-height: var(--panel-vvh, 100dvh);
+      right: auto;
       z-index: 1;
     }
 
@@ -279,8 +281,8 @@ button {
   html.webpos-lock body,
   html.webpos-lock #root {
     width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden;
+    max-width: 100%;
+    overflow: hidden;
     height: 100%;
     height: 100dvh;
     -webkit-text-size-adjust: 100%;
@@ -335,7 +337,10 @@ button {
    */
   .webpos-shell.webpos-shell--fill {
     height: calc(100dvh / var(--webpos-zoom));
-    width: calc(100vw / var(--webpos-zoom));
+    /* 100vw includes the scrollbar and scrolls the document, which sticks as a
+       left/top gap after leaving Settings. Fill the parent instead. */
+    width: calc(100% / var(--webpos-zoom));
+    max-width: 100%;
     max-height: calc(100dvh / var(--webpos-zoom));
   }
   .webpos-shell.webpos-shell--embedded {
@@ -557,7 +562,7 @@ button {
     touch-action: manipulation;
   }
 
-  @media (max-width: 1023px) {
+  @media (max-width: 1023px), (pointer: coarse) {
     .panel-shell input,
     .panel-shell textarea,
     .panel-shell select,
@@ -1793,8 +1798,8 @@ button {
     .webpos-shell[data-narrow='1'] {
       --webpos-zoom: 1;
       zoom: 1;
-      width: 100vw !important;
-      max-width: 100vw;
+      width: 100% !important;
+      max-width: 100%;
       height: 100dvh !important;
       max-height: 100dvh !important;
       overflow: hidden;

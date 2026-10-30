@@ -517,6 +517,36 @@ export function agentPrinterListKey(p: AgentPrinter): string {
   return name.toLowerCase();
 }
 
+/** Value for `<select>` options — must match resolveAgentPrinterSelectValue. */
+export function agentPrinterOptionValue(p: AgentPrinter): string {
+  return String(p.id || p.name || '').trim();
+}
+
+/** Map saved profile row to `<select value>` for Bridge rows keyed by id. */
+export function resolveAgentPrinterSelectValue(
+  profileName: string,
+  profileMatchHint: string | null | undefined,
+  pickList: AgentPrinter[]
+): string {
+  const name = String(profileName || '').trim();
+  if (!name) return '';
+  const byName = pickList.find((ap) => ap.name === name);
+  if (byName) return agentPrinterOptionValue(byName);
+  const byId = pickList.find((ap) => ap.id && ap.id === name);
+  if (byId) return agentPrinterOptionValue(byId);
+  const hint = String(profileMatchHint || '').trim();
+  if (hint) {
+    const byHint = pickList.find(
+      (ap) =>
+        (ap.id && ap.id === hint) ||
+        (ap.address && ap.address.toUpperCase() === hint.toUpperCase()) ||
+        ap.matchHint === hint
+    );
+    if (byHint) return agentPrinterOptionValue(byHint);
+  }
+  return name;
+}
+
 /** Dropdown label when two Bluetooth printers share a marketing name. */
 export function formatAgentPrinterOptionLabel(p: AgentPrinter): string {
   const name = String(p.name || '').trim();
@@ -549,8 +579,9 @@ export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinte
 }
 
 /**
- * Settings → Receipts printer dropdown: hide saved LAN ghosts and generic "USB Serial"
- * rows when a USB printer-class device (e.g. "USB Printer Port") is on the bus.
+ * Settings → Receipts printer dropdown: hide generic "USB Serial" rows when a USB
+ * printer-class device (e.g. "USB Printer Port") is on the bus. Bridge LAN/network
+ * printers stay visible (stale USB-ethernet dongle names are dropped in normalizeAgentPrinterList).
  */
 export function filterAgentPrintersForSettingsPick(printers: AgentPrinter[]): AgentPrinter[] {
   const list = normalizeAgentPrinterList(printers);
@@ -569,7 +600,6 @@ export function filterAgentPrintersForSettingsPick(printers: AgentPrinter[]): Ag
   );
 
   return list.filter((p) => {
-    if (p.connectionType === 'lan') return false;
     if (!hasUsbPrinterClass || p.connectionType !== 'usb') return true;
     if (p.usbPrinterClass === true || /printer port/i.test(p.name)) return true;
     if (/^USB Serial$/i.test(p.name)) return false;
