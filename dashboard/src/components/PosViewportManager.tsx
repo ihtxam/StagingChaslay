@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { resetPanelViewportScroll } from '@/lib/panel-mobile-keyboard';
 
 const DEFAULT_VIEWPORT =
   'width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual';
@@ -28,7 +29,12 @@ export default function PosViewportManager() {
   useEffect(() => {
     const lock = isPosLikePath(pathname);
     applyPosViewport(lock);
-    return () => applyPosViewport(false);
+    resetPanelViewportScroll();
+    const t = window.setTimeout(resetPanelViewportScroll, 50);
+    return () => {
+      window.clearTimeout(t);
+      applyPosViewport(false);
+    };
   }, [pathname]);
 
   return null;
