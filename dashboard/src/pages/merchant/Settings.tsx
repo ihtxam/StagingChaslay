@@ -5263,7 +5263,9 @@ export default function Settings() {
                                 matchHint:
                                   picked?.connectionType === 'bluetooth' && picked?.address
                                     ? picked.address
-                                    : picked?.matchHint || picked?.driverName || p.matchHint || null,
+                                    : picked?.connectionType === 'lan' && picked?.id
+                                      ? picked.id
+                                      : picked?.matchHint || picked?.driverName || p.matchHint || null,
                               };
                             }
                             setSettings({
