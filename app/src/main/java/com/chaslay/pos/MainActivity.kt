@@ -129,8 +129,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // USB allow dialog only when foreground and a saved printer still lacks grant — see UsbPrinterManager.
-        usbPrinterManager.requestMissingPermissionsWhenForeground()
+        // Sync USB grant state only — permission dialog on print / replug attach, not app open (UsbPrinterManager).
+        usbPrinterManager.syncForegroundUsbPermissionState()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

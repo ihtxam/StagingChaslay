@@ -8,18 +8,20 @@ package com.chaslay.pos.printer
  * Stable device id is **`usb:vendorId:productId` only** (never serial — serial needs permission
  * and breaks matching). Permission prefs/callbacks use the same vid:pid key via [permissionKey].
  *
- * **When to show the system USB dialog**
- * - [requestMissingPermissionsWhenForeground] from [com.chaslay.pos.MainActivity.onResume] only
- *   (Activity must be foreground). Never call [requestPermission] from background timers.
- * - USB attach receiver auto-requests only for [setMonitoredPrinterAddresses] or
- *   [rememberedGrantedAddresses] ([shouldAutoRequestPermission]).
+ * **When to show the system USB dialog (Ojavana-style — not on app open)**
+ * - [requestPermission] when the user **prints** ([sendBytes]) and `!hasPermission`, or from
+ *   Settings when they pick / test a USB printer.
+ * - USB **ATTACHED** receiver auto-requests only for [setMonitoredPrinterAddresses] or
+ *   [rememberedGrantedAddresses] ([shouldAutoRequestPermission]) — not on cold start / onResume.
+ * - [syncForegroundUsbPermissionState] from [com.chaslay.pos.MainActivity.onResume]: sync grants
+ *   only; never calls [UsbManager.requestPermission]. Never prompt from background timers / warmup.
  * - [syncGrantedDevicesFromSystem] / [recordAlreadyGrantedDevices] sync Android’s grant without UI.
  *
  * **Do not regress**
  * - Single in-flight permission ([permissionQueueInFlight], [pendingPermissionDeviceId]).
  * - [reconcilePendingWithGrant] + [clearStalePendingRequest] (45s) after dismiss or replug.
  * - PendingIntent: [PendingIntent.FLAG_MUTABLE] on API 31+ for [UsbManager.requestPermission].
- * - One monitored device at a time via [requestNextMissingPermission] after grant broadcast.
+ * - No chained “next missing” prompts after a grant (avoid second dialog without print/attach).
  */
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -32,8 +34,6 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import com.chaslay.pos.printer.EscPosEncoder
@@ -74,7 +74,6 @@ class UsbPrinterManager @Inject constructor(
     private var pendingPermissionDeviceId: Int? = null
     @Volatile
     private var pendingRequestStartedElapsed: Long = 0L
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val attachReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -101,7 +100,6 @@ class UsbPrinterManager @Inject constructor(
             if (granted) rememberGrantedAddress(key)
             pendingCallbacks.remove(key)?.invoke(granted)
             permissionQueueInFlight.set(false)
-            mainHandler.post { requestNextMissingPermission() }
         }
     }
 
@@ -188,15 +186,14 @@ class UsbPrinterManager @Inject constructor(
     }
 
     /**
-     * Call from Activity [onResume] only — system USB allow dialog requires a foreground window.
-     * Queues at most one missing grant per [setMonitoredPrinterAddresses]; does not spam scanners.
+     * Call from Activity [onResume]: reconcile pending state and remember already-granted devices.
+     * Does **not** show the system USB allow dialog (defer to print, Settings, or USB attach).
      */
-    fun requestMissingPermissionsWhenForeground() {
+    fun syncForegroundUsbPermissionState() {
         val manager = usbManager ?: return
         recordAlreadyGrantedDevices()
         reconcilePendingWithGrant(manager)
         clearStalePendingRequest(manager)
-        requestNextMissingPermission()
     }
 
     fun normalizeStoredAddress(address: String): String {
@@ -445,23 +442,6 @@ class UsbPrinterManager @Inject constructor(
         manager.deviceList.values
             .filter { isLikelyPrinter(it) && manager.hasPermission(it) }
             .forEach { rememberGrantedAddress(stableAddress(it)) }
-    }
-
-    private fun requestNextMissingPermission() {
-        if (permissionQueueInFlight.get()) return
-        val manager = usbManager ?: return
-        reconcilePendingWithGrant(manager)
-        clearStalePendingRequest(manager)
-        if (pendingPermissionDeviceId != null) return
-        val monitoredKeys = monitoredPrinterAddresses.map { permissionKey(it) }.toSet()
-        if (monitoredKeys.isEmpty()) return
-        val next = monitoredKeys.firstOrNull { address ->
-            val device = resolveDevice(address) ?: return@firstOrNull false
-            isLikelyPrinter(device) && !manager.hasPermission(device)
-        } ?: return
-        requestPermission(next) { granted ->
-            if (granted) Log.i(TAG, "USB permission granted for saved printer $next")
-        }
     }
 
     private fun reconcilePendingWithGrant(manager: UsbManager) {

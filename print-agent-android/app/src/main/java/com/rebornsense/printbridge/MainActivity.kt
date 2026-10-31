@@ -293,7 +293,7 @@ class MainActivity : AppCompatActivity() {
         UsbHostPermissions.onPermissionSettled = { onUsbPermissionSettled() }
         UsbHostPermissions.syncMonitoredFromPreferences(this)
         if (runtimePermissionsResolved) {
-            UsbHostPermissions.requestMissingPermissionsWhenForeground(this)
+            UsbHostPermissions.syncForegroundUsbPermissionState(this)
         }
         consumeRefreshPrintersExtra(intent)
         dropUnpluggedUsbFromList()

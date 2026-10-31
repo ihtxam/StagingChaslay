@@ -30,7 +30,7 @@ class PrinterConnectionManager @Inject constructor(
                 .filter { it.connectionType == "USB" || UsbPrinterManager.isUsbAddress(it.address) }
                 .map { usbPrinterManager.normalizeStoredAddress(it.address) }
                 .plus(listOfNotNull(legacyUsb?.let { usbPrinterManager.normalizeStoredAddress(it) }))
-            // Monitored USB addresses drive attach/onResume prompts only — no background dialogs.
+            // Monitored USB addresses drive attach + print-time prompts only — no onResume / warmup dialogs.
             usbPrinterManager.setMonitoredPrinterAddresses(usbAddresses)
             usbPrinterManager.syncGrantedDevicesFromSystem()
             printers.forEach { printer ->

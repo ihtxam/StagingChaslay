@@ -156,8 +156,13 @@ class BluetoothPrinterService @Inject constructor(
         if (address.isBlank() || isSimulated(address)) return@withContext
         runCatching {
             when {
-                connectionType == "USB" || isUsbAddress(address) ->
-                    usbPrinterManager.sendBytes(address, ESC_INIT)
+                connectionType == "USB" || isUsbAddress(address) -> {
+                    if (usbPrinterManager.hasPermission(address)) {
+                        usbPrinterManager.sendBytes(address, ESC_INIT)
+                    } else {
+                        Log.d(TAG, "Skipping USB warmup — grant deferred until print or USB attach")
+                    }
+                }
                 isNetworkAddress(address) -> {
                     val (host, port) = parseHostPort(address)
                     java.net.Socket().use { socket ->
