@@ -13,6 +13,7 @@ class PrintBridgeApplication : Application() {
         // Reboot often has no WiFi yet. Never throw out of Application.onCreate —
         // that is the system "has stopped" dialog. Skip CE work until unlock.
         if (!BridgeUserUnlock.isCredentialStorageReady(this)) return
+        runCatching { UsbHostPermissions.syncMonitoredFromPreferences(this) }
         runCatching { UsbHostPermissions.recordGrantedDevices(this) }
         runCatching { com.rebornsense.printbridge.setup.OemSetupPreferences.syncInstalledVersion(this) }
         runCatching {

@@ -38,12 +38,17 @@ class UsbAttachReceiver : BroadcastReceiver() {
             PrintBridgeLauncher.refreshAfterHardwareChange(app)
             return
         }
+        UsbHostPermissions.syncMonitoredFromPreferences(app)
+        if (!UsbHostPermissions.shouldAutoRequestPermission(app, device)) {
+            Log.d(TAG, "USB attach — skip auto prompt (not default/remembered printer)")
+            return
+        }
         if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(app, device)) {
             Log.d(TAG, "USB attach — permission prompt debounced")
             return
         }
-        Log.d(TAG, "USB attach — launch permission UI for ${device.vendorId}:${device.productId}")
-        UsbPlugPlay.promptForMissingPrinter(app, device, allowForegroundActivity = false)
+        Log.d(TAG, "USB attach — requestPermission for ${device.vendorId}:${device.productId}")
+        UsbHostPermissions.requestPermissionFromContext(app, device)
     }
 
     private fun onUsbDetached(app: Context, intent: Intent) {

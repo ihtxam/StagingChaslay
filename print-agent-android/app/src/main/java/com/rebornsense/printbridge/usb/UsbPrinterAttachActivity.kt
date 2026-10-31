@@ -94,16 +94,17 @@ class UsbPrinterAttachActivity : AppCompatActivity() {
             onUsbAccessReady(skipMainActivity = true)
             return
         }
+        UsbHostPermissions.syncMonitoredFromPreferences(applicationContext)
         val userTappedAllow =
             intent?.action == UsbBootPermissionNotifier.ACTION_REQUEST_USB_PRINTER_PERMISSION ||
                 UsbPermissionUi.isPermissionPromptAction(intent?.action)
+        if (systemHotPlug && !UsbHostPermissions.shouldAutoRequestPermission(applicationContext, device)) {
+            Log.d(TAG, "USB attach activity — not default/remembered; skip dialog")
+            finish()
+            return
+        }
         if (userTappedAllow || systemHotPlug) {
-            Log.i(TAG, "USB permission missing — MainActivity USB allow dialog (Nebullus/Ojavana)")
-            if (UsbPermissionUi.launchMainActivityForUsbPermission(this, device, minimizeAfter = true)) {
-                finish()
-                return
-            }
-            Log.i(TAG, "USB permission missing — fallback attach activity prompt")
+            Log.i(TAG, "USB permission missing — system allow dialog (saved printer)")
             schedulePermissionPrompt(device, systemHotPlug)
             return
         }

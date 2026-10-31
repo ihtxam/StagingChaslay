@@ -27,6 +27,7 @@ import com.chaslay.pos.data.repository.LicenseRepository
 import com.chaslay.pos.payment.taptopay.TapToPayEngine
 import com.chaslay.pos.domain.model.LicenseGateState
 import com.chaslay.pos.domain.model.PosThemeMode
+import com.chaslay.pos.printer.UsbPrinterManager
 import com.chaslay.pos.sync.FloorSyncCoordinator
 import com.chaslay.pos.sync.PosSessionRepository
 import com.chaslay.pos.sync.SyncService
@@ -50,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var floorSyncCoordinator: FloorSyncCoordinator
     @Inject lateinit var posSessionRepository: PosSessionRepository
     @Inject lateinit var tapToPayEngine: TapToPayEngine
+    @Inject lateinit var usbPrinterManager: UsbPrinterManager
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -123,6 +125,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // USB allow dialog only when foreground and a saved printer still lacks grant — see UsbPrinterManager.
+        usbPrinterManager.requestMissingPermissionsWhenForeground()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

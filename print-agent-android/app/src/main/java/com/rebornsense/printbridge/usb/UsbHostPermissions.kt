@@ -10,16 +10,89 @@ import com.rebornsense.printbridge.PrintBridgeLauncher
 
 /**
  * USB host permission for printers only (not barcode/RFID peripherals).
+ *
+ * Parity with RebornPOS [com.chaslay.pos.printer.UsbPrinterManager]:
+ * - Stable id `usb:vid:pid`; remembered grants in [PrinterPreferences].
+ * - Auto [UsbManager.requestPermission] on attach / onResume only for default or remembered printers.
+ * - Manual "Grant USB" may still target any attached printer candidate.
  */
 object UsbHostPermissions {
     private const val TAG = "UsbHostPermissions"
     const val ACTION = "com.rebornsense.printbridge.USB_PERMISSION"
+    private const val USB_PREFIX = "usb:"
 
+    @Volatile
+    private var monitoredUsbKeys: Set<String> = emptySet()
     @Volatile
     private var pendingPermissionDeviceId: Int? = null
 
     @Volatile
     var onPermissionSettled: (() -> Unit)? = null
+
+    /** Default + previously granted USB printers — same role as POS monitored addresses. */
+    fun syncMonitoredFromPreferences(context: android.content.Context) {
+        val app = context.applicationContext
+        val keys = mutableSetOf<String>()
+        PrinterPreferences.getDefaultPrinterId(app)
+            ?.takeIf { it.startsWith(USB_PREFIX) }
+            ?.let { keys.add(monitoredKeyFromStableId(it)) }
+        PrinterPreferences.rememberedUsbDevices(app).forEach { vidPid ->
+            keys.add("$USB_PREFIX${vidPid.trim()}")
+        }
+        monitoredUsbKeys = keys
+    }
+
+    /** Attach / onResume auto-prompt only when the cashier already chose this printer once. */
+    fun shouldAutoRequestPermission(context: android.content.Context, device: UsbDevice): Boolean {
+        val stable = stableUsbId(device)
+        if (stable in monitoredUsbKeys) return true
+        return PrinterPreferences.isRememberedUsbDevice(context, deviceKey(device))
+    }
+
+    /**
+     * Activity foreground only (MainActivity.onResume). One missing grant at a time for monitored keys.
+     */
+    fun requestMissingPermissionsWhenForeground(activity: android.app.Activity) {
+        val app = activity.applicationContext
+        syncMonitoredFromPreferences(app)
+        recordGrantedDevices(app)
+        val usb = usbManager(app) ?: return
+        reconcilePendingWithGrant(usb, app)
+        clearStalePendingRequest(usb)
+        requestNextMonitoredMissingPermission(app)
+    }
+
+    fun stableUsbId(device: UsbDevice): String = "$USB_PREFIX${device.vendorId}:${device.productId}"
+
+    private fun monitoredKeyFromStableId(id: String): String {
+        val trimmed = id.trim()
+        if (!trimmed.startsWith(USB_PREFIX)) return trimmed
+        val parts = trimmed.removePrefix(USB_PREFIX).split(":")
+        val vid = parts.getOrNull(0)?.toIntOrNull() ?: return trimmed
+        val pid = parts.getOrNull(1)?.toIntOrNull() ?: return trimmed
+        return "$USB_PREFIX$vid:$pid"
+    }
+
+    private fun resolveDeviceByMonitoredKey(usb: UsbManager, key: String): UsbDevice? {
+        if (!key.startsWith(USB_PREFIX)) return null
+        val parts = key.removePrefix(USB_PREFIX).split(":")
+        val vid = parts.getOrNull(0)?.toIntOrNull() ?: return null
+        val pid = parts.getOrNull(1)?.toIntOrNull() ?: return null
+        return usb.deviceList.values.firstOrNull { it.vendorId == vid && it.productId == pid }
+    }
+
+    private fun requestNextMonitoredMissingPermission(context: android.content.Context) {
+        if (pendingPermissionDeviceId != null) return
+        val usb = usbManager(context) ?: return
+        val app = context.applicationContext
+        if (monitoredUsbKeys.isEmpty()) return
+        val nextKey = monitoredUsbKeys.firstOrNull { key ->
+            val device = resolveDeviceByMonitoredKey(usb, key) ?: return@firstOrNull false
+            UsbDeviceClassifier.isUsbPrinterCandidate(app, device) && !usb.hasPermission(device)
+        } ?: return
+        val device = resolveDeviceByMonitoredKey(usb, nextKey) ?: return
+        requestPermissionFromContext(app, device)
+    }
 
     /** True when Bridge should show the system USB allow dialog for this device. */
     fun needsPermissionRequest(
@@ -51,6 +124,9 @@ object UsbHostPermissions {
             Log.i(TAG, "USB permission denied for ${deviceKey(device)} deviceId=${device.deviceId}")
         }
         notifyPermissionSettled()
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            requestNextMonitoredMissingPermission(app)
+        }
     }
 
     fun recordGrantedDevices(context: android.content.Context) {
@@ -107,9 +183,10 @@ object UsbHostPermissions {
     }
 
     fun ensureGranted(context: android.content.Context) {
+        syncMonitoredFromPreferences(context)
         recordGrantedDevices(context)
         if (context is android.app.Activity) {
-            requestNextMissingPermission(context)
+            requestMissingPermissionsWhenForeground(context)
         }
     }
 

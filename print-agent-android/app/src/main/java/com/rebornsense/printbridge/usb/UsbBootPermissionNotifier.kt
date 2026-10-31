@@ -82,7 +82,10 @@ object UsbBootPermissionNotifier {
     }
 
     private fun missingPermissionPrinterCandidates(context: Context): List<UsbDevice> {
-        return UsbPlugPlay.missingPrinterDevices(context)
+        UsbHostPermissions.syncMonitoredFromPreferences(context)
+        return UsbPlugPlay.missingPrinterDevices(context).filter { device ->
+            UsbHostPermissions.shouldAutoRequestPermission(context, device)
+        }
     }
 
     private fun currentBootWallTimeMs(): Long =

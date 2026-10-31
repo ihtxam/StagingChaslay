@@ -1,5 +1,26 @@
 package com.chaslay.pos.printer
 
+/**
+ * USB ESC/POS printing and host permission for saved POS printers.
+ *
+ * ## REGRESSION LOCK — do not change without manual tablet retest
+ *
+ * Stable device id is **`usb:vendorId:productId` only** (never serial — serial needs permission
+ * and breaks matching). Permission prefs/callbacks use the same vid:pid key via [permissionKey].
+ *
+ * **When to show the system USB dialog**
+ * - [requestMissingPermissionsWhenForeground] from [com.chaslay.pos.MainActivity.onResume] only
+ *   (Activity must be foreground). Never call [requestPermission] from background timers.
+ * - USB attach receiver auto-requests only for [setMonitoredPrinterAddresses] or
+ *   [rememberedGrantedAddresses] ([shouldAutoRequestPermission]).
+ * - [syncGrantedDevicesFromSystem] / [recordAlreadyGrantedDevices] sync Android’s grant without UI.
+ *
+ * **Do not regress**
+ * - Single in-flight permission ([permissionQueueInFlight], [pendingPermissionDeviceId]).
+ * - [reconcilePendingWithGrant] + [clearStalePendingRequest] (45s) after dismiss or replug.
+ * - PendingIntent: [PendingIntent.FLAG_MUTABLE] on API 31+ for [UsbManager.requestPermission].
+ * - One monitored device at a time via [requestNextMissingPermission] after grant broadcast.
+ */
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -11,9 +32,14 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import com.chaslay.pos.printer.EscPosEncoder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.min
@@ -37,16 +63,31 @@ class UsbPrinterManager @Inject constructor(
         context.getSystemService(Context.USB_SERVICE) as? UsbManager
 
     private val permissionAction = "${context.packageName}.USB_PERMISSION"
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val pendingCallbacks = ConcurrentHashMap<String, (Boolean) -> Unit>()
     private var permissionReceiverRegistered = false
     private var attachReceiverRegistered = false
+    @Volatile
+    private var monitoredPrinterAddresses: Set<String> = emptySet()
+    private val permissionQueueInFlight = AtomicBoolean(false)
+    @Volatile
+    private var pendingPermissionDeviceId: Int? = null
+    @Volatile
+    private var pendingRequestStartedElapsed: Long = 0L
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val attachReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
             val device = intent.getUsbDeviceExtra() ?: return
             if (!isLikelyPrinter(device)) return
-            // Do not auto-prompt on attach — user grants once from Settings when adding a printer.
+            val manager = usbManager ?: return
+            val address = permissionKey(stableAddress(device))
+            if (shouldAutoRequestPermission(address) && !manager.hasPermission(device)) {
+                requestPermission(address) { granted ->
+                    if (granted) Log.i(TAG, "USB permission re-granted on attach for $address")
+                }
+            }
         }
     }
 
@@ -55,8 +96,12 @@ class UsbPrinterManager @Inject constructor(
             if (intent?.action != permissionAction) return
             val device = intent.getUsbDeviceExtra()
             val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-            val key = device?.let { stableAddress(it) } ?: return
-            pendingCallbacks.remove(key)?.invoke(granted && device != null)
+            val key = device?.let { permissionKey(stableAddress(it)) } ?: return
+            pendingPermissionDeviceId = null
+            if (granted) rememberGrantedAddress(key)
+            pendingCallbacks.remove(key)?.invoke(granted)
+            permissionQueueInFlight.set(false)
+            mainHandler.post { requestNextMissingPermission() }
         }
     }
 
@@ -73,6 +118,7 @@ class UsbPrinterManager @Inject constructor(
         return manager.hasPermission(device)
     }
 
+    /** One dialog at a time; uses package-scoped broadcast [permissionAction] + deviceId PendingIntent. */
     fun requestPermission(address: String, onResult: (Boolean) -> Unit) {
         val manager = usbManager ?: run {
             onResult(false)
@@ -83,36 +129,74 @@ class UsbPrinterManager @Inject constructor(
             return
         }
         if (manager.hasPermission(device)) {
+            rememberGrantedAddress(permissionKey(stableAddress(device)))
             onResult(true)
             return
         }
         runCatching {
             ensurePermissionReceiverRegistered()
-            val key = stableAddress(device)
+            reconcilePendingWithGrant(manager)
+            clearStalePendingRequest(manager)
+            if (pendingPermissionDeviceId != null) {
+                onResult(false)
+                return
+            }
+            val key = permissionKey(stableAddress(device))
             pendingCallbacks[key] = onResult
+            permissionQueueInFlight.set(true)
+            pendingPermissionDeviceId = device.deviceId
+            pendingRequestStartedElapsed = SystemClock.elapsedRealtime()
             val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
-            val requestCode = (key.hashCode() xor device.vendorId xor device.productId)
             val permissionIntent = PendingIntent.getBroadcast(
                 context,
-                requestCode,
+                device.deviceId,
                 Intent(permissionAction).setPackage(context.packageName),
                 flags
             )
+            Log.i(TAG, "Requesting USB permission for $key deviceId=${device.deviceId}")
             manager.requestPermission(device, permissionIntent)
         }.onFailure {
-            pendingCallbacks.remove(stableAddress(device))
+            permissionQueueInFlight.set(false)
+            pendingPermissionDeviceId = null
+            pendingCallbacks.remove(permissionKey(stableAddress(device)))
             onResult(false)
         }
     }
 
-    /** Register USB receivers only — no permission dialogs on startup. */
+    /** Register USB attach/permission receivers. */
     fun startMonitoring() {
         ensurePermissionReceiverRegistered()
         ensureAttachReceiverRegistered()
+        recordAlreadyGrantedDevices()
+    }
+
+    /** Saved POS printer USB addresses (stable usb:vid:pid[:serial]). */
+    fun setMonitoredPrinterAddresses(addresses: Collection<String>) {
+        monitoredPrinterAddresses = addresses
+            .map { permissionKey(normalizeStoredAddress(it)) }
+            .filter { isUsbAddress(it) }
+            .toSet()
+    }
+
+    /** Sync granted devices from the system; does not show dialogs (safe from background). */
+    fun syncGrantedDevicesFromSystem() {
+        recordAlreadyGrantedDevices()
+    }
+
+    /**
+     * Call from Activity [onResume] only — system USB allow dialog requires a foreground window.
+     * Queues at most one missing grant per [setMonitoredPrinterAddresses]; does not spam scanners.
+     */
+    fun requestMissingPermissionsWhenForeground() {
+        val manager = usbManager ?: return
+        recordAlreadyGrantedDevices()
+        reconcilePendingWithGrant(manager)
+        clearStalePendingRequest(manager)
+        requestNextMissingPermission()
     }
 
     fun normalizeStoredAddress(address: String): String {
@@ -147,7 +231,16 @@ class UsbPrinterManager @Inject constructor(
     fun sendBytes(address: String, payload: ByteArray): Result<Unit> = runCatching {
         val manager = usbManager ?: error("USB not available")
         val device = resolveDevice(address) ?: error("USB printer not found — replug USB and re-select in Settings")
-        if (!manager.hasPermission(device)) error("USB permission not granted — open Settings → Printers and allow access")
+        if (!manager.hasPermission(device)) {
+            if (shouldAutoRequestPermission(address)) {
+                requestPermission(address) { granted ->
+                    if (granted) Log.i(TAG, "USB permission granted during print for $address")
+                }
+                error("USB permission required — allow the system dialog, then print again")
+            } else {
+                error("USB printer not authorized — open Settings → Printers, select the printer, and allow USB access")
+            }
+        }
         val connection = manager.openDevice(device) ?: error("Could not open USB printer")
         try {
             val candidates = findPrintEndpoints(device)
@@ -316,17 +409,107 @@ class UsbPrinterManager @Inject constructor(
 
     private fun deviceSerial(device: UsbDevice): String? = runCatching { device.serialNumber }.getOrNull()
 
+    private fun shouldAutoRequestPermission(address: String): Boolean {
+        val normalized = permissionKey(normalizeStoredAddress(address))
+        if (normalized in monitoredPrinterAddresses) return true
+        return normalized in rememberedGrantedAddresses()
+    }
+
+    /** vid:pid key used for permission prefs/callbacks — never includes serial (serial needs permission). */
+    private fun permissionKey(address: String): String {
+        parseStableAddress(normalizeStoredAddress(address))?.let { (vid, pid, _) ->
+            return "${USB_PREFIX}$vid:$pid"
+        }
+        return normalizeStoredAddress(address)
+    }
+
+    private fun rememberedGrantedAddresses(): Set<String> =
+        prefs.getStringSet(PREFS_GRANTED_ADDRESSES, emptySet())
+            ?.map { permissionKey(it) }
+            ?.toSet()
+            .orEmpty()
+
+    private fun rememberGrantedAddress(address: String) {
+        val normalized = permissionKey(address)
+        val updated = prefs.getStringSet(PREFS_GRANTED_ADDRESSES, emptySet())
+            ?.map { permissionKey(it) }
+            ?.toMutableSet()
+            ?: mutableSetOf()
+        if (updated.add(normalized)) {
+            prefs.edit().putStringSet(PREFS_GRANTED_ADDRESSES, updated).apply()
+        }
+    }
+
+    private fun recordAlreadyGrantedDevices() {
+        val manager = usbManager ?: return
+        manager.deviceList.values
+            .filter { isLikelyPrinter(it) && manager.hasPermission(it) }
+            .forEach { rememberGrantedAddress(stableAddress(it)) }
+    }
+
+    private fun requestNextMissingPermission() {
+        if (permissionQueueInFlight.get()) return
+        val manager = usbManager ?: return
+        reconcilePendingWithGrant(manager)
+        clearStalePendingRequest(manager)
+        if (pendingPermissionDeviceId != null) return
+        val monitoredKeys = monitoredPrinterAddresses.map { permissionKey(it) }.toSet()
+        if (monitoredKeys.isEmpty()) return
+        val next = monitoredKeys.firstOrNull { address ->
+            val device = resolveDevice(address) ?: return@firstOrNull false
+            isLikelyPrinter(device) && !manager.hasPermission(device)
+        } ?: return
+        requestPermission(next) { granted ->
+            if (granted) Log.i(TAG, "USB permission granted for saved printer $next")
+        }
+    }
+
+    private fun reconcilePendingWithGrant(manager: UsbManager) {
+        val pendingId = pendingPermissionDeviceId ?: return
+        val device = manager.deviceList.values.firstOrNull { it.deviceId == pendingId } ?: run {
+            pendingPermissionDeviceId = null
+            permissionQueueInFlight.set(false)
+            return
+        }
+        if (manager.hasPermission(device)) {
+            pendingPermissionDeviceId = null
+            permissionQueueInFlight.set(false)
+            rememberGrantedAddress(permissionKey(stableAddress(device)))
+            pendingCallbacks.remove(permissionKey(stableAddress(device)))?.invoke(true)
+            Log.d(TAG, "Reconciled USB permission already granted for ${permissionKey(stableAddress(device))}")
+        }
+    }
+
+    private fun clearStalePendingRequest(manager: UsbManager, maxAgeMs: Long = 45_000L) {
+        val pendingId = pendingPermissionDeviceId ?: return
+        val device = manager.deviceList.values.firstOrNull { it.deviceId == pendingId }
+        if (device != null && manager.hasPermission(device)) {
+            pendingPermissionDeviceId = null
+            permissionQueueInFlight.set(false)
+            return
+        }
+        if (device == null) {
+            pendingPermissionDeviceId = null
+            permissionQueueInFlight.set(false)
+            return
+        }
+        if (SystemClock.elapsedRealtime() - pendingRequestStartedElapsed > maxAgeMs) {
+            Log.w(TAG, "Clearing stale USB permission request for deviceId=$pendingId")
+            pendingPermissionDeviceId = null
+            permissionQueueInFlight.set(false)
+        }
+    }
+
     companion object {
+        private const val TAG = "UsbPrinterManager"
+        private const val PREFS_NAME = "usb_printer_prefs"
+        private const val PREFS_GRANTED_ADDRESSES = "granted_usb_addresses"
         private const val USB_PREFIX = "usb:"
         private val LEGACY_VID_PID_REGEX = Regex("\\((\\d+):(\\d+)\\)\\s*$")
 
         fun stableAddress(device: UsbDevice): String {
-            val serial = runCatching { device.serialNumber?.trim() }.getOrNull()?.takeIf { it.isNotEmpty() }
-            return if (serial != null) {
-                "${USB_PREFIX}${device.vendorId}:${device.productId}:$serial"
-            } else {
-                "${USB_PREFIX}${device.vendorId}:${device.productId}"
-            }
+            // Match Ojavana/print-bridge: vid:pid only — serial requires USB permission and breaks matching.
+            return "${USB_PREFIX}${device.vendorId}:${device.productId}"
         }
 
         fun parseStableAddress(address: String): Triple<Int, Int, String?>? {

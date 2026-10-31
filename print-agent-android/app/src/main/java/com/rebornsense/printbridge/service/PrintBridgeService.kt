@@ -212,6 +212,7 @@ class PrintBridgeService : Service() {
     }
 
     private fun discoverPrintersQuietly() {
+        runCatching { UsbHostPermissions.syncMonitoredFromPreferences(applicationContext) }
         runCatching { UsbHostPermissions.recordGrantedDevices(applicationContext) }
             .onFailure { error -> Log.w(TAG, "record granted USB devices failed", error) }
         runCatching { registry.refresh(applicationContext) }
