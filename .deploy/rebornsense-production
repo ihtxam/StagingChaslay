@@ -1,3 +1,5 @@
+# Deploy 2026-11-01T12:00:00Z — EOD per-staff cash and card breakdown (POS reports, backend, WebPOS receipt)
+
 # Deploy 2026-10-22T10:05:00Z — POS open-ticket ledger: paid/cancel heal, KDS ghost prevention (#843)
 # Deploy 2026-11-01T00:00:00Z — merge feat/pos-bridge-usb-scale-and-retail (sync profit-margin, Bridge USB scale, native POS reports)
 
