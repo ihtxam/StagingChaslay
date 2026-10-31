@@ -7,7 +7,7 @@ import {
   installDesktopHardwareBridge,
 } from '@/lib/hardware/desktop-bridge';
 import { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
-import { isEscPosBase64 } from './escpos-payload';
+import { isValidAgentRawPrintBase64 } from './escpos-payload';
 import type { EscPosTextEncoding } from './escpos-encode';
 
 export { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
@@ -1246,7 +1246,7 @@ export async function printViaAgent(opts: {
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
   const b64 = String(opts.dataBase64 || '').trim();
-  if (!isEscPosBase64(b64)) {
+  if (!isValidAgentRawPrintBase64(b64)) {
     throw new Error(
       'Print data is not valid ESC/POS (corrupt or truncated). Hard-refresh Web POS and print again.'
     );

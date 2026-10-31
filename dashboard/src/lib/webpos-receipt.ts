@@ -3798,7 +3798,7 @@ export async function buildReceiptEscPos(
   );
 }
 
-export { isEscPosBase64, isEscPosBytePayload } from '@/lib/escpos-payload';
+export { isEscPosBase64, isEscPosBytePayload, isValidAgentRawPrintBase64 } from '@/lib/escpos-payload';
 
 export function uint8ToBase64(bytes: Uint8Array): string {
   if (typeof btoa === 'undefined') return '';
