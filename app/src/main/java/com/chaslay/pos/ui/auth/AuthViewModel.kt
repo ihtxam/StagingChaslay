@@ -6,8 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.LoginResult
-import com.chaslay.pos.domain.model.STAFF_PIN_MAX_LENGTH
 import com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH
+import com.chaslay.pos.domain.model.STAFF_PIN_QUICK_LOGIN_LENGTH
 import com.chaslay.pos.data.preferences.SyncApiKeyStore
 import com.chaslay.pos.sync.MenuSyncMode
 import com.chaslay.pos.sync.MenuSyncRepository
@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class AuthUiState(
     val isLoggedIn: Boolean = false,
@@ -46,28 +49,47 @@ class AuthViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            sessionManager.currentUserAccess
+                .distinctUntilChanged()
+                .collect { access ->
+                    _uiState.update { it.copy(isLoggedIn = access != null) }
+                }
+        }
+    }
+
     private var pendingSession: AuthRepository.AuthSession? = null
     private var pinSetupBuffer: String = ""
     private var pinSetupFirst: String = ""
     /** True when finishing a cloud email login (replace local demo menu). */
     private var pendingPullCloudMenu: Boolean = false
+    private val pinLoginMutex = Mutex()
 
     fun tryAutoLoginWithPin(pin: String) {
         viewModelScope.launch {
-            if (authRepository.pinMatchesActiveStaff(pin)) {
-                loginWithPin(pin)
+            pinLoginMutex.withLock {
+                if (authRepository.pinMatchesActiveStaff(pin)) {
+                    performPinLogin(pin)
+                }
             }
         }
     }
 
     fun loginWithPin(pin: String) {
         viewModelScope.launch {
-            val session = authRepository.loginWithPin(pin)
-            if (session != null) {
-                finishLogin(session, pullCloudMenu = false)
-            } else {
-                _uiState.update { it.copy(errorMessage = "Invalid PIN") }
+            pinLoginMutex.withLock {
+                performPinLogin(pin)
             }
+        }
+    }
+
+    private suspend fun performPinLogin(pin: String) {
+        val session = authRepository.loginWithPin(pin)
+        if (session != null) {
+            finishLogin(session, pullCloudMenu = false)
+        } else {
+            _uiState.update { it.copy(errorMessage = "Invalid PIN") }
         }
     }
 
@@ -99,10 +121,10 @@ class AuthViewModel @Inject constructor(
     }
 
     fun onPinSetupDigit(digit: String) {
-        if (_uiState.value.pinSetupUserName == null || pinSetupBuffer.length >= STAFF_PIN_MAX_LENGTH) return
+        if (_uiState.value.pinSetupUserName == null || pinSetupBuffer.length >= STAFF_PIN_QUICK_LOGIN_LENGTH) return
         pinSetupBuffer += digit
         _uiState.update { it.copy(pinSetupLength = pinSetupBuffer.length, errorMessage = null) }
-        if (pinSetupBuffer.length >= STAFF_PIN_MAX_LENGTH) {
+        if (pinSetupBuffer.length >= STAFF_PIN_QUICK_LOGIN_LENGTH) {
             confirmPinSetupEntry()
         }
     }
@@ -215,7 +237,7 @@ class AuthViewModel @Inject constructor(
                 syncService.syncAll(force = true)
             }.onFailure { Log.w("AuthViewModel", "Post-login menu sync failed", it) }
         }
-        _uiState.update { AuthUiState(isLoggedIn = true) }
+        _uiState.update { it.copy(errorMessage = null) }
     }
 
     fun logout() {

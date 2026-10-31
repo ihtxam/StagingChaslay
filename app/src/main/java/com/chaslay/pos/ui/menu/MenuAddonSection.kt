@@ -90,7 +90,7 @@ fun AddonListSection(groups: List<AddonGroupEntity>, viewModel: MenuViewModel) {
 }
 
 @Composable
-private fun AddonGroupCard(
+internal fun AddonGroupCard(
     group: AddonGroupEntity,
     viewModel: MenuViewModel,
     onEdit: () -> Unit,
@@ -106,6 +106,7 @@ private fun AddonGroupCard(
     }
 
     val badges = buildList {
+        add(stringResource(R.string.extras_nos_badge_extras))
         add(stringResource(R.string.menu_paid_extras))
         add(
             if (group.required) stringResource(R.string.required_option)
@@ -127,7 +128,7 @@ private fun AddonGroupCard(
 }
 
 @Composable
-private fun AddonEditorDialog(
+internal fun AddonEditorDialog(
     group: AddonGroupEntity?,
     viewModel: MenuViewModel,
     onDismiss: () -> Unit,

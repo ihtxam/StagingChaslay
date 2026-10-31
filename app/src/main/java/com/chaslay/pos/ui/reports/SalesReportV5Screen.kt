@@ -407,7 +407,12 @@ private fun BreakdownCard(
         }
         Spacer(Modifier.size(12.dp))
         if (rows.isEmpty()) {
-            Text("No data", color = DashColors.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                stringResource(R.string.report_no_data),
+                color = DashColors.TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         } else {
             rows.forEach { row ->
                 val pct = if (total > 0.0) (row.total / total * 100.0) else 0.0
@@ -501,7 +506,12 @@ private fun TaxBreakdownCard(rows: List<TaxRow>, sym: String) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.LocalOffer, contentDescription = null, tint = DashColors.Info, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Tax Breakdown", color = DashColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                stringResource(R.string.report_tax_breakdown),
+                color = DashColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
         Spacer(Modifier.size(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {

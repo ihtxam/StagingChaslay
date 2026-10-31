@@ -7,6 +7,9 @@ import android.os.SystemClock
 import android.util.Log
 import com.rebornsense.printbridge.print.PrinterPreferences
 import com.rebornsense.printbridge.PrintBridgeLauncher
+import com.rebornsense.printbridge.scale.ScalePreferences
+import com.rebornsense.printbridge.scale.ScaleUsbHelper
+import com.rebornsense.printbridge.scale.ScaleUsbMatcher
 
 /**
  * USB host permission for printers only (not barcode/RFID peripherals).
@@ -24,6 +27,8 @@ object UsbHostPermissions {
     @Volatile
     private var monitoredUsbKeys: Set<String> = emptySet()
     @Volatile
+    private var monitoredScaleKey: String? = null
+    @Volatile
     private var pendingPermissionDeviceId: Int? = null
 
     @Volatile
@@ -40,13 +45,25 @@ object UsbHostPermissions {
             keys.add("$USB_PREFIX${vidPid.trim()}")
         }
         monitoredUsbKeys = keys
+        monitoredScaleKey = ScalePreferences.getMonitoredScaleAddress(app)?.let { ScaleUsbHelper.permissionKey(it) }
     }
 
-    /** Attach / print / manual grant — not bulk onResume when the Bridge UI merely opens. */
+    /** Print path and boot notifier — includes remembered USB grants. */
     fun shouldAutoRequestPermission(context: android.content.Context, device: UsbDevice): Boolean {
         val stable = stableUsbId(device)
         if (stable in monitoredUsbKeys) return true
         return PrinterPreferences.isRememberedUsbDevice(context, deviceKey(device))
+    }
+
+    /** Attach-receiver auto-prompt: default / saved USB printer only (not remembered-grant prefs). */
+    fun shouldAutoRequestOnAttach(device: UsbDevice): Boolean {
+        return stableUsbId(device) in monitoredUsbKeys
+    }
+
+    /** Saved WebPOS scale address (vid:pid) only. */
+    fun shouldAutoRequestScaleOnAttach(device: UsbDevice): Boolean {
+        val key = monitoredScaleKey ?: return false
+        return stableUsbId(device) == key
     }
 
     /**
@@ -60,6 +77,116 @@ object UsbHostPermissions {
         val usb = usbManager(app) ?: return
         reconcilePendingWithGrant(usb, app)
         clearStalePendingRequest(usb)
+        maybeRequestPostBootMonitoredUsbPermission(activity, usb)
+        maybeRequestPostBootMonitoredScaleUsbPermission(activity, usb)
+    }
+
+    /** One foreground USB allow dialog per reboot when default/saved printer is plugged in but unauthorized. */
+    private fun maybeRequestPostBootMonitoredUsbPermission(
+        activity: android.app.Activity,
+        usb: UsbManager,
+    ) {
+        val app = activity.applicationContext
+        if (!UsbBootAttachGrace.shouldOfferPostBootForegroundPrompt(app)) return
+        if (monitoredUsbKeys.isEmpty()) {
+            UsbBootAttachGrace.markPostBootForegroundPromptCompleted(app)
+            return
+        }
+        if (pendingPermissionDeviceId != null) return
+        val missing = usb.deviceList.values.firstOrNull { device ->
+            if (!UsbDeviceClassifier.isUsbPrinterCandidate(app, device)) return@firstOrNull false
+            if (usb.hasPermission(device)) return@firstOrNull false
+            shouldAutoRequestOnAttach(device)
+        }
+        if (missing == null) {
+            UsbBootAttachGrace.markPostBootForegroundPromptCompleted(app)
+            return
+        }
+        UsbBootAttachGrace.markPostBootForegroundPromptCompleted(app)
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(app, missing)) {
+            Log.d(TAG, "Post-boot USB prompt debounced for ${deviceKey(missing)}")
+            return
+        }
+        Log.i(TAG, "Post-boot USB permission prompt for ${deviceKey(missing)}")
+        UsbAttachPromptGuard.markPromptIssued(app, missing)
+        requestPermissionForDevice(activity, missing)
+    }
+
+    private fun maybeRequestPostBootMonitoredScaleUsbPermission(
+        activity: android.app.Activity,
+        usb: UsbManager,
+    ) {
+        val app = activity.applicationContext
+        if (!UsbBootAttachGrace.shouldOfferPostBootScaleForegroundPrompt(app)) return
+        val scaleKey = monitoredScaleKey
+        if (scaleKey.isNullOrBlank()) {
+            UsbBootAttachGrace.markPostBootScaleForegroundPromptCompleted(app)
+            return
+        }
+        if (pendingPermissionDeviceId != null) return
+        val missing = usb.deviceList.values.firstOrNull { device ->
+            if (stableUsbId(device) != scaleKey) return@firstOrNull false
+            if (!isLikelyScale(app, device)) return@firstOrNull false
+            !usb.hasPermission(device)
+        }
+        if (missing == null) {
+            UsbBootAttachGrace.markPostBootScaleForegroundPromptCompleted(app)
+            return
+        }
+        UsbBootAttachGrace.markPostBootScaleForegroundPromptCompleted(app)
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(app, missing)) {
+            Log.d(TAG, "Post-boot scale USB prompt debounced for ${deviceKey(missing)}")
+            return
+        }
+        Log.i(TAG, "Post-boot USB permission prompt for scale ${deviceKey(missing)}")
+        UsbAttachPromptGuard.markPromptIssued(app, missing)
+        requestPermissionForScaleDevice(activity, missing)
+    }
+
+    fun isLikelyScale(context: android.content.Context, device: UsbDevice): Boolean {
+        return ScaleUsbMatcher.isLikelyScale(device) {
+            UsbDeviceClassifier.isUsbPrinterCandidate(context, it)
+        }
+    }
+
+    fun needsScalePermissionRequest(
+        context: android.content.Context,
+        usb: UsbManager,
+        device: UsbDevice,
+    ): Boolean {
+        if (usb.hasPermission(device)) return false
+        if (!isLikelyScale(context.applicationContext, device)) return false
+        return shouldAutoRequestScaleOnAttach(device)
+    }
+
+    fun requestPermissionForScaleDevice(activity: android.app.Activity, device: UsbDevice): Boolean {
+        register(activity)
+        val usb = usbManager(activity) ?: return false
+        val app = activity.applicationContext
+        if (!needsScalePermissionRequest(app, usb, device)) {
+            if (usb.hasPermission(device)) {
+                Log.d(TAG, "Skip scale USB request — already granted for ${deviceKey(device)}")
+            }
+            return false
+        }
+        reconcilePendingWithGrant(usb, app)
+        clearStalePendingRequest(usb)
+        if (pendingPermissionDeviceId != null) return false
+        UsbAttachPromptGuard.markPromptIssued(app, device)
+        requestPermission(app, usb, device)
+        return true
+    }
+
+    fun requestScalePermissionFromContext(context: android.content.Context, device: UsbDevice): Boolean {
+        val app = context.applicationContext
+        val usb = usbManager(app) ?: return false
+        if (!needsScalePermissionRequest(app, usb, device)) return false
+        reconcilePendingWithGrant(usb, app)
+        clearStalePendingRequest(usb)
+        if (pendingPermissionDeviceId != null) return false
+        UsbAttachPromptGuard.markPromptIssued(app, device)
+        requestPermission(app, usb, device)
+        return true
     }
 
     fun stableUsbId(device: UsbDevice): String = "$USB_PREFIX${device.vendorId}:${device.productId}"
@@ -200,6 +327,7 @@ object UsbHostPermissions {
             }
             return false
         }
+        UsbAttachPromptGuard.markPromptIssued(app, device)
         requestPermission(app, usb, device)
         return true
     }
@@ -219,6 +347,7 @@ object UsbHostPermissions {
             }
             return false
         }
+        UsbAttachPromptGuard.markPromptIssued(app, device)
         requestPermission(app, usb, device)
         return true
     }

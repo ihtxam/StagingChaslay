@@ -6,11 +6,13 @@ import androidx.core.os.LocaleListCompat
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.preferences.sessionDataStore
 import com.chaslay.pos.debug.CrashLogger
 import com.chaslay.pos.domain.model.AppLanguage
 import com.chaslay.pos.payment.taptopay.TapToPayEngine
 import com.chaslay.pos.printer.PrinterConnectionManager
+import com.chaslay.pos.printer.UsbBootAttachGrace
 import com.chaslay.pos.printer.UsbPrinterManager
 import com.chaslay.pos.sync.BackgroundSyncScheduler
 import dagger.hilt.android.HiltAndroidApp
@@ -29,12 +31,15 @@ class ChaslayPosApp : Application(), Configuration.Provider {
     @Inject lateinit var backgroundSyncScheduler: BackgroundSyncScheduler
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var tapToPayEngine: TapToPayEngine
+    @Inject lateinit var sessionManager: SessionManager
 
     override fun onCreate() {
         super.onCreate()
+        runBlocking { sessionManager.clearAuthSession() }
         applySavedLocale()
         crashLogger.installGlobalHandler()
         crashLogger.flushPendingUploads()
+        UsbBootAttachGrace.ensureBootAnchorIfUnset(this)
         printerConnectionManager.warmupOnStartup()
         usbPrinterManager.startMonitoring()
         backgroundSyncScheduler.schedule(this)
@@ -47,9 +52,21 @@ class ChaslayPosApp : Application(), Configuration.Provider {
 
     private fun applySavedLocale() {
         val languageCode = runBlocking {
-            sessionDataStore.data.first()[startupLanguageKey] ?: AppLanguage.ENGLISH.code
+            sessionDataStore.data.first()[startupLanguageKey]?.trim()?.takeIf { it.isNotEmpty() }
+                ?: AppCompatDelegate.getApplicationLocales().let { locales ->
+                    if (locales.isEmpty) null else locales[0]?.toLanguageTag()?.substringBefore('-')
+                }
+                ?: AppLanguage.ENGLISH.code
         }
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(languageCode))
+        val persisted = runBlocking {
+            sessionDataStore.data.first()[startupLanguageKey]?.trim()?.takeIf { it.isNotEmpty() }
+        }
+        if (persisted == null) {
+            runBlocking {
+                sessionManager.setLanguage(AppLanguage.fromCode(languageCode))
+            }
+        }
     }
 
     override val workManagerConfiguration: Configuration

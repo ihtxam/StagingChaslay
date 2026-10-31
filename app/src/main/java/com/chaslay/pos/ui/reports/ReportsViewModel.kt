@@ -3,7 +3,10 @@ package com.chaslay.pos.ui.reports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaslay.pos.data.preferences.SessionManager
+import com.chaslay.pos.data.preferences.SyncApiKeyStore
+import com.chaslay.pos.data.remote.SyncApi
 import com.chaslay.pos.data.repository.SettingsRepository
+import com.chaslay.pos.data.repository.ProductRepository
 import com.chaslay.pos.data.repository.TransactionRepository
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.DailySalesReport
@@ -19,6 +22,7 @@ import com.chaslay.pos.domain.model.roundMoney
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
+import android.util.Log
 import com.chaslay.pos.domain.model.PosPermission
 import com.chaslay.pos.util.PosLocalPrefs
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +65,40 @@ data class SalesReportSnapshot(
     val takeawayCount: Int = 0
 )
 
+data class ProfitMarginSnapshot(
+    val netMerchandise: Double = 0.0,
+    val cogs: Double = 0.0,
+    val grossProfit: Double = 0.0,
+    val marginPercent: Double = 0.0,
+    val linesMissingCost: Int = 0,
+    val revenueChangePct: Double? = null,
+    val profitChangePct: Double? = null
+)
+
+enum class ProfitBreakdown { CATEGORY, PRODUCT, DAY, MONTH }
+
+data class ProfitMarginRow(
+    val id: String,
+    val label: String,
+    val quantity: Double,
+    val revenue: Double,
+    val cogs: Double,
+    val profit: Double,
+    val marginPercent: Double?,
+    val revenueChangePct: Double? = null,
+    val profitChangePct: Double? = null
+)
+
+data class ProfitMarginReport(
+    val summary: ProfitMarginSnapshot = ProfitMarginSnapshot(),
+    val byProduct: List<ProfitMarginRow> = emptyList(),
+    val byCategory: List<ProfitMarginRow> = emptyList(),
+    val byDay: List<ProfitMarginRow> = emptyList(),
+    val byMonth: List<ProfitMarginRow> = emptyList(),
+    val fromCloud: Boolean = false,
+    val previousRangeLabel: String? = null
+)
+
 data class ReportsUiState(
     val dailyReport: DailySalesReport = DailySalesReport(0, 0.0, 0.0, 0.0, 0.0),
     val salesReport: SalesReportSnapshot = SalesReportSnapshot(),
@@ -80,6 +118,9 @@ data class ReportsUiState(
     ),
     val topProducts: List<ProductSalesReport> = emptyList(),
     val userPerformance: List<UserPerformanceReport> = emptyList(),
+    val profitMargin: ProfitMarginSnapshot = ProfitMarginSnapshot(),
+    val profitReport: ProfitMarginReport = ProfitMarginReport(),
+    val profitBreakdown: ProfitBreakdown = ProfitBreakdown.PRODUCT,
     val eodStaffOptions: List<EodStaffOption> = emptyList(),
     val selectedEodStaffId: Long? = null,
     val canViewAllSales: Boolean = true,
@@ -91,10 +132,13 @@ data class ReportsUiState(
 class ReportsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val transactionRepository: TransactionRepository,
+    private val productRepository: ProductRepository,
     private val settingsRepository: SettingsRepository,
     private val printerService: BluetoothPrinterService,
     private val sessionManager: SessionManager,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val syncApi: SyncApi,
+    private val syncApiKeyStore: SyncApiKeyStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReportsUiState())
@@ -192,6 +236,13 @@ class ReportsViewModel @Inject constructor(
                 takeawayTotal = roundMoney(completed.filter { it.serviceType == ServiceType.TAKEAWAY }.sumOf { netBrut(it) }),
                 takeawayCount = completed.count { it.serviceType == ServiceType.TAKEAWAY }
             )
+            val profitReportLocal = computeProfitReport(completed)
+            val profitReport = fetchRemoteProfitReport(
+                range = range,
+                breakdown = _uiState.value.profitBreakdown,
+                scopeUserId = scopeUserId,
+                fallback = profitReportLocal
+            )
             _uiState.value = ReportsUiState(
                 dailyReport = transactionRepository.getDailyReport(),
                 salesReport = salesReport,
@@ -205,11 +256,222 @@ class ReportsViewModel @Inject constructor(
                 topProducts = transactionRepository.getProductsSold(start, end, scopeUserId),
                 userPerformance = if (ownOnly) emptyList()
                 else transactionRepository.getUserPerformance(),
+                profitMargin = profitReport.summary,
+                profitReport = profitReport,
+                profitBreakdown = _uiState.value.profitBreakdown,
                 eodStaffOptions = staffOptions,
                 selectedEodStaffId = if (viewAll) selectedStaff else null,
-                canViewAllSales = viewAll
+                canViewAllSales = viewAll,
+                eodIncludeProductsSold = _uiState.value.eodIncludeProductsSold
             )
         }
+    }
+
+    fun selectProfitBreakdown(breakdown: ProfitBreakdown) {
+        _uiState.update { it.copy(profitBreakdown = breakdown) }
+        viewModelScope.launch {
+            val state = _uiState.value
+            val (start, end) = rangeBounds(state.selectedRange)
+            val access = sessionManager.currentUserAccess.first()
+            val userId = sessionManager.currentUserId.first()
+            val ownOnly = access != null && !access.canViewAllSales()
+            val viewAll = access == null || access.canViewAllSales()
+            val scopeUserId = when {
+                ownOnly -> userId
+                viewAll && state.selectedEodStaffId != null -> state.selectedEodStaffId
+                else -> null
+            }
+            if (!syncApiKeyStore.hasKey()) return@launch
+            val allTx = transactionRepository.getTransactionsBetween(start, end)
+            val transactions =
+                if (scopeUserId != null) allTx.filter { it.userId == scopeUserId } else allTx
+            val completed = transactions.filter { it.paymentStatus.isPaidSale() }
+            val local = computeProfitReport(completed)
+            val remote = fetchRemoteProfitReport(
+                range = state.selectedRange,
+                breakdown = breakdown,
+                scopeUserId = scopeUserId,
+                fallback = local
+            )
+            _uiState.update {
+                it.copy(profitReport = remote, profitMargin = remote.summary)
+            }
+        }
+    }
+
+    private suspend fun fetchRemoteProfitReport(
+        range: ReportRange,
+        breakdown: ProfitBreakdown,
+        scopeUserId: Long?,
+        fallback: ProfitMarginReport
+    ): ProfitMarginReport {
+        if (!syncApiKeyStore.hasKey()) return fallback
+        return try {
+            val preset = reportPresetFor(range)
+            val granularity = when (breakdown) {
+                ProfitBreakdown.MONTH -> "month"
+                ProfitBreakdown.DAY -> "day"
+                else -> null
+            }
+            val staffId = scopeUserId?.let { resolveCloudStaffId(it) }
+            val response = syncApi.profitMarginReport(
+                preset = preset,
+                granularity = granularity,
+                staffId = staffId
+            )
+            val remote = response.report ?: return fallback
+            ProfitMarginRemoteMapper.toLocal(remote)
+        } catch (e: Exception) {
+            Log.w(TAG, "Remote profit margin report failed; using local", e)
+            fallback
+        }
+    }
+
+    private suspend fun resolveCloudStaffId(localUserId: Long): String? {
+        val user = authRepository.getUser(localUserId) ?: return null
+        val email = user.email ?: return null
+        return if (email.startsWith("sync:")) email.removePrefix("sync:") else null
+    }
+
+    private fun reportPresetFor(range: ReportRange): String = when (range) {
+        ReportRange.TODAY -> "today"
+        ReportRange.YESTERDAY -> "yesterday"
+        ReportRange.LAST_WEEK -> "last_week"
+        ReportRange.LAST_MONTH -> "last_month"
+        ReportRange.LAST_3_MONTHS -> "last_3_months"
+    }
+
+    companion object {
+        private const val TAG = "ReportsViewModel"
+    }
+
+    private suspend fun computeProfitReport(
+        transactions: List<com.chaslay.pos.data.local.entity.TransactionEntity>
+    ): ProfitMarginReport {
+        val products = productRepository.getAllProducts()
+        val categories = productRepository.getAllCategories()
+        val costByProductId = products.associate { it.id to it.costPrice }
+        val categoryByProductId = products.associate { it.id to it.categoryId }
+        val categoryNameById = categories.associate { it.id to it.name }
+
+        val productAgg = mutableMapOf<String, AggRow>()
+        val categoryAgg = mutableMapOf<String, AggRow>()
+        val dayAgg = mutableMapOf<String, AggRow>()
+        val monthAgg = mutableMapOf<String, AggRow>()
+        var netMerchandise = 0.0
+        var cogs = 0.0
+        var linesMissingCost = 0
+
+        val zurich = java.time.ZoneId.of("Europe/Zurich")
+        val dayFmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val monthFmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM")
+
+        for (tx in transactions) {
+            val items = transactionRepository.getTransaction(tx.id)?.second.orEmpty()
+            val txDay = java.time.Instant.ofEpochMilli(tx.createdAt).atZone(zurich).toLocalDate()
+            val dayKey = txDay.format(dayFmt)
+            val monthKey = txDay.format(monthFmt)
+
+            for (item in items) {
+                val metrics = lineProfitMetrics(item, costByProductId[item.productId])
+                if (metrics == null) continue
+                netMerchandise += metrics.revenue
+                cogs += metrics.cogs
+                if (metrics.missingCost) linesMissingCost++
+
+                val productKey = item.productId?.takeIf { it > 0 }?.toString()
+                    ?: "name:${item.productName}"
+                addAgg(productAgg, productKey, item.productName, metrics)
+
+                val catId = item.productId?.let { categoryByProductId[it] }
+                val catKey = catId?.toString() ?: "uncategorized"
+                val catLabel = catId?.let { categoryNameById[it] } ?: "Uncategorized"
+                addAgg(categoryAgg, catKey, catLabel, metrics)
+
+                addAgg(dayAgg, dayKey, dayKey, metrics)
+                addAgg(monthAgg, monthKey, monthKey, metrics)
+            }
+        }
+
+        netMerchandise = roundMoney(netMerchandise)
+        cogs = roundMoney(cogs)
+        val grossProfit = roundMoney(netMerchandise - cogs)
+        val marginPercent = profitMarginPercent(netMerchandise, grossProfit) ?: 0.0
+        val summary = ProfitMarginSnapshot(
+            netMerchandise = netMerchandise,
+            cogs = cogs,
+            grossProfit = grossProfit,
+            marginPercent = marginPercent,
+            linesMissingCost = linesMissingCost
+        )
+        return ProfitMarginReport(
+            summary = summary,
+            byProduct = toProfitRows(productAgg).sortedByDescending { it.profit },
+            byCategory = toProfitRows(categoryAgg).sortedByDescending { it.profit },
+            byDay = toProfitRows(dayAgg).sortedBy { it.id },
+            byMonth = toProfitRows(monthAgg).sortedBy { it.id }
+        )
+    }
+
+    private data class AggRow(var label: String, var qty: Double = 0.0, var revenue: Double = 0.0, var cogs: Double = 0.0)
+
+    private data class LineProfitMetrics(
+        val keptUnits: Double,
+        val revenue: Double,
+        val cogs: Double,
+        val missingCost: Boolean
+    )
+
+    private fun lineProfitMetrics(
+        item: com.chaslay.pos.data.local.entity.TransactionItemEntity,
+        unitCost: Double?
+    ): LineProfitMetrics? {
+        val keptQty = (item.quantity - item.refundedQuantity).coerceAtLeast(0)
+        if (keptQty <= 0) return null
+        val keptUnits = if (item.isWeighed) keptQty / 1000.0 else keptQty.toDouble()
+        val revenue = if (item.quantity > 0) {
+            item.lineSubtotal * (keptQty.toDouble() / item.quantity.toDouble())
+        } else {
+            item.lineSubtotal
+        }.coerceAtLeast(0.0)
+        val productId = item.productId
+        val missingCost = productId != null && productId > 0L && (unitCost == null || unitCost < 0.0)
+        val lineCogs = if (unitCost != null && unitCost >= 0.0) unitCost * keptUnits else 0.0
+        return LineProfitMetrics(
+            keptUnits = keptUnits,
+            revenue = revenue,
+            cogs = lineCogs,
+            missingCost = missingCost
+        )
+    }
+
+    private fun addAgg(map: MutableMap<String, AggRow>, key: String, label: String, metrics: LineProfitMetrics) {
+        val row = map.getOrPut(key) { AggRow(label) }
+        if (row.label.isBlank()) row.label = label
+        row.qty += metrics.keptUnits
+        row.revenue += metrics.revenue
+        row.cogs += metrics.cogs
+    }
+
+    private fun toProfitRows(map: Map<String, AggRow>): List<ProfitMarginRow> =
+        map.map { (id, row) ->
+            val revenue = roundMoney(row.revenue)
+            val cogs = roundMoney(row.cogs)
+            val profit = roundMoney(revenue - cogs)
+            ProfitMarginRow(
+                id = id,
+                label = row.label.ifBlank { id },
+                quantity = roundMoney(row.qty),
+                revenue = revenue,
+                cogs = cogs,
+                profit = profit,
+                marginPercent = profitMarginPercent(revenue, profit)
+            )
+        }
+
+    private fun profitMarginPercent(revenue: Double, profit: Double): Double? {
+        if (revenue <= 0.0005) return if (profit > 0) 100.0 else null
+        return roundMoney(profit / revenue * 100.0)
     }
 
     private fun rangeBounds(range: ReportRange): Pair<Long, Long> {

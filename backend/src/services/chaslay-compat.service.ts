@@ -487,7 +487,9 @@ export class ChaslayCompatService {
       where: eq(schema.products.merchantId, merchantId),
     });
     const activeProducts = allProducts.filter((p) => p.isActive !== false);
-    const { products, categories: visibleCategories } = filterCatalogForChannel(
+    // Products follow POS channel visibility; categories are the full merchant list so native
+    // POS tabs match the panel (WebPOS filters client-side the same way).
+    const { products: visibleProducts } = filterCatalogForChannel(
       activeProducts,
       categories,
       "pos"
@@ -506,7 +508,7 @@ export class ChaslayCompatService {
     ];
 
     const categoryClientById = new Map(
-      visibleCategories.map((c) => [c.id, c.clientId || c.id] as const)
+      categories.map((c) => [c.id, c.clientId || c.id] as const)
     );
     const productClientById = new Map(
       allProducts.map((p) => [p.id, p.clientId || p.id] as const)
@@ -542,8 +544,8 @@ export class ChaslayCompatService {
         store_hours: merchant.storeHours || {},
         receipt_base_url: receiptPublicBaseUrl(),
       },
-      categories: visibleCategories.map((c) => this.mapCategory(c)),
-      products: products.map((p) =>
+      categories: categories.map((c) => this.mapCategory(c)),
+      products: visibleProducts.map((p) =>
         this.mapProduct(p, false, categoryClientById, productClientById, groupsByProduct, catalogById)
       ),
       paymentConfig: await this.getPaymentConfigPayload(merchantId),
@@ -790,8 +792,8 @@ export class ChaslayCompatService {
       where: eq(schema.categories.merchantId, merchantId),
     });
     const activeChangedProducts = products.filter((p) => p.isActive !== false);
-    const { products: visibleProducts, categories: visibleChangedCategories } =
-      filterCatalogForChannel(activeChangedProducts, categories, "pos");
+    const { products: visibleProducts } =
+      filterCatalogForChannel(activeChangedProducts, allCategories, "pos");
     const categoryClientById = new Map(
       allCategories.map((c) => [c.id, c.clientId || c.id] as const)
     );
@@ -809,7 +811,7 @@ export class ChaslayCompatService {
 
     return {
       serverTime: Date.now(),
-      categories: visibleChangedCategories.map((c) => this.mapCategory(c, true)),
+      categories: categories.map((c) => this.mapCategory(c, true)),
       products: visibleProducts.map((p) =>
         this.mapProduct(p, true, categoryClientById, productClientById, groupsByProduct, catalogById)
       ),

@@ -362,7 +362,12 @@ private fun RefundsCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Undo, contentDescription = null, tint = ReportDashColors.Danger, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Refunds", color = ReportDashColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                stringResource(R.string.report_refunds),
+                color = ReportDashColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {

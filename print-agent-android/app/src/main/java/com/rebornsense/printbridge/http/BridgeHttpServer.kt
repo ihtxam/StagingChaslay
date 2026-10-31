@@ -14,6 +14,9 @@ import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.payment.hasNfcFeature
 import com.rebornsense.printbridge.scale.AclasScaleReader
+import com.rebornsense.printbridge.scale.ScalePreferences
+import com.rebornsense.printbridge.scale.ScaleUsbHelper
+import com.rebornsense.printbridge.usb.UsbHostPermissions
 import com.rebornsense.printbridge.usb.UsbPlugPlay
 import com.rebornsense.printbridge.scale.AclasScaleReading
 import fi.iki.elonen.NanoHTTPD
@@ -363,6 +366,22 @@ class BridgeHttpServer(
                         JSONObject().put("ok", false).put("error", "usbAddress query param required"),
                         Response.Status.BAD_REQUEST
                     )
+                }
+                ScalePreferences.setMonitoredScaleAddress(appContext, usbAddress)
+                UsbHostPermissions.syncMonitoredFromPreferences(appContext)
+                val resolved = ScaleUsbHelper.resolveDevice(appContext, usbAddress)
+                if (resolved != null) {
+                    val usb = appContext.getSystemService(android.content.Context.USB_SERVICE)
+                        as? android.hardware.usb.UsbManager
+                    if (usb != null && UsbHostPermissions.needsScalePermissionRequest(appContext, usb, resolved)) {
+                        UsbPlugPlay.promptForMissingScale(appContext, resolved)
+                        return jsonResponse(
+                            JSONObject()
+                                .put("ok", true)
+                                .put("reading", JSONObject.NULL)
+                                .put("message", "USB permission required — tap notification or open Bridge Reborn")
+                        )
+                    }
                 }
                 val outcome = runBlocking {
                     withTimeoutOrNull(timeoutMs + 800L) {

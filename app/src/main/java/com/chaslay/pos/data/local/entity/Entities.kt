@@ -253,6 +253,8 @@ data class BusinessSettingsEntity(
     val kitchenPrinterPrintKitchen: Boolean = true,
     /** Synced from merchant panel posPrintSettings.autoPrintKitchen */
     val autoPrintKitchen: Boolean = true,
+    /** Synced from merchant panel posPrintSettings.autoPrintReceipt; local toggle in Settings → Receipt. */
+    val autoPrintReceipt: Boolean = true,
     /** Ring on main till when a waiter device sends kitchen print (panel sync). */
     val waiterTillBellEnabled: Boolean = true,
     /** Auto-retry failed kitchen prints before showing error (panel sync). */
@@ -592,6 +594,7 @@ data class ModifierOptionEntity(
     val name: String,
     val sortOrder: Int = 0,
     val inStock: Boolean = true,
+    val isDefault: Boolean = false,
     val isActive: Boolean = true
 )
 
@@ -626,7 +629,14 @@ data class AddonOptionEntity(
     val price: Double = 0.0,
     val sortOrder: Int = 0,
     val inStock: Boolean = true,
+    val isDefault: Boolean = false,
     val isActive: Boolean = true
+)
+
+/** Product ↔ modifier/add-on link row for sort order (Room query result). */
+data class ProductGroupLink(
+    val groupId: Long,
+    val sortOrder: Int
 )
 
 @Entity(

@@ -156,7 +156,7 @@ fun OrderDetailDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    StatusPillDetail(orderStatusLabel(order.paymentStatus), statusColor(order.paymentStatus))
+                    StatusPillDetail(orderHistoryPaymentStatusDetailLabel(order.paymentStatus), statusColor(order.paymentStatus))
                     Text(
                         "#${shortOrderId(order.transactionNumber)}",
                         fontWeight = FontWeight.Bold,
@@ -252,7 +252,7 @@ fun OrderDetailDialog(
 
                         Spacer(Modifier.height(8.dp))
                         SectionTitle(stringResource(R.string.order_detail_transaction))
-                        BillLine(stringResource(R.string.payment_method), paymentLabel(order.paymentMethod))
+                        BillLine(stringResource(R.string.payment_method), orderHistoryPaymentMethodDetailLabel(order.paymentMethod))
                         BillLine(stringResource(R.string.staff), order.userName)
                         if (hasCustomerCard || hasMerchantCard) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -888,14 +888,6 @@ private fun StatusPillDetail(text: String, color: Color) {
     }
 }
 
-private fun orderStatusLabel(status: PaymentStatus): String = when (status) {
-    PaymentStatus.COMPLETED -> "Completed"
-    PaymentStatus.REFUNDED -> "Refunded"
-    PaymentStatus.PARTIALLY_REFUNDED -> "Partially refunded"
-    PaymentStatus.CANCELLED -> "Cancelled"
-    else -> status.name.replace('_', ' ')
-}
-
 private fun shortOrderId(number: String): String =
     com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(number).ifBlank {
         number.removePrefix("TX-")
@@ -907,16 +899,6 @@ private fun resolveOrderDiscount(order: TransactionEntity): Double {
         return order.subtotal * (order.discountPercent / 100.0)
     }
     return 0.0
-}
-
-private fun paymentLabel(method: com.chaslay.pos.domain.model.PaymentMethod): String = when (method) {
-    com.chaslay.pos.domain.model.PaymentMethod.CASH -> "Cash"
-    com.chaslay.pos.domain.model.PaymentMethod.CARD -> "Card"
-    com.chaslay.pos.domain.model.PaymentMethod.ADYEN_TERMINAL -> "Terminal"
-    com.chaslay.pos.domain.model.PaymentMethod.TAP_TO_PAY -> "Tap"
-    com.chaslay.pos.domain.model.PaymentMethod.PAY_LATER -> "Pay Later"
-    com.chaslay.pos.domain.model.PaymentMethod.INVOICE -> "Invoice"
-    com.chaslay.pos.domain.model.PaymentMethod.GIFT_CARD -> "Gift card"
 }
 
 private fun statusColor(status: PaymentStatus): Color = when (status) {

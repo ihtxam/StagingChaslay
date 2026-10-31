@@ -164,9 +164,12 @@ fun CheckoutScreen(
     } else {
         0.0
     }
+    val kitchenRefLabel = stringResource(R.string.checkout_kitchen_ref_label)
     val checkoutOrderRef = com.chaslay.pos.util.OrderNumberFormat.formatCheckoutOrderRef(
         cart.orderNumber,
-        null
+        null,
+        null,
+        kitchenRefLabel
     )
     val exactCash = checkoutState.method == PaymentMethod.CASH && cashApplied < 0.001 && cardApplied < 0.001
     val methodChargesRemaining = checkoutState.method == PaymentMethod.CARD ||

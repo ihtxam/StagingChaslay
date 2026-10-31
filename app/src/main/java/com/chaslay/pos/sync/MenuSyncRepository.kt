@@ -80,24 +80,29 @@ class MenuSyncRepository @Inject constructor(
                 return@withContext MenuSyncResult(skipped = true, message = "No sync API key")
             }
             val syncBusinessInfo = syncPreferences.isSyncBusinessInfoEnabled()
-            if (mode == MenuSyncMode.REPLACE) {
-                productDao.deactivateAll()
-                categoryDao.deactivateAll()
-                syncPreferences.resetMenuSyncCursor()
-            }
-
             val lastSync = syncPreferences.getLastMenuSyncMs()
             val forceBootstrap = mode == MenuSyncMode.REPLACE || lastSync <= 0L
             var businessSynced = false
             val bootstrap = if (forceBootstrap) {
-                syncApi.bootstrap()
+                runCatching { syncApi.bootstrap() }.getOrNull()
             } else {
                 // Incremental changes omit unchanged combos, so always refresh slots
                 // from the full catalog. WebPOS reads the same slot options live.
                 runCatching { syncApi.bootstrap() }.getOrNull()
             }
+            if (mode == MenuSyncMode.REPLACE) {
+                if (bootstrap == null) {
+                    return@withContext MenuSyncResult(message = "Could not download online menu")
+                }
+                productDao.deactivateAll()
+                categoryDao.deactivateAll()
+                syncPreferences.resetMenuSyncCursor()
+                PosLocalPrefs.clearAllLocalProductPrices(appContext)
+            }
             val (serverTime, categories, products) = if (forceBootstrap) {
-                Triple(bootstrap!!.serverTime, bootstrap.categories, bootstrap.products)
+                val boot = bootstrap
+                    ?: return@withContext MenuSyncResult(message = "Could not download online menu")
+                Triple(boot.serverTime, boot.categories, boot.products)
             } else {
                 val changes = syncApi.menuChanges(lastSync)
                 Triple(changes.serverTime, changes.categories, changes.products)
@@ -120,13 +125,14 @@ class MenuSyncRepository @Inject constructor(
             }
             val productIdByRemote = mutableMapOf<String, Long>()
             products.forEach { dto ->
-                val localId = upsertProduct(dto, categoryIdByRemote)
+                val localId = upsertProduct(dto, categoryIdByRemote, mode)
                 if (localId != null) productIdByRemote[dto.id] = localId
             }
             persistComboSlotsFromCatalog(
                 catalogProducts = bootstrap?.products ?: products,
                 categoryIdByRemote = categoryIdByRemote,
-                productIdByRemote = productIdByRemote
+                productIdByRemote = productIdByRemote,
+                mode = mode
             )
             persistModifiersFromCatalog(
                 catalogProducts = bootstrap?.products ?: products,
@@ -134,7 +140,8 @@ class MenuSyncRepository @Inject constructor(
             )
             persistVariantsFromCatalog(
                 catalogProducts = bootstrap?.products ?: products,
-                productIdByRemote = productIdByRemote
+                productIdByRemote = productIdByRemote,
+                mode = mode
             )
 
             syncPreferences.setLastMenuSyncMs(serverTime)
@@ -283,7 +290,7 @@ class MenuSyncRepository @Inject constructor(
             name = TextEncoding.repairCatalogText(dto.name),
             sortOrder = dto.sort_order ?: existing?.sortOrder ?: 0,
             colorHex = dto.color_hex ?: existing?.colorHex ?: "#5B9BD5",
-            isActive = !deleted,
+            isActive = !deleted && dto.kiosk_visible != false,
             onlineVisible = dto.online_visible ?: true,
             updatedAt = parseInstantMs(dto.updated_at)
         )
@@ -293,13 +300,23 @@ class MenuSyncRepository @Inject constructor(
         }
     }
 
-    private suspend fun upsertProduct(dto: SyncProductDto, categoryIdByRemote: Map<String, Long>): Long? {
+    private suspend fun upsertProduct(
+        dto: SyncProductDto,
+        categoryIdByRemote: Map<String, Long>,
+        mode: MenuSyncMode
+    ): Long? {
         val deleted = dto.deleted_at != null
         val existing = productDao.getByRemoteId(dto.id)
         val categoryId = dto.category_id?.let { categoryIdByRemote[it] }
         val isCombo = dto.productType == "combo" || existing?.isCombo == true
         val isOpenPrice = dto.isOpenPrice == true || dto.productType == "open_price"
         val isWeighed = dto.soldByWeight == true || dto.productType == "weighed"
+        val localPriceOverride = resolveLocalProductPriceOverride(existing, dto.id, mode)
+        val mergedPrice = when {
+            mode == MenuSyncMode.REPLACE -> dto.price
+            localPriceOverride != null -> localPriceOverride
+            else -> dto.price
+        }
         val entity = ProductEntity(
             id = existing?.id ?: 0L,
             remoteId = dto.id,
@@ -308,9 +325,10 @@ class MenuSyncRepository @Inject constructor(
             barcode = dto.barcode?.takeIf { it.isNotBlank() } ?: existing?.barcode,
             categoryId = categoryId ?: existing?.categoryId,
             taxRate = dto.tax_rate ?: existing?.taxRate ?: 0.0,
-            price = dto.price,
+            price = mergedPrice,
+            costPrice = dto.costPrice?.takeIf { it >= 0.0 } ?: existing?.costPrice,
             imageUri = dto.image_url ?: existing?.imageUri,
-            isActive = !deleted && dto.in_stock != false,
+            isActive = !deleted && dto.in_stock != false && dto.kiosk_visible != false,
             isOpenPrice = isOpenPrice,
             isWeighed = isWeighed && !isOpenPrice,
             isCombo = isCombo,
@@ -324,39 +342,65 @@ class MenuSyncRepository @Inject constructor(
             productDao.update(entity)
             existing.id
         }.also { localId ->
-            persistProductVariants(localId, dto)
+            persistProductVariants(localId, dto, mode)
         }
+    }
+
+    /** MERGE: prefer PosLocalPrefs (by local id or remote id) over cloud catalog price. */
+    private fun resolveLocalProductPriceOverride(
+        existing: ProductEntity?,
+        dtoRemoteId: String,
+        mode: MenuSyncMode
+    ): Double? {
+        if (mode == MenuSyncMode.REPLACE) return null
+        existing?.id?.let { PosLocalPrefs.getLocalProductPrice(appContext, it) }?.let { return it }
+        val remote = existing?.remoteId?.takeIf { it.isNotBlank() } ?: dtoRemoteId.takeIf { it.isNotBlank() }
+        return remote?.let { PosLocalPrefs.getLocalProductPriceByRemote(appContext, it) }
     }
 
     private suspend fun persistVariantsFromCatalog(
         catalogProducts: List<SyncProductDto>,
-        productIdByRemote: Map<String, Long>
+        productIdByRemote: Map<String, Long>,
+        mode: MenuSyncMode
     ) {
         catalogProducts.forEach { dto ->
             val localId = productIdByRemote[dto.id] ?: productDao.getByRemoteId(dto.id)?.id ?: return@forEach
-            persistProductVariants(localId, dto)
+            persistProductVariants(localId, dto, mode)
         }
     }
 
-    private suspend fun persistProductVariants(localProductId: Long, dto: SyncProductDto) {
+    private suspend fun persistProductVariants(
+        localProductId: Long,
+        dto: SyncProductDto,
+        mode: MenuSyncMode
+    ) {
         val raw = dto.variants ?: dto.specifications ?: emptyList()
         productVariantDao.deactivateByProduct(localProductId)
         val entities = raw.mapIndexedNotNull { index, variant ->
-            variant.toEntity(localProductId, index)
+            variant.toEntity(localProductId, index, mode)
         }
         if (entities.isNotEmpty()) {
             productVariantDao.insertAll(entities)
         }
     }
 
-    private fun SyncVariantDto.toEntity(localProductId: Long, index: Int): ProductVariantEntity? {
+    private fun SyncVariantDto.toEntity(
+        localProductId: Long,
+        index: Int,
+        mode: MenuSyncMode
+    ): ProductVariantEntity? {
         val variantName = name?.trim().orEmpty()
         if (variantName.isEmpty()) return null
         if (saleStatus == "out_of_stock") return null
+        val cloudPrice = price ?: 0.0
+        val mergedPrice = when {
+            mode == MenuSyncMode.REPLACE -> cloudPrice
+            else -> PosLocalPrefs.getLocalVariantPrice(appContext, localProductId, variantName) ?: cloudPrice
+        }
         return ProductVariantEntity(
             productId = localProductId,
             name = TextEncoding.repairCatalogText(variantName),
-            price = price ?: 0.0,
+            price = mergedPrice,
             sortOrder = sortOrder ?: index,
             isActive = true
         )
@@ -365,11 +409,12 @@ class MenuSyncRepository @Inject constructor(
     private suspend fun persistComboSlotsFromCatalog(
         catalogProducts: List<SyncProductDto>,
         categoryIdByRemote: Map<String, Long>,
-        productIdByRemote: MutableMap<String, Long>
+        productIdByRemote: MutableMap<String, Long>,
+        mode: MenuSyncMode
     ) {
         catalogProducts.forEach { dto ->
             if (productIdByRemote[dto.id] != null) return@forEach
-            val localId = upsertProduct(dto, categoryIdByRemote)
+            val localId = upsertProduct(dto, categoryIdByRemote, mode)
             if (localId != null) productIdByRemote[dto.id] = localId
         }
         productDao.getAllActive().forEach { product ->
@@ -486,6 +531,7 @@ class MenuSyncRepository @Inject constructor(
                 name = TextEncoding.repairCatalogText(name),
                 sortOrder = opt.sortOrder ?: index,
                 inStock = opt.saleStatus != "out_of_stock",
+                isDefault = opt.isDefault == true,
                 isActive = true
             )
         }
@@ -519,6 +565,7 @@ class MenuSyncRepository @Inject constructor(
                 price = opt.price ?: 0.0,
                 sortOrder = opt.sortOrder ?: index,
                 inStock = opt.saleStatus != "out_of_stock",
+                isDefault = opt.isDefault == true,
                 isActive = true
             )
         }

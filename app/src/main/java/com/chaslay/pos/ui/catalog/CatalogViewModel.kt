@@ -8,9 +8,12 @@ import com.chaslay.pos.data.local.entity.ModifierGroupEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.data.local.entity.ProductVariantEntity
 import com.chaslay.pos.R
+import com.chaslay.pos.util.PosLocalPrefs
 import com.chaslay.pos.data.repository.MenuRepository
 import com.chaslay.pos.data.repository.ProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +35,8 @@ data class ProductVariantDraft(val name: String, val price: Double)
 @HiltViewModel
 class CatalogViewModel @Inject constructor(
     private val productRepository: ProductRepository,
-    private val menuRepository: MenuRepository
+    private val menuRepository: MenuRepository,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _messageRes = MutableStateFlow<Int?>(null)
@@ -72,6 +76,7 @@ class CatalogViewModel @Inject constructor(
         sku: String? = null,
         stockQuantity: Int? = null,
         lowStockThreshold: Int? = null,
+        costPrice: Double? = null,
         id: Long = 0
     ) {
         if (name.isBlank()) return
@@ -95,7 +100,7 @@ class CatalogViewModel @Inject constructor(
                     stockQuantity = stockQuantity,
                     lowStockThreshold = lowStockThreshold,
                     remoteId = existing?.remoteId,
-                    costPrice = existing?.costPrice,
+                    costPrice = costPrice?.takeIf { it >= 0.0 } ?: existing?.costPrice,
                     imageUri = existing?.imageUri,
                     onlineVisible = existing?.onlineVisible ?: true,
                     printTarget = existing?.printTarget,
@@ -108,6 +113,10 @@ class CatalogViewModel @Inject constructor(
             menuRepository.replaceProductVariants(productId, variantEntities)
             menuRepository.setProductModifierLinks(productId, modifierGroupIds)
             menuRepository.setProductAddonLinks(productId, addonGroupIds)
+            PosLocalPrefs.saveLocalProductPrice(appContext, productId, price, existing?.remoteId)
+            variantEntities.forEach { variant ->
+                PosLocalPrefs.saveLocalVariantPrice(appContext, productId, variant.name, variant.price)
+            }
             _messageRes.value = R.string.product_saved
         }
     }

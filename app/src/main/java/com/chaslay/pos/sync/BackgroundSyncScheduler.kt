@@ -25,6 +25,7 @@ class BackgroundSyncScheduler @Inject constructor() {
             ExistingPeriodicWorkPolicy.KEEP,
             request
         )
+        DiagnosticUploadWorkScheduler.schedulePeriodic(context)
     }
 
     companion object {

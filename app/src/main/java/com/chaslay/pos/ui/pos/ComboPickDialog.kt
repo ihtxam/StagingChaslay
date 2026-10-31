@@ -103,18 +103,56 @@ fun ComboPickDialog(
             combo.slots.forEach { slot -> put(slot.id, emptyList()) }
         }
     }
-    var comboModifiers by remember { mutableStateOf<List<SelectedModifier>>(emptyList()) }
-    var comboAddons by remember { mutableStateOf<List<SelectedAddon>>(emptyList()) }
+    val comboSingleModifier = remember(combo.product.id) {
+        mutableStateMapOf<Long, Long>().apply {
+            combo.modifierGroups.filter { it.isSingleSelect }.forEach { group ->
+                group.options.firstOrNull { it.isDefault && it.inStock }?.let { opt -> put(group.id, opt.id) }
+            }
+        }
+    }
+    val comboModifierQty = remember(combo.product.id) {
+        mutableStateMapOf<Long, Int>().apply {
+            combo.modifierGroups.filter { !it.isSingleSelect }.forEach { group ->
+                group.options.filter { it.isDefault && it.inStock }.forEach { opt ->
+                    if (!containsKey(opt.id)) put(opt.id, 1)
+                }
+            }
+            combo.modifierGroups.filter { it.isSingleSelect }.forEach { group ->
+                if (comboSingleModifier[group.id] == null) {
+                    group.options.firstOrNull { it.isDefault && it.inStock }?.let { opt ->
+                        comboSingleModifier[group.id] = opt.id
+                        put(opt.id, 1)
+                    }
+                } else {
+                    comboSingleModifier[group.id]?.let { put(it, 1) }
+                }
+            }
+        }
+    }
+    val comboAddonQty = remember(combo.product.id) {
+        mutableStateMapOf<Long, Int>().apply {
+            combo.addonGroups.forEach { group ->
+                group.options.filter { it.isDefault && it.inStock }.forEach { opt ->
+                    if (!containsKey(opt.id)) put(opt.id, 1)
+                }
+            }
+        }
+    }
     var nestedOption by remember { mutableStateOf<Pair<ComboSlotModel, ComboSlotOptionModel>?>(null) }
-    var showComboExtras by remember { mutableStateOf(false) }
     var userNotes by remember { mutableStateOf("") }
     var showNotes by remember { mutableStateOf(false) }
+
+    val msgChooseOptionFor = stringResource(R.string.customize_choose_option_for)
+    val msgTooManyModifiers = stringResource(R.string.customize_too_many_modifiers)
+    val msgTooManyAddons = stringResource(R.string.customize_too_many_addons)
 
     fun slotQty(slotId: Long) = picks[slotId].orEmpty().sumOf { it.qty }
 
     val extrasTotal = combo.slots.sumOf { slot ->
         picks[slot.id].orEmpty().sumOf { it.surcharge * it.qty }
-    } + comboAddons.sumOf { it.price * it.quantity }
+    } + combo.addonGroups.sumOf { group ->
+        group.options.sumOf { opt -> (comboAddonQty[opt.id] ?: 0) * opt.price }
+    }
     val unitPrice = product.price + extrasTotal
     val lineTotal = unitPrice * itemQty
 
@@ -199,34 +237,15 @@ fun ComboPickDialog(
                             )
                         }
                         if (combo.hasComboExtras) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        stringResource(R.string.combo_extras),
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 15.sp
-                                    )
-                                    Text(
-                                        stringResource(R.string.combo_customize_item),
-                                        color = Color(0xFF80CBC4),
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.clickable { showComboExtras = true }
-                                    )
-                                }
-                                val extraLabels = comboModifiers.map { it.name } + comboAddons.map { it.name }
-                                if (extraLabels.isNotEmpty()) {
-                                    Text(
-                                        extraLabels.joinToString(", "),
-                                        color = Color(0xFFB0B0B0),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
+                            ProductExtraGroupsInlineEditor(
+                                modifierGroups = combo.modifierGroups,
+                                addonGroups = combo.addonGroups,
+                                currencySymbol = currencySymbol,
+                                singleModifier = comboSingleModifier,
+                                modifierQty = comboModifierQty,
+                                addonQty = comboAddonQty,
+                                onSelectionChanged = { errorMessage = null }
+                            )
                         }
                     }
 
@@ -327,14 +346,36 @@ fun ComboPickDialog(
                                 errorMessage = validation
                                 return@Button
                             }
+                            val builtModifiers = buildModifiers(combo.modifierGroups, comboSingleModifier, comboModifierQty)
+                            val builtAddons = buildAddons(combo.addonGroups, comboAddonQty)
+                            val extrasValidation = validateSelections(
+                                state = ProductCustomizeState(
+                                    product = product,
+                                    modifierGroups = combo.modifierGroups,
+                                    addonGroups = combo.addonGroups,
+                                ),
+                                singleModifier = comboSingleModifier,
+                                modifierQty = comboModifierQty,
+                                addonQty = comboAddonQty,
+                                hasVariants = false,
+                                selectedVariant = null,
+                                chooseOptionFor = msgChooseOptionFor,
+                                chooseSpecification = msgChooseOptionFor,
+                                tooManyModifiers = msgTooManyModifiers,
+                                tooManyAddons = msgTooManyAddons,
+                            )
+                            if (extrasValidation != null) {
+                                errorMessage = extrasValidation
+                                return@Button
+                            }
                             errorMessage = null
                             onConfirm(
                                 ComboPickResult(
                                     selections = buildComboSelections(combo.slots, snapshot),
                                     quantity = itemQty.coerceAtLeast(1),
                                     unitPrice = unitPrice,
-                                    comboExtras = comboAddons.toList(),
-                                    comboModifiers = comboModifiers.toList(),
+                                    comboExtras = builtAddons,
+                                    comboModifiers = builtModifiers,
                                     notes = userNotes.trim().ifBlank { null }
                                 )
                             )
@@ -394,28 +435,6 @@ fun ComboPickDialog(
                 errorMessage = null
             },
             onDismiss = { nestedOption = null }
-        )
-    }
-
-    if (showComboExtras) {
-        ProductCustomizeDialog(
-            state = ProductCustomizeState(
-                product = product.copy(price = 0.0, isCombo = false),
-                modifierGroups = combo.modifierGroups,
-                addonGroups = combo.addonGroups,
-                openPrice = 0.0,
-                initialModifiers = comboModifiers,
-                initialAddons = comboAddons
-            ),
-            currencySymbol = currencySymbol,
-            showProductImages = showProductImages,
-            autoReturnOnSingleExtra = true,
-            onAdd = { result ->
-                comboModifiers = result.modifiers.orEmpty()
-                comboAddons = result.addons.orEmpty()
-                showComboExtras = false
-            },
-            onDismiss = { showComboExtras = false }
         )
     }
 

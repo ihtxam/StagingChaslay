@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -31,10 +30,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
+import com.chaslay.pos.domain.model.STAFF_PIN_QUICK_LOGIN_LENGTH
 import com.chaslay.pos.ui.theme.ChaslayBrand
 
 @Composable
-fun PinDotsDisplay(pinLength: Int, maxLength: Int = 6, modifier: Modifier = Modifier) {
+fun PinDotsDisplay(
+    pinLength: Int,
+    maxLength: Int = STAFF_PIN_QUICK_LOGIN_LENGTH,
+    modifier: Modifier = Modifier
+) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
@@ -44,8 +48,8 @@ fun PinDotsDisplay(pinLength: Int, maxLength: Int = 6, modifier: Modifier = Modi
             val filled = index < pinLength
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .size(if (filled) 18.dp else 14.dp)
+                    .padding(horizontal = 6.dp)
+                    .size(if (filled) 16.dp else 13.dp)
                     .clip(CircleShape)
                     .background(if (filled) ChaslayBrand.Burgundy else ChaslayBrand.Gray200)
                     .border(
@@ -60,6 +64,12 @@ fun PinDotsDisplay(pinLength: Int, maxLength: Int = 6, modifier: Modifier = Modi
 
 private enum class KeyVariant { Digit, Muted, Primary }
 
+private val KeypadRowSpacing = 10.dp
+private val KeypadKeySpacing = 10.dp
+private val KeyMinHeight = 50.dp
+private val KeyCornerRadius = 12.dp
+private val EnterKeyHeight = 48.dp
+
 @Composable
 fun PinLoginKeypad(
     onDigit: (String) -> Unit,
@@ -71,7 +81,7 @@ fun PinLoginKeypad(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(KeypadRowSpacing)
     ) {
         listOf(
             listOf("1", "2", "3"),
@@ -80,7 +90,7 @@ fun PinLoginKeypad(
         ).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(KeypadKeySpacing)
             ) {
                 row.forEach { key ->
                     PinKey(
@@ -93,7 +103,7 @@ fun PinLoginKeypad(
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(KeypadKeySpacing)
         ) {
             PinKey(
                 label = stringResource(R.string.keypad_clear),
@@ -114,12 +124,11 @@ fun PinLoginKeypad(
                 onClick = onBackspace
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
         PinKey(
             label = stringResource(R.string.login),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
+                .height(EnterKeyHeight),
             variant = KeyVariant.Primary,
             enabled = enterEnabled,
             fillHeight = true,
@@ -155,8 +164,12 @@ private fun PinKey(
         variant == KeyVariant.Primary -> ChaslayBrand.Burgundy
         else -> ChaslayBrand.Gray200
     }
-    val shape = RoundedCornerShape(16.dp)
-    val heightMod = if (fillHeight) modifier else modifier.heightIn(min = 52.dp).aspectRatio(1.45f)
+    val shape = RoundedCornerShape(KeyCornerRadius)
+    val heightMod = if (fillHeight) {
+        modifier
+    } else {
+        modifier.heightIn(min = KeyMinHeight, max = KeyMinHeight)
+    }
     Column(
         modifier = heightMod
             .clip(shape)
@@ -171,14 +184,18 @@ private fun PinKey(
                 icon,
                 contentDescription = null,
                 tint = contentColor,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(22.dp)
             )
         } else {
             Text(
                 text = label,
                 fontWeight = if (variant == KeyVariant.Primary) FontWeight.Bold else FontWeight.SemiBold,
                 color = contentColor,
-                fontSize = if (variant == KeyVariant.Primary) 20.sp else 26.sp,
+                fontSize = when (variant) {
+                    KeyVariant.Primary -> 16.sp
+                    KeyVariant.Muted -> 13.sp
+                    else -> 20.sp
+                },
                 textAlign = TextAlign.Center
             )
         }

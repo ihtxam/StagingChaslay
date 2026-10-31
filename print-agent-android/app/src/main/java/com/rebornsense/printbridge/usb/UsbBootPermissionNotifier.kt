@@ -32,6 +32,14 @@ object UsbBootPermissionNotifier {
     private const val NOTIFICATION_ID = 9102
 
     fun onDiscoveryFinished(context: Context) {
+        if (UsbBootAttachGrace.isWithinPostBootGrace(context)) {
+            BridgeEventsLog.record(
+                context,
+                "usb-permission",
+                "skip boot discovery prompt — post-reboot grace",
+            )
+            return
+        }
         UsbHostPermissions.promoteGrantedUsbPrinters(context)
         val missing = missingPermissionPrinterCandidates(context)
         if (missing.isEmpty()) {

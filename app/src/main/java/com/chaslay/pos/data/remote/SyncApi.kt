@@ -2,6 +2,7 @@ package com.chaslay.pos.data.remote
 
 import com.chaslay.pos.data.remote.dto.AckResponse
 import com.chaslay.pos.data.remote.dto.DiagnosticReportRequest
+import com.chaslay.pos.data.remote.dto.ProfitMarginReportResponse
 import com.chaslay.pos.data.remote.dto.IncomingOrdersResponse
 import com.chaslay.pos.data.remote.dto.MenuBootstrapResponse
 import com.chaslay.pos.data.remote.dto.MenuChangesResponse
@@ -49,4 +50,13 @@ interface SyncApi {
 
     @POST("v1/sync/diagnostic-report")
     suspend fun postDiagnosticReport(@Body body: DiagnosticReportRequest): AckResponse
+
+    @GET("v1/sync/reports/profit-margin")
+    suspend fun profitMarginReport(
+        @Query("preset") preset: String,
+        @Query("granularity") granularity: String? = null,
+        @Query("staffId") staffId: String? = null,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null
+    ): ProfitMarginReportResponse
 }

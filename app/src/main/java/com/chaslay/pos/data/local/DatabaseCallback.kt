@@ -55,6 +55,7 @@ class DatabaseCallback(
         if (count(db, "customers") == 0L) {
             seedCustomers(db)
         }
+        migrateDemoStaffPinsIfNeeded(db, prefs)
         db.execSQL(
             """
             UPDATE products
@@ -190,7 +191,13 @@ class DatabaseCallback(
         db.execSQL(
             """
             INSERT OR IGNORE INTO users (id, name, email, pinHash, passwordHash, roleId, isActive, biometricEnabled, createdAt)
-            VALUES (4, 'Cashier', NULL, '${hash("0000")}', NULL, 5, 1, 0, $now)
+            VALUES (4, 'Cashier', NULL, '${hash("4444")}', NULL, 5, 1, 0, $now)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO users (id, name, email, pinHash, passwordHash, roleId, isActive, biometricEnabled, createdAt)
+            VALUES (5, 'Manager', NULL, '${hash("0000")}', NULL, 4, 1, 0, $now)
             """.trimIndent()
         )
     }
@@ -298,6 +305,49 @@ class DatabaseCallback(
                 """.trimIndent()
             )
         }
+    }
+
+    /** Avoid demo Cashier PIN 0000 colliding with synced manager PINs on merchant devices. */
+    private fun migrateDemoStaffPinsIfNeeded(
+        db: SupportSQLiteDatabase,
+        prefs: android.content.SharedPreferences
+    ) {
+        if (prefs.getBoolean("demo_staff_pin_v51", false)) return
+        val now = System.currentTimeMillis()
+        val legacyCashierPin = hash("0000")
+        val newCashierPin = hash("4444")
+        val managerPin = hash("0000")
+        db.execSQL(
+            """
+            UPDATE users
+            SET pinHash = '$newCashierPin'
+            WHERE id = 4 AND email IS NULL AND name = 'Cashier' AND pinHash = '$legacyCashierPin'
+            """.trimIndent()
+        )
+        val managerExists = db.query("SELECT id FROM users WHERE id = 5 LIMIT 1").use { cursor ->
+            cursor.moveToFirst()
+        }
+        if (!managerExists) {
+            db.execSQL(
+                """
+                INSERT OR IGNORE INTO users (id, name, email, pinHash, passwordHash, roleId, isActive, biometricEnabled, createdAt)
+                VALUES (5, 'Manager', NULL, '$managerPin', NULL, 4, 1, 0, $now)
+                """.trimIndent()
+            )
+        }
+        val syncedStaff = db.query("SELECT id FROM users WHERE email LIKE 'sync:%' LIMIT 1").use { cursor ->
+            cursor.moveToFirst()
+        }
+        if (syncedStaff) {
+            db.execSQL(
+                """
+                UPDATE users
+                SET isActive = 0
+                WHERE id IN (1, 2, 3, 4, 5) AND email IS NULL
+                """.trimIndent()
+            )
+        }
+        prefs.edit().putBoolean("demo_staff_pin_v51", true).apply()
     }
 
     /** One-time wipe so client handoff builds start without demo sales history. */

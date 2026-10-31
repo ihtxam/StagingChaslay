@@ -90,6 +90,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -120,7 +121,6 @@ import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
 import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.scanner.BarcodeWedgeListener
-import com.chaslay.pos.domain.model.ProductVariantModel
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.GiftCardOp
@@ -178,6 +178,7 @@ fun PosScreen(
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val loggedInUserName by viewModel.loggedInUserName.collectAsStateWithLifecycle()
     val activity = LocalContext.current as? Activity
     val context = LocalContext.current
 
@@ -201,17 +202,20 @@ fun PosScreen(
     val retailDineInEnabled = state.settings.retailDineInEnabled
     val retailTakeawayEnabled = state.settings.retailTakeawayEnabled
     val retailDeliveryEnabled = state.settings.retailDeliveryEnabled
-    val isTableServiceEnabled = isRestaurantMode && tablesEnabled
+    val isTableServiceEnabled = tablesEnabled && (isRestaurantMode || isRetailMode)
     val showRetailDineInToggle = isRetailMode && retailDineInEnabled
     var showBarcodeScanner by remember { mutableStateOf(false) }
     val hardwareScanEnabled =
         !showBarcodeScanner &&
+            !state.showWeighedProductDialog &&
+            !state.showMiscPriceDialog &&
             !state.showOrderComplete &&
             !state.showMembershipDialog &&
             !state.showMembershipSellDialog &&
             !state.showGiftCardOpsMenu &&
             !state.showGiftCardOpsDialog &&
-            !state.showGiftCardPayDialog
+            !state.showGiftCardPayDialog &&
+            !state.showCashPaymentDialog
 
     DisposableEffect(hardwareScanEnabled) {
         BarcodeWedgeHub.enabled = hardwareScanEnabled
@@ -306,11 +310,14 @@ fun PosScreen(
                     currencySymbol = state.currencySymbol,
                     splitPaymentIndex = state.splitPaymentIndex,
                     splitPaymentTotal = state.splitPaymentTotal,
+                    completedSplitOrders = state.completedSplitOrders,
                     receiptPublicUrl = state.receiptPublicUrl,
                     orderCompleteNotice = state.orderCompleteNotice,
                     showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,
                     showAdyenCashierReceipt = false,
                     onPrintReceipt = viewModel::printCompletedReceipt,
+                    onPrintSplitReceipt = viewModel::printCompletedSplitReceipt,
+                    onPrintAllSplitReceipts = viewModel::printAllCompletedSplitReceipts,
                     onPrintAdyenPaymentReceipt = viewModel::printAdyenCustomerReceipt,
                     onPrintAdyenCashierReceipt = {},
                     onShareEmail = viewModel::openReceiptEmailDialog,
@@ -360,6 +367,16 @@ fun PosScreen(
                 onConfirm = viewModel::confirmGiftCardPayment
             )
         }
+        if (state.showCashPaymentDialog) {
+            CashPaymentDialog(
+                totalDue = state.cashPaymentTotalDue,
+                currencySymbol = state.currencySymbol,
+                currencyCode = state.settings.defaultCurrency,
+                isProcessing = state.isProcessingPayment,
+                onDismiss = viewModel::dismissCashPaymentDialog,
+                onConfirm = { tender -> viewModel.confirmRetailCashPayment(tender, activity) }
+            )
+        }
         return
     }
 
@@ -385,11 +402,14 @@ fun PosScreen(
             currencySymbol = state.currencySymbol,
             splitPaymentIndex = state.splitPaymentIndex,
             splitPaymentTotal = state.splitPaymentTotal,
+            completedSplitOrders = state.completedSplitOrders,
             receiptPublicUrl = state.receiptPublicUrl,
             orderCompleteNotice = state.orderCompleteNotice,
             showAdyenPaymentReceipt = state.adyenCustomerReceipt != null,
             showAdyenCashierReceipt = false,
             onPrintReceipt = viewModel::printCompletedReceipt,
+            onPrintSplitReceipt = viewModel::printCompletedSplitReceipt,
+            onPrintAllSplitReceipts = viewModel::printAllCompletedSplitReceipts,
             onPrintAdyenPaymentReceipt = viewModel::printAdyenCustomerReceipt,
             onPrintAdyenCashierReceipt = {},
             onShareEmail = viewModel::openReceiptEmailDialog,
@@ -443,6 +463,7 @@ fun PosScreen(
         val courseSendMode = CourseSendMode.fromKey(state.settings.courseSendMode)
         OdooPosNavBar(
             businessName = state.settings.businessName,
+            loggedInUserName = loggedInUserName,
             isTableServiceEnabled = isTableServiceEnabled,
             selectedTab = mainTab,
             pendingOnlineOrderCount = state.pendingOnlineOrderCount,
@@ -600,6 +621,11 @@ fun PosScreen(
                         categories = state.displayCategories,
                         selectedCategoryId = state.selectedCategoryId,
                         onCategorySelected = viewModel::selectCategory,
+                        emptyCatalogHint = if (state.syncedCategoriesEmpty) {
+                            stringResource(R.string.pos_categories_sync_empty_hint)
+                        } else {
+                            null
+                        },
                         modifier = Modifier
                             .width(140.dp)
                             .fillMaxHeight()
@@ -774,6 +800,17 @@ fun PosScreen(
         )
     }
 
+    if (state.showCashPaymentDialog) {
+        CashPaymentDialog(
+            totalDue = state.cashPaymentTotalDue,
+            currencySymbol = state.currencySymbol,
+            currencyCode = state.settings.defaultCurrency,
+            isProcessing = state.isProcessingPayment,
+            onDismiss = viewModel::dismissCashPaymentDialog,
+            onConfirm = { tender -> viewModel.confirmRetailCashPayment(tender, activity) }
+        )
+    }
+
     if (state.showCartCancelSimpleDialog) {
         AlertDialog(
             onDismissRequest = viewModel::dismissCartCancelSimpleDialog,
@@ -881,10 +918,13 @@ fun PosScreen(
     }
 
     if (state.showMiscPriceDialog) {
-        PriceKeypadDialog(
-            title = stringResource(R.string.misc_item),
+        LaunchedEffect(Unit) { viewModel.beginScaleWeighingSession() }
+        MiscDiversDialog(
             currencySymbol = state.currencySymbol,
-            onConfirm = { price -> viewModel.addMiscItemFromDialog(price) },
+            scaleEnabled = state.settings.scaleEnabled,
+            reading = state.scaleReading,
+            scaleConnectionMessage = state.scaleConnectionMessage,
+            onConfirm = viewModel::addMiscWeighedItem,
             onDismiss = viewModel::dismissMiscPriceDialog
         )
     }
@@ -912,12 +952,14 @@ fun PosScreen(
 
     if (state.showWeighedProductDialog) {
         state.selectedProduct?.let { product ->
+            LaunchedEffect(product.id) { viewModel.beginScaleWeighingSession() }
             WeightProductDialog(
                 productName = product.name,
                 pricePerKg = product.price,
                 currencySymbol = state.currencySymbol,
                 scaleEnabled = state.settings.scaleEnabled,
                 reading = state.scaleReading,
+                scaleConnectionMessage = state.scaleConnectionMessage,
                 onConfirm = viewModel::addWeighedProductToCart,
                 onDismiss = viewModel::dismissWeighedProductDialog
             )
@@ -1004,6 +1046,7 @@ fun PosScreen(
 @Composable
 private fun OdooPosNavBar(
     businessName: String,
+    loggedInUserName: String? = null,
     isTableServiceEnabled: Boolean,
     selectedTab: PosMainTab,
     pendingOnlineOrderCount: Int = 0,
@@ -1064,14 +1107,31 @@ private fun OdooPosNavBar(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
-            Text(
-                businessName,
-                color = vc.textPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                Text(
+                    businessName,
+                    color = vc.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                loggedInUserName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
+                    Text(
+                        staffName,
+                        color = vc.textSecondary,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             if (showProductFilters) {
                 ProductGridFilterMenu(
                     showProductImages = showProductImages,
@@ -1539,7 +1599,7 @@ private fun VectronOrderPanel(
     canSendKitchen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val isTableMode = isRestaurantMode && tablesEnabled && activeTableName != null
+    val isTableMode = tablesEnabled && activeTableName != null
     val showCourses = isTableMode && coursesEnabled
     val displayTotal = applyCashRounding(cart.displayTotal, roundingStep)
     val orderingItems = cart.items.filter { !it.sentToKitchen }
@@ -2383,7 +2443,7 @@ private fun CartModifierLineRows(item: CartItem, currencySymbol: String) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "- ${row.label}",
+                text = "${row.ticketPrefix()} ${row.label}",
                 color = Color(0xFF666666),
                 fontSize = 11.sp,
                 maxLines = 2,
@@ -2709,7 +2769,8 @@ private fun VectronCategoryColumn(
     categories: List<CategoryEntity>,
     selectedCategoryId: Long?,
     onCategorySelected: (Long?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    emptyCatalogHint: String? = null,
 ) {
     val vc = vectronColors()
     Column(
@@ -2741,6 +2802,18 @@ private fun VectronCategoryColumn(
                     fontSize = 12.sp
                 )
             }
+        }
+        if (!emptyCatalogHint.isNullOrBlank()) {
+            Text(
+                emptyCatalogHint,
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, start = 4.dp, end = 4.dp)
+            )
         }
     }
 }
@@ -3394,92 +3467,6 @@ private fun OpenPriceDialog(
 }
 
 @Composable
-private fun OptionGroupDialog(
-    picker: com.chaslay.pos.domain.model.OptionGroupPicker,
-    currencySymbol: String,
-    onConfirm: (Set<String>) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val selected = remember(picker) { mutableStateListOf<String>() }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(picker.groupName) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    if (picker.limitQuantity <= 1) "Choose 1" else "Choose up to ${picker.limitQuantity}",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-                picker.choices.forEach { choice ->
-                    val isSelected = choice.name in selected
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            if (picker.limitQuantity <= 1) {
-                                selected.clear()
-                                selected.add(choice.name)
-                            } else if (isSelected) {
-                                selected.remove(choice.name)
-                            } else if (selected.size < picker.limitQuantity) {
-                                selected.add(choice.name)
-                            }
-                        },
-                        label = {
-                            Text(
-                                if (picker.isAddon && choice.price > 0) {
-                                    "${choice.name} +${formatMoney(choice.price, currencySymbol)}"
-                                } else choice.name
-                            )
-                        }
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(selected.toSet()) }) {
-                Text(stringResource(R.string.confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        }
-    )
-}
-
-@Composable
-private fun VariantDialog(
-    productName: String,
-    variants: List<ProductVariantModel>,
-    currencySymbol: String,
-    onSelect: (ProductVariantModel) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.select_variant)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(productName, fontWeight = FontWeight.SemiBold)
-                variants.forEach { variant ->
-                    Button(
-                        onClick = { onSelect(variant) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("${variant.name} - ${formatMoney(variant.price, currencySymbol)}")
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        }
-    )
-}
-
-@Composable
 private fun DiscountDialog(
     onApply: (Double, Double) -> Unit,
     onDismiss: () -> Unit
@@ -3537,7 +3524,7 @@ private fun PaymentSummaryDialog(
         title = { Text(stringResource(R.string.payment_summary)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${cart.items.size} items")
+                Text(stringResource(R.string.cart_items_count, cart.items.size))
                 if (splitByItems && splitCount > 1) {
                     Text(stringResource(R.string.paying_check, activeSplitCheck))
                 } else if (splitCount > 1) {
@@ -3635,8 +3622,12 @@ private fun ReceiptOptionsDialog(
     onSkip: () -> Unit
 ) {
     val qrGenerator = remember { ReceiptQrGenerator() }
-    val qrBitmap = remember(receiptUrl) {
-        if (receiptUrl.isNotBlank()) qrGenerator.generateQrBitmap(receiptUrl, 256) else null
+    val density = LocalDensity.current
+    val qrBitmapPx = with(density) {
+        (PosReceiptQrMaxDisplayDp * PosReceiptQrBitmapScale).roundToPx().coerceAtLeast(640)
+    }
+    val qrBitmap = remember(receiptUrl, qrBitmapPx) {
+        if (receiptUrl.isNotBlank()) qrGenerator.generateQrBitmap(receiptUrl, qrBitmapPx) else null
     }
 
     AlertDialog(
@@ -3652,7 +3643,7 @@ private fun ReceiptOptionsDialog(
                     androidx.compose.foundation.Image(
                         bitmap = it.asImageBitmap(),
                         contentDescription = stringResource(R.string.digital_receipt),
-                        modifier = Modifier.size(180.dp)
+                        modifier = Modifier.size(PosReceiptQrMaxDisplayDp)
                     )
                 }
                 Text(receiptUrl, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)

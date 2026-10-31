@@ -51,6 +51,25 @@ internal fun SettingsPageHeader(title: String, subtitle: String? = null) {
 }
 
 @Composable
+internal fun SettingsReadOnlyRow(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            label,
+            color = SettingsDashColors.TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            value,
+            color = SettingsDashColors.TextPrimary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
+@Composable
 internal fun SettingsSectionCard(
     title: String,
     icon: ImageVector? = null,
