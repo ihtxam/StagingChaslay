@@ -20,7 +20,7 @@ import {
   ArrowDownUp,
   Nfc,
 } from 'lucide-react';
-import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
 import { useFullscreenActive } from '@/hooks/useFullscreenActive';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { webPosVersionLabel } from '@/lib/app-version';
@@ -32,6 +32,7 @@ import {
 import type { PosTab, PosView } from './types';
 import { cycleWebPosTextSize } from '@/lib/webpos-appearance';
 import { shouldShowPosOptionChooser } from '@/lib/pos-hub-visibility';
+import { WebPosStaffHardwarePanel } from '@/components/webpos/WebPosStaffHardwarePanel';
 export type {
   WebPosAppearance,
   WebPosColorTheme,
@@ -421,12 +422,14 @@ export default function WebPosTopBar({
               onSwitchUser();
             }}
           >
-            <UserCircle2 size={18} className="shrink-0 lg:hidden" />
-            <UserCircle2 size={16} className="hidden shrink-0 lg:inline" />
-            <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
+            <UserCircle2 size={18} className="shrink-0 sm:hidden" />
+            <UserCircle2 size={16} className="hidden shrink-0 sm:inline" />
+            <span className="hidden max-w-[5.5rem] truncate sm:inline sm:max-w-[7rem] lg:max-w-[9rem]">
+              {staffName || t('webPosSwitchUser')}
+            </span>
           </button>
 
-          {canDrawer ? (
+          {canDrawer && isLocalPrintStation ? (
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
@@ -548,7 +551,34 @@ export default function WebPosTopBar({
   );
 }
 
+function WebPosEodGearSection({
+  showEodButton,
+  onEodReport,
+}: {
+  showEodButton?: boolean;
+  onEodReport?: () => void;
+}) {
+  const { t } = useI18n();
+  if (!showEodButton || !onEodReport) return null;
+  return (
+    <div className="space-y-1.5 border-b border-stone-100 pb-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+        {t('webPosEodReport')}
+      </p>
+      <button
+        type="button"
+        className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+        onClick={onEodReport}
+      >
+        {t('webPosEodPrint')}
+      </button>
+      <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
+    </div>
+  );
+}
+
 export function WebPosSettingsDropdown({
+  staffName,
   onReloadCatalog,
   shiftsEnabled,
   shiftOpen,
@@ -575,6 +605,8 @@ export function WebPosSettingsDropdown({
   locale = 'en',
   onLanguageChange,
   canManageChannels = false,
+  canManageOnlineShopChannels,
+  canManageOrderChannels,
   shopEnabled = false,
   reservationsEnabled = false,
   pickupEnabled = true,
@@ -599,7 +631,17 @@ export function WebPosSettingsDropdown({
   onDeviceDefaultStationChange,
   tapToPayWizardVisible = false,
   onOpenTapToPayWizard,
+  showStaffHardwarePanel = false,
+  staffPrinterProfiles = [],
+  onStaffTestReceipt,
+  onStaffReprintLast,
+  staffReprintAvailable = false,
+  staffAllowPrinterPick = false,
+  staffSelectedPrinter = '',
+  onStaffPrinterChange,
+  hardwareGearOnly = false,
 }: {
+  staffName?: string | null;
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
   shiftOpen?: boolean;
@@ -626,6 +668,10 @@ export function WebPosSettingsDropdown({
   locale?: Locale;
   onLanguageChange?: (lang: Locale) => void;
   canManageChannels?: boolean;
+  /** When set, overrides canManageChannels for the online shop / reservations block. */
+  canManageOnlineShopChannels?: boolean;
+  /** When set, overrides canManageChannels for pickup / delivery / dine-in toggles. */
+  canManageOrderChannels?: boolean;
   shopEnabled?: boolean;
   reservationsEnabled?: boolean;
   pickupEnabled?: boolean;
@@ -652,6 +698,16 @@ export function WebPosSettingsDropdown({
   /** Android WebPOS + merchant Tap to Pay enabled */
   tapToPayWizardVisible?: boolean;
   onOpenTapToPayWizard?: () => void;
+  showStaffHardwarePanel?: boolean;
+  staffPrinterProfiles?: Array<{ id: string; name: string }>;
+  onStaffTestReceipt?: () => void;
+  onStaffReprintLast?: () => void;
+  staffReprintAvailable?: boolean;
+  staffAllowPrinterPick?: boolean;
+  staffSelectedPrinter?: string;
+  onStaffPrinterChange?: (name: string) => void;
+  /** Waiter / floor staff: printers + test print only (no payments, terminals, channels). */
+  hardwareGearOnly?: boolean;
 }) {
   const { t } = useI18n();
   const fullscreenActive = useFullscreenActive();
@@ -659,13 +715,98 @@ export function WebPosSettingsDropdown({
     if (!onTextSizeChange) return;
     onTextSizeChange(cycleWebPosTextSize(textSize, dir));
   };
+  const onlineShopChannelToggles = canManageOnlineShopChannels ?? canManageChannels;
+  const orderChannelToggles = canManageOrderChannels ?? canManageChannels;
+  const signedInLabel = staffName?.trim()
+    ? t('webPosSignedInAs').replace('{name}', staffName.trim())
+    : null;
 
   return (
     <div
-      className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(65vh,26rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
+      className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(78vh,32rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {signedInLabel ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-stone-100 bg-stone-50 px-3 py-2.5">
+          <UserCircle2 size={18} className="shrink-0 text-stone-500" aria-hidden />
+          <p className="min-w-0 truncate text-sm font-semibold text-stone-800">{signedInLabel}</p>
+        </div>
+      ) : null}
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5">
+      {hardwareGearOnly ? (
+        <>
+          {showStaffHardwarePanel ? (
+            <WebPosStaffHardwarePanel
+              printers={staffPrinterProfiles}
+              onTestReceipt={onStaffTestReceipt}
+              onReprintLast={onStaffReprintLast}
+              reprintAvailable={staffReprintAvailable}
+              allowPrinterPick={staffAllowPrinterPick}
+              selectedPrinter={staffSelectedPrinter}
+              onPrinterChange={onStaffPrinterChange}
+            />
+          ) : null}
+          <WebPosEodGearSection showEodButton={showEodButton} onEodReport={onEodReport} />
+          <div className="grid grid-cols-2 gap-1.5 border-b border-stone-100 pb-2">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw size={14} />
+              {t('webPosRefreshPage')}
+            </button>
+            {onSendLogs ? (
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
+                onClick={onSendLogs}
+              >
+                {t('webPosSendLogs')}
+              </button>
+            ) : null}
+          </div>
+          {shiftsEnabled ? (
+            <div className="space-y-1.5 border-b border-stone-100 pb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                {t('webPosShiftMenu')}
+              </p>
+              {shiftOpen ? (
+                <button
+                  type="button"
+                  className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+                  onClick={onCloseShift}
+                >
+                  {t('webPosShiftClose')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+                  onClick={onStartShift}
+                >
+                  {t('webPosShiftStart')}
+                </button>
+              )}
+              {shiftOpen && onCashMovement ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  onClick={onCashMovement}
+                >
+                  <ArrowDownUp size={16} />
+                  {t('webPosCashMovementTitle')}
+                </button>
+              ) : null}
+              <p className="text-[10px] text-stone-500">
+                {shiftOpen ? t('webPosShiftOpenHint') : t('webPosShiftClosedHint')}
+              </p>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {!hardwareGearOnly ? (
+      <>
       <div className="space-y-1.5 border-b border-stone-100 pb-2">
         {canShowPanel && onShowPanel ? (
           <button
@@ -737,7 +878,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {canManageChannels && (onShopEnabledChange || onReservationsEnabledChange) ? (
+      {onlineShopChannelToggles && (onShopEnabledChange || onReservationsEnabledChange) ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosOnlineChannels')}
@@ -785,7 +926,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {canManageChannels &&
+      {orderChannelToggles &&
       (onPickupEnabledChange || onDeliveryEnabledChange || onDineInEnabledChange) ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
@@ -979,22 +1120,6 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {showEodButton ? (
-        <div className="space-y-1.5 border-b border-stone-100 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosEodReport')}
-          </p>
-          <button
-            type="button"
-            className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
-            onClick={onEodReport}
-          >
-            {t('webPosEodPrint')}
-          </button>
-          <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
-        </div>
-      ) : null}
-
       {posStations.length >= 2 && onDeviceDefaultStationChange ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
@@ -1034,6 +1159,15 @@ export function WebPosSettingsDropdown({
           </button>
           <p className="text-[10px] leading-snug text-stone-500">{t('tapToPayWizardGearHint')}</p>
         </div>
+      ) : null}
+
+      {showStaffHardwarePanel ? (
+        <WebPosStaffHardwarePanel
+          printers={staffPrinterProfiles}
+          onTestReceipt={onStaffTestReceipt}
+          onReprintLast={onStaffReprintLast}
+          reprintAvailable={staffReprintAvailable}
+        />
       ) : null}
 
       {terminalEnabled && shouldShowPosOptionChooser(terminals.length) && onTerminalChange ? (
@@ -1113,6 +1247,13 @@ export function WebPosSettingsDropdown({
           {t('webPosSendLogs')}
         </button>
       ) : null}
+      </>
+      ) : null}
+
+      {!hardwareGearOnly ? (
+        <WebPosEodGearSection showEodButton={showEodButton} onEodReport={onEodReport} />
+      ) : null}
+
       <p className="border-t border-stone-100 pt-1.5 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>

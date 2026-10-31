@@ -14,10 +14,13 @@ class SunmiInternalDriver : PrinterDriver {
     override val key: String = "sunmi-internal"
 
     private val serviceRef = AtomicReference<SunmiPrinterService?>(null)
+    private val lcdAvailable = AtomicReference<Boolean?>(null)
 
     companion object {
         private const val RAW_CHUNK_SIZE = 4096
         private const val RAW_CHUNK_DELAY_MS = 15L
+        /** Sunmi mini-series 7-segment customer display — ~20 chars per line. */
+        private const val LCD_LINE_MAX = 20
     }
 
     fun bindIfNeeded(context: Context) {
@@ -87,5 +90,75 @@ class SunmiInternalDriver : PrinterDriver {
 
     private fun isSunmiDevice(): Boolean {
         return Build.MANUFACTURER.orEmpty().contains("SUNMI", ignoreCase = true)
+    }
+
+    /** D3 Mini 58 mm and similar mini desktops with the small 7-segment customer display. */
+    fun isLikelyCustomerLcdDevice(): Boolean {
+        if (!isSunmiDevice()) return false
+        val model = Build.MODEL.orEmpty().uppercase()
+        return model.contains("D3") ||
+            model.contains("MINI") ||
+            model.contains("T1MINI") ||
+            model.contains("T2MINI")
+    }
+
+    fun customerLcdAvailable(context: Context): Boolean {
+        val cached = lcdAvailable.get()
+        if (cached != null) return cached
+        if (!isLikelyCustomerLcdDevice()) {
+            lcdAvailable.set(false)
+            return false
+        }
+        bindIfNeeded(context)
+        val service = serviceRef.get()
+        if (service == null) {
+            return false
+        }
+        val ok = probeLcdWake(service)
+        lcdAvailable.set(ok)
+        return ok
+    }
+
+    fun showCustomerLcd(context: Context, topText: String, bottomText: String): Result<Unit> {
+        bindIfNeeded(context)
+        val service = serviceRef.get()
+            ?: return Result.failure(IllegalStateException("Sunmi printer service not connected"))
+        return try {
+            val top = sanitizeLcdLine(topText)
+            val bottom = sanitizeLcdLine(bottomText)
+            service.sendLCDCommand(2)
+            service.sendLCDDoubleString(top, bottom, null)
+            lcdAvailable.set(true)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun clearCustomerLcd(context: Context): Result<Unit> {
+        bindIfNeeded(context)
+        val service = serviceRef.get()
+            ?: return Result.failure(IllegalStateException("Sunmi printer service not connected"))
+        return try {
+            service.sendLCDCommand(4)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun probeLcdWake(service: SunmiPrinterService): Boolean {
+        return try {
+            service.sendLCDCommand(2)
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun sanitizeLcdLine(raw: String): String {
+        val collapsed = raw.replace('\n', ' ').trim()
+        if (collapsed.length <= LCD_LINE_MAX) return collapsed
+        return collapsed.take(LCD_LINE_MAX - 1) + "…"
     }
 }

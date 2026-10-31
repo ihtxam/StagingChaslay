@@ -29,6 +29,31 @@ function normTab(value?: string | null): string {
     .replace(/^#/, '');
 }
 
+/**
+ * Strong ticket identity (kitchen #, tab, or POS order number) — not table-only.
+ * Used to block duplicate payment; table-only links would false-positive on reuse.
+ */
+export function orderStronglyMatchesCartLink(
+  order: MerchantOrder,
+  link: CartOrderLink
+): boolean {
+  const refs = orderPublicRefs(order);
+  const cartTicket = normTicket(link.ticketDisplay);
+  const cartTab = normTab(link.tabNumber);
+  const orderTicket = normTicket(refs.ticketDisplay);
+  const orderTab = normTab(refs.tabNumber);
+  if (cartTicket && orderTicket && cartTicket === orderTicket) return true;
+  if (cartTab && orderTab && cartTab === orderTab) return true;
+  if (
+    link.ticketOrderNumber?.trim() &&
+    order.orderNumber?.trim() &&
+    link.ticketOrderNumber.trim() === order.orderNumber.trim()
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** True when a server order belongs to the same open cart session. */
 export function orderMatchesCartLink(order: MerchantOrder, link: CartOrderLink): boolean {
   const refs = orderPublicRefs(order);
@@ -51,7 +76,8 @@ export function orderMatchesCartLink(order: MerchantOrder, link: CartOrderLink):
     if (cartTicket || orderTicket) return false;
     if (cartTab && orderTab) return cartTab === orderTab;
     if (cartTab || orderTab) return false;
-    return true;
+    // Same table, new party — do not inherit an older ticket without #/tab proof.
+    return false;
   }
   return false;
 }
@@ -124,7 +150,7 @@ export function resolveCartCheckoutGuard(
     }
   }
 
-  const paidOrder = paid[0];
+  const paidOrder = paid.find((o) => orderStronglyMatchesCartLink(o, link)) ?? null;
   if (paidOrder && unpaid.length === 0) {
     return { action: 'blocked', order: paidOrder };
   }
@@ -143,8 +169,24 @@ function lineId(orderItemId?: string, index?: number) {
 }
 
 /** Map persisted order lines into a read-only WebPOS cart for checkout collection. */
+/** Keep line items when a PATCH/action response omits them (common on collect-payment). */
+export function mergeMerchantOrderDetail<T extends MerchantOrder>(
+  base: T | null | undefined,
+  patch: Partial<T> | null | undefined
+): T {
+  const merged = { ...(base || {}), ...(patch || {}) } as T;
+  const items =
+    patch?.items && patch.items.length > 0
+      ? patch.items
+      : base?.items && base.items.length > 0
+        ? base.items
+        : patch?.items ?? base?.items ?? [];
+  merged.items = items ?? [];
+  return merged;
+}
+
 export function orderItemsToCartLines(items: OrderLine[]): CartLine[] {
-  return items.map((item, index) => {
+  return (items || []).map((item, index) => {
     const qty = Number(item.quantity) || 1;
     const totalPrice = Number(item.totalPrice) || 0;
     const unitPrice =

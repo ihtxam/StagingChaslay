@@ -1,4 +1,4 @@
-export type ShopOrderingBlockReason = 'vacation' | 'orders_paused';
+export type ShopOrderingBlockReason = 'vacation' | 'orders_paused' | 'shop_offline';
 
 export type ShopOrderingBlockVariant = 'cart' | 'header';
 
@@ -47,6 +47,8 @@ export function formatShopVacationMessage(
 export function resolveShopOrderingBlock(input: {
   vacationActive?: boolean;
   vacationReturn?: ShopVacationReturn | null;
+  /** Merchant panel “online shop” toggle — browse menu, block checkout. */
+  shopEnabled?: boolean;
   acceptingOrders?: boolean;
   t: (key: string, params?: Record<string, string | number>) => string;
   variant?: ShopOrderingBlockVariant;
@@ -61,6 +63,13 @@ export function resolveShopOrderingBlock(input: {
       blocked: true,
       reason: 'vacation',
       message: formatShopVacationMessage(input.t, variant, input.vacationReturn),
+    };
+  }
+  if (input.shopEnabled === false) {
+    return {
+      blocked: true,
+      reason: 'shop_offline',
+      message: input.t('shopOnlineOrdersDisabled'),
     };
   }
   if (input.acceptingOrders === false) {

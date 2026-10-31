@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { toastInfo, toastOrderAlreadyPaid } from '@/lib/toast-notify';
 import { RefreshCw, Truck } from 'lucide-react';
 import api, { resolveApiOriginForBridge } from '@/lib/api';
 import { repairCatalogText } from '@/lib/text-encoding';
@@ -8,7 +9,7 @@ import { useI18n, type Locale } from '@/lib/i18n';
 import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '@/lib/order-number';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { lineWidthForPaper } from '@/lib/receipt-labels';
-import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, resolvePosTaxRate } from '@/lib/money';
+import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, channelTaxRateFromMerchant } from '@/lib/money';
 import {
   applyTerminalTipToCheckoutExtras,
   normalizePosCheckoutExtras,
@@ -38,7 +39,6 @@ import {
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
   getReceiptHeaderLines,
-  normalizeReceiptHeaderFields,
   resolveReceiptPaperWidthMm,
   receiptHeaderFormatFromSettings,
   receiptHeaderFieldsFromPrintSettings,
@@ -53,6 +53,7 @@ import {
   receiptAndKitchenSharePrinter,
   resolveReceiptLanguage,
   buildReceiptEscPos,
+  buildPrinterTestEscPos,
   normalizeGoogleReviewUrl,
   uint8ToBase64,
   posOrderToWebPosReceipt,
@@ -70,6 +71,7 @@ import {
 } from '@/lib/adyen-receipt';
 import {
   normalizePosCheckoutSettings,
+  shouldAskGratuityOnTerminal,
   type PosCheckoutSettings,
 } from '@/lib/pos-checkout';
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
@@ -136,6 +138,7 @@ import {
   shouldAutoPrintReceipt,
   shouldAutoOpenCashDrawer,
   cacheMerchantAutoPrintSettings,
+  webPosDeviceId,
 } from '@/lib/webpos-print-relay';
 import { shouldSkipAutoPrint } from '@/lib/webpos-print-targets';
 import { printOrderLabelViaAgent } from '@/lib/order-labels';
@@ -197,6 +200,7 @@ import WebPosComboModal, {
 import WebPosPaymentModal, { type WebPosPaymentPhase } from '@/components/WebPosPaymentModal';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import WebPosStationPickerModal from '@/components/WebPosStationPickerModal';
+import LocationPickerModal from '@/components/merchant/LocationPicker';
 import {
   fetchPosStations,
   getDeviceDefaultStationId,
@@ -224,15 +228,18 @@ import { pushOrderToOds, dismissOrderFromOds, fetchOdsStatus, isOdsPollingStoppe
 import { readAddonLicenseFlag, shouldPollLicensedAddon } from '@/lib/addon-poll';
 import { asArray } from '@/lib/safe-iterables';
 import {
-  openCustomerDisplayWindow,
+  autoOpenCustomerDisplayOnTill,
+  openCustomerDisplayForTill,
   publishCustomerDisplayState,
   subscribeCustomerDisplayRequests,
   isCustomerDisplayLocale,
   type CustomerDisplayPhase,
 } from '@/lib/customer-display-sync';
+import { publishSunmiCustomerLcd } from '@/lib/sunmi-lcd-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
+import WebPosScanCreateProductModal from '@/components/webpos/WebPosScanCreateProductModal';
 import WebPosCustomAmountModal from '@/components/webpos/WebPosCustomAmountModal';
 import WebPosOnlineOrdersPanel, {
   type OnlineOrder,
@@ -434,7 +441,10 @@ import {
 import WebPosCashMovementModal from '@/components/webpos/WebPosCashMovementModal';
 import {
   EodIncludeProductsCheckbox,
+  EodIncludeStaffPerformanceCheckbox,
   useEodIncludeProductsSold,
+  useEodIncludeStaffPerformance,
+  type EodPrintOptions,
 } from '@/components/EodIncludeProductsCheckbox';
 import { printMerchantOrderReceipt } from '@/lib/print-order-receipt';
 import WebPosCartPanel from '@/components/webpos/WebPosCartPanel';
@@ -497,6 +507,7 @@ import type { AppliedPayment } from '@/components/webpos/WebPosCheckoutView';
 import {
   collectPaymentAction,
   customerFromOrder,
+  mergeMerchantOrderDetail,
   orderItemsToCartLines,
   orderMatchesCartLink,
   resolveCartCheckoutGuard,
@@ -602,6 +613,7 @@ import {
   deliveryDriverHomePath,
   getEffectivePanelAccess,
   hasPermission,
+  hasPosHardwareGearAccess,
   isDeliveryDriverOnlyStaff,
   isMerchantOwnerJwt,
   clearWebPosStaffSession,
@@ -618,7 +630,11 @@ import { navigateTargetAfterStaffPin } from '@/lib/auth-home';
 import { normalizeStaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore } from '@/store/auth';
 import { useLocationStore } from '@/store/location';
-import { openCashDrawerViaAgent } from '@/lib/print-agent';
+import {
+  bootstrapWebPosLocationFromPanel,
+  setWebPosTerminalLocationId,
+} from '@/lib/webpos-terminal-location';
+import { isPrintAgentUnreachableError, openCashDrawerViaAgent } from '@/lib/print-agent';
 
 type Channel = PosChannel;
 
@@ -711,6 +727,7 @@ type WebPosPaymentConfig = {
   tapToPayEnabled?: boolean;
   defaultTerminalId: string | null;
   staffPreferredTerminalId?: string | null;
+  deviceEnrollmentLocked?: boolean;
   terminals: WebPosTerminal[];
   posPrintSettings?: PosPrintSettingsClient | null;
   posCheckoutSettings?: PosCheckoutSettings | null;
@@ -769,15 +786,25 @@ function mergeBillDiscounts(
   return { percent: 0, amount: roundMoney2(Math.max(src.amount, tgt.amount)) };
 }
 
-async function fetchAllMerchantProducts(fetchOpts: { timeout: number }) {
+async function fetchAllMerchantProducts(
+  fetchOpts: { timeout: number },
+  locationId?: string | null
+) {
   const pageSize = 500;
   let page = 1;
   const all: any[] = [];
   let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
+  const catalogParams: Record<string, string | number> = {
+    limit: pageSize,
+    page,
+    posLocationCatalog: '1',
+  };
+  const loc = String(locationId || '').trim();
+  if (loc) catalogParams.locationId = loc;
   for (;;) {
     try {
       const res = await api.get('/merchant/products', {
-        params: { limit: pageSize, page, posLocationCatalog: '1' },
+        params: catalogParams,
         ...fetchOpts,
       });
       const batch = asArray<any>(res.data?.products ?? res.data);
@@ -866,9 +893,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const impersonating = useAuthStore((s) => s.impersonating);
   const stopImpersonation = useAuthStore((s) => s.stopImpersonation);
   const logout = useAuthStore((s) => s.logout);
-  const posLocationId = useLocationStore((s) => s.locationId);
+  const panelBranchId = useLocationStore((s) => s.locationId);
   const loadLocations = useLocationStore((s) => s.load);
-  const setPosLocationId = useLocationStore((s) => s.setLocationId);
+  const storeLocations = useLocationStore((s) => s.locations);
+  const [posLocationId, setPosLocationId] = useState<string | null>(() =>
+    bootstrapWebPosLocationFromPanel(useLocationStore.getState().locationId)
+  );
+  const [posBranchPickerOpen, setPosBranchPickerOpen] = useState(false);
   const jwtIsOwner = isMerchantOwnerJwt(authUser);
   /** One-time hydrate from sessionStorage so refresh keeps an open cart. */
   const bootCartRef = useRef<PersistedWebPosCarts | null | undefined>(undefined);
@@ -882,6 +913,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const [loading, setLoading] = useState(true);
   const catalogBootedRef = useRef(false);
+  const catalogLoadSeqRef = useRef(0);
   const [entitlement, setEntitlement] = useState<WebPosEntitlement | null>(null);
   const [merchant, setMerchant] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -900,10 +932,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => () => clearRetailScanTimer(), [clearRetailScanTimer]);
   const [retailTillSettingsOpen, setRetailTillSettingsOpen] = useState(false);
   const [cart, setCart] = useState<CartLine[]>(() => normalizeCartLines(bootActive?.cart));
-  const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? 'takeaway');
-  const effectiveChannel: Channel = channel ?? 'takeaway';
+  const [channel, setChannel] = useState<Channel | null>(() => bootActive?.channel ?? null);
   const [posTab, setPosTab] = useState<PosTab>('register');
   const [posView, setPosView] = useState<PosView>('register');
+  const posViewRef = useRef(posView);
+  posViewRef.current = posView;
   const [selectedLineId, setSelectedLineId] = useState<string | null>(
     () => bootActive?.selectedLineId ?? null
   );
@@ -1213,6 +1246,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [pendingOpenPrice, setPendingOpenPrice] = useState<Product | null>(null);
   const [pendingWeighed, setPendingWeighed] = useState<Product | null>(null);
   const [customAmountOpen, setCustomAmountOpen] = useState(false);
+  const [scanCreateBarcode, setScanCreateBarcode] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [channelsSaving, setChannelsSaving] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
@@ -1270,6 +1304,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [panelStaff, setPanelStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [eodPickerOpen, setEodPickerOpen] = useState(false);
   const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
+  const [eodIncludeStaffPerformance, setEodIncludeStaffPerformance] =
+    useEodIncludeStaffPerformance();
   const settingsRef = useRef<HTMLDivElement>(null);
   /** Open carts keyed by table / tab / channel (also mirrored to sessionStorage). */
   const openCartDraftsRef = useRef<Map<string, OpenCartDraft>>(
@@ -1451,7 +1487,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     })
       .then((result) => {
         if (result.ok && result.kickedSessionIds.length > 0) {
-          toast.info(t('webPosSessionReclaimed'));
+          toastInfo(t('webPosSessionReclaimed'));
         }
       })
       .catch(() => undefined);
@@ -1738,6 +1774,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       navigate('/merchant');
       return;
     }
+    window.dispatchEvent(new CustomEvent('webpos:show-panel'));
     navigate(backOfficeHomePath(access.permissions, false));
   }, [
     impersonating,
@@ -1757,10 +1794,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   useEffect(() => {
     const openSettings = () => {
-      if (isDesktopApp()) {
-        navigate('/merchant/desktop-settings');
-        return;
-      }
       setSettingsOpen(true);
     };
     window.addEventListener('webpos:open-settings', openSettings);
@@ -1825,19 +1858,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     settingsOpen,
     mobileCartOpen,
   ]);
-
-  const taxRate = useMemo(() => {
-    if (!merchant) return 8.1;
-    const vat = merchant.vatRate;
-    const ch = effectiveChannel;
-    if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
-    if (ch === 'delivery') {
-      const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
-      if (delivery > 0) return delivery;
-      return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
-    }
-    return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
-  }, [merchant, effectiveChannel]);
 
   const merchantTax = useMemo(
     () =>
@@ -1947,6 +1967,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         ...(merchantTakeawayEnabled ? (['takeaway'] as const) : []),
         ...(merchantDeliveryEnabled ? (['delivery'] as const) : []),
       ];
+  const effectiveChannel: Channel = useMemo(() => {
+    if (tableId) return 'dine_in';
+    if (channel) return channel;
+    const retailCounterOnly =
+      isRetail && !showChannelTabs && channelTabOptions.length === 0;
+    return retailCounterOnly ? 'in_store' : 'takeaway';
+  }, [tableId, channel, isRetail, showChannelTabs, channelTabOptions.length]);
+
+  const taxRate = useMemo(
+    () => (merchant ? channelTaxRateFromMerchant(merchant, effectiveChannel) : 8.1),
+    [merchant, effectiveChannel]
+  );
+
   const kitchenEnabled = !isRetail && editionAllows('pos_kitchen');
   const orderLabelEnabled = printSettings?.orderLabelEnabled === true;
   const labelOnSend =
@@ -2013,6 +2046,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     if (channelTabOptions.includes(channel as 'takeaway' | 'delivery' | 'dine_in')) return;
     setChannel(channelTabOptions[0] ?? null);
   }, [isRetail, tableId, channel, channelTabOptions]);
+
+  useEffect(() => {
+    if (!isRetail || tableId) return;
+    if (showChannelTabs) return;
+    if (channel === 'takeaway' || channel === 'delivery' || channel === 'dine_in') {
+      setChannel(null);
+    }
+  }, [isRetail, tableId, showChannelTabs, channel]);
 
   const showFireCourseButton =
     coursesEnabled &&
@@ -2288,14 +2329,52 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       return;
     }
     setSettingsOpen(false);
-    const win = openCustomerDisplayWindow({
+    void openCustomerDisplayForTill({
+      merchantSlug: merchant?.slug,
+      shortCode: cdsShortCode,
+    }).then((result) => {
+      if (result === 'failed') toast.error(t('cdsActionFailed'));
+    });
+  }, [cdsToken, cdsShortCode, cdsEnabled, merchant?.slug, t]);
+
+  /** Sunmi D2S Plus: show CDS on the rear screen when WebPOS PWA opens (Bridge ≥ 0.4.50). */
+  useEffect(() => {
+    if (!cdsToken || !cdsEnabled) return;
+    if (!isAndroidWebPosTill()) return;
+    void autoOpenCustomerDisplayOnTill({
       merchantSlug: merchant?.slug,
       shortCode: cdsShortCode,
     });
-    if (!win) {
-      toast.error(t('cdsActionFailed'));
-    }
-  }, [cdsToken, cdsShortCode, cdsEnabled, merchant?.slug, t]);
+  }, [cdsToken, cdsEnabled, merchant?.slug, cdsShortCode]);
+
+  /** Sunmi D3 Mini 58 mm: 7-segment customer display — last item + running total (Bridge ≥ 0.4.51). */
+  useEffect(() => {
+    if (!isAndroidWebPosTill()) return;
+    const thankYou = cdsPhase === 'thankyou';
+    const snap = thankYou ? cdsThankYouSnapshot : null;
+    const saleTotals = snap ?? activeSale.totals;
+    const total = snap?.total ?? successInfo?.amount ?? saleTotals.total;
+    void publishSunmiCustomerLcd({
+      phase: cdsPhase,
+      currency: 'CHF',
+      total,
+      merchantName: merchant?.name || merchant?.businessName,
+      lines: thankYou
+        ? []
+        : activeSale.lines.map((l) => ({
+            name: repairCatalogText(l.name),
+            qty: l.quantity,
+          })),
+    });
+  }, [
+    cdsPhase,
+    cdsThankYouSnapshot,
+    activeSale.lines,
+    activeSale.totals,
+    successInfo?.amount,
+    merchant?.name,
+    merchant?.businessName,
+  ]);
 
   const membershipCheckout = useMemo(() => {
     if (
@@ -2753,6 +2832,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
 
   const load = useCallback(async () => {
+    const loadSeq = ++catalogLoadSeqRef.current;
+    const shouldSurfaceCatalogLoadError = () => {
+      if (loadSeq !== catalogLoadSeqRef.current) return false;
+      const view = posViewRef.current;
+      if (view === 'checkout' || view === 'success') return false;
+      return !catalogBootedRef.current;
+    };
     if (!catalogBootedRef.current) setLoading(true);
     let cacheReady = false;
     const offlineBoot = !isBrowserOnline();
@@ -2773,14 +2859,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     try {
       let catalogError: { response?: { data?: { error?: string } }; message?: string } | null = null;
       let staffFailed = false;
+      const catalogLoc = String(posLocationId || '').trim();
+      const posCatalogParams = catalogLoc
+        ? { posLocationCatalog: '1', locationId: catalogLoc }
+        : { posLocationCatalog: '1' };
       const [settingsRes, catRes, prodFetch, webposRes, staffRes, bestsellerRes] = await Promise.all([
         api.get('/merchant/settings', fetchOpts),
         api.get('/merchant/categories', {
-          params: { posLocationCatalog: '1' },
+          params: posCatalogParams,
           ...fetchOpts,
         }).catch(() => ({ data: { categories: [] } })),
-        fetchAllMerchantProducts(fetchOpts),
-        api.get('/merchant/webpos-config', fetchOpts).catch(() => ({ data: { config: null } })),
+        fetchAllMerchantProducts(fetchOpts, posLocationId),
+        api
+          .get('/merchant/webpos-config', {
+            params: { deviceId: webPosDeviceId() },
+            ...fetchOpts,
+          })
+          .catch(() => ({ data: { config: null } })),
         api.get('/merchant/staff', fetchOpts).catch(() => {
           staffFailed = true;
           return { data: { staff: [] } };
@@ -2862,11 +2957,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             ...cfgPs,
             ...merchantPs,
             receiptHeaderTitle: merchantPs.receiptHeaderTitle ?? cfgPs.receiptHeaderTitle,
-            receiptHeader: merchantPs.receiptHeader ?? cfgPs.receiptHeader,
-            receiptHeaderLines:
-              merchantPs.receiptHeaderLines?.length
-                ? merchantPs.receiptHeaderLines
-                : cfgPs.receiptHeaderLines,
+            receiptHeader: merchantPs.receiptHeader ?? cfgPs.receiptHeader ?? '',
+            receiptHeaderLines: undefined,
           });
           setPrintSettings(nextPrintSettings);
           cacheMerchantAutoPrintSettings(nextPrintSettings);
@@ -2887,7 +2979,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setStaffRoster(staffList);
         applyStaffRoster(staffList, { openPinGate: !loadWebPosStaffSession() });
       }
-      if (catalogError) {
+      if (catalogError && shouldSurfaceCatalogLoadError()) {
         toast.error(
           catalogError.response?.data?.error || catalogError.message || t('webPosLoadFailed')
         );
@@ -2993,15 +3085,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         );
         cacheReady = hydrated;
       }
-      if (!cacheReady) {
+      if (!cacheReady && shouldSurfaceCatalogLoadError()) {
         logWebPosError('load', 'WebPOS catalog load failed', e, { autoSend: true });
         toast.error(e.response?.data?.error || t('webPosLoadFailed'));
       }
     } finally {
-      setLoading(false);
+      if (loadSeq === catalogLoadSeqRef.current) {
+        setLoading(false);
+      }
       catalogBootedRef.current = true;
     }
-  }, [applyCachedOfflineSnapshot, applyStaffRoster, refreshAgent, refreshCurrentShift, t]);
+  }, [applyCachedOfflineSnapshot, applyStaffRoster, posLocationId, refreshAgent, refreshCurrentShift, t]);
 
   const refreshBestsellers = useCallback(async () => {
     try {
@@ -3015,6 +3109,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     void loadLocations();
   }, [loadLocations]);
+
+  useEffect(() => {
+    setPosLocationId(bootstrapWebPosLocationFromPanel(panelBranchId));
+  }, [panelBranchId]);
+
+  useEffect(() => {
+    if (!storeLocations.length) return;
+    if (posLocationId) return;
+    if (storeLocations.length === 1) {
+      const only = storeLocations[0]!.id;
+      setWebPosTerminalLocationId(only);
+      setPosLocationId(only);
+      return;
+    }
+    setPosBranchPickerOpen(true);
+  }, [storeLocations, posLocationId]);
 
   useEffect(() => {
     if (!posLocationId) {
@@ -3052,7 +3162,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (!ids.length) return;
         const stored = localStorage.getItem('manupos_selected_location');
         if (stored && ids.includes(stored)) return;
-        setPosLocationId(ids[0]!);
+        const branchId = ids[0]!;
+        setWebPosTerminalLocationId(branchId);
+        setPosLocationId(branchId);
       } catch {
         /* best-effort */
       }
@@ -3060,11 +3172,24 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [authUser?.staffId, authUser?.role, setPosLocationId]);
+  }, [authUser?.staffId, authUser?.role]);
 
   useEffect(() => {
+    if (!posLocationId && storeLocations.length > 1) return;
     void load().catch(() => undefined);
-  }, [load, posLocationId]);
+  }, [load, posLocationId, storeLocations.length]);
+
+  useEffect(() => {
+    if (!storeLocations.length || !posLocationId) return;
+    if (storeLocations.some((l) => l.id === posLocationId)) return;
+    const healed =
+      (panelBranchId && storeLocations.some((l) => l.id === panelBranchId)
+        ? panelBranchId
+        : storeLocations.find((l) => l.isDefault)?.id || storeLocations[0]?.id) || null;
+    if (!healed) return;
+    setWebPosTerminalLocationId(healed);
+    setPosLocationId(healed);
+  }, [storeLocations, posLocationId, panelBranchId]);
 
   useEffect(() => {
     const refreshCatalog = () => {
@@ -4286,6 +4411,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
     channelRows?: Array<{ channel: string; count: number; total: number }>;
     range?: { label: string; from: string; to: string };
+    userPerformance?: Array<{ name: string; salesCount: number; total: number }>;
     shiftCash?: Array<{
       openingFloat: number;
       cashSales: number;
@@ -4321,6 +4447,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ? webposStaff.name
       : null;
 
+  const EOD_UNASSIGNED_STAFF = 'Unassigned';
+  const staffNameForEodReport = (name: string) =>
+    name === EOD_UNASSIGNED_STAFF ? t('reportsUnassignedSales') : name;
+
   /** EOD from POS menu: END_OF_DAY or VIEW_REPORTS (own sales when VIEW_ALL_SALES is off). */
   const canPrintEodReport =
     ownerOnRegister ||
@@ -4338,10 +4468,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const buildClosedShiftPrintPayload = (
     report: PosReportPayload | null,
-    includeProductsSold: boolean,
+    opts: EodPrintOptions,
     reportKind: 'shift' | 'eod',
     label: string
   ) => {
+    const includeProductsSold = opts.includeProductsSold !== false;
+    const includeStaffPerformance =
+      reportKind === 'eod' && opts.includeStaffPerformance === true;
     if (!lastClosedShift) return null;
     const totalSales =
       lastClosedShift.cashSales +
@@ -4421,6 +4554,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               }
           : undefined,
       includeProductsSold,
+      includeStaffPerformance,
+      userPerformance: includeStaffPerformance ? report?.userPerformance : undefined,
+      staffPerformanceTitle: t('reportsTabUsers'),
+      staffNameLabel: staffNameForEodReport,
       reportKind,
     };
     return reportKind === 'shift'
@@ -4429,7 +4566,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   /** Print report for the just-closed shift only (openedAt → closedAt). */
-  const printShiftReport = async (opts?: { includeProductsSold?: boolean }) => {
+  const printShiftReport = async (opts?: EodPrintOptions) => {
     const includeProductsSold = opts?.includeProductsSold !== false;
     if (!lastClosedShift) {
       toast.error(t('webPosShiftNoReport'));
@@ -4451,7 +4588,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       const text = buildClosedShiftPrintPayload(
         report,
-        includeProductsSold,
+        { includeProductsSold },
         'shift',
         t('webPosShiftReportLabel')
       );
@@ -4467,8 +4604,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   /** Print whole-day EOD (all shifts / full calendar day). Managers with View all sales only. */
-  const printDayEodFromShiftClose = async (opts?: { includeProductsSold?: boolean }) => {
-    const includeProductsSold = opts?.includeProductsSold !== false;
+  const printDayEodFromShiftClose = async (opts?: EodPrintOptions) => {
     if (!lastClosedShift) {
       toast.error(t('webPosShiftNoReport'));
       return;
@@ -4491,7 +4627,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
       const text = buildClosedShiftPrintPayload(
         report,
-        includeProductsSold,
+        opts || {},
         'eod',
         t('webPosEodReport')
       );
@@ -4523,9 +4659,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const printTodayEod = async (
     scopeStaffId?: string | null,
     scopeStaffName?: string | null,
-    opts?: { includeProductsSold?: boolean }
+    opts?: EodPrintOptions
   ) => {
     const includeProductsSold = opts?.includeProductsSold !== false;
+    const includeStaffPerformance =
+      !scopeStaffId && opts?.includeStaffPerformance === true;
     if (!canPrintEodReport) {
       toast.error(t('webPosEodPermissionDenied'));
       return;
@@ -4572,6 +4710,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         coversServed?: number | null;
         vatRows?: Array<{ label: string; net: number; tva: number; brut: number }>;
         productsSold: Array<{ name: string; quantity: number; total: number }>;
+        userPerformance?: Array<{ name: string; salesCount: number; total: number }>;
         paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
         orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
         channelRows?: Array<{ channel: string; count: number; total: number }>;
@@ -4640,6 +4779,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         footer: printSettings?.receiptFooter,
         ...receiptHeaderFieldsFromPrintSettings(printSettings),
         includeProductsSold,
+        includeStaffPerformance,
+        userPerformance: includeStaffPerformance ? report?.userPerformance : undefined,
+        staffPerformanceTitle: t('reportsTabUsers'),
+        staffNameLabel: staffNameForEodReport,
         reportKind: 'eod',
       });
       await printEscPosToTargets(text, { role: 'eod' });
@@ -6740,9 +6883,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     void ensureShift(doAdd);
   };
 
-  const pushCustomAmountLine = (amount: number) => {
-    const price = roundMoney2(amount);
-    if (price <= 0) return;
+  const pushCustomAmountLine = (payload: {
+    amount: number;
+    weightKg?: number;
+    pricePerKg?: number;
+  }) => {
+    const lineTotal = roundMoney2(payload.amount);
+    if (lineTotal <= 0) return;
+    const weightKg =
+      payload.weightKg != null && Number.isFinite(payload.weightKg)
+        ? roundWeightKg(Math.max(0, payload.weightKg))
+        : 0;
+    const weighed = weightKg > 0 && payload.pricePerKg != null;
+    const unitPrice = weighed ? roundMoney2(payload.pricePerKg!) : lineTotal;
     const courseNumber = coursesEnabled ? activeCourse : undefined;
     const lineId = `misc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setCart((prev) => [
@@ -6751,13 +6904,15 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         lineId,
         productId: '__misc__',
         name: t('webPosCustomAmount'),
-        quantity: 1,
-        unitPrice: price,
-        lineTotal: price,
+        quantity: weighed ? weightKg : 1,
+        unitPrice,
+        lineTotal,
         taxable: true,
         selectedExtras: [],
         comboSelections: [],
         isOpenPrice: true,
+        isWeighed: weighed,
+        weightKg: weighed ? weightKg : undefined,
         courseNumber,
       },
     ]);
@@ -6767,8 +6922,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPosView('register');
   };
 
-  const addCustomAmountLine = (amount: number) => {
-    void ensureShift(() => pushCustomAmountLine(amount));
+  const addCustomAmountLine = (payload: {
+    amount: number;
+    weightKg?: number;
+    pricePerKg?: number;
+  }) => {
+    void ensureShift(() => pushCustomAmountLine(payload));
   };
 
   const openCustomAmountModal = () => {
@@ -7214,9 +7373,21 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     for (const num of nums) void dismissOrderFromOds(num);
   };
 
+  const hydrateOrderForRegister = async (order: MerchantOrder): Promise<MerchantOrder> => {
+    if (order.items?.length || !order.id) return order;
+    try {
+      const res = await api.get(`/merchant/orders/${order.id}`);
+      const fresh = (res.data?.order || res.data) as MerchantOrder;
+      if (fresh?.id) return mergeMerchantOrderDetail(order, fresh);
+    } catch {
+      /* loadOrderIntoRegister surfaces empty-line errors */
+    }
+    return order;
+  };
+
   const loadOrderIntoRegister = (order: MerchantOrder): boolean => {
     if (isPaidOrder(order)) {
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
       );
       return false;
@@ -7262,27 +7433,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     return true;
   };
 
-  const loadPosOrderToRegister = (order: MerchantOrder) => {
-    if (!loadOrderIntoRegister(order)) return;
+  const loadPosOrderToRegister = async (order: MerchantOrder) => {
+    const full = await hydrateOrderForRegister(order);
+    if (!loadOrderIntoRegister(full)) return;
     setHighlightOrderId(null);
     setOrdersChannelPref(null);
     setPosTab('register');
     setPosView('register');
   };
 
-  const openOrderCollectCheckout = (
+  const openOrderCollectCheckout = async (
     order: MerchantOrder,
     returnView: 'orders' | 'register' = 'orders'
   ) => {
-    if (!loadOrderIntoRegister(order)) return;
+    const full = await hydrateOrderForRegister(order);
+    if (!loadOrderIntoRegister(full)) return;
     setCollectOrderRef({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      total: Number(order.total),
+      id: full.id,
+      orderNumber: full.orderNumber,
+      status: full.status,
+      total: Number(full.total),
       returnView,
-      isInvoice: isInvoiceOrder(order),
-      isPayLater: isPayLaterPaymentMethod(order.paymentMethod),
+      isInvoice: isInvoiceOrder(full),
+      isPayLater: isPayLaterPaymentMethod(full.paymentMethod),
     });
     setHighlightOrderId(null);
     setOrdersChannelPref(null);
@@ -7379,14 +7552,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
       if (guard.action === 'blocked') {
         releasePaidCartSession(guard.order);
-        toast.error(
+        toastOrderAlreadyPaid(
           t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
         );
         return false;
       }
       if (guard.action === 'collect') {
-        openOrderCollectCheckout(guard.order, 'register');
-        toast.info(
+        void openOrderCollectCheckout(guard.order, 'register');
+        toastInfo(
           t('webPosOrderUseCollect').replace('{number}', orderDisplayLabel(guard.order))
         );
         return false;
@@ -7410,7 +7583,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!orderMatchesCartLink(order, currentCartOrderLink())) return;
       if (!isPaidOrder(order)) return;
       releasePaidCartSession(order);
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
       );
     },
@@ -7449,7 +7622,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         });
         if (guard.action === 'blocked') {
           releasePaidCartSession(guard.order);
-          toast.error(
+          toastOrderAlreadyPaid(
             t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(guard.order))
           );
           return;
@@ -7489,7 +7662,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const order = (res.data?.order || res.data) as MerchantOrder;
         if (!order?.id) throw new Error('Order not found');
         if (isPaidOrder(order)) {
-          toast.error(
+          toastOrderAlreadyPaid(
             t('webPosOrderAlreadyPaid').replace('{number}', orderDisplayLabel(order))
           );
           setHighlightOrderId(order.id);
@@ -7498,7 +7671,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           setSearchParams({}, { replace: true });
           return;
         }
-        openOrderCollectCheckout(order, 'register');
+        void openOrderCollectCheckout(order, 'register');
         setSearchParams({}, { replace: true });
       } catch (e: any) {
         toast.error(e.response?.data?.error || e.message || t('webPosOrdersLoadFailed'));
@@ -7669,11 +7842,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         const cashCollect = saleIncludesCashTender(payMethod, payments);
         const kickCashDrawerOnce = async () => {
           if (!cashCollect || !shouldAutoOpenCashDrawer(printSettings)) return;
-          try {
-            await kickConfiguredCashDrawer();
-          } catch (e: unknown) {
-            notifyPrintError(e, 'webPosDrawerFailed');
-          }
+          await kickCashDrawerAfterSale();
         };
         if (
           !skipThermal &&
@@ -7699,7 +7868,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 fastQr: true,
               });
             } catch (e: unknown) {
-              notifyPrintError(e, 'webPosPrintFailed');
+              if (!isPrintAgentUnreachableError(e)) {
+                notifyPrintError(e, 'webPosPrintFailed');
+              }
             } finally {
               await kickCashDrawerOnce();
             }
@@ -7717,9 +7888,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         saleIncludesCashTender(payMethod, payments) &&
         shouldAutoOpenCashDrawer(printSettings)
       ) {
-        void kickConfiguredCashDrawer().catch((e: unknown) =>
-          notifyPrintError(e, 'webPosDrawerFailed')
-        );
+        void kickCashDrawerAfterSale();
       }
       setSuccessInfo({
         amount: ctx.total,
@@ -8042,12 +8211,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       soldGiftCards?: SoldGiftCardOnReceipt[];
     } = {}
   ): Promise<string> => {
-    const paper = opts.paperWidthMm || resolveReceiptPaperWidthMm(printSettings);
+    let liveSettings = printSettings;
+    try {
+      const settingsRes = await api.get('/merchant/settings', { timeout: 5000 });
+      const raw = settingsRes.data?.settings?.posPrintSettings;
+      if (raw && typeof raw === 'object') {
+        liveSettings = normalizeClientReceiptHeaderPrintSettings(raw);
+        setPrintSettings(liveSettings);
+      }
+    } catch {
+      /* print with the settings already on screen */
+    }
+    const paper = opts.paperWidthMm || resolveReceiptPaperWidthMm(liveSettings);
     const logoUrl =
-      printSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl || null;
+      liveSettings?.receiptLogoUrl || merchant?.shopLogoUrl || paymentConfig?.shopLogoUrl || null;
     let logo: Uint8Array | null = null;
     if (logoUrl) {
-      const logoWidth = resolveReceiptLogoWidthPx(printSettings, paper === 58 ? 58 : 80);
+      const logoWidth = resolveReceiptLogoWidthPx(liveSettings, paper === 58 ? 58 : 80);
       const cacheKey = `${String(logoUrl)}|${paper}|${logoWidth}`;
       if (logoEscPosCacheRef.current?.key === cacheKey) {
         logo = logoEscPosCacheRef.current.bytes;
@@ -8057,13 +8237,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       }
     }
     const qr =
-      opts.forceScannable || printSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
+      opts.forceScannable || liveSettings?.receiptShowQrCode !== false ? opts.qrUrl : undefined;
     const barcode = opts.barcodeData || (opts.forceScannable ? opts.qrUrl : undefined);
-    const lang = resolveReceiptLanguage(printSettings, locale);
-    const headerFmt = receiptHeaderFormatFromSettings(printSettings);
+    const lang = resolveReceiptLanguage(liveSettings, locale);
+    const headerFmt = receiptHeaderFormatFromSettings(liveSettings);
     const headerLines = getReceiptHeaderLines(
       {
-        ...receiptHeaderTxFromPrintSettings(printSettings),
+        ...receiptHeaderTxFromPrintSettings(liveSettings),
         businessName: merchant?.name || APP_NAME,
         address: merchant?.address || '',
         city: merchant?.city || undefined,
@@ -8073,9 +8253,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       },
       lineWidthForPaper(paper === 58 ? 58 : 80),
       { padLines: false, titleScale: headerFmt.textScale }
-    );
-    const headerNorm = normalizeReceiptHeaderFields(
-      receiptHeaderTxFromPrintSettings(printSettings)
     );
     const receiptTargets = printersForRole(printSettings, 'receipt');
     const primaryReceiptPrinter =
@@ -8102,8 +8279,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       headerAlign: headerFmt.align,
       headerBold: headerFmt.bold,
       headerTextScale: headerFmt.textScale,
+      headerTitlePx: headerFmt.titlePx,
+      headerDetailPx: headerFmt.detailPx,
       soldGiftCards: opts.soldGiftCards,
-      titleBodyGap: !!(headerNorm.title && headerNorm.body),
+      titleBodyGap: headerLines.length > 1,
       textEncoding,
     });
     const dataBase64 = uint8ToBase64(escpos);
@@ -8258,9 +8437,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               { padLines: false, titleScale: headerFmt.textScale }
             )
           : [];
-      const headerNorm = normalizeReceiptHeaderFields(
-        receiptHeaderTxFromPrintSettings(printSettings)
-      );
       const primaryReceiptPrinter = targets[0]?.name || fallbackName || '';
       let liveForEncoding = printers;
       if (!liveForEncoding.length) {
@@ -8284,8 +8460,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         headerAlign: headerFmt.align,
         headerBold: headerFmt.bold,
         headerTextScale: headerFmt.textScale,
+        headerTitlePx: headerFmt.titlePx,
+        headerDetailPx: headerFmt.detailPx,
         soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
-        titleBodyGap: !!(headerNorm.title && headerNorm.body),
+        titleBodyGap: headerLines.length > 1,
         textEncoding,
       });
       dataBase64 = uint8ToBase64(escpos);
@@ -9044,6 +9222,18 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     setPaymentMessage('');
   };
 
+  const canKickDrawerViaAgent = () => isDesktopApp() || agentOk;
+
+  const kickCashDrawerAfterSale = async () => {
+    if (!canKickDrawerViaAgent()) return;
+    try {
+      await kickConfiguredCashDrawer();
+    } catch (e: unknown) {
+      if (isPrintAgentUnreachableError(e)) return;
+      notifyPrintError(e, 'webPosDrawerFailed');
+    }
+  };
+
   /** Receipt printer drives the cash drawer. No kick when that printer is not configured. */
   async function kickConfiguredCashDrawer() {
     const named = printersForRole(printSettings, 'receipt')
@@ -9634,11 +9824,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     const cashDrawerKick = saleIncludesCashTender(method, extras?.tenders);
     const kickCashDrawerOnce = async () => {
       if (!cashDrawerKick || !shouldAutoOpenCashDrawer(printSettings)) return;
-      try {
-        await kickConfiguredCashDrawer();
-      } catch (e: unknown) {
-        notifyPrintError(e, 'webPosDrawerFailed');
-      }
+      await kickCashDrawerAfterSale();
     };
     // Send uses fire-and-forget kitchen print; at payment, run kitchen + receipt in parallel when safe.
     if (shouldPrintKitchen || shouldPrintReceipt) {
@@ -9690,13 +9876,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     dataBase64,
                     fastQr: true,
                   });
-                })().catch((e: unknown) => notifyPrintError(e, 'webPosPrintFailed'))
+                })().catch((e: unknown) => {
+                  if (!isPrintAgentUnreachableError(e)) {
+                    notifyPrintError(e, 'webPosPrintFailed');
+                  }
+                })
               : Promise.resolve(),
           ]);
         } catch (e: unknown) {
           if (shouldPrintKitchen) {
             handleKitchenPrintFailure(e, kitchenDelta.map((l) => l.lineId));
-          } else {
+          } else if (!isPrintAgentUnreachableError(e)) {
             notifyPrintError(e, 'webPosPrintFailed');
           }
         } finally {
@@ -9906,8 +10096,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
     try {
       const posTip = roundMoney2(extras?.tipAmount || 0);
-      const askGratuityOnTerminal =
-        checkoutSettings.tipsEnabled !== false && posTip <= 0.001;
+      const askGratuityOnTerminal = shouldAskGratuityOnTerminal(checkoutSettings, {
+        posTipAmount: posTip,
+      });
       const terminalAmount = roundMoney2(
         extras?.total ??
           (collectOrderRef ? collectOrderRef.total : activeSale.totals.total)
@@ -10120,6 +10311,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     : staffConfigured
       ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_PRODUCTS', false)
       : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_PRODUCTS', jwtIsOwner);
+  const canShowStaffHardware = ownerOnRegister
+    ? hasPosHardwareGearAccess(authUser?.permissions as Permission[] | undefined, true)
+    : staffConfigured
+      ? !!webposStaff && hasPosHardwareGearAccess(staffPerms, false)
+      : hasPosHardwareGearAccess(authUser?.permissions as Permission[] | undefined, jwtIsOwner);
+  const canManageSettings = ownerOnRegister
+    ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
+    : staffConfigured
+      ? !!webposStaff && hasPermission(staffPerms, 'MANAGE_SETTINGS', false)
+      : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
+  const hardwareGearOnly =
+    !ownerOnRegister &&
+    staffConfigured &&
+    !!webposStaff &&
+    canShowStaffHardware &&
+    !canManageSettings;
   const canViewOrders =
     ownerOnRegister ||
     !staffConfigured ||
@@ -10131,6 +10338,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   );
   const canShowBackOffice =
     impersonating || jwtPanelAccess || canOpenPanel || canManageProducts || canViewOrders;
+  const terminalEnrollmentLocked =
+    paymentConfig?.deviceEnrollmentLocked === true && !canManageSettings;
   const canManageOnlineShop = ownerOnRegister
     ? hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', true) ||
       hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', true)
@@ -10140,6 +10349,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           hasPermission(staffPerms, 'MANAGE_SETTINGS', false))
       : hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_ONLINE_SHOP', jwtIsOwner) ||
         hasPermission(authUser?.permissions as Permission[] | undefined, 'MANAGE_SETTINGS', jwtIsOwner);
+  /** POS gear: online shop toggle only when the edition includes online shop. */
+  const posGearOnlineShopToggles = canManageOnlineShop && editionAllows('online_shop');
+  /** POS gear: food-service channels (pickup/delivery/dine-in) — not for retail counter POS. */
+  const posGearOrderChannelToggles =
+    canManageOnlineShop &&
+    !isRetail &&
+    (editionAllows('channel_takeaway') || editionAllows('channel_delivery'));
   const canViewAllSales =
     ownerOnRegister ||
     !staffConfigured ||
@@ -10150,8 +10366,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     (!!webposStaff && hasPermission(staffPerms, 'GANDOLA_PURGE', false));
   /** Whole-day EOD: report permission + company-wide sales visibility. */
   const showEodButton = canPrintEodReport;
+  const showPosGearMenu =
+    canShowStaffHardware || showEodButton || shiftsEnabled || canShowBackOffice;
 
-  const printEodAfterShiftClose = async (opts?: { includeProductsSold?: boolean }) => {
+  const printEodAfterShiftClose = async (opts?: EodPrintOptions) => {
     if (mayPrintWholeDayEod) {
       await printDayEodFromShiftClose(opts);
       return;
@@ -10165,7 +10383,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       setEodPickerOpen(true);
       return;
     }
-    void printTodayEod(undefined, undefined, { includeProductsSold: eodIncludeProductsSold });
+    void printTodayEod(undefined, undefined, {
+      includeProductsSold: eodIncludeProductsSold,
+      includeStaffPerformance: eodIncludeStaffPerformance,
+    });
   };
 
   const openCashDrawer = async () => {
@@ -10279,6 +10500,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       try {
         await api.put('/merchant/pos/staff-preferences', {
           preferredTerminalId: terminalId || null,
+          deviceId: webPosDeviceId(),
         });
       } catch {
         /* local fallback kept */
@@ -10349,7 +10571,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       console.warn('[webpos] session register skipped (schema):', reg.error);
     }
     if (reg.ok && reg.kickedSessionIds.length > 0) {
-      toast.info(t('webPosSessionReclaimed'));
+      toastInfo(t('webPosSessionReclaimed'));
     }
     setPinModalOpen(false);
     toast.success(t('webPosSignedInAs').replace('{name}', staff.name));
@@ -10481,7 +10703,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setTabOpen ||
         manualTableOpen ||
         cancelModal ||
-        expressSuccessOpen
+        expressSuccessOpen ||
+        scanCreateBarcode
       ) {
         return;
       }
@@ -10527,12 +10750,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         setSearch('');
         return;
       }
+      if (
+        canManageProducts &&
+        !isWebPosCurrentlyOffline() &&
+        looksLikeRetailBarcodeInput(code)
+      ) {
+        setScanCreateBarcode(code);
+        setSearch('');
+        return;
+      }
       toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
       setSearch('');
     },
     // onProductClick / attach helpers are stable enough for scan
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      canManageProducts,
       pinGateRequired,
       pinModalOpen,
       posView,
@@ -10553,6 +10786,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       manualTableOpen,
       cancelModal,
       expressSuccessOpen,
+      scanCreateBarcode,
       findProductByScanCode,
       tablesUiEnabled,
       switchToTableOrder,
@@ -10583,7 +10817,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !setTableOpen &&
     !setTabOpen &&
     !manualTableOpen &&
-    !cancelModal;
+    !cancelModal &&
+    !scanCreateBarcode;
 
   const { onCaptureInput: onBarcodeCaptureInput, onCaptureKeyDown: onBarcodeCaptureKeyDown } =
     useBarcodeWedge({
@@ -10935,6 +11170,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 merchant?.shopLogoUrl ||
                 paymentConfig?.shopLogoUrl
               }
+              terminalLocationId={posLocationId}
             />
           </>
         )}
@@ -11166,10 +11402,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             })
             .catch(() => undefined);
         }}
-        hideSettingsMenu={isDesktop}
+        hideSettingsMenu={isDesktop && !showPosGearMenu}
         settingsPanel={
-          isDesktop ? null : (
           <WebPosSettingsDropdown
+            staffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
             onReloadCatalog={() => {
               void load();
               setSettingsOpen(false);
@@ -11229,7 +11465,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             }}
             locale={locale}
             onLanguageChange={(lang) => void changePosLanguage(lang)}
-            canManageChannels={canManageOnlineShop}
+            canManageOnlineShopChannels={posGearOnlineShopToggles}
+            canManageOrderChannels={posGearOrderChannelToggles}
             shopEnabled={!!merchant?.shopEnabled}
             reservationsEnabled={!!merchant?.reservationsEnabled}
             pickupEnabled={merchant?.pickupEnabled !== false}
@@ -11237,25 +11474,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             dineInEnabled={merchant?.dineInEnabled !== false}
             channelsSaving={channelsSaving}
             onShopEnabledChange={
-              canManageOnlineShop ? (enabled) => void toggleShopEnabled(enabled) : undefined
+              posGearOnlineShopToggles ? (enabled) => void toggleShopEnabled(enabled) : undefined
             }
             onReservationsEnabledChange={
-              canManageOnlineShop && reservationsPosUiEnabled
+              posGearOnlineShopToggles && reservationsPosUiEnabled
                 ? (enabled) => void toggleReservationsEnabled(enabled)
                 : undefined
             }
             onPickupEnabledChange={
-              canManageOnlineShop
+              posGearOrderChannelToggles
                 ? (enabled) => void toggleMerchantOrderChannel('pickupEnabled', enabled)
                 : undefined
             }
             onDeliveryEnabledChange={
-              canManageOnlineShop
+              posGearOrderChannelToggles
                 ? (enabled) => void toggleMerchantOrderChannel('deliveryEnabled', enabled)
                 : undefined
             }
             onDineInEnabledChange={
-              canManageOnlineShop
+              posGearOrderChannelToggles
                 ? (enabled) => void toggleMerchantOrderChannel('dineInEnabled', enabled)
                 : undefined
             }
@@ -11276,7 +11513,47 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             terminalEnabled={enabledMethods.terminal}
             terminals={activeTerminals}
             selectedTerminalId={selectedTerminalId}
-            onTerminalChange={(id) => void changePosTerminal(id)}
+            onTerminalChange={
+              terminalEnrollmentLocked ? undefined : (id) => void changePosTerminal(id)
+            }
+            hardwareGearOnly={hardwareGearOnly}
+            showStaffHardwarePanel={canShowStaffHardware}
+            staffPrinterProfiles={printSettings?.printers || []}
+            staffAllowPrinterPick={
+              canShowStaffHardware &&
+              !terminalEnrollmentLocked &&
+              (printSettings?.printers?.length ?? 0) > 1
+            }
+            staffSelectedPrinter={printerName}
+            onStaffPrinterChange={(name) => setPrinterName(name)}
+            onStaffTestReceipt={
+              canShowStaffHardware
+                ? () => {
+                    const name =
+                      printSettings?.printers?.find((p) => p.printReceipts)?.name ||
+                      printSettings?.printers?.[0]?.name;
+                    if (!name) {
+                      toast.error(t('testPrinterFailed'));
+                      return;
+                    }
+                    void printEscPosToTargets('', {
+                      role: 'receipt',
+                      dataBase64: uint8ToBase64(
+                        buildPrinterTestEscPos({ printerName: name, merchantName: merchant?.name })
+                      ),
+                      quiet: true,
+                    }).catch((e: unknown) => notifyPrintError(e, 'testPrinterFailed'));
+                  }
+                : undefined
+            }
+            onStaffReprintLast={
+              canShowStaffHardware && lastReceipt
+                ? () => {
+                    void printEscPosToTargets(lastReceipt, { role: 'receipt', quiet: true });
+                  }
+                : undefined
+            }
+            staffReprintAvailable={!!lastReceipt}
             posStations={posStations}
             deviceDefaultStationId={deviceDefaultStationId}
             onDeviceDefaultStationChange={changeDeviceDefaultStation}
@@ -11290,7 +11567,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               setTapToPaySetupOpen(true);
             }}
           />
-          )
         }
       />
 
@@ -11551,7 +11827,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 handleKitchenPrintFailure(e, lines.map((l) => l.lineId));
               }
             }}
-            onCollectPaymentCheckout={(order) => openOrderCollectCheckout(order, 'orders')}
+            onCollectPaymentCheckout={(order) => void openOrderCollectCheckout(order, 'orders')}
             onLoadPosOrder={loadPosOrderToRegister}
             onOrderActioned={markOnlineOrderActioned}
             onOrderPaid={handleOrderPaidElsewhere}
@@ -12550,6 +12826,47 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         open={customAmountOpen}
         onClose={() => setCustomAmountOpen(false)}
         onConfirm={addCustomAmountLine}
+        scaleEnabled={scaleFeatureEnabled}
+        configuredPort={printSettings?.scaleComPort}
+        configuredUsbAddress={printSettings?.scaleUsbAddress}
+        configuredDeviceName={printSettings?.scaleDeviceName}
+        configuredDeviceId={printSettings?.scaleDeviceId}
+        onPortResolved={healScalePort}
+        onUsbAddressResolved={healScaleUsbAddress}
+      />
+
+      <WebPosScanCreateProductModal
+        open={!!scanCreateBarcode}
+        barcode={scanCreateBarcode || ''}
+        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+        defaultCategoryId={
+          categoryId && categoryId !== POS_GIFT_CARDS_CATEGORY && categoryId !== POS_MOST_SOLD_CATEGORY
+            ? categoryId
+            : categories[0]?.id
+        }
+        onClose={() => setScanCreateBarcode(null)}
+        onCreated={(raw) => {
+          const created: Product = {
+            id: String(raw.id),
+            name: repairCatalogText(String(raw.name || '')),
+            price: Number(raw.price) || 0,
+            categoryId: (raw.categoryId as string) || null,
+            barcode: (raw.barcode as string) || scanCreateBarcode,
+            sku: (raw.sku as string) || null,
+            extraBarcodes: Array.isArray(raw.extraBarcodes) ? raw.extraBarcodes : [],
+            visibility: normalizeCatalogVisibility(raw.visibility),
+            image: (raw.imageUrl as string) || (raw.image as string) || null,
+            stock: raw.stock != null ? Number(raw.stock) : undefined,
+          };
+          setProducts((prev) => {
+            if (prev.some((p) => p.id === created.id)) {
+              return prev.map((p) => (p.id === created.id ? { ...p, ...created } : p));
+            }
+            return [...prev, created];
+          });
+          setScanCreateBarcode(null);
+          onProductClick(created, { fromScan: true });
+        }}
       />
 
       <WebPosWeightModal
@@ -12625,6 +12942,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           merchant?.shopLogoUrl ||
           paymentConfig?.shopLogoUrl
         }
+        terminalLocationId={posLocationId}
+        currentStaffName={webposStaff?.name || (jwtIsOwner ? authUser?.name : undefined)}
+      />
+
+      <LocationPickerModal
+        open={posBranchPickerOpen}
+        onClose={() => setPosBranchPickerOpen(false)}
+        branchOnly
+        lockWebPosTerminal
+        title={t('locationPickerTitle')}
+        onSelect={(loc) => {
+          if (loc?.id) setPosLocationId(loc.id);
+        }}
       />
 
       <WebPosStationPickerModal
@@ -13068,6 +13398,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
               checked={eodIncludeProductsSold}
               onChange={setEodIncludeProductsSold}
             />
+            <EodIncludeStaffPerformanceCheckbox
+              className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+              checked={eodIncludeStaffPerformance}
+              onChange={setEodIncludeStaffPerformance}
+            />
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
@@ -13076,6 +13411,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   setEodPickerOpen(false);
                   void printTodayEod(undefined, undefined, {
                     includeProductsSold: eodIncludeProductsSold,
+                    includeStaffPerformance: eodIncludeStaffPerformance,
                   });
                 }}
               >
@@ -13090,6 +13426,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     setEodPickerOpen(false);
                     void printTodayEod(s.id, s.name, {
                       includeProductsSold: eodIncludeProductsSold,
+                      includeStaffPerformance: false,
                     });
                   }}
                 >
@@ -13111,6 +13448,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         open={shiftClosedOpen}
         balanced={shiftBalanced}
         showEodPrint={canPrintEodReport}
+        showStaffPerformanceOption={canViewAllSales && panelStaff.length > 0}
         onPrintShift={(opts) => void printShiftReport(opts)}
         onPrintEod={(opts) => void printEodAfterShiftClose(opts)}
         onRestart={handleRestartShift}

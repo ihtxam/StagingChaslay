@@ -19,13 +19,15 @@ import {
   STAFF_PIN_MAX_LENGTH,
   STAFF_PIN_MIN_LENGTH,
 } from '@/lib/staff-pin';
+import { apiTryAgainMessage, isDeployBlip } from '@/lib/deploy-blip';
 import { isNetworkError } from '@/lib/webpos-offline/network';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 
 const PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH;
 const PIN_MAX_LENGTH = STAFF_PIN_MAX_LENGTH;
-/** Pause so a longer PIN can be typed before verify runs (no OK button in gate mode). */
+/** Brief pause before verify when the fourth digit is entered (no OK button in gate mode). */
 const PIN_AUTO_DELAY_MS = 420;
+const PIN_VERIFY_TIMEOUT_MS = 12_000;
 
 export type WebPosPinModalMode = 'gate' | 'switch';
 
@@ -87,6 +89,7 @@ export default function WebPosPinModal({
   productName,
   logoUrl,
   terminalLocationId,
+  currentStaffName,
 }: {
   open: boolean;
   /** `gate` = fullscreen unlock before register; `switch` = compact switch-user modal */
@@ -112,6 +115,8 @@ export default function WebPosPinModal({
   logoUrl?: string | null;
   /** Locked WebPOS location — PIN must be valid for this branch (does not change panel location). */
   terminalLocationId?: string | null;
+  /** Staff currently signed in on this register (shown on switch-user keypad). */
+  currentStaffName?: string | null;
 }) {
   const { t, locale } = useI18n();
   const [pin, setPin] = useState('');
@@ -122,6 +127,7 @@ export default function WebPosPinModal({
   const [merchantLogoFailed, setMerchantLogoFailed] = useState(false);
   const busyRef = useRef(false);
   const autoTimerRef = useRef<number | null>(null);
+  const verifyAbortRef = useRef<AbortController | null>(null);
   const isGate = mode === 'gate';
   const clock = useLiveClock(locale);
 
@@ -140,6 +146,8 @@ export default function WebPosPinModal({
       setShake(false);
       setMenuOpen(false);
       setMerchantLogoFailed(false);
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
       busyRef.current = false;
       setBusy(false);
     }
@@ -164,8 +172,20 @@ export default function WebPosPinModal({
     if (!navigator.onLine || isNetworkError(error)) {
       return t('webPosPinNoInternet');
     }
-    const err = error as { response?: { data?: { error?: string } } };
+    if (isDeployBlip(error)) {
+      return apiTryAgainMessage(locale);
+    }
+    const err = error as { response?: { data?: { error?: string }; status?: number } };
+    const status = err.response?.status;
+    if (status != null && status >= 500) {
+      return apiTryAgainMessage(locale);
+    }
     return err.response?.data?.error || t('webPosPinInvalid');
+  };
+
+  const releaseBusy = () => {
+    busyRef.current = false;
+    setBusy(false);
   };
 
   const submitPin = async (value: string) => {
@@ -179,21 +199,34 @@ export default function WebPosPinModal({
       failPin(t('webPosPinNoInternet'));
       return;
     }
+    verifyAbortRef.current?.abort();
+    const controller = new AbortController();
+    verifyAbortRef.current = controller;
     busyRef.current = true;
     setBusy(true);
     setError('');
     try {
-      const res = await api.post('/merchant/staff/verify-pin', {
-        pin: value,
-        locationId: terminalLocationId || undefined,
-      });
+      const res = await api.post(
+        '/merchant/staff/verify-pin',
+        {
+          pin: value,
+          locationId: terminalLocationId || undefined,
+        },
+        { signal: controller.signal, timeout: PIN_VERIFY_TIMEOUT_MS }
+      );
+      if (controller.signal.aborted) return;
       onSuccess(res.data.staff);
       if (!isGate) onClose();
     } catch (e: unknown) {
+      if (controller.signal.aborted) return;
+      const err = e as { code?: string; name?: string };
+      if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') return;
       failPin(pinErrorMessage(e));
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      if (verifyAbortRef.current === controller) {
+        verifyAbortRef.current = null;
+      }
+      releaseBusy();
     }
   };
 
@@ -207,7 +240,13 @@ export default function WebPosPinModal({
   };
 
   const appendDigit = (d: string) => {
-    if (pin.length >= PIN_MAX_LENGTH || busyRef.current) return;
+    setMenuOpen(false);
+    if (pin.length >= PIN_MAX_LENGTH) return;
+    if (busyRef.current) {
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
+      releaseBusy();
+    }
     clearAutoTimer();
     const next = pin + d;
     setPin(next);
@@ -222,17 +261,32 @@ export default function WebPosPinModal({
   };
 
   const backspace = () => {
-    if (busyRef.current) return;
+    setMenuOpen(false);
+    if (busyRef.current) {
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
+      releaseBusy();
+    }
     clearAutoTimer();
     setPin((p) => p.slice(0, -1));
     setError('');
   };
 
   const handleGateKey = (key: GateKey) => {
+    setMenuOpen(false);
     if (key === 'clear') backspace();
     else if (key === 'enter') void submitPin(pin);
     else appendDigit(key);
   };
+
+  /** Fire on pointer down so taps work on touch devices (touchStart preventDefault blocks click). */
+  const activateKey =
+    (action: () => void) => (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (!e.isPrimary) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      action();
+    };
 
   const switchKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'] as const;
 
@@ -253,9 +307,9 @@ export default function WebPosPinModal({
         <button
           key={key}
           type="button"
-          disabled={busy}
-          onClick={() => handleGateKey(key)}
-          className="webpos-pin-gate-key flex h-[2.75rem] w-full items-center justify-center rounded-xl bg-[#B8324A] text-xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:h-[3.25rem] sm:text-2xl md:h-12 lg:h-14 lg:text-[1.65rem]"
+          disabled={busy && (key === 'enter' || key === 'clear')}
+          onPointerDown={activateKey(() => handleGateKey(key))}
+          className="webpos-pin-gate-key touch-manipulation flex h-[2.75rem] w-full select-none items-center justify-center rounded-xl bg-[#B8324A] text-xl font-semibold text-white transition-colors hover:bg-[#c94d62] disabled:opacity-50 sm:h-[3.25rem] sm:text-2xl md:h-12 lg:h-14 lg:text-[1.65rem]"
           aria-label={
             key === 'clear'
               ? t('webPosPinClear')
@@ -284,13 +338,13 @@ export default function WebPosPinModal({
         <button
           key={key}
           type="button"
-          disabled={busy}
-          onClick={() => {
+          disabled={busy && (key === 'OK' || key === '⌫')}
+          onPointerDown={activateKey(() => {
             if (key === '⌫') backspace();
             else if (key === 'OK') void submitPin(pin);
             else appendDigit(key);
-          }}
-          className={`font-semibold disabled:opacity-50 ${
+          })}
+          className={`touch-manipulation select-none font-semibold disabled:opacity-50 ${
             key === 'OK'
               ? 'webpos-accent-btn rounded-xl py-3 text-lg'
               : 'webpos-keypad-key'
@@ -300,6 +354,24 @@ export default function WebPosPinModal({
         </button>
       ))}
     </div>
+  );
+
+  const pinGateClock = (
+    <>
+      <div className="flex items-baseline justify-center gap-1 sm:gap-2">
+        <span className="webpos-pin-gate-time text-[clamp(2.5rem,9vw,5.5rem)] font-extralight leading-none tracking-tight lg:text-[clamp(3.5rem,12vw,7rem)]">
+          {clock.hour}:{clock.minute}
+        </span>
+        {clock.dayPeriod ? (
+          <span className="webpos-pin-gate-ampm text-[clamp(0.85rem,2.5vw,1.35rem)] font-light uppercase tracking-wide text-white/80 lg:text-[clamp(1rem,3vw,1.75rem)]">
+            {clock.dayPeriod}
+          </span>
+        ) : null}
+      </div>
+      <p className="webpos-pin-gate-date mt-2 max-w-md text-[clamp(0.8rem,2vw,1.1rem)] font-light leading-snug text-white/85 lg:mt-4 lg:text-[clamp(0.95rem,2.2vw,1.35rem)]">
+        {clock.dateLabel}
+      </p>
+    </>
   );
 
   const pinDots = (
@@ -378,7 +450,7 @@ export default function WebPosPinModal({
               <>
                 <button
                   type="button"
-                  className="fixed inset-0 z-10 cursor-default"
+                  className="fixed inset-0 z-[115] cursor-default bg-black/20"
                   aria-label={t('close')}
                   onClick={() => setMenuOpen(false)}
                 />
@@ -419,48 +491,47 @@ export default function WebPosPinModal({
         ) : null}
 
         <div
-          className={`flex min-h-0 flex-1 flex-col overflow-hidden min-[640px]:flex-row ${
+          className={`webpos-pin-gate-body flex min-h-0 flex-1 flex-col overflow-hidden max-[639px]:justify-end min-[640px]:flex-row ${
             shake ? 'webpos-pin-shake' : ''
           }`}
         >
-          <section className="webpos-pin-gate-clock flex shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
-            <div className="flex items-baseline justify-center gap-1 sm:gap-2">
-              <span className="webpos-pin-gate-time text-[clamp(2.5rem,9vw,5.5rem)] font-extralight leading-none tracking-tight lg:text-[clamp(3.5rem,12vw,7rem)]">
-                {clock.hour}:{clock.minute}
-              </span>
-              {clock.dayPeriod ? (
-                <span className="webpos-pin-gate-ampm text-[clamp(0.85rem,2.5vw,1.35rem)] font-light uppercase tracking-wide text-white/80 lg:text-[clamp(1rem,3vw,1.75rem)]">
-                  {clock.dayPeriod}
-                </span>
-              ) : null}
-            </div>
-            <p className="webpos-pin-gate-date mt-2 max-w-md text-[clamp(0.8rem,2vw,1.1rem)] font-light leading-snug text-white/85 lg:mt-4 lg:text-[clamp(0.95rem,2.2vw,1.35rem)]">
-              {clock.dateLabel}
-            </p>
+          <section
+            className="webpos-pin-gate-clock hidden shrink-0 flex-col items-center justify-start px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-center min-[640px]:flex min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8"
+          >
+            {pinGateClock}
           </section>
 
-          <section className="webpos-pin-gate-entry flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overscroll-contain px-4 pb-2 pt-1 min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 lg:px-6 lg:py-8">
-            <div className="mb-3 flex w-full max-w-md flex-col items-center gap-1.5 text-center sm:mb-4 sm:gap-2">
-              {busy ? (
-                <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />
-              ) : null}
-              <h1 className="text-lg font-semibold leading-tight tracking-tight sm:text-xl lg:text-2xl">
-                {t('webPosPinGateTitle')}
-              </h1>
-              <p className="max-w-sm text-xs leading-snug text-white/65 sm:text-sm">
-                {t('webPosPinGateHint')}
-              </p>
-            </div>
-
-            <div className="mb-3 sm:mb-4">{pinDots}</div>
-
-            {error ? (
-              <div className="mb-4 w-full max-w-md rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
-                <p className="text-base font-semibold text-red-100">{error}</p>
+          <section
+            className="webpos-pin-gate-entry relative z-[118] flex w-full max-[639px]:shrink-0 flex-col items-center overflow-hidden px-4 pb-0 pt-0 min-[640px]:min-h-0 min-[640px]:flex-1 min-[640px]:overflow-y-auto min-[640px]:overscroll-contain min-[640px]:justify-center min-[640px]:px-5 min-[640px]:py-6 min-[640px]:pb-2 lg:px-6 lg:py-8"
+          >
+            <div className="webpos-pin-gate-stack flex w-full max-w-md flex-col items-center">
+              <div className="webpos-pin-gate-mobile-clock w-full text-center min-[640px]:hidden">
+                {pinGateClock}
               </div>
-            ) : null}
 
-            {gateKeypad}
+              <div className="webpos-pin-gate-message flex w-full flex-col items-center gap-1.5 text-center sm:gap-2">
+                {busy ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-white/80 sm:h-7 sm:w-7" aria-hidden />
+                ) : null}
+                <h1 className="text-lg font-semibold leading-tight tracking-tight sm:text-xl lg:text-2xl">
+                  {t('webPosPinGateTitle')}
+                </h1>
+                <p className="webpos-pin-gate-copy max-w-sm text-xs leading-snug text-white/65 sm:text-sm">
+                  {t('webPosPinGateHint')}
+                </p>
+                <div className="mt-1 shrink-0 sm:mt-2">{pinDots}</div>
+              </div>
+
+              {error ? (
+                <div className="mt-3 w-full shrink-0 rounded-xl border border-red-400/60 bg-red-950/80 px-4 py-3 text-center">
+                  <p className="text-base font-semibold text-red-100">{error}</p>
+                </div>
+              ) : null}
+
+              <div className="webpos-pin-gate-keypad-shell flex w-full flex-col justify-end pb-[max(0.35rem,env(safe-area-inset-bottom))] min-[640px]:justify-center min-[640px]:pb-2">
+                {gateKeypad}
+              </div>
+            </div>
           </section>
         </div>
 
@@ -493,15 +564,22 @@ export default function WebPosPinModal({
           shake ? 'webpos-pin-shake' : ''
         }`}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[var(--webpos-text,var(--text))]">
-            <UserCircle2 className="h-5 w-5" />
-            <h2 className="font-semibold">{t('webPosPinTitle')}</h2>
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[var(--webpos-text,var(--text))]">
+              <UserCircle2 className="h-5 w-5 shrink-0" />
+              <h2 className="font-semibold">{t('webPosPinTitle')}</h2>
+            </div>
+            {currentStaffName?.trim() ? (
+              <p className="mt-1 truncate text-sm text-[var(--webpos-text-muted,var(--text-muted))]">
+                {t('webPosSignedInAs').replace('{name}', currentStaffName.trim())}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
+            className="shrink-0 rounded-lg p-1 text-[var(--webpos-text-muted,var(--text-muted))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
           >
             <X className="h-4 w-4" />
           </button>

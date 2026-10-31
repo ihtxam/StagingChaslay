@@ -7,6 +7,7 @@ import {
   Save,
   Settings2,
   Users,
+  Wine,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { isMissingAuthorizationError } from '@/lib/reservations-auth-error';
@@ -33,6 +34,7 @@ type ResSettings = {
   bufferMinutes: number;
   minPartySize: number;
   maxPartySize: number;
+  largePartyCallThreshold?: number | null;
   minHoursBefore: number;
   maxDaysAhead: number;
   autoAccept: boolean;
@@ -49,11 +51,16 @@ type ResSettings = {
   slotDiscounts: Array<{
     id: string;
     name: string;
-    percentOff: number;
+    kind?: 'percent' | 'free_wine' | 'dine_free';
+    percentOff?: number;
+    payCovers?: number;
+    receiveCovers?: number;
     scheduleMode: 'specific_days' | 'whole_week';
     daysOfWeek: string[];
     timeStart?: string | null;
     timeEnd?: string | null;
+    specificTimes?: string[];
+    peekMessage?: string | null;
     enabled?: boolean;
   }>;
   waitlistEnabled?: boolean;
@@ -89,15 +96,24 @@ export default function SettingsReservationsTab() {
   const [settings, setSettings] = useState<ResSettings | null>(null);
   const [dineInHours, setDineInHours] = useState<ChannelHours>(emptyWeek());
   const [saving, setSaving] = useState(false);
+  const [shopSlug, setShopSlug] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await api.get('/merchant/reservations/config');
+      const [res, settingsRes] = await Promise.all([
+        api.get('/merchant/reservations/config'),
+        api.get('/merchant/settings'),
+      ]);
       setEnabled(!!res.data.config?.enabled);
       setSettings(res.data.config?.settings);
       if (res.data.config?.hours) setDineInHours(res.data.config.hours);
+      setShopSlug(
+        settingsRes.data?.merchant?.slug ||
+          settingsRes.data?.settings?.slug ||
+          ''
+      );
     } catch (e: any) {
       if (isMissingAuthorizationError(e)) {
         setLoadError(t('reservationsUnlicensedHint'));
@@ -369,6 +385,26 @@ export default function SettingsReservationsTab() {
               onChange={(e) => setSettings({ ...settings, maxPartySize: Number(e.target.value) })}
             />
           </SettingsField>
+          <SettingsField
+            label={t('reservationsLargePartyCallThreshold')}
+            hint={t('reservationsLargePartyCallThresholdHint')}
+          >
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className="input"
+              placeholder={t('reservationsLargePartyCallThresholdOff')}
+              value={settings.largePartyCallThreshold ?? ''}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  largePartyCallThreshold:
+                    e.target.value === '' ? null : Number(e.target.value),
+                })
+              }
+            />
+          </SettingsField>
           <SettingsField label={t('reservationsMaxCovers')}>
             <input
               type="number"
@@ -466,7 +502,7 @@ export default function SettingsReservationsTab() {
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
-            className="btn-secondary text-sm"
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm"
             onClick={() =>
               setSettings({
                 ...settings,
@@ -474,6 +510,7 @@ export default function SettingsReservationsTab() {
                   ...(settings.slotDiscounts || []),
                   {
                     id: `disc-${Date.now()}`,
+                    kind: 'percent',
                     name: 'Off-peak 20%',
                     percentOff: 20,
                     scheduleMode: 'whole_week',
@@ -486,17 +523,95 @@ export default function SettingsReservationsTab() {
               })
             }
           >
-            {t('reservationsAddDiscount')}
+            <Percent className="h-3.5 w-3.5" aria-hidden />
+            {t('reservationsAddPercentPromo')}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm"
+            onClick={() =>
+              setSettings({
+                ...settings,
+                slotDiscounts: [
+                  ...(settings.slotDiscounts || []),
+                  {
+                    id: `wine-${Date.now()}`,
+                    kind: 'free_wine',
+                    name: 'Free wine bottle',
+                    scheduleMode: 'specific_days',
+                    daysOfWeek: ['thu'],
+                    timeStart: '19:00',
+                    timeEnd: '22:00',
+                    specificTimes: ['19:00', '19:30', '20:00'],
+                    peekMessage: '',
+                    enabled: true,
+                  },
+                ],
+              })
+            }
+          >
+            <Wine className="h-3.5 w-3.5" aria-hidden />
+            {t('reservationsAddWinePromo')}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm"
+            onClick={() =>
+              setSettings({
+                ...settings,
+                slotDiscounts: [
+                  ...(settings.slotDiscounts || []),
+                  {
+                    id: `dine-${Date.now()}`,
+                    kind: 'dine_free',
+                    name: 'Book 4 pay 3',
+                    payCovers: 3,
+                    receiveCovers: 4,
+                    scheduleMode: 'specific_days',
+                    daysOfWeek: ['fri', 'sat'],
+                    timeStart: '18:00',
+                    timeEnd: '22:00',
+                    peekMessage: '',
+                    enabled: true,
+                  },
+                ],
+              })
+            }
+          >
+            <Users className="h-3.5 w-3.5" aria-hidden />
+            {t('reservationsAddDinePromo')}
           </button>
         </div>
-        {(settings.slotDiscounts || []).map((d, idx) => (
+        {(settings.slotDiscounts || []).map((d, idx) => {
+          const kind = d.kind || 'percent';
+          return (
           <div
             key={d.id}
             className="space-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/30 p-3.5"
           >
             <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-              <input
+              <select
                 className="input"
+                value={kind}
+                onChange={(e) => {
+                  const next = [...(settings.slotDiscounts || [])];
+                  const k = e.target.value as 'percent' | 'free_wine' | 'dine_free';
+                  next[idx] = {
+                    ...d,
+                    kind: k,
+                    percentOff: k === 'percent' ? d.percentOff ?? 10 : undefined,
+                    payCovers: k === 'dine_free' ? d.payCovers ?? 3 : undefined,
+                    receiveCovers: k === 'dine_free' ? d.receiveCovers ?? 4 : undefined,
+                  };
+                  setSettings({ ...settings, slotDiscounts: next });
+                }}
+              >
+                <option value="percent">{t('reservationsPromoKindPercent')}</option>
+                <option value="free_wine">{t('reservationsPromoKindWine')}</option>
+                <option value="dine_free">{t('reservationsPromoKindDine')}</option>
+              </select>
+              <input
+                className="input md:col-span-2"
                 value={d.name}
                 onChange={(e) => {
                   const next = [...(settings.slotDiscounts || [])];
@@ -505,13 +620,14 @@ export default function SettingsReservationsTab() {
                 }}
                 placeholder={t('name')}
               />
+              {kind === 'percent' ? (
               <label className="flex items-center gap-1 text-sm">
                 <input
                   className="input !w-20"
                   type="number"
                   min={1}
                   max={90}
-                  value={d.percentOff}
+                  value={d.percentOff ?? 10}
                   onChange={(e) => {
                     const next = [...(settings.slotDiscounts || [])];
                     next[idx] = { ...d, percentOff: Number(e.target.value) || 0 };
@@ -520,6 +636,38 @@ export default function SettingsReservationsTab() {
                 />
                 % off
               </label>
+              ) : kind === 'dine_free' ? (
+                <div className="flex items-center gap-1 text-sm">
+                  <input
+                    className="input !w-14"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={d.payCovers ?? 3}
+                    onChange={(e) => {
+                      const next = [...(settings.slotDiscounts || [])];
+                      next[idx] = { ...d, payCovers: Number(e.target.value) || 1 };
+                      setSettings({ ...settings, slotDiscounts: next });
+                    }}
+                  />
+                  <span className="text-[var(--text-muted)]">{t('reservationsDinePay')}</span>
+                  <input
+                    className="input !w-14"
+                    type="number"
+                    min={2}
+                    max={24}
+                    value={d.receiveCovers ?? 4}
+                    onChange={(e) => {
+                      const next = [...(settings.slotDiscounts || [])];
+                      next[idx] = { ...d, receiveCovers: Number(e.target.value) || 2 };
+                      setSettings({ ...settings, slotDiscounts: next });
+                    }}
+                  />
+                  <span className="text-[var(--text-muted)]">{t('reservationsDineBook')}</span>
+                </div>
+              ) : (
+                <span className="text-xs text-[var(--text-muted)] self-center">{t('reservationsWinePerkHint')}</span>
+              )}
               <select
                 className="input"
                 value={d.scheduleMode || 'specific_days'}
@@ -572,6 +720,36 @@ export default function SettingsReservationsTab() {
               />
               <span className="text-xs text-[var(--text-muted)]">{t('reservationsEmptyTimesHint')}</span>
             </div>
+            <label className="block text-sm">
+              <span className="muted mb-1 block text-xs">{t('reservationsSpecificTimes')}</span>
+              <input
+                className="input"
+                value={(d.specificTimes || []).join(', ')}
+                onChange={(e) => {
+                  const specificTimes = e.target.value
+                    .split(/[,;\s]+/)
+                    .map((x) => x.trim())
+                    .filter(Boolean);
+                  const next = [...(settings.slotDiscounts || [])];
+                  next[idx] = { ...d, specificTimes };
+                  setSettings({ ...settings, slotDiscounts: next });
+                }}
+                placeholder="19:00, 19:30, 20:00"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="muted mb-1 block text-xs">{t('reservationsPeekMessage')}</span>
+              <textarea
+                className="input min-h-[52px] text-sm"
+                value={d.peekMessage || ''}
+                onChange={(e) => {
+                  const next = [...(settings.slotDiscounts || [])];
+                  next[idx] = { ...d, peekMessage: e.target.value };
+                  setSettings({ ...settings, slotDiscounts: next });
+                }}
+                placeholder={t('reservationsPeekMessagePlaceholder')}
+              />
+            </label>
             {d.scheduleMode !== 'whole_week' ? (
               <div className="flex flex-wrap gap-1">
                 {STORE_HOURS_DAYS.map((day) => {
@@ -601,7 +779,8 @@ export default function SettingsReservationsTab() {
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
       </SettingsReportCard>
 
       <SettingsReportCard
@@ -732,6 +911,47 @@ export default function SettingsReservationsTab() {
           </div>
         )}
       </SettingsReportCard>
+
+      {enabled && shopSlug ? (
+        <SettingsReportCard
+          title="Website widget"
+          description="Shown automatically on your Reborn shop and CMS homepage when reservations are on. Use the snippet below for WordPress or any external site (EGGA / Zenchef style)."
+          icon={CalendarClock}
+        >
+          <p className="text-sm text-[var(--text-muted)] mb-3">
+            Paste before <code className="text-xs bg-[var(--bg-muted)] px-1 rounded">&lt;/body&gt;</code>.
+            Staging: try{' '}
+            <a
+              className="text-teal-700 underline"
+              href={`${typeof window !== 'undefined' ? window.location.origin : ''}/embed/reservation-demo.html`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              reservation demo
+            </a>
+            .
+          </p>
+          <textarea
+            readOnly
+            className="input w-full font-mono text-xs min-h-[9rem]"
+            value={`<script
+  src="${typeof window !== 'undefined' ? window.location.origin : 'https://app.chaslay.com'}/embed/reborn-reservations.js"
+  data-shop="${shopSlug}"
+  data-theme="light"
+  data-accent="#1c3557"
+  data-label="Réserver une table"
+  data-lang="fr"
+  async
+></script>`}
+            onFocus={(e) => e.target.select()}
+          />
+          <p className="text-xs text-[var(--text-muted)] mt-2">
+            Retail shop on the same account: use <code className="text-[10px]">data-mode="shop"</code> and{' '}
+            <code className="text-[10px]">data-label="Commander"</code>. Dark theme:{' '}
+            <code className="text-[10px]">data-theme="dark"</code>.
+          </p>
+        </SettingsReportCard>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]/30 px-4 py-3">
         <button type="submit" className="btn-primary inline-flex items-center gap-2 sm:hidden" disabled={saving}>

@@ -338,6 +338,9 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
     if (req.user.role === "staff" && req.user.staffId && req.user.merchantId) {
       const { StaffService } = await import("@/services/staff.service");
       const profile = await StaffService.getStaffProfile(req.user.merchantId, req.user.staffId);
+      const authEpoch =
+        req.user.authEpoch ??
+        (await AuthService.getMerchantAuthEpoch(req.user.merchantId));
       const token = AuthService.generateToken({
         id: profile.id,
         email: profile.email || req.user.email,
@@ -347,6 +350,7 @@ router.get("/me", verifyToken, async (req: Request, res: Response) => {
         name: profile.name,
         roleName: profile.roleName,
         permissions: profile.permissions,
+        authEpoch,
       });
       const { readInventoryAddonEnabled } = await import("@/lib/inventory-addon");
       const { readSignageAddon } = await import("@/lib/signage-addon");

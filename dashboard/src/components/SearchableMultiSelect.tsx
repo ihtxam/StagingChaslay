@@ -11,6 +11,8 @@ type Props = {
   value: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
+  /** Shows required marker on the label. */
+  required?: boolean;
 };
 
 export default function SearchableMultiSelect({
@@ -21,6 +23,7 @@ export default function SearchableMultiSelect({
   value,
   onChange,
   disabled,
+  required,
 }: Props) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -63,7 +66,10 @@ export default function SearchableMultiSelect({
 
   return (
     <div className="block text-sm" ref={rootRef}>
-      <span className="font-medium">{label}</span>
+      <span className="font-medium">
+        {label}
+        {required ? <span className="text-rose-600 dark:text-rose-400"> *</span> : null}
+      </span>
       {helperText ? <p className="text-xs text-[var(--text-muted)] mt-0.5">{helperText}</p> : null}
       <div
         className={`mt-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-2 py-1.5 ${

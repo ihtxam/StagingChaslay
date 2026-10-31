@@ -33,7 +33,7 @@ export const PANEL_NAV_GROUP_PATHS: Record<string, string[]> = {
     '/merchant/products/scheduled-menus',
     '/merchant/products/pizza-builder',
   ],
-  hq: ['/merchant/hq', '/merchant/hq/menus', '/merchant/hq/bulk-pricing'],
+  hq: ['/merchant/hq', '/merchant/hq/sync', '/merchant/hq/menus', '/merchant/hq/bulk-pricing'],
   inventory: [
     '/merchant/inventory',
     '/merchant/inventory/list',
@@ -85,6 +85,7 @@ export const PANEL_NAV_HIDE_OPTIONS: Array<{ key: string; labelKey: string }> = 
   { key: 'inventory', labelKey: 'panelNavHideInventory' },
   { key: 'hq', labelKey: 'panelNavHideHq' },
   { key: 'platform-shop', labelKey: 'panelNavHidePlatformShop' },
+  { key: '/merchant/settings', labelKey: 'panelNavHideSettings' },
 ];
 
 export function parsePanelNavHidden(raw: unknown): string[] {

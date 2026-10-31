@@ -136,7 +136,7 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun pinMatchesActiveStaff(pin: String): Boolean {
-        if (pin.length < com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH) return false
+        if (pin.length != com.chaslay.pos.domain.model.STAFF_PIN_LENGTH) return false
         val hash = hash(pin)
         return userDao.getPinUsers().any { it.pinHash == hash && it.isActive }
     }

@@ -51,6 +51,8 @@ export const shopEn: Record<string, string> = {
   shopFulfillment: 'Order type',
   shopLoading: 'Loading shop…',
   shopNotFound: 'Shop not found',
+  shopOnlineOrdersDisabled:
+    'We are not accepting online orders at the moment. Please visit our menu or visit later.',
   shopFailedLoad: 'Failed to load shop',
   shopNoItems: 'No items added yet.',
   shopNoProducts: 'No products in this category.',
@@ -115,6 +117,7 @@ export const shopEn: Record<string, string> = {
   // Checkout
   shopLoadingCheckout: 'Loading checkout…',
   shopBackToMenu: 'Back to menu',
+  shopBackToHome: 'Back to home',
   shopCheckout: 'checkout',
   shopStepDetails: 'Details',
   shopStepPayment: 'Payment',
@@ -150,6 +153,14 @@ export const shopEn: Record<string, string> = {
   shopPasswordMin6: 'Password (min 6)',
   shopEmailPasswordRequired: 'Email and password (min 6 characters) are required',
   shopLoginFailed: 'Login failed',
+  shopPhoneLogin: 'Sign in with SMS',
+  shopPhoneSignup: 'Verify phone',
+  shopSendCode: 'Send code',
+  shopVerifyCode: 'Verify code',
+  shopSmsCode: '6-digit code',
+  shopSmsCodeSent: 'We sent a code to {phone}',
+  shopMarketingSmsOptIn: 'Send me offers by SMS',
+  shopUseEmailInstead: 'Use email instead',
   shopCouldNotCreateAccount: 'Could not create account',
   shopRegisterContinue: 'Register & continue',
   shopLoggedInAs: 'Logged in as',
@@ -560,6 +571,10 @@ export const shopEn: Record<string, string> = {
   shopReservationsParty: 'Party size',
   shopReservationsDate: 'Date',
   shopReservationsToday: 'Today',
+  shopReservationPeekTitle: 'Book a table',
+  shopReservationPeekGuests: 'guests',
+  shopReservationPeekChooseTime: 'Choose a time',
+  shopReservationPeekContinue: 'Continue',
   shopReservationsShowMore: 'Show more',
   shopReservationsShowLess: 'Show less',
   shopReservationsOtherDate: 'Other date',
@@ -574,6 +589,10 @@ export const shopEn: Record<string, string> = {
   shopReservationsTime: 'Time',
   shopReservationsNoSlots: 'No available slots this day - try another date.',
   shopReservationsSlotHint: 'Slots every {interval} min · book at least {hours}h ahead',
+  shopReservationsLargePartyCall:
+    'Booking for {count} or more guests? Please call us at {phone} to arrange your table.',
+  shopReservationsLargePartyMax:
+    'Online booking is limited to {max} guests. For larger groups, call us at {phone}.',
   shopReservationsBook: 'Request reservation',
 };
 
@@ -630,6 +649,8 @@ export const shopFr: Record<string, string> = {
   shopFulfillment: 'Type de commande',
   shopLoading: 'Chargement de la boutique…',
   shopNotFound: 'Boutique introuvable',
+  shopOnlineOrdersDisabled:
+    'Nous n’acceptons pas les commandes en ligne pour le moment. Consultez notre menu ou revenez plus tard.',
   shopFailedLoad: 'Échec du chargement de la boutique',
   shopNoItems: 'Aucun article pour le moment.',
   shopNoProducts: 'Aucun produit dans cette catégorie.',
@@ -693,6 +714,7 @@ export const shopFr: Record<string, string> = {
 
   shopLoadingCheckout: 'Chargement du paiement…',
   shopBackToMenu: 'Retour au menu',
+  shopBackToHome: "Retour à l'accueil",
   shopCheckout: 'paiement',
   shopStepDetails: 'Détails',
   shopStepPayment: 'Paiement',
@@ -728,6 +750,14 @@ export const shopFr: Record<string, string> = {
   shopPasswordMin6: 'Mot de passe (min. 6)',
   shopEmailPasswordRequired: 'E-mail et mot de passe (min. 6 caractères) requis',
   shopLoginFailed: 'Connexion échouée',
+  shopPhoneLogin: 'Connexion par SMS',
+  shopPhoneSignup: 'Vérifier le téléphone',
+  shopSendCode: 'Envoyer le code',
+  shopVerifyCode: 'Vérifier le code',
+  shopSmsCode: 'Code à 6 chiffres',
+  shopSmsCodeSent: 'Nous avons envoyé un code au {phone}',
+  shopMarketingSmsOptIn: 'Recevoir des offres par SMS',
+  shopUseEmailInstead: 'Utiliser l’e-mail',
   shopCouldNotCreateAccount: 'Impossible de créer le compte',
   shopRegisterContinue: 'S’inscrire et continuer',
   shopLoggedInAs: 'Connecté en tant que',
@@ -1124,6 +1154,10 @@ export const shopFr: Record<string, string> = {
   shopReservationsParty: 'Nombre de personnes',
   shopReservationsDate: 'Date',
   shopReservationsToday: "Aujourd'hui",
+  shopReservationPeekTitle: 'Réserver une table',
+  shopReservationPeekGuests: 'pers.',
+  shopReservationPeekChooseTime: 'Choisir une heure',
+  shopReservationPeekContinue: 'Continuer',
   shopReservationsShowMore: 'Afficher plus',
   shopReservationsShowLess: 'Afficher moins',
   shopReservationsOtherDate: 'Autre date',
@@ -1138,6 +1172,10 @@ export const shopFr: Record<string, string> = {
   shopReservationsTime: 'Heure',
   shopReservationsNoSlots: 'Aucun créneau ce jour - essayez une autre date.',
   shopReservationsSlotHint: 'Créneaux toutes les {interval} min · réserver au moins {hours}h avant',
+  shopReservationsLargePartyCall:
+    'Pour {count} personnes ou plus, merci de nous appeler au {phone} pour réserver.',
+  shopReservationsLargePartyMax:
+    'Réservation en ligne limitée à {max} personnes. Pour un plus grand groupe, appelez le {phone}.',
   shopReservationsBook: 'Demander une réservation',
 };
 
@@ -1194,6 +1232,8 @@ export const shopDe: Record<string, string> = {
   shopFulfillment: 'Bestellart',
   shopLoading: 'Shop wird geladen…',
   shopNotFound: 'Shop nicht gefunden',
+  shopOnlineOrdersDisabled:
+    'Wir nehmen derzeit keine Online-Bestellungen an. Bitte besuchen Sie unser Menü oder kommen Sie später wieder.',
   shopFailedLoad: 'Shop konnte nicht geladen werden',
   shopNoItems: 'Noch keine Artikel.',
   shopNoProducts: 'Keine Produkte in dieser Kategorie.',
@@ -1257,6 +1297,7 @@ export const shopDe: Record<string, string> = {
 
   shopLoadingCheckout: 'Kasse wird geladen…',
   shopBackToMenu: 'Zurück zum Menü',
+  shopBackToHome: 'Zur Startseite',
   shopCheckout: 'Kasse',
   shopStepDetails: 'Details',
   shopStepPayment: 'Zahlung',
@@ -1292,6 +1333,14 @@ export const shopDe: Record<string, string> = {
   shopPasswordMin6: 'Passwort (min. 6)',
   shopEmailPasswordRequired: 'E-Mail und Passwort (min. 6 Zeichen) erforderlich',
   shopLoginFailed: 'Anmeldung fehlgeschlagen',
+  shopPhoneLogin: 'Mit SMS anmelden',
+  shopPhoneSignup: 'Telefon bestätigen',
+  shopSendCode: 'Code senden',
+  shopVerifyCode: 'Code prüfen',
+  shopSmsCode: '6-stelliger Code',
+  shopSmsCodeSent: 'Wir haben einen Code an {phone} gesendet',
+  shopMarketingSmsOptIn: 'Angebote per SMS erhalten',
+  shopUseEmailInstead: 'Stattdessen E-Mail nutzen',
   shopCouldNotCreateAccount: 'Konto konnte nicht erstellt werden',
   shopRegisterContinue: 'Registrieren & weiter',
   shopLoggedInAs: 'Angemeldet als',
@@ -1688,6 +1737,10 @@ export const shopDe: Record<string, string> = {
   shopReservationsParty: 'Personen',
   shopReservationsDate: 'Datum',
   shopReservationsToday: 'Heute',
+  shopReservationPeekTitle: 'Tisch reservieren',
+  shopReservationPeekGuests: 'Gäste',
+  shopReservationPeekChooseTime: 'Uhrzeit wählen',
+  shopReservationPeekContinue: 'Weiter',
   shopReservationsShowMore: 'Mehr anzeigen',
   shopReservationsShowLess: 'Weniger',
   shopReservationsOtherDate: 'Anderes Datum',
@@ -1702,5 +1755,9 @@ export const shopDe: Record<string, string> = {
   shopReservationsTime: 'Uhrzeit',
   shopReservationsNoSlots: 'Keine Slots an diesem Tag - anderes Datum wählen.',
   shopReservationsSlotHint: 'Slots alle {interval} Min. · mindestens {hours} Std. im Voraus',
+  shopReservationsLargePartyCall:
+    'Ab {count} Personen bitte telefonisch reservieren: {phone}.',
+  shopReservationsLargePartyMax:
+    'Online maximal {max} Personen. Für grössere Gruppen: {phone}.',
   shopReservationsBook: 'Reservation anfragen',
 };

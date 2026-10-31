@@ -1,0 +1,97 @@
+name: Production health watch
+
+# Alerts when app.rebornsense.com is unreachable or API/DB probes fail.
+# Enable GitHub Actions failure notifications (Settings → Notifications) for email/Slack via repo integrations.
+
+on:
+  schedule:
+    # Every 10 minutes (UTC)
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      run_auto_heal_after_failure:
+        description: If probe fails, SSH run api-auto-heal.sh once (still counts toward 3-strike on server)
+        type: boolean
+        default: false
+
+concurrency:
+  group: production-health-watch
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Shallow API health (through Caddy)
+        run: |
+          set -euo pipefail
+          URL="https://app.rebornsense.com/api/health"
+          CODE="$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 30 "$URL")"
+          echo "GET $URL → HTTP $CODE"
+          cat /tmp/health.json || true
+          echo
+          test "$CODE" = "200"
+
+      - name: Deep health (API + Postgres)
+        run: |
+          set -euo pipefail
+          URL="https://app.rebornsense.com/api/health?deep=1"
+          CODE="$(curl -sS -o /tmp/health-deep.json -w '%{http_code}' --max-time 45 "$URL")"
+          echo "GET $URL → HTTP $CODE"
+          cat /tmp/health-deep.json || true
+          echo
+          test "$CODE" = "200"
+          jq -e '.database == "ok"' /tmp/health-deep.json >/dev/null
+
+      - name: Public status page database component
+        run: |
+          set -euo pipefail
+          URL="https://app.rebornsense.com/api/public/status"
+          curl -sS --max-time 45 "$URL" | tee /tmp/status.json
+          jq -e '.components.database.status == "ok"' /tmp/status.json >/dev/null
+
+  # Scheduled auto-heal piggybacks on this workflow because GitHub cron for
+  # production-api-auto-heal.yml may not fire until the workflow is re-registered;
+  # health-watch schedule is already reliable (every 10 min UTC).
+  scheduled-auto-heal:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH api-auto-heal (production, scheduled)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            export HEALTH_URL="https://app.rebornsense.com/api/health?deep=1"
+            export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
+            export DEPLOY_STACK=rebornsense
+            export ENV_FILE="/root/rebornsense-secrets/.env.production"
+            bash "$DEPLOY_PATH/scripts/api-auto-heal.sh"
+
+  auto-heal-on-demand:
+    needs: probe
+    if: failure() && github.event_name == 'workflow_dispatch' && inputs.run_auto_heal_after_failure == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH api-auto-heal (production)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.REBORN_HETZNER_HOST }}
+          username: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
+          key: ${{ secrets.REBORN_HETZNER_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            export HEALTH_URL="https://app.rebornsense.com/api/health?deep=1"
+            export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
+            export DEPLOY_STACK=rebornsense
+            export ENV_FILE="/root/rebornsense-secrets/.env.production"
+            bash "$DEPLOY_PATH/scripts/api-auto-heal.sh"

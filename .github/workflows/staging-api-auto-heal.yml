@@ -1,0 +1,32 @@
+name: Staging API auto-heal
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: staging-api-auto-heal
+  cancel-in-progress: false
+
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run auto-heal on staging server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            export HEALTH_URL="https://app.chaslay.com/api/health?deep=1"
+            export DEPLOY_PATH="/root/StagingChaslay"
+            export DEPLOY_STACK="chaslay"
+            export ENV_FILE="/root/chaslay-secrets/.env.production"
+            export SKIP_GIT_SYNC=1
+            bash "$DEPLOY_PATH/scripts/api-auto-heal.sh"

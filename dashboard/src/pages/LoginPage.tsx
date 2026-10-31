@@ -12,8 +12,12 @@ import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
+import { bootstrapStaffRegisterSessionAfterEmailLogin } from '@/lib/staff-email-login-bootstrap';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
+import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
+import { readLoginFormCredentials } from '@/lib/login-form-credentials';
+import { shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
 import { useSoftKeyboardLayout } from '@/lib/useSoftKeyboardLayout';
 
 const loginSchema = z.object({
@@ -181,7 +185,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, locale, setLocale } = useI18n();
-  const { user, token, setUser, setToken } = useAuthStore();
+  const { user, token, setUser, setToken, refreshSession, logout } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<'login' | 'forgot' | 'sent'>(
     location.pathname.includes('forgot-password') ? 'forgot' : 'login'
@@ -209,26 +213,38 @@ export default function LoginPage() {
     document.title = APP_PANEL_TITLE;
   }, []);
 
+  // Restore an existing session once on mount (do not re-run after manual login — that races refreshSession).
   useEffect(() => {
-    if (user && token) {
-      navigate(posEmbedReturnPath() ?? homePathForUser(user), { replace: true });
-    }
-  }, [user, token, navigate]);
+    let cancelled = false;
+    void (async () => {
+      const initial = useAuthStore.getState();
+      if (!initial.token || !initial.user) return;
+      await refreshSession();
+      if (cancelled) return;
+      const session = useAuthStore.getState();
+      if (!session.token || !session.user) return;
+      navigate(posEmbedReturnPath() ?? homePathForUser(session.user), { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, refreshSession]);
 
   const onSubmit = async (form: LoginFormData) => {
     setIsLoading(true);
     try {
+      const { email, password } = readLoginFormCredentials(form);
       let data: UnifiedLoginResponse;
       try {
         const response = await api.post<UnifiedLoginResponse>('/auth/login', {
-          email: form.email.trim(),
-          password: form.password,
+          email,
+          password,
         });
         data = response.data;
       } catch (unifiedError: unknown) {
         const status = (unifiedError as { response?: { status?: number } }).response?.status;
         if (status !== 404) throw unifiedError;
-        data = await legacyLogin(form.email.trim(), form.password);
+        data = await legacyLogin(email, password);
       }
       const hit = userFromLogin(data);
       if (!hit) {
@@ -240,6 +256,16 @@ export default function LoginPage() {
       clearWebPosStaffSession();
       setToken(hit.token);
       setUser(hit.user);
+      if (hit.user.role === 'staff') {
+        try {
+          localStorage.removeItem('manupos_panel_scope');
+          const { useLocationStore } = await import('@/store/location');
+          await useLocationStore.getState().load();
+          await bootstrapStaffRegisterSessionAfterEmailLogin(hit.user, hit.token);
+        } catch {
+          /* branch bind / register session is best-effort */
+        }
+      }
       toast.success(t('loginWelcome'));
       navigate(posEmbedReturnPath() ?? homePathForUser(hit.user), { replace: true });
     } catch (error: unknown) {
@@ -274,6 +300,8 @@ export default function LoginPage() {
     }
   };
 
+  const showKeyboardToggle = shouldShowOnScreenKeyboardToggle();
+
   return (
     <div
       className={`flex w-full flex-col items-center p-4 ${
@@ -281,6 +309,14 @@ export default function LoginPage() {
       }`}
       style={{ backgroundColor: BRAND_BLUE_CHARCOAL, ...pageStyle }}
     >
+      {showKeyboardToggle ? (
+        <div className="relative z-10 mb-2 flex w-full max-w-[420px] justify-end">
+          <OnScreenKeyboardToggle
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white hover:bg-white/20 data-[active=true]:border-teal-300 data-[active=true]:bg-teal-900/40"
+            iconSize={18}
+          />
+        </div>
+      ) : null}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -318,11 +354,15 @@ export default function LoginPage() {
                   </label>
                   <input
                     id="login-email"
-                    {...register('email')}
+                    {...emailField}
+                    name="email"
                     type="email"
                     placeholder="name@company.com"
                     className="input py-2.5"
                     autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     autoFocus={!keyboardOpen}
                     enterKeyHint="next"
                     onFocus={onFormFieldFocus}
@@ -348,11 +388,15 @@ export default function LoginPage() {
                   </div>
                   <input
                     id="login-password"
-                    {...register('password')}
+                    {...passwordField}
+                    name="password"
                     type="password"
                     placeholder="••••••••"
                     className="input py-2.5"
                     autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     enterKeyHint="go"
                     onFocus={onFormFieldFocus}
                   />

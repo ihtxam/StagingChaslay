@@ -4,6 +4,12 @@ import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import HqPendingCatalogBanner from '@/components/merchant/HqPendingCatalogBanner';
+import {
+  panelCatalogListParams,
+  shouldShowHqCatalogBadges,
+  shouldUseBranchCatalogPanel,
+} from '@/lib/panel-scope-nav';
 import { useLocationStore } from '@/store/location';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
@@ -34,6 +40,7 @@ interface Category {
   color?: string | null;
   imageUrl?: string | null;
   sortOrder?: number;
+  locationId?: string | null;
   visibility?: CatalogVisibility;
   deliveryPricingEnabled?: boolean;
   extraDeliveryPrice?: number | string | null;
@@ -45,7 +52,16 @@ const MAX_CATEGORY_DESC = 256;
 
 export default function Categories() {
   const { t } = useI18n();
-  const { locationId } = useLocationStore();
+  const { locationId, isHqView, locations, limits } = useLocationStore();
+  const panelScopeNavInput = {
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+    isHqView,
+    locationId,
+  };
+  const catalogListParams = panelCatalogListParams(panelScopeNavInput);
+  const branchCatalogPanel = shouldUseBranchCatalogPanel(panelScopeNavInput);
+  const showHqCatalogBadges = shouldShowHqCatalogBadges(panelScopeNavInput);
   const [hqCategoryIds, setHqCategoryIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +103,7 @@ export default function Categories() {
   const load = async () => {
     try {
       const [response, settingsRes] = await Promise.all([
-        api.get('/merchant/categories'),
+        api.get('/merchant/categories', { params: catalogListParams }),
         api.get('/merchant/settings').catch(() => null),
       ]);
       setCategories(response.data.categories || []);
@@ -101,10 +117,10 @@ export default function Categories() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [locationId, isHqView, locations.length, limits?.maxLocations]);
 
   useEffect(() => {
-    if (!locationId) {
+    if (!showHqCatalogBadges || !locationId) {
       setHqCategoryIds(new Set());
       return;
     }
@@ -112,7 +128,9 @@ export default function Categories() {
       try {
         const [linksRes, productsRes] = await Promise.all([
           api.get(`/merchant/hq/catalog/links/${locationId}`),
-          api.get('/merchant/products', { params: { limit: 500, page: 1 } }),
+          api.get('/merchant/products', {
+            params: { limit: 500, page: 1, ...catalogListParams },
+          }),
         ]);
         const productCategory = new Map<string, string>();
         for (const p of productsRes.data?.products || []) {
@@ -130,7 +148,7 @@ export default function Categories() {
         setHqCategoryIds(new Set());
       }
     })();
-  }, [locationId]);
+  }, [locationId, showHqCatalogBadges, isHqView, locations.length, limits?.maxLocations]);
 
   const reset = () => {
     setName('');
@@ -235,12 +253,15 @@ export default function Categories() {
         });
         toast.success(t('categoryToastUpdated'));
       } else {
+        const ownerLocationId =
+          locationId && (!isHqView || branchCatalogPanel) ? locationId : undefined;
         const created = await api.post('/merchant/categories', {
           name: payload.name,
           description: payload.description,
           color: payload.color,
           visibility,
           shopSchedule,
+          ...(ownerLocationId ? { ownerLocationId } : {}),
         });
         if (imageUrl && created.data?.category?.id) {
           await api.put(`/merchant/categories/${created.data.category.id}`, {
@@ -312,6 +333,7 @@ export default function Categories() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <HqPendingCatalogBanner />
       <div className="card">
         <h1 className="page-title mb-1">{t('categories')}</h1>
         <p className="page-sub mb-3">
@@ -535,7 +557,9 @@ export default function Categories() {
                           }}
                         />
                         {category.name}
-                        <HqCatalogBadge fromHq={hqCategoryIds.has(category.id)} />
+                        <HqCatalogBadge
+                          fromHq={showHqCatalogBadges && hqCategoryIds.has(category.id)}
+                        />
                         {normalizeShopCategoryScheduleForm(category.shopSchedule).enabled ? (
                           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
                             {t('categoryShopScheduleBadge')}

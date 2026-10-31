@@ -138,6 +138,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/vouchers': ['MANAGE_OFFERS'],
   '/merchant/terminals': ['MANAGE_SETTINGS'],
   '/merchant/newsletter': ['MANAGE_ONLINE_SHOP'],
+  '/merchant/sms': ['MANAGE_ONLINE_SHOP'],
   '/merchant/online-shop': ['MANAGE_ONLINE_SHOP'],
   '/merchant/website': ['MANAGE_ONLINE_SHOP'],
   '/merchant/chaslay-page-builder': ['MANAGE_ONLINE_SHOP'],
@@ -154,6 +155,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/billing': ['MANAGE_BILLING'],
   '/merchant/platform-shop': ['MANAGE_BILLING'],
   '/merchant/hq': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
+  '/merchant/hq/sync': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/menus': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   '/merchant/hq/bulk-pricing': ['ACCESS_PANEL', 'MANAGE_SETTINGS', 'MANAGE_PRODUCTS'],
   [MERCHANT_SCHEDULED_MENUS_PATH]: ['MANAGE_PRODUCTS'],
@@ -163,6 +165,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   [MERCHANT_TIME_SLOT_PRICING_LEGACY_PATH]: ['MANAGE_PRODUCTS'],
   [MERCHANT_HQ_MENUS_LEGACY_PATH]: ['MANAGE_PRODUCTS'],
   '/merchant/settings': ['MANAGE_SETTINGS', 'MANAGE_STAFF', 'VIEW_DELIVERY_TRACKING', 'MANAGE_KIOSK'],
+  '/merchant/desktop-settings': ['USE_WEBPOS', 'USE_POS', 'MANAGE_SETTINGS'],
   '/merchant/support': ['ACCESS_PANEL'],
   '/merchant/guides': ['ACCESS_PANEL'],
   '/merchant/updates': ['ACCESS_PANEL'],
@@ -319,6 +322,17 @@ export function canAccessRoute(
   if (!required.length) return true;
   if (!permissions?.length) return false;
   return required.some((p) => permissions.includes(p));
+}
+
+/** Floor register roles that may open the POS hardware gear (printers, test print). */
+export function hasPosHardwareGearAccess(
+  permissions: Permission[] | undefined,
+  isOwner = false
+): boolean {
+  if (isOwner) return true;
+  return (
+    hasPermission(permissions, 'USE_WEBPOS', false) || hasPermission(permissions, 'USE_POS', false)
+  );
 }
 
 export function hasPermission(

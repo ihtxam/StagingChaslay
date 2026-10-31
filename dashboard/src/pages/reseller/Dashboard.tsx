@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Sidebar from '@/components/Sidebar';
-import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import AgencyTopBar, { agencyInitials } from '@/components/agency/AgencyTopBar';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
@@ -261,6 +260,7 @@ function MerchantsPage() {
     storekeeperAddonEnabled: false,
     growthAnalyticsAddonEnabled: false,
     guestCrmAddonEnabled: false,
+    phoneOrderingAddonEnabled: false,
     cateringAddonEnabled: false,
   });
   const [limitsFor, setLimitsFor] = useState<{
@@ -281,6 +281,7 @@ function MerchantsPage() {
     storekeeperAddonEnabled: boolean;
     growthAnalyticsAddonEnabled: boolean;
     guestCrmAddonEnabled: boolean;
+    phoneOrderingAddonEnabled: boolean;
     cateringAddonEnabled: boolean;
   } | null>(null);
   const [planFor, setPlanFor] = useState<{
@@ -474,6 +475,7 @@ function MerchantsPage() {
         storekeeperAddonEnabled: !!limitsFor.storekeeperAddonEnabled,
         growthAnalyticsAddonEnabled: !!limitsFor.growthAnalyticsAddonEnabled,
         guestCrmAddonEnabled: !!limitsFor.guestCrmAddonEnabled,
+        phoneOrderingAddonEnabled: !!limitsFor.phoneOrderingAddonEnabled,
         cateringAddonEnabled: !!limitsFor.cateringAddonEnabled,
       });
       toast.success(t('posPostsLimitsSaved'));
@@ -933,6 +935,22 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!form.phoneOrderingAddonEnabled}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phoneOrderingAddonEnabled: e.target.checked }))
+                }
+              />
+              <span>
+                <span className="font-medium block">Phone ordering</span>
+                <span className="text-xs text-stone-500">
+                  Phone desk, SMS/voice webhooks, shop call-to-order
+                </span>
+              </span>
+            </label>
+            <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!form.kdsAddonEnabled}
                 onChange={(e) => setForm((f) => ({ ...f, kdsAddonEnabled: e.target.checked }))}
               />
@@ -1270,6 +1288,22 @@ function MerchantsPage() {
               <input
                 type="checkbox"
                 className="mt-0.5"
+                checked={!!limitsFor.phoneOrderingAddonEnabled}
+                onChange={(e) =>
+                  setLimitsFor({ ...limitsFor, phoneOrderingAddonEnabled: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium block">Phone ordering</span>
+                <span className="text-xs text-stone-500">
+                  Phone desk, SMS/voice webhooks, shop call-to-order
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
                 checked={!!limitsFor.kdsAddonEnabled}
                 onChange={(e) =>
                   setLimitsFor({ ...limitsFor, kdsAddonEnabled: e.target.checked })
@@ -1553,6 +1587,7 @@ function MerchantsPage() {
                     storekeeperAddonEnabled: m.storekeeperAddonEnabled === true,
                     growthAnalyticsAddonEnabled: m.growthAnalyticsAddonEnabled === true,
                     guestCrmAddonEnabled: m.guestCrmAddonEnabled === true,
+                    phoneOrderingAddonEnabled: m.phoneOrderingAddonEnabled === true,
                     cateringAddonEnabled: m.cateringAddonEnabled === true,
                   }),
               },
@@ -2391,7 +2426,6 @@ function ResellerShell() {
             <Route path="notifications" element={<PlatformNotificationsHistory />} />
           </Routes>
         </main>
-        <RebornPoweredByFooter variant="panel" className="shrink-0" />
       </div>
     </div>
   );

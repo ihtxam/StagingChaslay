@@ -34,7 +34,7 @@ export type KioskSettings = {
   /** Cash orders need manual approval in Order Hub (default true). */
   kioskCashNeedsApproval?: boolean;
   idleTimeoutSeconds?: number;
-  /** 4–8 digit PIN to open back panel from fullscreen kiosk. */
+  /** 4-digit PIN to open back panel from fullscreen kiosk. */
   adminPin?: string;
   cashPaymentEnabled?: boolean;
   cardPaymentEnabled?: boolean;
@@ -197,7 +197,7 @@ function normalizeScreenSizeIn(value: unknown): 23 | 27 {
 
 function normalizeAdminPin(value: unknown): string {
   const pin = String(value ?? DEFAULT_KIOSK_SETTINGS.adminPin ?? "1234").replace(/\D/g, "");
-  if (pin.length >= 4 && pin.length <= 8) return pin;
+  if (pin.length === 4) return pin;
   return DEFAULT_KIOSK_SETTINGS.adminPin!;
 }
 

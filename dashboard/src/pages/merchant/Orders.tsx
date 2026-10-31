@@ -37,7 +37,7 @@ import {
 } from '@/lib/order-management';
 import { collectPaymentAction } from '@/lib/order-to-cart';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
+import { filterActiveHeldRows, parseHeldCartJson, resolveHeldChannel } from '@/lib/webpos-held';
 import { computeMerchandiseTotals } from '@/lib/money';
 import { applyBillDiscountToTotals } from '@/lib/webpos-bill-discount';
 import { printMerchantOrderReceipt, printRefundReceipt } from '@/lib/print-order-receipt';
@@ -64,6 +64,7 @@ import DeliveryLiveMap from '@/components/delivery/DeliveryLiveMap';
 import ReportDatePresetFilter from '@/components/reports/ReportDatePresetFilter';
 import { resolveReportPresetRange, type ReportPreset } from '@/lib/report-preset';
 import { useAuthStore } from '@/store/auth';
+import { useLocationStore } from '@/store/location';
 
 type ChannelFilter = 'all' | 'dine_in' | 'takeaway' | 'delivery' | 'online';
 type TypeFilter = 'all' | 'kitchen' | 'delivery' | 'takeaway' | 'dine_in' | 'online' | 'invoice' | 'programmed';
@@ -418,6 +419,9 @@ const filterPill =
 export default function Orders({ invoiceLedger = false }: { invoiceLedger?: boolean }) {
   const { t, formatDateTime, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
+  const locationId = useLocationStore((s) => s.locationId);
+  const isHqView = useLocationStore((s) => s.isHqView);
+  const panelScopeKey = isHqView ? 'hq' : locationId || '';
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
   const canGandolaPurge =
     jwtIsOwner ||
@@ -539,7 +543,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         setHeldRows([]);
       } else {
         const params = new URLSearchParams({
-          limit: '200',
+          limit: purgeMode || statusFilter === 'completed' ? '500' : '200',
           from: dateFrom,
           to: dateTo,
         });
@@ -549,8 +553,13 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
           api.get(`/merchant/pos/orders?${params.toString()}`),
           api.get('/merchant/pos/held'),
         ]);
-        setOrders((ordersRes.data.orders || []) as MerchantOrder[]);
-        setHeldRows((heldRes.data.held || []) as HeldRow[]);
+        const nextOrders = (ordersRes.data.orders || []) as MerchantOrder[];
+        const nextHeld = filterActiveHeldRows(
+          (heldRes.data.held || []) as HeldRow[],
+          nextOrders
+        );
+        setOrders(nextOrders);
+        setHeldRows(nextHeld);
         setRefundReasons(ordersRes.data.refundReasons || []);
         setCancelReasons(ordersRes.data.cancelReasons || []);
       }
@@ -559,7 +568,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, t]);
+  }, [dateFrom, dateTo, statusFilter, searchQ, showingInvoices, invoicePayFilter, panelScopeKey, purgeMode, t]);
 
   useEffect(() => {
     const id = window.setTimeout(() => setSearchQ(search.trim()), 300);
@@ -661,6 +670,10 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     setStatusFilter('completed');
     setPaymentFilter('cash');
     setPurgePaymentFilter('cash');
+    setChannelFilter('all');
+    setTypeFilter('all');
+    setStaffFilter('all');
+    setDatePreset((preset) => (preset === 'today' ? 'last_week' : preset));
     setSelectedPurgeIds(new Set());
     setSelected(null);
     toast.success(t('gandolaPurgeMode'), { duration: 4000 });
@@ -987,12 +1000,19 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
       {!showingInvoices ? (
         <ReportDatePresetFilter
           preset={datePreset}
-          onPresetChange={setDatePreset}
+          onPresetChange={(preset) => {
+            setDatePreset(preset);
+            if (purgeMode) setSelectedPurgeIds(new Set());
+          }}
           customFrom={customFrom}
           customTo={customTo}
           onCustomFromChange={setCustomFrom}
           onCustomToChange={setCustomTo}
-          onApplyCustom={() => void load()}
+          onApplyCustom={() => {
+            if (purgeMode) setSelectedPurgeIds(new Set());
+            void load();
+          }}
+          className={purgeMode ? 'rounded-xl border border-amber-200 bg-amber-50/40 p-2' : ''}
         />
       ) : null}
 

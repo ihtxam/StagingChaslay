@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isShopPathHubHost, isShopRequestHost, shopSlugFromPath } from "./shop-request-host";
+import {
+  isShopPathHubHost,
+  isShopRequestHost,
+  requestLooksLikeSpaDocument,
+  shopSlugFromPath,
+} from "./shop-request-host";
 
 describe("shop-request-host", () => {
   it("detects shop path hub hosts", () => {
@@ -11,6 +16,12 @@ describe("shop-request-host", () => {
   it("extracts slug from path hub URLs", () => {
     expect(shopSlugFromPath("/brazza-pizza/menu")).toBe("brazza-pizza");
     expect(shopSlugFromPath("/api/shop/demo")).toBeNull();
+  });
+
+  it("treats extension-less shop paths as SPA documents", () => {
+    expect(requestLooksLikeSpaDocument("/demo", "application/json")).toBe(true);
+    expect(requestLooksLikeSpaDocument("/demo/menu", "")).toBe(true);
+    expect(requestLooksLikeSpaDocument("/demo/menu.js", "")).toBe(false);
   });
 
   it("treats custom domains as shop hosts", () => {

@@ -30,6 +30,8 @@ export const phoneHostEn: Record<string, string> = {
   phoneOrderingMarkPaid: 'Mark paid',
   phoneOrderingCreated: 'Phone order created',
   phoneOrderingNeedEnabled: 'Enable phone ordering in Settings → Phone first.',
+  phoneOrderingAddonUpsell:
+    'Phone ordering (desk, SMS/voice webhooks, shop call-to-order) is a paid add-on. Ask your reseller or Reborn admin to enable it.',
   phoneOrderingShopCta: 'Order by phone',
   shopFooterJoinUs: 'Create an account',
   hostAppTitle: 'Reborn Host',
@@ -68,6 +70,8 @@ export const phoneHostFr: Record<string, string> = {
   phoneOrderingMarkPaid: 'Marquer payé',
   phoneOrderingCreated: 'Commande téléphone créée',
   phoneOrderingNeedEnabled: 'Activez d’abord la commande téléphone dans Réglages → Téléphone.',
+  phoneOrderingAddonUpsell:
+    'La commande téléphone (bureau, webhooks SMS/voix, appel sur la boutique) est un module payant. Demandez à votre revendeur ou à Reborn de l’activer.',
   phoneOrderingShopCta: 'Commander par téléphone',
   shopFooterJoinUs: 'Créer un compte',
   hostAppTitle: 'Reborn Hôte',
@@ -106,6 +110,8 @@ export const phoneHostDe: Record<string, string> = {
   phoneOrderingMarkPaid: 'Als bezahlt markieren',
   phoneOrderingCreated: 'Telefonbestellung erstellt',
   phoneOrderingNeedEnabled: 'Aktivieren Sie zuerst Telefonbestellung unter Einstellungen → Telefon.',
+  phoneOrderingAddonUpsell:
+    'Telefonbestellung (Desk, SMS/Sprach-Webhooks, Shop-Anruf) ist ein kostenpflichtiges Add-on. Bitte Reseller oder Reborn-Admin kontaktieren.',
   phoneOrderingShopCta: 'Per Telefon bestellen',
   shopFooterJoinUs: 'Konto erstellen',
   hostAppTitle: 'Reborn Host',

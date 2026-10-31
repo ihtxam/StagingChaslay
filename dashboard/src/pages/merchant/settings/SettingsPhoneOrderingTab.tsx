@@ -35,6 +35,7 @@ export default function SettingsPhoneOrderingTab() {
   const [secret, setSecret] = useState('');
   const [saving, setSaving] = useState(false);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [licensed, setLicensed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +43,7 @@ export default function SettingsPhoneOrderingTab() {
       .get('/merchant/settings')
       .then((res) => {
         if (cancelled) return;
+        setLicensed(res.data?.settings?.phoneOrderingAddonEnabled === true);
         const raw = (res.data?.settings?.phoneOrderingSettings ||
           res.data?.phoneOrderingSettings ||
           {}) as PhonePublic;
@@ -88,6 +90,17 @@ export default function SettingsPhoneOrderingTab() {
       setSaving(false);
     }
   };
+
+  if (!licensed) {
+    return (
+      <div className="space-y-5">
+        <SettingsPageHeader title={t('settingsPhoneOrdering')} subtitle={t('phoneOrderingHint')} />
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {t('phoneOrderingAddonUpsell')}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={save} className="space-y-5">

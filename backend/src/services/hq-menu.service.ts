@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { CatalogChannel } from "@/lib/catalog-visibility";
 import { normalizeMenuCatalogChannels } from "@/lib/catalog-visibility";
@@ -72,6 +72,8 @@ async function resolveMenuProductIds(
     }
   }
 
+  if (explicit.length) return ids;
+
   if (ids.size) return ids;
 
   if (menu.hqVersionId) {
@@ -84,9 +86,10 @@ async function resolveMenuProductIds(
     const payload = (version?.payloadJson || {}) as { products?: Array<{ id: string }> };
     const versionIds = (payload.products || []).map((p) => p.id).filter(Boolean);
     if (versionIds.length) return new Set(versionIds);
+    // Snapshot exists but has no products — do not hide the whole branch menu.
   }
 
-  if (explicit.length || categoryIds.length) return ids;
+  if (categoryIds.length) return null;
 
   return null;
 }
@@ -282,6 +285,98 @@ export class HqMenuService {
     return { success: true };
   }
 
+  /**
+   * After HQ catalog push, ensure the location has an active POS menu bound to the snapshot.
+   */
+  static async ensureLocationPushMenu(
+    merchantId: string,
+    locationId: string,
+    hqVersionId: string
+  ) {
+    const db = getDb();
+    const loc = String(locationId || "").trim();
+    const versionId = String(hqVersionId || "").trim();
+    if (!loc || !versionId) return;
+
+    const menus = await db.query.hqMenus.findMany({
+      where: eq(schema.hqMenus.merchantId, merchantId),
+    });
+
+    const assigned = menus.filter((m) => {
+      if (m.isDefault || m.isActive === false) return false;
+      const locIds = Array.isArray(m.locationIds) ? m.locationIds : [];
+      return locIds.includes(loc);
+    });
+
+    const target =
+      assigned.find((m) => m.hqVersionId === versionId) ||
+      assigned.find((m) => !!m.hqVersionId) ||
+      assigned[0];
+
+    const version = await db.query.hqCatalogVersions.findFirst({
+      where: and(
+        eq(schema.hqCatalogVersions.id, versionId),
+        eq(schema.hqCatalogVersions.merchantId, merchantId)
+      ),
+    });
+    const versionPayload = (version?.payloadJson || {}) as {
+      products?: Array<{ id: string }>;
+      categories?: Array<{ id: string }>;
+    };
+    const versionProductIds = (versionPayload.products || []).map((p) => p.id).filter(Boolean);
+    const versionCategoryIds = (versionPayload.categories || [])
+      .map((c) => String(c.id || "").trim())
+      .filter(Boolean);
+
+    const menuPatch = {
+      hqVersionId: versionId,
+      productIds: versionProductIds,
+      categoryIds: versionCategoryIds,
+      channels: [...DEFAULT_MENU_CHANNELS],
+      scheduleType: "daily" as const,
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      daysOfMonth: [] as number[],
+      timeRanges: [{ start: "00:00", end: "23:59" }],
+      timeStart: "00:00",
+      timeEnd: "23:59",
+      isActive: true,
+      updatedAt: new Date(),
+    };
+
+    if (target) {
+      await db
+        .update(schema.hqMenus)
+        .set(menuPatch)
+        .where(eq(schema.hqMenus.id, target.id));
+      return;
+    }
+
+    const [maxSort] = await db
+      .select({ max: sql<number>`coalesce(max(${schema.hqMenus.sortOrder}), 0)` })
+      .from(schema.hqMenus)
+      .where(eq(schema.hqMenus.merchantId, merchantId));
+
+    await db.insert(schema.hqMenus).values({
+      merchantId,
+      name: "Location catalog",
+      channels: [...DEFAULT_MENU_CHANNELS],
+      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+      daysOfMonth: [],
+      scheduleType: "daily",
+      timeRanges: [{ start: "00:00", end: "23:59" }],
+      timeStart: "00:00",
+      timeEnd: "23:59",
+      locationIds: [loc],
+      hqVersionId: versionId,
+      productIds: versionProductIds,
+      categoryIds: versionCategoryIds,
+      productPrices: {},
+      isDefault: false,
+      isActive: true,
+      sortOrder: Number(maxSort?.max || 0) + 10,
+    });
+  }
+
   static async resolveActiveMenu(
     merchantId: string,
     locationId: string,
@@ -307,9 +402,26 @@ export class HqMenuService {
     });
     if (!picked) {
       const strictEmpty = locationHasDedicatedScheduledMenus(menus, locationId);
+      if (strictEmpty) {
+        const linkRows = await db.query.locationCatalogLinks.findMany({
+          where: and(
+            eq(schema.locationCatalogLinks.merchantId, merchantId),
+            eq(schema.locationCatalogLinks.locationId, locationId)
+          ),
+          columns: { localProductId: true, hqProductId: true },
+        });
+        const hasBranchCatalogLinks = linkRows.some(
+          (l) => String(l.localProductId || l.hqProductId || "").trim()
+        );
+        return {
+          menu: null,
+          productIds: hasBranchCatalogLinks ? null : new Set<string>(),
+          productPrices: {},
+        };
+      }
       return {
         menu: null,
-        productIds: strictEmpty ? new Set<string>() : null,
+        productIds: null,
         productPrices: {},
       };
     }
@@ -321,6 +433,9 @@ export class HqMenuService {
       menuHasExplicitCatalogSelection(picked)
     ) {
       productIds = new Set<string>();
+    }
+    if (productIds !== null && productIds.size === 0) {
+      productIds = null;
     }
     const productPrices = normalizeProductPrices(picked.productPrices);
     return { menu: picked, productIds, productPrices };

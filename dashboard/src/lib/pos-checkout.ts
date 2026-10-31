@@ -16,6 +16,8 @@ export type RetailProductSortMode = 'most_sold' | 'alphabetical' | 'catalog_orde
 
 export type PosCheckoutSettings = {
   tipsEnabled: boolean;
+  /** Adyen terminal AskGratuity (tip screen on card terminal). */
+  terminalAskGratuityEnabled: boolean;
   tipPresetsPercent: number[];
   allowCustomTip: boolean;
   discountsEnabled: boolean;
@@ -82,6 +84,7 @@ export type PosCheckoutSettings = {
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   tipsEnabled: true,
+  terminalAskGratuityEnabled: false,
   tipPresetsPercent: [0, 5, 10, 15],
   allowCustomTip: true,
   discountsEnabled: true,
@@ -158,6 +161,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
       : src.requireTableForDineIn !== false;
   return {
     tipsEnabled: src.tipsEnabled !== false,
+    terminalAskGratuityEnabled: src.terminalAskGratuityEnabled === true,
     tipPresetsPercent: tipPresets.length ? tipPresets : DEFAULT_POS_CHECKOUT.tipPresetsPercent,
     allowCustomTip: src.allowCustomTip !== false,
     discountsEnabled: src.discountsEnabled !== false,
@@ -206,4 +210,15 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         : DEFAULT_POS_CHECKOUT.retailProductSortMode,
     retailRegisterProfiles: parseRetailRegisterProfiles(src.retailRegisterProfiles),
   };
+}
+
+export function shouldAskGratuityOnTerminal(
+  checkout: PosCheckoutSettings,
+  opts?: { askGratuity?: boolean; posTipAmount?: number }
+): boolean {
+  const posTip = Math.round(Math.max(0, Number(opts?.posTipAmount) || 0) * 100) / 100;
+  if (posTip > 0.001) return false;
+  if (opts?.askGratuity === false) return false;
+  if (opts?.askGratuity === true) return true;
+  return checkout.terminalAskGratuityEnabled === true;
 }

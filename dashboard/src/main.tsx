@@ -41,6 +41,12 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
       reloadOnce();
     }
   });
+  window.addEventListener('error', (event) => {
+    const msg = String(event.message || '');
+    if (/before initialization/i.test(msg)) {
+      reloadOnce();
+    }
+  });
 }
 
 if (import.meta.env.PROD && typeof window !== 'undefined') {

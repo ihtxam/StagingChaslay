@@ -1,10 +1,11 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
   filterCatalogForChannel,
   isVisibleOnChannel,
   type CatalogChannel,
 } from "@/lib/catalog-visibility";
+import { CatalogScopeService } from "@/services/catalog-scope.service";
 
 type ProductRow = typeof schema.products.$inferSelect;
 type CategoryRow = typeof schema.categories.$inferSelect;
@@ -15,7 +16,35 @@ export type LocationChannelCatalog = {
   locationId: string;
 };
 
+type CatalogLinkRow = {
+  hqProductId: string;
+  localProductId?: string | null;
+};
+
 export class CatalogLocationService {
+  /**
+   * Map HQ catalog links to live product ids (heals null/stale localProductId via hqProductId).
+   */
+  static resolveLinkedProductIds<T extends { id: string }>(
+    links: CatalogLinkRow[],
+    activeProducts: T[]
+  ): Set<string> {
+    const activeIds = new Set(activeProducts.map((p) => p.id));
+    const allowed = new Set<string>();
+    for (const link of links) {
+      const local = String(link.localProductId || "").trim();
+      const hq = String(link.hqProductId || "").trim();
+      if (local && activeIds.has(local)) {
+        allowed.add(local);
+        continue;
+      }
+      if (hq && activeIds.has(hq)) {
+        allowed.add(hq);
+      }
+    }
+    return allowed;
+  }
+
   /** Merge per-location price, visibility, and availability overrides onto products. */
   static async applyLocationOverrides<T extends ProductRow>(
     merchantId: string,
@@ -88,7 +117,10 @@ export class CatalogLocationService {
       return { categories: [], products: [], locationId: locId };
     }
 
-    const [categories, products, links] = await Promise.all([
+    const scopeMode = await CatalogScopeService.getScopeMode(merchantId);
+    const perLocation = scopeMode === "per_location";
+
+    const [categoryRows, productRows, links] = await Promise.all([
       db.query.categories.findMany({
         where: eq(schema.categories.merchantId, merchantId),
         orderBy: [asc(schema.categories.sortOrder)],
@@ -105,12 +137,31 @@ export class CatalogLocationService {
       }),
     ]);
 
-    let productPool = products;
-    if (links.length) {
-      const allowed = new Set(
-        links.map((l) => l.localProductId).filter((id): id is string => !!id)
+    let categories = categoryRows;
+    let productPool = productRows;
+    if (perLocation) {
+      productPool = productRows.filter((p) => String(p.locationId || "") === locId);
+      categories = categoryRows.filter(
+        (c) =>
+          String(c.locationId || "") === locId ||
+          !!(c as { isOffersCategory?: boolean }).isOffersCategory
       );
-      productPool = products.filter((p) => allowed.has(p.id));
+    } else if (links.length) {
+      const allowed = this.resolveLinkedProductIds(links, productRows);
+      if (allowed.size > 0) {
+        productPool = productRows.filter((p) => allowed.has(p.id));
+      }
+    } else {
+      const siblingLink = await db.query.locationCatalogLinks.findFirst({
+        where: and(
+          eq(schema.locationCatalogLinks.merchantId, merchantId),
+          ne(schema.locationCatalogLinks.locationId, locId)
+        ),
+        columns: { id: true },
+      });
+      if (siblingLink) {
+        productPool = [];
+      }
     }
 
     const withOverrides = await this.applyLocationOverrides(merchantId, locId, productPool);
@@ -135,6 +186,16 @@ export class CatalogLocationService {
       filtered.products,
       activeMenu.productIds
     );
+
+    if (!visibleProducts.length && links.length > 0) {
+      // HQ push links are authoritative when schedule menus or POS filters would blank the branch.
+      const linkPool = this.resolveLinkedProductIds(links, withOverrides);
+      if (linkPool.size > 0) {
+        visibleProducts = withOverrides.filter((p) => linkPool.has(p.id));
+      } else if (filtered.products.length > 0) {
+        visibleProducts = filtered.products;
+      }
+    }
 
     const menuCategoryIds = Array.isArray(activeMenu.menu?.categoryIds)
       ? activeMenu.menu!.categoryIds!.map((id) => String(id || "").trim()).filter(Boolean)

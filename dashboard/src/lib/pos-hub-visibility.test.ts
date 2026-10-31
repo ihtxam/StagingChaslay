@@ -7,6 +7,7 @@ import {
   shouldShowOnlineReservationsToggle,
   shouldShowPosOptionChooser,
   shouldShowReservationsSettings,
+  shouldShowShopSettings,
 } from './pos-hub-visibility';
 
 assert.equal(
@@ -79,6 +80,10 @@ assert.equal(
   'unlicensed restaurant hides reservations settings'
 );
 
+assert.equal(shouldShowShopSettings(['pos_retail', 'reports']), false, 'POS-only edition hides shop settings');
+assert.equal(shouldShowShopSettings(null), true, 'legacy full catalog keeps shop settings');
+assert.equal(shouldShowShopSettings(['online_shop', 'pos_retail']), true);
+
 assert.equal(shouldShowPosOptionChooser(0), false);
 assert.equal(shouldShowPosOptionChooser(1), false);
 assert.equal(shouldShowPosOptionChooser(2), true);
@@ -97,8 +102,8 @@ assert.equal(
 );
 assert.equal(
   shouldShowLocationSwitcher({ locationCount: 2, maxLocations: 1 }),
-  false,
-  'unlicensed multi-location rows stay hidden'
+  true,
+  'existing multi-branch merchants always get the switcher'
 );
 assert.equal(
   shouldShowLocationSwitcher({ locationCount: 2, maxLocations: 0 }),

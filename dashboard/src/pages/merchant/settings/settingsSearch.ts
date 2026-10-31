@@ -22,7 +22,9 @@ export type SettingsTabId =
   | 'kiosk'
   | 'email'
   | 'language'
-  | 'users';
+  | 'users'
+  | 'extra-modules'
+  | 'about';
 
 export type SettingsSearchEntry = {
   id: string;
@@ -151,6 +153,7 @@ export function nextTabForHiddenRetailSettings(
   tab: SettingsTabId,
   ctx: {
     showTablesSettings: boolean;
+    showShopSettings?: boolean;
     isRetailMerchant: boolean;
     reservationsLicensed?: boolean;
     query?: string | null;
@@ -158,6 +161,7 @@ export function nextTabForHiddenRetailSettings(
 ): SettingsTabId | null {
   if (isSettingsSearchQueryActive(ctx.query)) return null;
   if (tab === 'tables' && !ctx.showTablesSettings) return 'pos';
+  if (tab === 'shop' && ctx.showShopSettings === false) return 'business';
   if (tab === 'reservations' && (ctx.isRetailMerchant || ctx.reservationsLicensed === false)) {
     return 'business';
   }
@@ -394,6 +398,11 @@ export function buildSettingsSearchIndex(
         'express checkout',
         t('posCheckoutSettings'),
         t('tipsEnabled'),
+        t('terminalAskGratuityEnabled'),
+        'adyen',
+        'terminal',
+        'gratuity',
+        'trinkgeld',
         t('discountsEnabled'),
         t('quickCashEnabled'),
         t('splitBillsEnabled'),
@@ -581,6 +590,21 @@ export function buildSettingsSearchIndex(
       keywords: ['reservations', 'booking', 'slots', t('settingsReservations'), t('reservationsEnable')],
     },
     {
+      id: 'print-bridge-download',
+      tab: 'receipt',
+      keywords: [
+        'bridge',
+        'print bridge',
+        'android',
+        'apk',
+        'download',
+        'rebornprint',
+        t('downloadPrintBridge'),
+        t('installPrintBridge'),
+        t('kioskPrintBridgeTitle'),
+      ],
+    },
+    {
       id: 'receipt-print',
       tab: 'receipt',
       keywords: [
@@ -652,10 +676,22 @@ export function buildSettingsSearchIndex(
         'phone',
         'telephone',
         'twilio',
-        'sms',
         'voice',
         'call',
         t('settingsPhoneOrdering'),
+      ],
+    },
+    {
+      id: 'sms-addon',
+      tab: 'extra-modules',
+      keywords: [
+        'sms',
+        'esendex',
+        'text message',
+        'otp',
+        'marketing sms',
+        t('smsTitle'),
+        t('extraModuleSmsTitle'),
       ],
     },
     {

@@ -15,12 +15,11 @@ import ShopLocaleSync from '@/components/shop/ShopLocaleSync';
 import ShopRouteLayout from '@/components/shop/ShopRouteLayout';
 import ScrollToTop from '@/components/ScrollToTop';
 
-import LoginPage from '@/pages/LoginPage';
 import HostApp from '@/pages/HostApp';
 import SetPasswordPage from '@/pages/SetPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SuperadminDashboard from '@/pages/superadmin/Dashboard';
-import MerchantDashboard from '@/pages/merchant/Dashboard';
+const MerchantDashboard = lazy(() => import('@/pages/merchant/Dashboard'));
 import ResellerDashboard from '@/pages/reseller/Dashboard';
 import OrderingPage from '@/pages/shop/OrderingPage';
 import CheckoutPage from '@/pages/shop/CheckoutPage';
@@ -32,9 +31,12 @@ import GiftCardViewPage from '@/pages/shop/GiftCardViewPage';
 import AccountPage from '@/pages/shop/AccountPage';
 import ReservationsPage from '@/pages/shop/ReservationsPage';
 import ReceiptPage from '@/pages/ReceiptPage';
+import PlatformLegalPageView from '@/pages/PlatformLegalPageView';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PosEmbedPage from '@/pages/PosEmbedPage';
+import ReservationsEmbedPage from '@/pages/embed/ReservationsEmbedPage';
 import PosViewportManager from '@/components/PosViewportManager';
+import PanelMobileViewportSync from '@/components/PanelMobileViewportSync';
 import KdsDisplayPage from '@/pages/KdsDisplayPage';
 import OdsDisplayPage from '@/pages/OdsDisplayPage';
 import CustomerDisplayPage from '@/pages/CustomerDisplayPage';
@@ -48,11 +50,40 @@ import PanelLoginRedirect from '@/components/PanelLoginRedirect';
 import DesktopChromeBar from '@/components/DesktopChromeBar';
 import DesktopLoadingOverlay from '@/components/DesktopLoadingOverlay';
 import DesktopUpdateBanner from '@/components/DesktopUpdateBanner';
-import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboard';
+import { OnScreenKeyboardProvider } from '@/components/OnScreenKeyboardProvider';
 import { initDesktopAppDetection, shouldAutoOpenOnScreenKeyboard } from '@/lib/platform';
 import { activateWaitingServiceWorker, reloadIfDeployedBuildChanged } from '@/lib/pwa-recover';
 
+const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const ShopEntry = lazy(() => import('@/pages/shop/ShopEntry'));
+
+function LoginRoute() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#1a2332] text-sm text-white/80">
+          Loading…
+        </div>
+      }
+    >
+      <LoginPage />
+    </Suspense>
+  );
+}
+
+function MerchantPanelRoute() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] items-center justify-center text-sm text-[var(--text-muted)]">
+          Loading…
+        </div>
+      }
+    >
+      <MerchantDashboard />
+    </Suspense>
+  );
+}
 const ShopLocationsPage = lazy(() => import('@/pages/shop/ShopLocationsPage'));
 const ChaslayShopPage = lazy(() => import('@/pages/shop/ChaslayShopPage'));
 const ShopHubLocationRedirect = lazy(() => import('@/pages/shop/ShopHubLocationRedirect'));
@@ -236,6 +267,7 @@ function App() {
         <DesktopChromeBar />
         <DesktopUpdateBanner />
         <PosViewportManager />
+        <PanelMobileViewportSync />
         <Routes>
           {statusMode && (
             <>
@@ -249,7 +281,7 @@ function App() {
               path="/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -259,7 +291,7 @@ function App() {
               path="/signin"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -269,7 +301,7 @@ function App() {
               path="/superadmin/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -279,7 +311,7 @@ function App() {
               path="/reseller/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -289,7 +321,7 @@ function App() {
               path="/merchant/login"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
@@ -310,12 +342,15 @@ function App() {
               path="/forgot-password"
               element={
                 <I18nProvider storageKey={PANEL_LANG_KEY}>
-                  <LoginPage />
+                  <LoginRoute />
                 </I18nProvider>
               }
             />
           )}
           {!shopMode && !statusMode && <Route path="/pos-embed" element={<PosEmbedPage />} />}
+          {!shopMode && !statusMode && (
+            <Route path="/embed/reservations/:merchantSlug" element={<ReservationsEmbedPage />} />
+          )}
           {!shopMode && !statusMode && (
             <Route
               path="/host"
@@ -335,6 +370,8 @@ function App() {
             }
           />
           <Route path="/receipts/:saleId" element={<LegacyReceiptRedirect />} />
+          <Route path="/legal/:pageSlug" element={<PlatformLegalPageView />} />
+          <Route path="/legal" element={<Navigate to="/legal/privacy-policy" replace />} />
           <Route
             path="/kds/:token"
             element={
@@ -1028,7 +1065,7 @@ function App() {
                 path="/merchant/*"
                 element={
                   <ProtectedRoute requiredRole="merchant">
-                    <MerchantDashboard />
+                    <MerchantPanelRoute />
                   </ProtectedRoute>
                 }
               />

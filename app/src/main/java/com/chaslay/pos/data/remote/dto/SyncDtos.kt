@@ -255,6 +255,7 @@ data class SyncCheckoutDiscountPresetDto(
 
 data class SyncCheckoutDto(
     val tipsEnabled: Boolean = true,
+    val terminalAskGratuityEnabled: Boolean = false,
     val tipPresetsPercent: List<Double> = listOf(0.0, 5.0, 10.0, 15.0),
     val allowCustomTip: Boolean = true,
     val discountsEnabled: Boolean = true,

@@ -5,6 +5,8 @@ import {
   requireMerchant,
   setMerchantContext,
 } from '@/middleware/auth.middleware';
+import { getDb, schema } from '@/db';
+import { eq } from 'drizzle-orm';
 import { SupportTicketService, saveSupportAttachment } from '@/services/support-ticket.service';
 
 const router = Router();
@@ -41,6 +43,58 @@ router.get('/tickets/:ticketId', async (req: Request, res: Response) => {
     res.json({ success: true, ticket });
   } catch (error) {
     res.status(404).json({ error: error instanceof Error ? error.message : 'Ticket not found' });
+  }
+});
+
+/** Paid add-on activation request from merchant settings → support ticket for reseller + superadmin. */
+router.post('/module-request', async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.merchantId!;
+    const moduleId = String(req.body?.moduleId || '').trim().slice(0, 80);
+    const moduleName = String(req.body?.moduleName || moduleId || 'Module').trim().slice(0, 120);
+    if (!moduleId) {
+      return res.status(400).json({ error: 'moduleId is required' });
+    }
+
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { id: true, name: true, email: true },
+    });
+    if (!merchant) {
+      return res.status(404).json({ error: 'Merchant not found' });
+    }
+
+    const requesterEmail =
+      String(req.user?.email || merchant.email || '')
+        .trim()
+        .slice(0, 255) || 'unknown';
+
+    const subject = `Add-on request: ${moduleName}`;
+    const body = [
+      `Merchant "${merchant.name}" (${merchantId}) requested activation of the paid module "${moduleName}" (${moduleId}).`,
+      '',
+      `Requester email: ${requesterEmail}`,
+      req.user?.name ? `Requester name: ${String(req.user.name).slice(0, 255)}` : '',
+      '',
+      'Please enable the add-on for this merchant or follow up with pricing.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const ticketDraft = await SupportTicketService.createTicket(merchantId, {
+      category: 'miscellaneous',
+      subcategory: 'addon_request',
+      subject,
+      body,
+      authorName: req.user?.name || merchant.name,
+      authorId: req.user?.staffId || req.user?.id,
+    });
+
+    const full = await SupportTicketService.getTicketWithMessages(ticketDraft.id, { merchantId });
+    res.status(201).json({ success: true, ticket: full });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to submit request' });
   }
 });
 

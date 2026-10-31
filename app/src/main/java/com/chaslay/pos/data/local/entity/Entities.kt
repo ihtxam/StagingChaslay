@@ -225,6 +225,7 @@ data class BusinessSettingsEntity(
     val roundingStep: Double = 0.05,
     /** Synced from merchant panel posCheckoutSettings */
     val tipsEnabled: Boolean = true,
+    val terminalAskGratuityEnabled: Boolean = false,
     val allowCustomTip: Boolean = true,
     /** Comma-separated tip preset percents, e.g. "0,5,10,15" */
     val tipPresetsPercentCsv: String = "0,5,10,15",

@@ -441,11 +441,14 @@ export default function KioskAdminPanel({
               <input
                 className="input mt-1 w-full"
                 inputMode="numeric"
-                maxLength={8}
+                maxLength={4}
                 value={settings.adminPin || ''}
                 disabled={!tokenModeEditable}
                 onChange={(e) =>
-                  setSettings({ ...settings, adminPin: e.target.value.replace(/\D/g, '') })
+                  setSettings({
+                    ...settings,
+                    adminPin: e.target.value.replace(/\D/g, '').slice(0, 4),
+                  })
                 }
               />
             </label>

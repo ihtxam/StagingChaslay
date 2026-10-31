@@ -41,6 +41,8 @@ import posSessionsRoutes from "@/routes/pos-sessions.routes";
 import locationsRoutes from "@/routes/locations.routes";
 import hqRoutes from "@/routes/hq.routes";
 import clientErrorsRoutes from "@/routes/client-errors.routes";
+import paymentProfilesRoutes from "@/routes/payment-profiles.routes";
+import deviceEnrollmentRoutes from "@/routes/device-enrollment.routes";
 import { setLocationContext } from "@/middleware/location.middleware";
 import type { ReportPreset } from "@/services/pos-reports.service";
 
@@ -54,6 +56,11 @@ function wantsPosLocationCatalog(req: Request): boolean {
   return raw === "1" || raw.toLowerCase() === "true";
 }
 
+function branchPanelSettingsRequested(req: Request): boolean {
+  const raw = String(req.query.branchPanel ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true";
+}
+
 /**
  * Strict terminal menu isolation applies only to WebPOS (posLocationCatalog=1).
  * HQ/Admin requests often send X-Location-Id for reports but must see the full master catalog.
@@ -62,10 +69,15 @@ function usesPosLocationCatalog(req: Request): boolean {
   return wantsPosLocationCatalog(req);
 }
 
-function posCatalogLocationId(req: Request): string | undefined {
+async function posCatalogLocationId(
+  req: Request,
+  merchantId: string
+): Promise<string | undefined> {
   if (!usesPosLocationCatalog(req)) return undefined;
-  if (!req.locationId) return undefined;
-  return req.locationId;
+  const raw = String(req.query.locationId ?? req.locationId ?? "").trim();
+  if (!raw) return undefined;
+  const { LocationsService } = await import("@/services/locations.service");
+  return (await LocationsService.resolveLocationIdOrNull(merchantId, raw)) ?? undefined;
 }
 
 const imageUpload = multer({
@@ -459,7 +471,7 @@ router.get("/products", async (req: Request, res: Response) => {
     ]);
     let pageList = products || [];
 
-    const catalogLocationId = posCatalogLocationId(req);
+    const catalogLocationId = await posCatalogLocationId(req, merchantId);
     if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
@@ -558,7 +570,7 @@ router.get("/products", async (req: Request, res: Response) => {
       productLimit: productLimit
         ? {
             maxProducts: productLimit.maxProducts,
-            currentCount: productLimit.currentCount,
+            currentCount: catalogLocationId ? pageList.length : productLimit.currentCount,
             planSlug: productLimit.planSlug,
             planName: productLimit.planName,
           }
@@ -733,6 +745,16 @@ router.post("/products", async (req: Request, res: Response) => {
       }
     }
 
+    const { CatalogScopeService } = await import("@/services/catalog-scope.service");
+    const ownerLocationId = await CatalogScopeService.requireCreateLocationId(merchantId, req);
+    if (ownerLocationId) {
+      await CatalogScopeService.assertCategoryOwnedByLocation(
+        merchantId,
+        categoryId,
+        ownerLocationId
+      );
+    }
+
     const product = await ProductService.createProduct(
       merchantId,
       name,
@@ -746,6 +768,7 @@ router.post("/products", async (req: Request, res: Response) => {
       description,
       imageUrl,
       {
+        locationId: ownerLocationId ?? null,
         productType: productType === "combo" || normalizedComboItems.length ? "combo" : productType,
         isOpenPrice,
         soldByWeight,
@@ -794,6 +817,14 @@ router.post("/products", async (req: Request, res: Response) => {
         patch.dietaryTags = normalizeDietaryTags(dietaryTags);
       }
       await ProductService.updateProduct(merchantId, product.id, patch);
+    }
+
+    if (ownerLocationId) {
+      await CatalogScopeService.bindCatalogItemToLocation(
+        merchantId,
+        ownerLocationId,
+        product.id
+      );
     }
 
     const saved = await ProductService.getProductById(merchantId, product.id);
@@ -1199,7 +1230,7 @@ router.get("/categories", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    const catalogLocationId = posCatalogLocationId(req);
+    const catalogLocationId = await posCatalogLocationId(req, merchantId);
     if (catalogLocationId) {
       const { CatalogLocationService } = await import("@/services/catalog-location.service");
       const catalog = await CatalogLocationService.buildLocationChannelCatalog(
@@ -1295,11 +1326,15 @@ router.post("/categories", async (req: Request, res: Response) => {
     const normalizedColor =
       color != null && color !== "" ? normalizeHexColor(String(color)) : color;
 
+    const { CatalogScopeService } = await import("@/services/catalog-scope.service");
+    const ownerLocationId = await CatalogScopeService.requireCreateLocationId(merchantId, req);
+
     const category = await CategoryService.createCategory(
       merchantId,
       trimmedName,
       trimmedDescription,
-      normalizedColor
+      normalizedColor,
+      ownerLocationId
     );
 
     if (visibility !== undefined) {
@@ -1951,6 +1986,22 @@ router.get("/software-releases", async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/merchant/platform-about
+ * Company / projects copy for Settings → About (editable in superadmin).
+ */
+router.get("/platform-about", async (_req: Request, res: Response) => {
+  try {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const html = await PlatformSettingsService.getMerchantAboutHtml();
+    res.json({ success: true, html });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load about content",
+    });
+  }
+});
+
+/**
  * GET /api/merchant/settings
  * Get merchant settings
  */
@@ -1962,7 +2013,15 @@ router.get("/settings", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    const settings = await MerchantSettingsService.getMerchantSettings(merchantId);
+    const { resolveBranchPanelSettingsLocationId } = await import("@/lib/branch-panel-settings");
+    const branchLocationId = resolveBranchPanelSettingsLocationId(
+      req.locationFromHeader,
+      req.locationId,
+      { branchPanelRequested: branchPanelSettingsRequested(req) }
+    );
+    const settings = await MerchantSettingsService.getMerchantSettings(merchantId, {
+      branchLocationId,
+    });
     const { AdyenMerchantWebhookService } = await import(
       "@/services/adyen-merchant-webhook.service"
     );
@@ -2036,25 +2095,93 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Merchant not found" });
     }
 
-    const terminals = await db.query.paymentTerminals.findMany({
+    const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
+    const { DeviceEnrollmentService } = await import("@/services/device-enrollment.service");
+    const {
+      resolveBranchPanelSettingsLocationId,
+      branchPanelTerminalsContext,
+    } = await import("@/lib/branch-panel-settings");
+    const branchLocationId = resolveBranchPanelSettingsLocationId(
+      req.locationFromHeader,
+      req.locationId,
+      { branchPanelRequested: branchPanelSettingsRequested(req) }
+    );
+    const panelSettings = (await MerchantSettingsService.getMerchantSettings(merchantId, {
+      branchLocationId,
+    })) as Record<string, unknown>;
+    const branchProfile = branchLocationId
+      ? await PaymentProfilesService.ensureProfileForLocation(merchantId, branchLocationId)
+      : null;
+    const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(merchantId);
+    const scopedProfileId = branchProfile?.id || defaultProfileId;
+    const deviceId = String(req.query.deviceId || "").trim();
+    const deviceConfig = deviceId
+      ? await DeviceEnrollmentService.getDeviceConfig(merchantId, deviceId)
+      : null;
+
+    let terminals = await db.query.paymentTerminals.findMany({
       where: eq(schema.paymentTerminals.merchantId, merchantId),
       orderBy: asc(schema.paymentTerminals.createdAt),
     });
+    if (branchLocationId) {
+      const { filterByProfile, profileId } = await branchPanelTerminalsContext(
+        merchantId,
+        branchLocationId
+      );
+      if (filterByProfile) {
+        terminals = terminals.filter(
+          (t) => (t.paymentProfileId || defaultProfileId) === profileId
+        );
+      }
+    }
+    if (deviceConfig?.enrollment) {
+      terminals = terminals.filter((t) => t.id === deviceConfig.enrollment?.paymentTerminalId);
+    }
+
+    const adyenApiKey = branchProfile?.adyenApiKey ?? merchant.adyenApiKey;
+    const adyenMerchantAccount =
+      branchProfile?.adyenMerchantAccount ?? merchant.adyenMerchantAccount;
+    const adyenLiveEnvironment =
+      branchProfile?.adyenLiveEnvironment ?? merchant.adyenLiveEnvironment;
+    const adyenLiveRegion = branchProfile?.adyenLiveRegion ?? merchant.adyenLiveRegion;
+    const adyenUseLegacyEndpoint =
+      branchProfile?.adyenUseLegacyEndpoint ?? merchant.adyenUseLegacyEndpoint;
+    const tapToPayEnabled =
+      panelSettings.tapToPayEnabled !== undefined
+        ? panelSettings.tapToPayEnabled === true
+        : merchant.tapToPayEnabled === true;
+    const webposCashEnabled =
+      panelSettings.webposCashEnabled !== undefined
+        ? panelSettings.webposCashEnabled !== false
+        : merchant.webposCashEnabled !== false;
+    const webposCardEnabled =
+      panelSettings.webposCardEnabled !== undefined
+        ? panelSettings.webposCardEnabled !== false
+        : merchant.webposCardEnabled !== false;
+    const webposTerminalEnabled =
+      panelSettings.webposTerminalEnabled !== undefined
+        ? panelSettings.webposTerminalEnabled !== false
+        : merchant.webposTerminalEnabled !== false;
+    const webposGiftCardEnabled =
+      panelSettings.webposGiftCardEnabled !== undefined
+        ? panelSettings.webposGiftCardEnabled === true
+        : merchant.webposGiftCardEnabled === true;
+    const webposInvoiceEnabled =
+      panelSettings.webposInvoiceEnabled !== undefined
+        ? panelSettings.webposInvoiceEnabled !== false
+        : (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false;
 
     const activeTerminals = terminals.filter((t) => t.status === "active");
     const terminalReady =
-      !!merchant.adyenApiKey &&
-      !!merchant.adyenMerchantAccount &&
-      activeTerminals.length > 0;
-    const tapToPayReady =
-      merchant.tapToPayEnabled === true &&
-      !!merchant.adyenApiKey &&
-      !!merchant.adyenMerchantAccount;
+      !!adyenApiKey && !!adyenMerchantAccount && activeTerminals.length > 0;
+    const tapToPayReady = tapToPayEnabled && !!adyenApiKey && !!adyenMerchantAccount;
 
     const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { normalizeGiftCardSettings } = await import("@/lib/gift-card-settings");
-    const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
+    const posPrintSettings = normalizePosPrintSettings(
+      (panelSettings.posPrintSettings as typeof merchant.posPrintSettings) ?? merchant.posPrintSettings
+    );
     const posCheckoutSettings = normalizePosCheckoutSettings({
       ...(merchant.posCheckoutSettings && typeof merchant.posCheckoutSettings === "object"
         ? (merchant.posCheckoutSettings as Record<string, unknown>)
@@ -2087,12 +2214,12 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
         methods: {
           // Express checkout bar under products — driven by posCheckoutSettings, not a tender.
           express: posCheckoutSettings.expressCheckoutEnabled,
-          cash: merchant.webposCashEnabled !== false,
-          card: merchant.webposCardEnabled !== false,
-          terminal: merchant.webposTerminalEnabled !== false && terminalReady,
+          cash: webposCashEnabled,
+          card: webposCardEnabled,
+          terminal: webposTerminalEnabled && terminalReady,
           tap_to_pay: tapToPayReady,
-          giftCard: merchant.webposGiftCardEnabled === true,
-          invoice: (merchant as { webposInvoiceEnabled?: boolean }).webposInvoiceEnabled !== false,
+          giftCard: webposGiftCardEnabled,
+          invoice: webposInvoiceEnabled,
         },
         giftCardSettings,
         loyalty: (await import("@/services/shop-loyalty.service")).ShopLoyaltyService.programFromMerchant(
@@ -2103,18 +2230,23 @@ router.get("/webpos-config", async (req: Request, res: Response) => {
         ),
         terminalReady,
         tapToPayReady,
-        adyenConfigured: !!merchant.adyenApiKey && !!merchant.adyenMerchantAccount,
-        tapToPayEnabled: merchant.tapToPayEnabled === true,
-        adyenLiveEnvironment: !!merchant.adyenLiveEnvironment,
-        adyenLiveRegion: merchant.adyenLiveRegion || "EU",
-        adyenUseLegacyEndpoint: !!merchant.adyenUseLegacyEndpoint,
-        defaultTerminalId: activeTerminals[0]?.terminalId || null,
+        adyenConfigured: !!adyenApiKey && !!adyenMerchantAccount,
+        tapToPayEnabled,
+        adyenLiveEnvironment: !!adyenLiveEnvironment,
+        adyenLiveRegion: adyenLiveRegion || "EU",
+        adyenUseLegacyEndpoint: !!adyenUseLegacyEndpoint,
+        defaultTerminalId:
+          deviceConfig?.fixedTerminalId || activeTerminals[0]?.terminalId || null,
         staffPreferredTerminalId,
+        deviceEnrollment: deviceConfig?.enrollment || null,
+        deviceEnrollmentLocked: deviceConfig?.lockEnrollment === true,
+        paymentProfileId: deviceConfig?.paymentProfileId || scopedProfileId,
         terminals: terminals.map((t) => ({
           id: t.id,
           terminalId: t.terminalId,
           terminalName: t.terminalName,
           status: t.status,
+          paymentProfileId: t.paymentProfileId || defaultProfileId,
         })),
         posPrintSettings,
         posCheckoutSettings: {
@@ -2365,7 +2497,15 @@ router.put("/settings", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Merchant ID is required" });
     }
 
-    const merchant = await MerchantSettingsService.updateMerchantSettings(merchantId, updates);
+    const { resolveBranchPanelSettingsLocationId } = await import("@/lib/branch-panel-settings");
+    const branchLocationId = resolveBranchPanelSettingsLocationId(
+      req.locationFromHeader,
+      req.locationId,
+      { branchPanelRequested: branchPanelSettingsRequested(req) }
+    );
+    const merchant = await MerchantSettingsService.updateMerchantSettings(merchantId, updates, {
+      branchLocationId,
+    });
 
     res.json({
       success: true,
@@ -3552,6 +3692,7 @@ router.put("/pos/staff-preferences", async (req: Request, res: Response) => {
     const { StaffService } = await import("@/services/staff.service");
     const prefs = await StaffService.updatePosPreferences(merchantId, staffId, {
       preferredTerminalId: req.body?.preferredTerminalId ?? null,
+      deviceId: req.body?.deviceId ?? null,
     });
     res.json({ success: true, ...prefs });
   } catch (error) {
@@ -4194,6 +4335,8 @@ router.get("/shop-commission", async (req: Request, res: Response) => {
 router.use(posSessionsRoutes);
 router.use(locationsRoutes);
 router.use(hqRoutes);
+router.use("/payment-profiles", paymentProfilesRoutes);
+router.use("/device-enrollments", deviceEnrollmentRoutes);
 router.use("/client-errors", clientErrorsRoutes);
 
 export default router;

@@ -1,68 +1,73 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import Sidebar from '@/components/Sidebar';
-import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
-import MerchantSubNav from '@/components/MerchantSubNav';
-import Header from '@/components/Header';
-import Overview from './Overview';
-import Orders from './Orders';
-import Products from './Products';
-import CateringGuidePage from './CateringGuidePage';
-import Inventory from './Inventory';
-import InventoryLayout from './inventory/InventoryLayout';
-import {
-  InventoryListPage,
-  InboundStockPage,
-  OutboundStockPage,
-  StockCountingPage,
-  StockHistoryPage,
-} from './inventory/ops-pages';
-import {
-  StockItemsPage,
-  StockCategoriesPage,
-  CookbookPage,
-  SuppliersPage,
-  UnitsPage,
-} from './inventory/settings-pages';
-import { InventoryReportPage, ConsumptionReportPage, DeadStockReportPage } from './inventory/report-pages';
-import InventoryTransfersPage from './inventory/InventoryTransfersPage';
-import { InventoryHomePage } from './inventory/home-page';
-import Categories from './Categories';
-import Modifiers from './Modifiers';
-import Customers from './Customers';
-import Members from './Members';
-import Loyalty from './Loyalty';
-import Offers from './Offers';
-import Vouchers from './Vouchers';
-import Terminals from './Terminals';
-import Settings from './Settings';
-import DesktopSettings from './DesktopSettings';
-import DesktopStorePage from './DesktopStorePage';
-import DesktopTimingsPage from './DesktopTimingsPage';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
-import PlatformShop from './PlatformShop';
-import Support from './Support';
-import PlatformNotificationsHistory from '../shared/PlatformNotificationsHistory';
-import Billing from './Billing';
-import OnlineShop from './OnlineShop';
-import Reservations from './Reservations';
-import HostStation from './HostStation';
-import PhoneOrders from './PhoneOrders';
-import ReviewsInbox from './ReviewsInbox';
-import Newsletter from './Newsletter';
-import WebPos from './WebPos';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
 import LazyRouteErrorBoundary from '@/components/LazyRouteErrorBoundary';
-import WaiterApp from './WaiterApp';
-import DeliveryDriverPage from './DeliveryDriver';
-import StorekeeperApp from './StorekeeperApp';
-import MerchantOrderAlerts from '@/components/merchant/MerchantOrderAlerts';
-import WebPosPinModal from '@/components/WebPosPinModal';
-import { useTillPrintHub } from '@/hooks/useTillPrintHub';
-import { isTillPrintHubCandidate } from '@/lib/webpos-print-relay';
-import InventoryExpiryAlerts from '@/components/merchant/InventoryExpiryAlerts';
-import Reports from './Reports';
+import { isTillPrintHubCandidate } from '@/lib/till-print-hub-candidate';
+import {
+  Billing,
+  BulkPricingPage,
+  Categories,
+  CateringGuidePage,
+  ConsumptionReportPage,
+  CookbookPage,
+  Customers,
+  DeadStockReportPage,
+  DeliveryDriverPage,
+  DesktopSettings,
+  DesktopStorePage,
+  DesktopTimingsPage,
+  Header,
+  HqDashboardPage,
+  HqSyncMenuPage,
+  HostStation,
+  InboundStockPage,
+  InventoryExpiryAlerts,
+  InventoryHomePage,
+  InventoryLayout,
+  InventoryListPage,
+  InventoryReportPage,
+  InventoryTransfersPage,
+  Loyalty,
+  Members,
+  MerchantOrderAlerts,
+  MerchantSubNav,
+  MerchantTillPrintHub,
+  Modifiers,
+  Newsletter,
+  Sms,
+  Offers,
+  OnlineShop,
+  OrderCenterApp,
+  Orders,
+  OutboundStockPage,
+  Overview,
+  PhoneOrders,
+  PizzaBuilderEditorPage,
+  PizzaBuilderPage,
+  PlatformShop,
+  Products,
+  Reports,
+  Reservations,
+  ReviewsInbox,
+  ScheduledMenusPage,
+  Settings,
+  Sidebar,
+  StockCategoriesPage,
+  StockCountingPage,
+  StockHistoryPage,
+  StockItemsPage,
+  StorekeeperApp,
+  SuppliersPage,
+  Support,
+  Terminals,
+  UnitsPage,
+  Vouchers,
+  WaiterApp,
+  WebPos,
+  WebPosPinModal,
+} from './merchant-lazy-routes';
 import api from '@/lib/api';
 import { I18nProvider, useI18n, type Locale } from '@/lib/i18n';
 import { APP_PANEL_TITLE } from '@/lib/brand';
@@ -144,6 +149,7 @@ import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
 import { isMultiLocationLicensed } from '@/lib/locations-addon';
 import { isCateringLicensed } from '@/lib/catering-addon';
+import { isPhoneOrderingLicensed } from '@/lib/phone-ordering-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isDesktopApp, useIsDesktopApp } from '@/lib/platform';
 import {
@@ -159,17 +165,35 @@ import {
   parsePanelNavHidden,
 } from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
-import HqDashboardPage from './HqDashboard';
-import BulkPricingPage from './BulkPricingPage';
-import ScheduledMenusPage from './ScheduledMenusPage';
-import PizzaBuilderPage from './PizzaBuilderPage';
-import PizzaBuilderEditorPage from './PizzaBuilderEditorPage';
-import OrderCenterApp from './OrderCenterApp';
 import { getSelectedLocationId, useLocationStore } from '@/store/location';
 import { buildWebPosLaunchPath } from '@/lib/webpos-terminal-location';
+import {
+  shouldHideMerchantSettingsInHqView,
+  shouldRedirectFromHqPanelPath,
+  shouldShowHqPanelNav,
+  shouldShowPanelPosQuickAction,
+} from '@/lib/panel-scope-nav';
+import { buildPanelLocationHeaderLabels } from '@/lib/panel-location-header';
+import { effectiveCanSwitchPanelLocation } from '@/lib/panel-location-switch';
 
 const ChaslayPageBuilderList = lazy(() => import('./ChaslayPageBuilderList'));
 const ChaslayPageBuilderEditor = lazy(() => import('./ChaslayPageBuilderEditor'));
+const PlatformNotificationsHistory = lazy(
+  () => import('../shared/PlatformNotificationsHistory')
+);
+
+function MerchantLazyFallback({ className }: { className?: string }) {
+  return (
+    <div
+      className={
+        className ??
+        'flex min-h-[40vh] items-center justify-center text-sm text-[var(--text-muted)]'
+      }
+    >
+      Loading…
+    </div>
+  );
+}
 
 function LegacyReservationsRedirect() {
   const location = useLocation();
@@ -253,6 +277,8 @@ function MerchantShell() {
   const [signageLicensed, setSignageLicensed] = useState(() => isSignageLicensed(user));
   const [kioskLicensed, setKioskLicensed] = useState(false);
   const [cateringLicensed, setCateringLicensed] = useState(false);
+  const [phoneOrderingLicensed, setPhoneOrderingLicensed] = useState(false);
+  const [smsLicensed, setSmsLicensed] = useState(false);
   const [hqLicensed, setHqLicensed] = useState(() =>
     isMultiLocationLicensed({ maxLocations: user?.maxLocations })
   );
@@ -344,6 +370,8 @@ function MerchantShell() {
     () => !jwtIsOwner && isWaiterRestrictedStaff(effective.permissions, false),
     [jwtIsOwner, effective.permissions]
   );
+  const panelChromeRestricted =
+    orderCenterRestricted || kioskRestricted || storekeeperRestricted || waiterRestricted;
   const hideChrome =
     (((isPosRoute || isWaiterRoute || isOrderCenterRoute) && posAppMode) ||
       isStorekeeperRoute ||
@@ -351,6 +379,26 @@ function MerchantShell() {
       (isOrderCenterRoute && (!managerPanelAccess || orderCenterRestricted)) ||
       isDesktopHubPanel) ||
     isPosEmbed;
+
+  /**
+   * Leaving POS app mode while still on /merchant/pos used to render the panel rail +
+   * embedded WebPOS (demo backoffice bug). Navigate synchronously in the route instead.
+   */
+  const leavePosForPanelPath = useMemo(() => {
+    if (posAppMode || isPosEmbed) return null;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (path !== '/merchant/pos' && path !== '/merchant/waiter') return null;
+    return jwtIsOwner
+      ? '/merchant'
+      : backOfficeHomePath(effective.permissions, effective.isOwner);
+  }, [
+    posAppMode,
+    isPosEmbed,
+    location.pathname,
+    jwtIsOwner,
+    effective.permissions,
+    effective.isOwner,
+  ]);
 
   /** PIN-restricted staff home route — delivery drivers use driver app, not register POS. */
   const isAllowedPinAppRoute = useMemo(() => {
@@ -404,6 +452,8 @@ function MerchantShell() {
       kioskEnabled?: boolean;
       cateringEnabled?: boolean;
       cateringAddonEnabled?: boolean;
+      phoneOrderingAddonEnabled?: boolean;
+      smsAddonEnabled?: boolean;
       maxLocations?: number | null;
       panelNavHidden?: string[] | null;
     } | null) => {
@@ -421,6 +471,8 @@ function MerchantShell() {
       setSignageLicensed(isSignageLicensed(settings) || isSignageLicensed(user));
       setKioskLicensed(isKioskLicensed(settings));
       setCateringLicensed(isCateringLicensed(settings));
+      setPhoneOrderingLicensed(isPhoneOrderingLicensed(settings));
+      setSmsLicensed(settings?.smsAddonEnabled === true);
       setHqLicensed(isMultiLocationLicensed(settings) || isMultiLocationLicensed(user));
       setMerchantShopName(
         settings?.name?.trim() ||
@@ -451,6 +503,7 @@ function MerchantShell() {
           setSignageLicensed(isSignageLicensed(user));
           setKioskLicensed(false);
           setCateringLicensed(false);
+          setPhoneOrderingLicensed(false);
           setHqLicensed(isMultiLocationLicensed(user));
           setProductFlagsReady(true);
         });
@@ -464,9 +517,19 @@ function MerchantShell() {
     };
   }, [user]);
 
+  const prevPanelPathRef = useRef(location.pathname);
   useEffect(() => {
-    if (isPosLikeRoute || isStorekeeperRoute) setPosAppMode(true);
-  }, [isPosLikeRoute, isStorekeeperRoute]);
+    const prev = prevPanelPathRef.current;
+    prevPanelPathRef.current = location.pathname;
+    const norm = (p: string) => p.replace(/\/$/, '') || '/merchant';
+    const wasPosLike =
+      /^\/merchant\/(pos|waiter|storekeeper|kiosk)(\/|$)/.test(norm(prev)) ||
+      norm(prev) === '/merchant/storekeeper';
+    const nowPosLike = isPosLikeRoute || isStorekeeperRoute;
+    if (nowPosLike && !wasPosLike) {
+      setPosAppMode(true);
+    }
+  }, [location.pathname, isPosLikeRoute, isStorekeeperRoute]);
 
   useEffect(() => {
     document.title = APP_PANEL_TITLE;
@@ -474,7 +537,10 @@ function MerchantShell() {
 
   const refreshSession = useAuthStore((s) => s.refreshSession);
   useEffect(() => {
-    void refreshSession();
+    const id = window.requestAnimationFrame(() => {
+      void refreshSession();
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [refreshSession]);
 
   useEffect(() => {
@@ -528,6 +594,8 @@ function MerchantShell() {
   // Restricted PIN: stay on role app (POS, driver, storekeeper) unless they may open panel pages.
   useEffect(() => {
     if (!effective.pinActive || effective.canOpenPanel) return;
+    const panelPath = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (panelPath === '/merchant' && effective.canOpenPanel) return;
     if (effective.canOpenCatalog && isCatalogPanelPath(location.pathname)) return;
     if (effective.canOpenOrders && isOrdersPanelPath(location.pathname)) return;
     if (effective.canOpenReports && isReportsPanelPath(location.pathname)) return;
@@ -616,6 +684,9 @@ function MerchantShell() {
       if (normalized === '/merchant/pos' && productFlagsReady && !hasPos) {
         return false;
       }
+      if (normalized === '/merchant/sales/phone' && !phoneOrderingLicensed) {
+        return false;
+      }
       if (isPanelNavHidden(path, panelNavHidden)) {
         return false;
       }
@@ -636,6 +707,7 @@ function MerchantShell() {
       hasPos,
       panelNavHidden,
       productFlagsReady,
+      phoneOrderingLicensed,
     ]
   );
 
@@ -671,22 +743,74 @@ function MerchantShell() {
     [kioskLicensed, effective.permissions, effective.isOwner, businessModule]
   );
 
-  const { locations, limits, locationId: panelLocationId } = useLocationStore();
-  const posLaunchPath = buildWebPosLaunchPath(
-    panelLocationId || getSelectedLocationId() || ''
+  const {
+    locations,
+    limits,
+    locationId: panelLocationId,
+    location: panelLocation,
+    isHqView,
+  } = useLocationStore();
+  const panelLocationLabels = useMemo(
+    () =>
+      buildPanelLocationHeaderLabels({
+        merchantName: merchantShopName || '',
+        locationCount: locations.length,
+        maxLocations: limits?.maxLocations,
+        isHqView,
+        location: panelLocation,
+      }),
+    [merchantShopName, locations.length, limits?.maxLocations, isHqView, panelLocation]
   );
+  const pinRestrictsHq = useMemo(() => {
+    if (!effective.pinActive || !pinSession) return false;
+    return !effectiveCanSwitchPanelLocation({
+      jwtUser: user,
+      pinRoleName: pinSession.roleName,
+      pinPermissions: pinSession.permissions,
+      pinActive: true,
+    });
+  }, [effective.pinActive, pinSession, user]);
+  const panelScopeNavInput = useMemo(
+    () => ({
+      locationCount: locations.length,
+      maxLocations: limits?.maxLocations,
+      isHqView,
+      pinRestrictsHq,
+    }),
+    [locations.length, limits?.maxLocations, isHqView, pinRestrictsHq]
+  );
+  const posLaunchPath = isHqView
+    ? '/merchant/pos'
+    : buildWebPosLaunchPath(panelLocationId || getSelectedLocationId() || '');
   const showHq =
     hqLicensed ||
     isMultiLocationLicensed({ maxLocations: limits?.maxLocations }) ||
     locations.length > 1;
+  const showHqNav = shouldShowHqPanelNav({ ...panelScopeNavInput, hqNavLicensed: showHq });
   const allowHq = useCallback(
     (path: string) =>
-      showHq &&
+      showHqNav &&
       !isPanelNavHidden(path, panelNavHidden) &&
       !isPanelNavGroupHidden('hq', panelNavHidden) &&
       canAccessRoute(path, effective.permissions, effective.isOwner, null, businessModule),
-    [showHq, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
+    [showHqNav, effective.permissions, effective.isOwner, businessModule, panelNavHidden]
   );
+
+  useEffect(() => {
+    if (jwtOwnerBypass || isPosLikeRoute) return;
+    const path = location.pathname.replace(/\/$/, '') || '/merchant';
+    if (
+      shouldRedirectFromHqPanelPath(path, panelScopeNavInput)
+    ) {
+      navigate('/merchant', { replace: true });
+    }
+  }, [
+    jwtOwnerBypass,
+    isPosLikeRoute,
+    location.pathname,
+    navigate,
+    panelScopeNavInput,
+  ]);
 
   // Block direct URL access to panel pages the role may not open.
   useEffect(() => {
@@ -850,6 +974,9 @@ function MerchantShell() {
       return;
     }
     if (normalizeStaffLoginHome(user?.loginHome) === 'pos') {
+      if (effective.canOpenBackOffice) {
+        return;
+      }
       if (!isAppShellRoute) {
         const dest = homePathForUser({
           role: 'staff',
@@ -879,20 +1006,30 @@ function MerchantShell() {
     user?.permissions,
     jwtIsOwner,
     isAppShellRoute,
+    effective.canOpenBackOffice,
     location.pathname,
     navigate,
   ]);
 
   const showWebPosQuickAction = useMemo(
     () =>
-      hasPos &&
-      canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
-    [hasPos, jwtIsOwner, user?.permissions]
+      shouldShowPanelPosQuickAction({
+        ...panelScopeNavInput,
+        baseAllowed:
+          hasPos &&
+          canShowWebPosQuickAction(jwtIsOwner, user?.permissions as Permission[] | undefined),
+      }),
+    [hasPos, jwtIsOwner, user?.permissions, panelScopeNavInput]
   );
+
+  const hideSettingsInHqView = shouldHideMerchantSettingsInHqView(panelScopeNavInput);
+  const merchantSettingsPath =
+    !panelChromeRestricted && allow('/merchant/settings') && !hideSettingsInHqView
+      ? '/merchant/settings'
+      : undefined;
 
   const orderAlertsEnabled = !isPosLikeRoute && allow('/merchant/orders');
   const tillPrintHubEnabled = !isPosLikeRoute && isTillPrintHubCandidate();
-  useTillPrintHub({ enabled: tillPrintHubEnabled });
   const loadLocations = useLocationStore((s) => s.load);
 
   useEffect(() => {
@@ -966,7 +1103,9 @@ function MerchantShell() {
         { label: t('orders'), path: '/merchant/orders', icon: '📦' },
         { label: t('orderCenterTitle'), path: '/merchant/order-center', icon: '📲' },
         { label: t('reports'), path: '/merchant/reports', icon: '📈' },
-        { label: t('phoneOrderingDeskNav'), path: '/merchant/sales/phone', icon: '📞' },
+        ...(phoneOrderingLicensed
+          ? [{ label: t('phoneOrderingDeskNav'), path: '/merchant/sales/phone', icon: '📞' }]
+          : []),
         ...(isRestaurantModule(businessModule)
           ? [
               { label: t('reservations'), path: '/merchant/sales/reservations', icon: '📅' },
@@ -979,9 +1118,10 @@ function MerchantShell() {
       id: 'hq',
       label: t('navHq'),
       icon: '🏢',
-      children: showHq
+      children: showHqNav
         ? [
             { label: t('hqDashboardTitle'), path: '/merchant/hq', icon: '🏢' },
+            { label: t('hqSyncNav'), path: '/merchant/hq/sync', icon: '🔄' },
             { label: t('bulkPricingTitle'), path: '/merchant/hq/bulk-pricing', icon: '📈' },
           ].filter((item) => allowHq(item.path))
         : [],
@@ -1041,6 +1181,7 @@ function MerchantShell() {
         { label: t('offers'), path: '/merchant/offers', icon: '🏷️' },
         { label: t('vouchers'), path: '/merchant/vouchers', icon: '🎟️' },
         { label: t('newsletter'), path: '/merchant/newsletter', icon: '✉️' },
+        ...(smsLicensed ? [{ label: t('smsNav'), path: '/merchant/sms', icon: '💬' }] : []),
       ].filter((item) => allow(item.path)),
     },
     {
@@ -1154,9 +1295,6 @@ function MerchantShell() {
       ? waiterMenuItems
       : fullMenuItems;
 
-  const panelChromeRestricted =
-    orderCenterRestricted || kioskRestricted || storekeeperRestricted || waiterRestricted;
-
   /** POS / role apps enforce their own fullscreen PIN gate. */
   const routeHasOwnPinGate =
     isPosRoute || isWaiterRoute || isStorekeeperRoute || isDriverRoute;
@@ -1223,20 +1361,23 @@ function MerchantShell() {
   if (showPanelPinGate) {
     return (
       <div className="panel-shell flex h-full max-h-full">
-        <WebPosPinModal
-          open
-          mode="gate"
-          onClose={() => {
-            /* gate cannot be dismissed without PIN */
-          }}
-          onSuccess={onPanelPinSuccess}
-          onLogout={handlePanelPinLogout}
-          productName={pinGateMerchantName(
-            merchantShopName,
-            pinGateSessionMerchantName(user)
-          )}
-          logoUrl={merchantShopLogoUrl}
-        />
+        <Suspense fallback={<p className="text-sm muted p-4">{t('loading')}</p>}>
+          <WebPosPinModal
+            open
+            mode="gate"
+            onClose={() => {
+              /* gate cannot be dismissed without PIN */
+            }}
+            onSuccess={onPanelPinSuccess}
+            onLogout={handlePanelPinLogout}
+            productName={pinGateMerchantName(
+              merchantShopName,
+              pinGateSessionMerchantName(user)
+            )}
+            logoUrl={merchantShopLogoUrl}
+            terminalLocationId={panelLocationId || getSelectedLocationId()}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -1246,6 +1387,7 @@ function MerchantShell() {
       {!hideChrome && (
         <>
           <div className="lg:hidden">
+            <Suspense fallback={<MerchantLazyFallback className="h-12" />}>
             <Sidebar
               isOpen={sidebarOpen}
               onToggle={() => setSidebarOpen(!sidebarOpen)}
@@ -1265,10 +1407,7 @@ function MerchantShell() {
               language={locale}
               onLanguageChange={changeLanguage}
               profileMenu={{
-                settingsPath:
-                  !panelChromeRestricted && allow('/merchant/settings')
-                    ? '/merchant/settings'
-                    : undefined,
+                settingsPath: merchantSettingsPath,
                 billingPath:
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:
@@ -1279,6 +1418,7 @@ function MerchantShell() {
                     : undefined,
               }}
               shopName={merchantShopName}
+              panelLocationLabels={panelLocationLabels}
               shopPath={
                 !panelChromeRestricted &&
                 !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
@@ -1287,8 +1427,10 @@ function MerchantShell() {
                   : null
               }
             />
+            </Suspense>
           </div>
           <div className="hidden lg:flex shrink-0">
+            <Suspense fallback={<MerchantLazyFallback className="w-14" />}>
             <Sidebar
               isOpen
               onToggle={() => setSidebarOpen(!sidebarOpen)}
@@ -1309,10 +1451,7 @@ function MerchantShell() {
               language={locale}
               onLanguageChange={changeLanguage}
               profileMenu={{
-                settingsPath:
-                  !panelChromeRestricted && allow('/merchant/settings')
-                    ? '/merchant/settings'
-                    : undefined,
+                settingsPath: merchantSettingsPath,
                 billingPath:
                   !panelChromeRestricted && allow('/merchant/billing') ? '/merchant/billing' : undefined,
                 supportPath:
@@ -1323,6 +1462,7 @@ function MerchantShell() {
                     : undefined,
               }}
               shopName={merchantShopName}
+              panelLocationLabels={panelLocationLabels}
               shopPath={
                 !panelChromeRestricted &&
                 !isPanelNavHidden('/merchant/platform-shop', panelNavHidden) &&
@@ -1332,37 +1472,44 @@ function MerchantShell() {
               }
             />
             {!panelChromeRestricted ? <MerchantSubNav menuItems={menuItems} /> : null}
+            </Suspense>
           </div>
         </>
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         {!hideChrome && (
-          <Header
-            title={t('merchantDashboard')}
-            onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            compact
-            storeName={merchantShopName}
-            registerDisplay={registerDisplay}
-            showAcceptingMenu={!isStorekeeperRoute}
-          />
+          <Suspense fallback={<MerchantLazyFallback className="flex h-12 items-center justify-center text-xs text-[var(--text-muted)]" />}>
+            <Header
+              title={t('merchantDashboard')}
+              onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+              compact
+              storeName={merchantShopName}
+              panelLocationLabels={panelLocationLabels}
+              registerDisplay={registerDisplay}
+              showAcceptingMenu={!isStorekeeperRoute}
+            />
+          </Suspense>
         )}
 
         {!hideChrome ? <PlatformStatusBannerSlot /> : null}
         {!hideChrome && productFlagsReady && allowInventory('/merchant/inventory') ? (
-          <InventoryExpiryAlerts licensed={inventoryLicensed} />
+          <Suspense fallback={null}>
+            <InventoryExpiryAlerts licensed={inventoryLicensed} />
+          </Suspense>
         ) : null}
 
         <main
           className={
             isSettingsRoute
-              ? 'panel-main flex-1 p-3 sm:p-4 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden lg:overflow-y-hidden'
+              ? 'panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4'
               : ((isPosLikeRoute || isOrderCenterRoute || isStorekeeperRoute) && !isKioskRoute && posAppMode) ||
                   isStorekeeperRoute
                 ? 'flex-1 overflow-hidden p-0 min-h-0'
                 : 'panel-main flex-1 p-3 sm:p-4'
           }
         >
+          <Suspense fallback={<MerchantLazyFallback />}>
           <Routes>
             <Route
               index
@@ -1405,11 +1552,15 @@ function MerchantShell() {
             <Route
               path="pos"
               element={
-                missingPosRedirect ? (
+                leavePosForPanelPath ? (
+                  <Navigate to={leavePosForPanelPath} replace />
+                ) : missingPosRedirect ? (
                   <Navigate to={missingPosRedirect} replace />
                 ) : (
                   <WebPosErrorBoundary>
-                    <WebPos appMode={hideChrome} />
+                    <Suspense fallback={<MerchantLazyFallback />}>
+                      <WebPos appMode={hideChrome} />
+                    </Suspense>
                   </WebPosErrorBoundary>
                 )
               }
@@ -1417,9 +1568,13 @@ function MerchantShell() {
             <Route
               path="waiter"
               element={
-                <PanelRouteGuard path="/merchant/waiter" allow={allow}>
-                  <WaiterApp appMode={hideChrome} />
-                </PanelRouteGuard>
+                leavePosForPanelPath ? (
+                  <Navigate to={leavePosForPanelPath} replace />
+                ) : (
+                  <PanelRouteGuard path="/merchant/waiter" allow={allow}>
+                    <WaiterApp appMode={hideChrome} />
+                  </PanelRouteGuard>
+                )
               }
             />
             <Route
@@ -1548,6 +1703,14 @@ function MerchantShell() {
               }
             />
             <Route
+              path="sms"
+              element={
+                <PanelRouteGuard path="/merchant/sms" allow={allow}>
+                  <Sms />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
               path="online-shop"
               element={
                 <PanelRouteGuard path="/merchant/online-shop" allow={allow}>
@@ -1588,6 +1751,14 @@ function MerchantShell() {
               element={
                 <PanelRouteGuard path="/merchant/hq" allow={allowHq}>
                   <HqDashboardPage />
+                </PanelRouteGuard>
+              }
+            />
+            <Route
+              path="hq/sync"
+              element={
+                <PanelRouteGuard path="/merchant/hq/sync" allow={allowHq}>
+                  <HqSyncMenuPage />
                 </PanelRouteGuard>
               }
             />
@@ -1721,14 +1892,16 @@ function MerchantShell() {
               path="notifications"
               element={
                 <PanelRouteGuard path="/merchant/notifications" allow={allow}>
-                  <PlatformNotificationsHistory />
+                  <Suspense fallback={<MerchantLazyFallback />}>
+                    <PlatformNotificationsHistory />
+                  </Suspense>
                 </PanelRouteGuard>
               }
             />
             <Route
               path="desktop-settings"
               element={
-                <PanelRouteGuard path="/merchant/settings" allow={allow}>
+                <PanelRouteGuard path="/merchant/desktop-settings" allow={allow}>
                   <DesktopSettings />
                 </PanelRouteGuard>
               }
@@ -1757,15 +1930,22 @@ function MerchantShell() {
                     resetKey="merchant-settings"
                     fallbackText={t('settingsSearchOpenFailed')}
                   >
-                    <Settings />
+                    <Suspense fallback={<MerchantLazyFallback />}>
+                      <Settings />
+                    </Suspense>
                   </SettingsSearchErrorBoundary>
                 </PanelRouteGuard>
               }
             />
           </Routes>
+          </Suspense>
         </main>
-        {!hideChrome ? <RebornPoweredByFooter variant="panel" className="shrink-0" /> : null}
-        <MerchantOrderAlerts enabled={orderAlertsEnabled} />
+        <Suspense fallback={null}>
+          <MerchantTillPrintHub enabled={tillPrintHubEnabled} />
+        </Suspense>
+        <Suspense fallback={null}>
+          <MerchantOrderAlerts enabled={orderAlertsEnabled} />
+        </Suspense>
       </div>
     </div>
   );

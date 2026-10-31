@@ -100,11 +100,6 @@ import {
   readKioskAddonEnabledMap,
   writeKioskAddonEnabled,
 } from "@/lib/kiosk-addon";
-import {
-  isCateringAddonEnabled,
-  readCateringAddonEnabled,
-  writeCateringAddonEnabled,
-} from "@/lib/catering-addon";
 import { assignMerchantSupportCode } from "@/lib/merchant-support-code";
 import {
   isStorekeeperAddonEnabled,
@@ -326,9 +321,6 @@ export class MerchantService {
       const kioskOn = await readKioskAddonEnabled(merchantId).catch(() =>
         isKioskAddonEnabled(merchant.kioskAddonEnabled)
       );
-      const cateringOn = await readCateringAddonEnabled(merchantId).catch(() =>
-        isCateringAddonEnabled((merchant as { cateringEnabled?: boolean }).cateringEnabled)
-      );
       const justEatOn = await readJustEatAddonEnabled(merchantId).catch(() =>
         isJustEatAddonEnabled(merchant.justEatAddonEnabled)
       );
@@ -378,8 +370,6 @@ export class MerchantService {
         odsEnabled: odsOn,
         kioskAddonEnabled: kioskOn,
         kioskEnabled: kioskOn,
-        cateringEnabled: cateringOn,
-        cateringAddonEnabled: cateringOn,
         justEatAddonEnabled: justEatOn,
         uberEatsAddonEnabled: uberEatsOn,
         deliveryPlatformsAddonEnabled: justEatOn || uberEatsOn,
@@ -444,13 +434,15 @@ export class MerchantService {
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
+      smsAddonEnabled?: boolean;
+      smsTier?: string;
+      smsUnitPriceCents?: number;
       deliveryPlatformsAddonEnabled?: boolean;
       storekeeperAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
       growthAnalyticsAddonEnabled?: boolean;
       guestCrmAddonEnabled?: boolean;
-      cateringAddonEnabled?: boolean;
       marketingAutomationAddonEnabled?: boolean;
       smartSegmentsAddonEnabled?: boolean;
       reservationCampaignsAddonEnabled?: boolean;
@@ -615,6 +607,11 @@ export class MerchantService {
       if (options?.kioskAddonEnabled === true) {
         await writeKioskAddonEnabled(created.id, true);
       }
+      if (options?.smsAddonEnabled === true) {
+        const { writeSmsAddonEnabled, writeSmsTier } = await import("@/lib/sms-addon");
+        await writeSmsAddonEnabled(created.id, true);
+        if (options.smsTier) await writeSmsTier(created.id, options.smsTier);
+      }
       if (options?.deliveryPlatformsAddonEnabled === true) {
         await writeJustEatAddonEnabled(created.id, true);
         await writeUberEatsAddonEnabled(created.id, true);
@@ -632,9 +629,6 @@ export class MerchantService {
       }
       if (options?.guestCrmAddonEnabled === true) {
         await writeGuestCrmAddonEnabled(created.id, true);
-      }
-      if (options?.cateringAddonEnabled === true) {
-        await writeCateringAddonEnabled(created.id, true);
       }
       if (options?.marketingAutomationAddonEnabled === true) {
         await writeMarketingAutomationAddonEnabled(created.id, true);
@@ -793,8 +787,9 @@ export class MerchantService {
       kdsAddonEnabled?: boolean;
       odsAddonEnabled?: boolean;
       kioskAddonEnabled?: boolean;
-      cateringEnabled?: boolean;
-      cateringAddonEnabled?: boolean;
+      smsAddonEnabled?: boolean;
+      smsTier?: string;
+      smsUnitPriceCents?: number;
       deliveryPlatformsAddonEnabled?: boolean;
       bexioAddonEnabled?: boolean;
       odooAddonEnabled?: boolean;
@@ -861,11 +856,23 @@ export class MerchantService {
       await writeKioskAddonEnabled(merchantId, limits.kioskAddonEnabled);
       wroteAddon = true;
     }
-    if (limits.cateringEnabled !== undefined || limits.cateringAddonEnabled !== undefined) {
-      await writeCateringAddonEnabled(
-        merchantId,
-        limits.cateringEnabled === true || limits.cateringAddonEnabled === true
+    if (
+      limits.smsAddonEnabled !== undefined ||
+      limits.smsTier !== undefined ||
+      limits.smsUnitPriceCents !== undefined
+    ) {
+      const { writeSmsAddonEnabled, writeSmsTier, writeSmsUnitPriceCents } = await import(
+        "@/lib/sms-addon"
       );
+      if (limits.smsAddonEnabled !== undefined) {
+        await writeSmsAddonEnabled(merchantId, limits.smsAddonEnabled);
+      }
+      if (limits.smsTier !== undefined) {
+        await writeSmsTier(merchantId, limits.smsTier);
+      }
+      if (limits.smsUnitPriceCents !== undefined) {
+        await writeSmsUnitPriceCents(merchantId, limits.smsUnitPriceCents);
+      }
       wroteAddon = true;
     }
     if (limits.storekeeperAddonEnabled !== undefined) {
@@ -906,7 +913,7 @@ export class MerchantService {
     }
     if (!wroteAddon && Object.keys(patch).length === 0) {
       throw new Error(
-        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, cateringEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
+        "At least one of maxPosPosts, maxWaiterPosts, maxLocations, inventoryAddonEnabled, growthAnalyticsAddonEnabled, guestCrmAddonEnabled, marketingAutomationAddonEnabled, smartSegmentsAddonEnabled, reservationCampaignsAddonEnabled, aiCoachAddonEnabled, signageAddonEnabled, signageScreenLimit, kdsAddonEnabled, odsAddonEnabled, kioskAddonEnabled, smsAddonEnabled, storekeeperAddonEnabled, deliveryPlatformsAddonEnabled, bexioAddonEnabled, or odooAddonEnabled is required"
       );
     }
     return this.getMerchantById(merchantId);

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
@@ -6,17 +7,17 @@ import { useI18n } from '@/lib/i18n';
 import CartGiftTierEditorModal, {
   type CartGiftTierForm,
 } from '@/components/merchant/CartGiftTierEditorModal';
-
-type OfferType =
-  | 'percent_category'
-  | 'percent_order'
-  | 'fixed_off'
-  | 'bogo'
-  | 'pay_n_get_m'
-  | 'nth_item_percent'
-  | 'package_deal'
-  | 'combo_deal'
-  | 'cart_free_gift';
+import {
+  type OfferType,
+  emptyForm,
+  clampMoneyDigits,
+  clampNonNegativeIntStr,
+  validityPreset,
+  validityOnDate,
+  ymdFromIso,
+  MAX_MIN_ORDER_DIGITS,
+  MAX_PERCENT_OFF,
+} from '@/pages/merchant/offers-form';
 
 type Offer = {
   id: string;
@@ -177,105 +178,21 @@ const RESTAURANT_TEMPLATES: Array<
   },
 ];
 
-const MAX_MIN_ORDER_DIGITS = 10;
-const MAX_PERCENT_OFF = 100;
+const MORE_OFFER_TYPES: Array<{ type: OfferType; emoji: string; titleKey: string }> = [
+  { type: 'percent_order', emoji: '%', titleKey: 'offerTypePercentOrder' },
+  { type: 'percent_category', emoji: '🏷️', titleKey: 'offerTypePercentCategory' },
+  { type: 'fixed_off', emoji: 'CHF', titleKey: 'offerTypeFixedOff' },
+  { type: 'package_deal', emoji: '📦', titleKey: 'offerTypePackageDeal' },
+  { type: 'combo_deal', emoji: '🍽️', titleKey: 'offerTypeComboDeal' },
+];
 
-function clampMoneyDigits(raw: string, maxDigits: number) {
-  const cleaned = raw.replace(/[^\d.]/g, '');
-  const parts = cleaned.split('.');
-  const intPart = (parts[0] || '').slice(0, maxDigits);
-  if (parts.length <= 1) return intPart;
-  return `${intPart}.${parts.slice(1).join('').slice(0, 2)}`;
+function offerCardClass(selected: boolean) {
+  return `rounded-xl border px-3 py-3 text-left min-h-[5.5rem] transition-colors ${
+    selected
+      ? 'border-stone-900 ring-2 ring-stone-900/15 bg-stone-50 dark:bg-zinc-900'
+      : 'border-[var(--border)] bg-white hover:border-stone-400 dark:bg-zinc-950'
+  }`;
 }
-
-function clampNonNegativeIntStr(raw: string) {
-  if (raw.trim() === '' || raw === '-') return raw;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return '0';
-  return String(Math.max(0, Math.floor(n)));
-}
-
-function endOfZurichDay(d: Date) {
-  const copy = new Date(d);
-  copy.setHours(23, 59, 59, 999);
-  return copy;
-}
-
-function startOfZurichDay(d: Date) {
-  const copy = new Date(d);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-/** Preset date window for "today / 2 days / week" */
-function validityPreset(kind: 'today' | 'two_days' | 'week'): { validFrom: string; validTo: string } {
-  const from = startOfZurichDay(new Date());
-  const to = new Date(from);
-  if (kind === 'today') {
-    // end of today
-  } else if (kind === 'two_days') {
-    to.setDate(to.getDate() + 1);
-  } else {
-    to.setDate(to.getDate() + 6);
-  }
-  return { validFrom: from.toISOString(), validTo: endOfZurichDay(to).toISOString() };
-}
-
-function validityOnDate(ymd: string): { validFrom: string; validTo: string } {
-  const from = startOfZurichDay(new Date(`${ymd}T12:00:00`));
-  return { validFrom: from.toISOString(), validTo: endOfZurichDay(from).toISOString() };
-}
-
-function ymdFromIso(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-const emptyForm = () => ({
-  name: '',
-  description: '',
-  offerType: 'percent_order' as OfferType,
-  percentOff: '20',
-  fixedOff: '5',
-  buyQty: '2',
-  getQty: '1',
-  getDiscountPercent: '100',
-  payQty: '3',
-  receiveQty: '4',
-  nthItem: '2',
-  sameProductOnly: false,
-  packagePrice: '25',
-  buyProductIds: [] as string[],
-  getProductIds: [] as string[],
-  minOrderAmount: '',
-  channels: [] as string[],
-  categoryIds: [] as string[],
-  productIds: [] as string[],
-  staffIds: [] as string[],
-  scheduleMode: 'always',
-  daysOfWeek: [] as string[],
-  timeStart: '',
-  timeEnd: '',
-  validFrom: '' as string,
-  validTo: '' as string,
-  validityPreset: '' as '' | 'today' | 'two_days' | 'week' | 'date',
-  featured: true,
-  isActive: true,
-  badgeLabel: '',
-  priority: '10',
-  stackable: false,
-  cartGiftTiers: [] as Array<{
-    id: string;
-    minCartTotal: string;
-    label: string;
-    productIds: string[];
-  }>,
-});
 
 export default function Offers() {
   const { t, formatDateTime } = useI18n();
@@ -296,6 +213,7 @@ export default function Offers() {
   const [form, setForm] = useState(emptyForm());
   const [tierModalOpen, setTierModalOpen] = useState(false);
   const [tierEditing, setTierEditing] = useState<CartGiftTierForm | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -320,9 +238,14 @@ export default function Offers() {
     void load();
   }, []);
 
-  const reset = () => {
+  const closeEditor = () => {
+    setEditorOpen(false);
     setEditingId(null);
     setForm(emptyForm());
+  };
+
+  const reset = () => {
+    closeEditor();
   };
 
   const startEdit = (offer: Offer) => {
@@ -372,6 +295,7 @@ export default function Offers() {
           )
         : [],
     });
+    setEditorOpen(true);
   };
 
   const buildPayload = () => {
@@ -648,6 +572,13 @@ export default function Offers() {
         productIds: [],
       })),
     });
+    setEditorOpen(true);
+  };
+
+  const openBlankOfferType = (type: OfferType) => {
+    setEditingId(null);
+    setForm({ ...emptyForm(), offerType: type });
+    setEditorOpen(true);
   };
 
   const applyPreset = (preset: OfferPreset) => {
@@ -669,6 +600,7 @@ export default function Offers() {
       badgeLabel: preset.badgeLabel,
       priority: '10',
     });
+    setEditorOpen(true);
   };
 
   if (loading) return <div className="text-center py-12">Loading offers…</div>;
@@ -735,43 +667,96 @@ export default function Offers() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
-          <p className="text-sm font-medium text-amber-950">Quick presets — same product quantity deals</p>
-          <p className="text-xs text-stone-600">
-            These apply automatically when customers add enough of the same item to their cart.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_PRESETS.map((preset) => (
-              <button
-                key={preset.label}
-                type="button"
-                className="rounded-full px-3 py-1.5 text-xs border bg-white border-amber-300 hover:bg-amber-100"
-                onClick={() => applyPreset(preset)}
-              >
-                {preset.label}
-              </button>
-            ))}
+        <div className="space-y-4 border-t border-[var(--border)] pt-4">
+          <div>
+            <p className="text-sm font-semibold">{t('offerPickerTitle')}</p>
+            <p className="text-xs muted mt-0.5">{t('offerPickerHint')}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-stone-600 mb-2">{t('offerPickerQuantityDeals')}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {QUICK_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className={offerCardClass(false)}
+                  onClick={() => applyPreset(preset)}
+                >
+                  <span className="text-lg font-bold text-amber-800">{preset.badgeLabel}</span>
+                  <p className="text-xs font-semibold mt-1 leading-snug">{preset.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-stone-600 mb-2">{t('offerRestaurantTemplatesTitle')}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {RESTAURANT_TEMPLATES.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className={offerCardClass(false)}
+                  onClick={() => applyRestaurantTemplate(preset)}
+                >
+                  <span className="text-lg" aria-hidden>{preset.badgeLabel === '3+1' ? '3+1' : preset.badgeLabel === 'Free gift' ? '🎁' : '%'}</span>
+                  <p className="text-xs font-semibold mt-1 leading-snug">{preset.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-stone-600 mb-2">{t('offerPickerMoreTypes')}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              {MORE_OFFER_TYPES.map((item) => (
+                <button
+                  key={item.type}
+                  type="button"
+                  className={offerCardClass(false)}
+                  onClick={() => openBlankOfferType(item.type)}
+                >
+                  <span className="text-sm font-bold">{item.emoji}</span>
+                  <p className="text-xs font-semibold mt-1 leading-snug">{t(item.titleKey)}</p>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 space-y-2">
-          <p className="text-sm font-medium text-teal-950">{t('offerRestaurantTemplatesTitle')}</p>
-          <p className="text-xs text-stone-600">{t('offerRestaurantTemplatesHint')}</p>
-          <div className="flex flex-wrap gap-2">
-            {RESTAURANT_TEMPLATES.map((preset) => (
+      {editorOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+          onClick={closeEditor}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-2xl max-h-[92vh] overflow-hidden rounded-t-2xl sm:rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="offer-editor-title"
+          >
+            <div className="flex items-start justify-between gap-2 border-b border-[var(--border)] px-4 py-3 shrink-0">
+              <div className="min-w-0">
+                <h2 id="offer-editor-title" className="text-base font-semibold">
+                  {editingId ? t('offerEditorTitleEdit') : t('offerEditorTitleNew')}
+                </h2>
+                <p className="text-xs muted mt-0.5">
+                  {typeLabels[form.offerType] || form.offerType}
+                  {form.badgeLabel ? ` · ${form.badgeLabel}` : ''}
+                </p>
+              </div>
               <button
-                key={preset.label}
                 type="button"
-                className="rounded-full px-3 py-1.5 text-xs border bg-white border-teal-300 hover:bg-teal-100"
-                onClick={() => applyRestaurantTemplate(preset)}
+                onClick={closeEditor}
+                className="rounded-md p-1 hover:bg-stone-100 dark:hover:bg-zinc-800"
+                aria-label={t('close')}
               >
-                {preset.label}
+                <X className="h-5 w-5" />
               </button>
-            ))}
-          </div>
-        </div>
-
-        <form onSubmit={onSubmit} className="space-y-3 border-t border-[var(--border)] pt-3">
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+        <form onSubmit={onSubmit} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="text-sm block">
               <span className="muted block mb-1">Name *</span>
@@ -1377,18 +1362,23 @@ export default function Offers() {
             </label>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 sticky bottom-0 bg-[var(--bg-elevated)] pt-2 pb-1">
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : editingId ? 'Update offer' : 'Create offer'}
+              {saving
+                ? 'Saving…'
+                : editingId
+                  ? t('offerEditorSaveUpdate')
+                  : t('offerEditorSaveCreate')}
             </button>
-            {editingId ? (
-              <button type="button" className="btn-secondary" onClick={reset}>
-                Cancel
-              </button>
-            ) : null}
+            <button type="button" className="btn-secondary" onClick={closeEditor}>
+              {t('cancel')}
+            </button>
           </div>
         </form>
-      </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="card">
         <h2 className="text-base font-semibold mb-3">Your offers</h2>

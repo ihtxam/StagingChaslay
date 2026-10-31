@@ -26,5 +26,16 @@ assert.match(ordersPanel, /findPaidOrderForHeldRow\(h, ordersForList\)/);
 assert.match(guard, /export function resolveCartCheckoutGuard/);
 assert.match(guard, /action: 'blocked'/);
 assert.match(guard, /export function findPaidOrderForCartLink/);
+assert.match(guard, /export function mergeMerchantOrderDetail/);
+assert.match(ordersPanel, /\(selectedOrder\.items \|\| \[\]\)\.map/);
+assert.match(ordersPanel, /loadSeqRef/);
+assert.match(ordersPanel, /void load\(\{ silent: true \}\)/);
+assert.match(ordersPanel, /queueMicrotask/);
+assert.match(webPos, /catalogLoadSeqRef/);
+assert.match(webPos, /shouldSurfaceCatalogLoadError/);
+assert.match(webPos, /view === 'checkout' \|\| view === 'success'/);
+const printAgent = readFileSync(join(root, 'print-agent.ts'), 'utf8');
+assert.match(printAgent, /export function isPrintAgentUnreachableError/);
+assert.match(webPos, /kickCashDrawerAfterSale/);
 
 console.log('order-to-cart.test.ts OK');

@@ -34,6 +34,58 @@ export function systemUpdateMessage(locale?: Locale): string {
   return translate(locale ?? panelLocale(), 'systemUpdateWait');
 }
 
+export function apiTryAgainMessage(locale?: Locale): string {
+  return translate(locale ?? panelLocale(), 'apiErrorTryAgain');
+}
+
+/** Axios / proxy noise — never show these strings to staff in the panel. */
+export function isAxiosStatusMessage(message: string): boolean {
+  return /request failed with status code \d{3}/i.test(message.trim());
+}
+
+function looksLikeTechnicalHttpMessage(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  return (
+    isAxiosStatusMessage(text) ||
+    /^5\d{2}(\s|$)/.test(text) ||
+    /bad gateway|service unavailable|gateway timeout/i.test(text)
+  );
+}
+
+/** Map API failures to short, staff-friendly copy (deploy, 5xx, network). */
+export function formatUserFacingApiError(error: unknown, fallback: string, locale?: Locale): string {
+  const loc = locale ?? panelLocale();
+  if (isDeployBlip(error) && deployBlipMatchesClientRing(error)) {
+    return systemUpdateMessage(loc);
+  }
+  const err = error as AxiosLike & { response?: { data?: { error?: string } } };
+  const status = err.response?.status;
+  const apiErr = err.response?.data?.error;
+  if (typeof apiErr === 'string' && apiErr.trim() && !looksLikeTechnicalHttpMessage(apiErr)) {
+    return apiErr.trim();
+  }
+  const msg = String(err.message || '').trim();
+  if (msg && !looksLikeTechnicalHttpMessage(msg) && !isAxiosStatusMessage(msg)) {
+    return msg;
+  }
+  if (status != null && status >= 500) {
+    return apiTryAgainMessage(loc);
+  }
+  if (!err.response) {
+    const code = String(err.code || '');
+    if (
+      code === 'ERR_NETWORK' ||
+      code === 'ERR_BAD_RESPONSE' ||
+      code === 'ECONNRESET' ||
+      /failed to fetch|network error|load failed/i.test(msg)
+    ) {
+      return apiTryAgainMessage(loc);
+    }
+  }
+  return fallback;
+}
+
 export function isHtmlErrorBody(data: unknown): boolean {
   if (typeof data !== 'string') return false;
   const text = data.trim();
@@ -59,6 +111,34 @@ function contentTypeLooksHtml(headers: Record<string, unknown> | undefined): boo
 }
 
 /** 502/503/504, network drop, HTML/Caddy body — not 401/403/422 business errors. */
+const CLIENT_DEPLOY_RING =
+  typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEPLOY_RING
+    ? String(import.meta.env.VITE_DEPLOY_RING).trim()
+    : '';
+
+function responseDeployRing(error: unknown): string | null {
+  const err = error as { response?: { headers?: Record<string, unknown> } };
+  const headers = err.response?.headers;
+  if (!headers) return null;
+  const raw = headers['x-reborn-deploy-ring'] ?? headers['X-Reborn-Deploy-Ring'];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+/** Ignore deploy blips from another ring (e.g. misconfigured API URL). */
+export function deployBlipMatchesClientRing(error: unknown): boolean {
+  const serverRing = responseDeployRing(error);
+  if (!serverRing) return true;
+  const clientRing = CLIENT_DEPLOY_RING || inferDeployRingFromHostname();
+  return serverRing === clientRing;
+}
+
+function inferDeployRingFromHostname(): string {
+  if (typeof window === 'undefined') return 'production';
+  const host = window.location.hostname.toLowerCase();
+  if (host.includes('chaslay.com')) return 'staging';
+  return 'production';
+}
+
 export function isDeployBlip(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const err = error as AxiosLike;
@@ -102,28 +182,37 @@ function openDeployToastWindow(now = Date.now()): void {
   deployWindowUntil = now + DEPLOY_TOAST_WINDOW_MS;
 }
 
-/** One toast for a burst of deploy 502s — same id, same window. */
-export function notifyDeployBlip(): string {
-  openDeployToastWindow();
+function showSystemUpdateToast(opts?: Parameters<typeof toast.loading>[1]): string {
   const message = systemUpdateMessage();
-  toast.error(message, { id: DEPLOY_TOAST_ID, duration: 8000 });
-  return message;
+  return toast.loading(message, { id: DEPLOY_TOAST_ID, duration: 8000, ...opts });
+}
+
+/** One toast for a burst of deploy 502s — same id, same window. */
+export function notifyDeployBlip(error?: unknown): string {
+  if (error != null && !deployBlipMatchesClientRing(error)) {
+    return systemUpdateMessage();
+  }
+  openDeployToastWindow();
+  showSystemUpdateToast();
+  return systemUpdateMessage();
 }
 
 export function toastLoadError(error: unknown, fallback: string): void {
-  if (isDeployBlip(error)) {
-    notifyDeployBlip();
+  if (isDeployBlip(error) && deployBlipMatchesClientRing(error)) {
+    notifyDeployBlip(error);
     return;
   }
-  const err = error as { response?: { data?: { error?: string } } };
-  const apiError = err.response?.data?.error;
-  toast.error(typeof apiError === 'string' && apiError.trim() ? apiError : fallback);
+  toast.error(formatUserFacingApiError(error, fallback));
 }
 
 function looksLikeLoadFailedToast(message: unknown): boolean {
   const text = typeof message === 'string' ? message : '';
-  return /failed to load|could not load|cannot load|can't load|couldn't load|échec du chargement|impossible de charger|konnten nicht geladen|konnte nicht geladen|nicht geladen werden/i.test(
-    text
+  return (
+    isAxiosStatusMessage(text) ||
+    looksLikeTechnicalHttpMessage(text) ||
+    /failed to load|could not load|cannot load|can't load|couldn't load|échec du chargement|impossible de charger|konnten nicht geladen|konnte nicht geladen|nicht geladen werden/i.test(
+      text
+    )
   );
 }
 
@@ -133,8 +222,11 @@ export function installDeployToastGuard(): void {
   toastGuardInstalled = true;
   const original = toast.error.bind(toast);
   toast.error = ((message, opts) => {
-    if (isDeployToastWindowOpen() && looksLikeLoadFailedToast(message)) {
-      return original(systemUpdateMessage(), { ...opts, id: DEPLOY_TOAST_ID });
+    if (typeof message === 'string' && looksLikeLoadFailedToast(message)) {
+      if (isDeployToastWindowOpen()) {
+        return showSystemUpdateToast({ ...opts, id: DEPLOY_TOAST_ID });
+      }
+      return original(apiTryAgainMessage(), opts);
     }
     return original(message, opts);
   }) as typeof toast.error;

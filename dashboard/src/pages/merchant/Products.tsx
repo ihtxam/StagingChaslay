@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   ChevronDown,
@@ -19,6 +20,7 @@ import {
   Barcode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastInfo } from '@/lib/toast-notify';
 import { parseExtraBarcodes, sanitizeBarcodeFieldValue, stripScannerControlChars } from '@/lib/product-scan-codes';
 import { BARCODE_FIELD_INPUT_CLASS } from '@/lib/barcode-wedge';
 import ProductInventoryExpiryPanel from '@/components/merchant/ProductInventoryExpiryPanel';
@@ -34,8 +36,16 @@ import {
   type CateringPricingMode,
 } from '@/lib/catering';
 import HqCatalogBadge from '@/components/merchant/HqCatalogBadge';
+import HqPendingCatalogBanner from '@/components/merchant/HqPendingCatalogBanner';
+import {
+  panelCatalogListParams,
+  shouldShowHqCatalogBadges,
+  shouldUseBranchCatalogPanel,
+} from '@/lib/panel-scope-nav';
+import { PANEL_LOCATION_SCOPE_EVENT } from '@/lib/panel-location-scope';
 import { useLocationStore } from '@/store/location';
 import { moneyDigitCount, normalizeMoneyInput, parseMoney } from '@/lib/money';
+import { useLockPageScroll } from '@/lib/useLockPageScroll';
 import { DragHandle, SortableContainer, SortableRow } from '@/components/SortableList';
 import { BarcodePreview } from '@/components/BarcodePreview';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
@@ -147,11 +157,13 @@ interface Product {
   }>;
   cateringConfig?: Record<string, unknown>;
   dietaryTags?: string[];
+  locationId?: string | null;
 }
 
 interface Category {
   id: string;
   name: string;
+  locationId?: string | null;
   visibility?: CatalogVisibility;
 }
 
@@ -194,6 +206,8 @@ type FormState = {
   visibility: CatalogVisibility;
   similarProductIds: string[];
   dietaryTags: DietaryTagId[];
+  /** Per-location catalog: owning branch (HQ create/edit). */
+  ownerLocationId: string;
 };
 
 const emptySlot = (name = 'Main'): ComboSlotForm => ({
@@ -203,6 +217,8 @@ const emptySlot = (name = 'Main'): ComboSlotForm => ({
   maxPick: 1,
   options: [],
 });
+
+const PRODUCT_EDITOR_FORM_ID = 'merchant-product-editor-form';
 
 const emptyForm = (): FormState => ({
   name: '',
@@ -240,6 +256,7 @@ const emptyForm = (): FormState => ({
   visibility: { ...DEFAULT_CATALOG_VISIBILITY },
   similarProductIds: [],
   dietaryTags: [],
+  ownerLocationId: '',
 });
 
 const PRODUCTS_PAGE_SIZE = 50;
@@ -359,7 +376,16 @@ type ProductTypeUi = 'standard' | 'combo' | 'open_price' | 'weighed';
 
 export default function Products() {
   const { t } = useI18n();
-  const { locationId } = useLocationStore();
+  const { locationId, isHqView, locations, limits } = useLocationStore();
+  const panelScopeNavInput = {
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+    isHqView,
+    locationId,
+  };
+  const catalogListParams = panelCatalogListParams(panelScopeNavInput);
+  const branchCatalogPanel = shouldUseBranchCatalogPanel(panelScopeNavInput);
+  const showHqCatalogBadges = shouldShowHqCatalogBadges(panelScopeNavInput);
   const [hqProductIds, setHqProductIds] = useState<Set<string>>(new Set());
   const productTypeLabel = (product: Product) => {
     if (product.productType === 'combo' || (product.comboItems && product.comboItems.length)) {
@@ -395,6 +421,7 @@ export default function Products() {
   const [reordering, setReordering] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
+  const productEditorScrollRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -429,6 +456,11 @@ export default function Products() {
   const [importProgressOpen, setImportProgressOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<CatalogImportProgress | null>(null);
   const [importFileName, setImportFileName] = useState('');
+  const [catalogScopeMode, setCatalogScopeMode] = useState<'per_location' | 'shared'>(
+    'per_location'
+  );
+  const showCatalogBranchPicker =
+    catalogScopeMode === 'per_location' && locations.length > 1 && isHqView;
   const [productLimit, setProductLimit] = useState<{
     maxProducts: number | null;
     currentCount: number;
@@ -440,16 +472,35 @@ export default function Products() {
     productLimit?.maxProducts != null &&
     (productLimit.currentCount ?? products.length) >= productLimit.maxProducts;
 
+  const defaultOwnerLocationId = useMemo(() => {
+    if (locationId && (!isHqView || branchCatalogPanel)) return locationId;
+    if (locations.length === 1) return locations[0]?.id || '';
+    return '';
+  }, [locationId, isHqView, branchCatalogPanel, locations]);
+
+  const resolvedOwnerLocationId = showCatalogBranchPicker
+    ? form.ownerLocationId
+    : defaultOwnerLocationId;
+
+  const editorCategories = useMemo(() => {
+    if (catalogScopeMode !== 'per_location' || !resolvedOwnerLocationId) return categories;
+    return categories.filter(
+      (c) => !c.locationId || c.locationId === resolvedOwnerLocationId
+    );
+  }, [categories, catalogScopeMode, resolvedOwnerLocationId]);
+
   const productLimitLabel = useMemo(() => {
     if (!productLimit) return null;
-    const count = productLimit.currentCount ?? products.length;
+    const count = branchCatalogPanel
+      ? products.length
+      : productLimit.currentCount ?? products.length;
     if (productLimit.maxProducts == null) {
       return t('productCountUnlimited').replace('{n}', String(count));
     }
     return t('productCountLimited')
       .replace('{n}', String(count))
       .replace('{max}', String(productLimit.maxProducts));
-  }, [productLimit, products.length, t]);
+  }, [branchCatalogPanel, productLimit, products.length, t]);
 
   const onUploadProductImage = async (file: File | null) => {
     if (!file) return;
@@ -483,7 +534,9 @@ export default function Products() {
         let total = 0;
         let limitInfo: typeof productLimit = null;
         for (;;) {
-          const res = await api.get('/merchant/products', { params: { limit: pageSize, page } });
+          const res = await api.get('/merchant/products', {
+            params: { limit: pageSize, page, ...catalogListParams },
+          });
           const batch = (res.data.products || []) as Product[];
           all = all.concat(batch);
           total = Number(res.data.pagination?.total) || all.length;
@@ -496,7 +549,9 @@ export default function Products() {
 
       const [p, c, m] = await Promise.all([
         fetchAllProducts(),
-        api.get('/merchant/categories').catch(() => ({ data: { categories: [] } })),
+        api
+          .get('/merchant/categories', { params: catalogListParams })
+          .catch(() => ({ data: { categories: [] } })),
         api.get('/merchant/modifiers').catch(() => ({ data: { groups: [] } })),
       ]);
       setProducts(p.products || []);
@@ -527,6 +582,7 @@ export default function Products() {
         const setRes = await api.get('/merchant/settings');
         const s = setRes.data?.settings;
         setCateringLicensed(isCateringLicensed(s));
+        setCatalogScopeMode(s?.catalogScopeMode === 'shared' ? 'shared' : 'per_location');
         setStoreName(s?.name || '');
         const ps = s?.posPrintSettings || {};
         setLabelOpts((prev) => ({
@@ -569,10 +625,19 @@ export default function Products() {
         setEditionFeatures(Array.isArray(feats) ? feats : null);
       })
       .catch(() => undefined);
-  }, []);
+  }, [locationId, isHqView, locations.length, limits?.maxLocations]);
 
   useEffect(() => {
-    if (!locationId) {
+    const reload = () => {
+      setLoading(true);
+      void load();
+    };
+    window.addEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
+    return () => window.removeEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
+  }, [locationId, isHqView, locations.length, limits?.maxLocations]);
+
+  useEffect(() => {
+    if (!showHqCatalogBadges || !locationId) {
       setHqProductIds(new Set());
       return;
     }
@@ -586,7 +651,7 @@ export default function Products() {
         setHqProductIds(ids);
       })
       .catch(() => setHqProductIds(new Set()));
-  }, [locationId]);
+  }, [locationId, showHqCatalogBadges]);
 
   const categoryName = (categoryId?: string | null) =>
     categories.find((c) => c.id === categoryId)?.name || t('uncategorized');
@@ -697,6 +762,7 @@ export default function Products() {
     const base = emptyForm();
     setForm({
       ...base,
+      ownerLocationId: showCatalogBranchPicker ? '' : defaultOwnerLocationId,
       specifications: base.specifications.map((spec, i) =>
         i === 0 ? { ...spec, name: t('default') } : spec
       ),
@@ -786,6 +852,7 @@ export default function Products() {
         visibility: normalizeCatalogVisibility(full.visibility),
         similarProductIds: Array.isArray(full.similarProductIds) ? full.similarProductIds : [],
         dietaryTags: normalizeDietaryTags(full.dietaryTags),
+        ownerLocationId: full.locationId || defaultOwnerLocationId,
       });
     } catch {
       const comboSlots = normalizeComboSlotsFromProduct(product.comboItems);
@@ -828,6 +895,7 @@ export default function Products() {
         visibility: normalizeCatalogVisibility(product.visibility),
         similarProductIds: Array.isArray(product.similarProductIds) ? product.similarProductIds : [],
         dietaryTags: normalizeDietaryTags(product.dietaryTags),
+        ownerLocationId: product.locationId || defaultOwnerLocationId,
       });
     }
   };
@@ -841,6 +909,8 @@ export default function Products() {
     setRecipeLines([]);
     setRecipeYield('1');
   };
+
+  useLockPageScroll(modalOpen, productEditorScrollRef);
 
   const linkedModifierGroups = useMemo(
     () =>
@@ -875,10 +945,12 @@ export default function Products() {
         : form.isOpenPrice
           ? 'open_price'
           : 'standard';
+    const ownerLocationId = resolvedOwnerLocationId || undefined;
     return {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       price,
+      ...(ownerLocationId ? { ownerLocationId } : {}),
       cost: form.cost.trim() ? parseMoney(form.cost) : null,
       stock: Math.max(0, Math.floor(Number(form.stock) || 0)),
       sku: form.sku.trim() || undefined,
@@ -979,6 +1051,10 @@ export default function Products() {
     }
     if (!form.categoryId) {
       toast.error(t('selectCategory'));
+      return;
+    }
+    if (showCatalogBranchPicker && !resolvedOwnerLocationId) {
+      toast.error(t('catalogBranchRequired'));
       return;
     }
     if (form.sku.trim().length > SKU_MAX_LEN) {
@@ -1093,7 +1169,7 @@ export default function Products() {
       if (generated > 0) {
         toast.success(t('barcodeGeneratedCount').replace('{n}', String(generated)));
       } else {
-        toast.info(t('barcodeNoneMissing'));
+        toastInfo(t('barcodeNoneMissing'));
       }
       const updated = (res.data.products || []) as Array<{ id: string; barcode: string }>;
       if (editingId) {
@@ -1122,7 +1198,7 @@ export default function Products() {
       if (n > 0) {
         toast.success(t('productPhotosImported').replace('{n}', String(n)));
       } else {
-        toast.info(t('productPhotosNoneMissing'));
+        toastInfo(t('productPhotosNoneMissing'));
       }
       await load();
     } catch (error: any) {
@@ -1358,6 +1434,7 @@ export default function Products() {
 
   return (
     <div className="space-y-3">
+      <HqPendingCatalogBanner />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="page-title">{t('products')}</h1>
@@ -1714,7 +1791,9 @@ export default function Products() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="truncate font-semibold text-lg text-[var(--text)]">{product.name}</h3>
-                      <HqCatalogBadge fromHq={hqProductIds.has(product.id)} />
+                      <HqCatalogBadge
+                        fromHq={showHqCatalogBadges && hqProductIds.has(product.id)}
+                      />
                       <span className="rounded-full bg-[var(--bg-muted)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                         {productTypeLabel(product)}
                       </span>
@@ -1931,9 +2010,10 @@ export default function Products() {
         ) : null}
       </section>
 
-      {modalOpen && (
+      {modalOpen && typeof document !== 'undefined'
+        ? createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-3"
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center overflow-hidden bg-black/50 p-0 sm:p-3 touch-none"
           onClick={closeModal}
           onKeyDown={(e) => {
             if (e.key === 'Escape') closeModal();
@@ -1941,12 +2021,12 @@ export default function Products() {
           role="presentation"
         >
           <div
-            className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl"
+            className="flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl touch-auto"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
               <h2 className="text-base font-semibold">
                 {editingId ? t('editProduct') : t('addProduct')}
               </h2>
@@ -1960,7 +2040,57 @@ export default function Products() {
               </button>
             </div>
 
-            <form onSubmit={onSubmit} noValidate className="space-y-3 px-4 py-3">
+            <div
+              ref={productEditorScrollRef}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 touch-pan-y [-webkit-overflow-scrolling:touch]"
+            >
+            <form
+              id={PRODUCT_EDITOR_FORM_ID}
+              onSubmit={onSubmit}
+              noValidate
+              className="space-y-3"
+            >
+              {showCatalogBranchPicker ? (
+                <Field label={`${t('catalogBelongsToBranch')} *`}>
+                  <select
+                    className="field-input"
+                    value={form.ownerLocationId}
+                    required
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        ownerLocationId: e.target.value,
+                        categoryId:
+                          form.categoryId &&
+                          editorCategories.some((c) => c.id === form.categoryId)
+                            ? form.categoryId
+                            : '',
+                      })
+                    }
+                  >
+                    <option value="">{t('catalogSelectBranch')}</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t('catalogBelongsToBranchHint')}
+                  </p>
+                </Field>
+              ) : null}
+              {!showCatalogBranchPicker &&
+              catalogScopeMode === 'per_location' &&
+              defaultOwnerLocationId &&
+              locations.length > 1 ? (
+                <p className="text-xs text-[var(--text-muted)] rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2">
+                  {t('catalogAddingToBranch').replace(
+                    '{name}',
+                    locations.find((l) => l.id === defaultOwnerLocationId)?.name || ''
+                  )}
+                </p>
+              ) : null}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label={`${t('productName')} *`}>
                   <input
@@ -1978,7 +2108,7 @@ export default function Products() {
                     onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
                   >
                     <option value="">{t('selectCategory')}</option>
-                    {categories.map((c) => (
+                    {editorCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
@@ -3061,26 +3191,32 @@ export default function Products() {
                 </div>
               )}
 
-              <div className="flex gap-2 pt-1 sticky bottom-0 bg-[var(--bg-elevated)] pb-1">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="btn-secondary flex-1"
-                >
-                  {t('cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn-primary flex-1"
-                >
-                  {saving ? t('saving') : editingId ? t('save') : t('createProduct')}
-                </button>
-              </div>
             </form>
+            </div>
+            <div
+              className="flex shrink-0 gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+            >
+              <button
+                type="button"
+                onClick={closeModal}
+                className="btn-secondary flex-1"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="submit"
+                form={PRODUCT_EDITOR_FORM_ID}
+                disabled={saving}
+                className="btn-primary flex-1"
+              >
+                {saving ? t('saving') : editingId ? t('save') : t('createProduct')}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+      )
+        : null}
 
       {showBarcodeTools && printOpen && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setPrintOpen(false)}>
@@ -3381,9 +3517,14 @@ export default function Products() {
           border-radius: 0.375rem;
           border: 1px solid var(--border);
           padding: 0.4rem 0.625rem;
-          font-size: 0.8125rem;
+          font-size: 1rem;
           background: var(--bg-elevated);
           color: var(--text);
+        }
+        @media (min-width: 1024px) {
+          .field-input {
+            font-size: 0.8125rem;
+          }
         }
         .field-input:focus {
           outline: none;

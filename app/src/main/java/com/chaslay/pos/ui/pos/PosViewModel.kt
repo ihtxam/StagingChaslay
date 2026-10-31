@@ -4508,7 +4508,7 @@ class PosViewModel @Inject constructor(
                         PaymentResult.Failure("Enable Adyen terminal in Settings")
                     } else {
                         val askTerminalGratuity =
-                            settings.tipsEnabled && checkout.tipAmount <= 0.001
+                            settings.terminalAskGratuityEnabled && checkout.tipAmount <= 0.001
                         val cardCharge = resolveCardCharge(checkout, roundedTotal)
                         updateExtras {
                             it.copy(

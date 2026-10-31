@@ -88,6 +88,8 @@ unset RESET_STAGING_DB PRODUCTION_DB_FORCE_RESET FORCE_DB_RESET
 export DEPLOY_STACK=${PRODUCTION_DEPLOY_STACK}
 export DEPLOY_PATH=${PRODUCTION_DEPLOY_PATH}
 export CADDYFILE="\${DEPLOY_PATH}/deploy/Caddyfile.rebornsense"
+export SKIP_ANDROID_BRIDGE_BUILD=1
+export SKIP_ANDROID_POS_BUILD=1
 cd "\${DEPLOY_PATH}"
 bash scripts/pre-deploy-sanity-check.sh
 git fetch origin main

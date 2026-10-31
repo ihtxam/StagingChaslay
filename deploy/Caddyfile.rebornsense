@@ -11,6 +11,42 @@ rebornsense.com, www.rebornsense.com {
 }
 
 app.rebornsense.com {
+	# Access log — the record of what users actually got (502s, slow requests).
+	# Lives on the caddy_data volume so it survives container recreates.
+	# Bounded at 20MiB x 5 files.
+	# Caddy redacts Authorization/Cookie itself; the custom credential headers
+	# below carry JWTs and API keys and must be dropped explicitly or they land
+	# on disk in cleartext.
+	log {
+		output file /data/logs/access.log {
+			roll_size 20MiB
+			roll_keep 5
+			roll_keep_for 336h
+		}
+		format filter {
+			wrap json
+			fields {
+				request>headers>X-Webpos-Staff-Access delete
+				request>headers>X-Api-Key delete
+				request>headers>X-Chaslay-Webhook-Secret delete
+				request>headers>X-Phone-Ordering-Secret delete
+				request>headers>X-Webhook-Secret delete
+				request>headers>Cookie delete
+				request>headers>Set-Cookie delete
+				resp_headers>Set-Cookie delete
+				# This host carries bearer-equivalent secrets in the URL itself, which
+				# header redaction does not touch: ?token= / ?secret= on the password
+				# reset and invite pages, /api/auth/reset-password/<token>,
+				# /api/auth/invite/<token>, and the screen tokens in the first path
+				# segment of /api/kiosk, /api/cds, /api/kds, /api/ods and /api/tv.
+				# Caddy applies one filter per field, so a single regexp covers both
+				# shapes: group 1 matches the query form, group 2 the path form, and
+				# the unmatched group expands to empty.
+				request>uri regexp "(?i)((?:token|secret|apikey|api_key|password)=)[^&]*|(/api/auth/(?:reset-password|invite)/|/api/(?:kiosk|cds|kds|ods|tv)/)[^/?]+" "${1}${2}REDACTED"
+			}
+		}
+	}
+
 	handle /receipt/* {
 		redir https://pay.rebornsense.com{uri} permanent
 	}
@@ -83,16 +119,40 @@ order.rebornsense.com {
 		reverse_proxy dashboard:80
 	}
 
+	handle /payment-logos/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /icons/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /brand/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /embed/* {
+		reverse_proxy dashboard:80
+	}
+
 	@shop_spa {
 		not path /api/*
 		not path /assets/*
 		not path /openpage/*
 		not path /downloads/*
 		not path /shop/payments/*
-		not path /*.*
+		not path /payment-logos/*
+		not path /icons/*
+		not path /brand/*
+		not path /embed/*
+		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {
@@ -157,15 +217,39 @@ status.rebornsense.com {
 		reverse_proxy api:3000
 	}
 
+	handle /payment-logos/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /icons/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /brand/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /embed/* {
+		reverse_proxy dashboard:80
+	}
+
 	@shop_spa {
 		not path /api/*
 		not path /assets/*
 		not path /openpage/*
 		not path /downloads/*
-		not path /*.*
+		not path /payment-logos/*
+		not path /icons/*
+		not path /brand/*
+		not path /embed/*
+		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {
@@ -185,15 +269,39 @@ https:// {
 		reverse_proxy api:3000
 	}
 
+	handle /payment-logos/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /icons/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /brand/* {
+		reverse_proxy dashboard:80
+	}
+
+	handle /embed/* {
+		reverse_proxy dashboard:80
+	}
+
 	@shop_spa {
 		not path /api/*
 		not path /assets/*
 		not path /openpage/*
 		not path /downloads/*
-		not path /*.*
+		not path /payment-logos/*
+		not path /icons/*
+		not path /brand/*
+		not path /embed/*
+		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {

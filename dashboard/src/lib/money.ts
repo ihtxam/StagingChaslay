@@ -77,13 +77,14 @@ export function channelTaxRateFromMerchant(
   channel?: string | null
 ): number {
   const vat = merchant.vatRate;
-  const ch = String(channel || 'takeaway').toLowerCase();
+  const ch = String(channel || 'takeaway').toLowerCase().replace(/-/g, '_');
   if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
   if (ch === 'delivery') {
     const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
     if (delivery > 0) return delivery;
     return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
   }
+  // takeaway, in_store (retail counter), and default → reduced / standard POS rate (e.g. 2.6% CH)
   return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
 }
 

@@ -12,8 +12,16 @@ import {
   validatePlatformAdyenApiKey,
 } from "@/lib/platform-adyen-credentials";
 import {
+  PLATFORM_LEGAL_HTML_KEYS,
+  PLATFORM_LEGAL_SLUG_TO_ID,
+  defaultPlatformLegalPageTitle,
+  normalizePlatformLegalHtml,
+  platformLegalHtmlById,
+} from "@/lib/platform-legal-content";
+import {
   PLATFORM_LEGAL_SETTING_KEYS,
-  resolvePlatformLegalUrls,
+  resolvePlatformLegalSettings,
+  type PlatformLegalSettings,
   type PlatformLegalUrls,
 } from "@/lib/platform-legal-urls";
 import { DEFAULT_PLATFORM_FROM_NAME, resolveMailcoFromName } from "@/lib/mailco-payload";
@@ -23,6 +31,10 @@ import {
   resolveDesktopBranding,
   type DesktopBranding,
 } from "@/lib/desktop-branding";
+import {
+  normalizePlatformMerchantAboutHtml,
+  PLATFORM_MERCHANT_ABOUT_KEY,
+} from "@/lib/platform-merchant-about";
 
 export {
   adyenDropinEnvironment,
@@ -52,6 +64,21 @@ export const PLATFORM_MAILCO_KEYS = {
   templateSlug: "mailco_template_slug",
   emailPrimary: "platform_email_primary",
 } as const;
+
+export const PLATFORM_ESENDEX_KEYS = {
+  user: "esendex_api_user",
+  password: "esendex_api_password",
+  accountRef: "esendex_account_ref",
+  originator: "esendex_default_originator",
+} as const;
+
+export type PlatformEsendexSettings = {
+  user?: string | null;
+  password?: string | null;
+  apiKey?: string | null;
+  accountRef?: string | null;
+  originator?: string | null;
+};
 
 export type PlatformEmailPrimary = "mailco" | "brevo";
 
@@ -347,6 +374,69 @@ export class PlatformSettingsService {
     return this.getMailcoSettingsPublic();
   }
 
+  static async getEsendexSettings(): Promise<PlatformEsendexSettings> {
+    const rows = await this.getMany(Object.values(PLATFORM_ESENDEX_KEYS));
+    return {
+      user: rows[PLATFORM_ESENDEX_KEYS.user],
+      password: rows[PLATFORM_ESENDEX_KEYS.password],
+      apiKey: rows[PLATFORM_ESENDEX_KEYS.password],
+      accountRef: rows[PLATFORM_ESENDEX_KEYS.accountRef],
+      originator: rows[PLATFORM_ESENDEX_KEYS.originator],
+    };
+  }
+
+  static async getEsendexSettingsPublic() {
+    const s = await this.getEsendexSettings();
+    const user = (s.user || process.env.ESENDEX_API_USER || "").trim();
+    const password = (
+      s.password ||
+      process.env.ESENDEX_API_PASSWORD ||
+      process.env.ESENDEX_API_KEY ||
+      ""
+    ).trim();
+    const accountRef = (s.accountRef || process.env.ESENDEX_ACCOUNT_REF || "").trim();
+    const originator = (
+      s.originator ||
+      process.env.ESENDEX_DEFAULT_ORIGINATOR ||
+      "Reborn"
+    ).trim();
+    return {
+      user: user || "",
+      accountRef: accountRef || "",
+      originator: originator.slice(0, 11),
+      passwordMasked: maskSecret(password),
+      passwordSet: !!password,
+      usingEnvFallback: !s.password && !!(process.env.ESENDEX_API_PASSWORD || process.env.ESENDEX_API_KEY),
+      configured: !!(user && password && accountRef),
+    };
+  }
+
+  static async updateEsendexSettings(input: {
+    user?: string;
+    password?: string;
+    apiKey?: string;
+    accountRef?: string;
+    originator?: string;
+  }) {
+    if (input.user !== undefined) {
+      await this.set(PLATFORM_ESENDEX_KEYS.user, input.user.trim() || null);
+    }
+    if (input.accountRef !== undefined) {
+      await this.set(PLATFORM_ESENDEX_KEYS.accountRef, input.accountRef.trim() || null);
+    }
+    if (input.originator !== undefined) {
+      await this.set(
+        PLATFORM_ESENDEX_KEYS.originator,
+        input.originator.replace(/[^A-Za-z0-9 ]/g, "").trim().slice(0, 11) || null
+      );
+    }
+    const secret = input.password ?? input.apiKey;
+    if (secret !== undefined && secret.trim() && !secret.includes("••••")) {
+      await this.set(PLATFORM_ESENDEX_KEYS.password, secret.trim());
+    }
+    return this.getEsendexSettingsPublic();
+  }
+
   static async getPlatformEmailPrimary(): Promise<PlatformEmailPrimary> {
     const s = await this.getMailcoSettings();
     return this.normalizeEmailPrimary(s.emailPrimary || process.env.PLATFORM_EMAIL_PRIMARY);
@@ -534,30 +624,112 @@ export class PlatformSettingsService {
     }
   }
 
-  static async getPlatformLegalUrls(): Promise<PlatformLegalUrls> {
-    const rows = await this.getMany(Object.values(PLATFORM_LEGAL_SETTING_KEYS));
-    return resolvePlatformLegalUrls({
+  private static async loadPlatformLegalRaw() {
+    const keys = [
+      ...Object.values(PLATFORM_LEGAL_SETTING_KEYS),
+      ...Object.values(PLATFORM_LEGAL_HTML_KEYS),
+    ];
+    const rows = await this.getMany(keys);
+    return {
       privacyUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.privacyUrl],
       termsUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.termsUrl],
       cookiesUrl: rows[PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl],
-    });
+      privacyHtml: rows[PLATFORM_LEGAL_HTML_KEYS.privacy],
+      termsHtml: rows[PLATFORM_LEGAL_HTML_KEYS.terms],
+      cookiesHtml: rows[PLATFORM_LEGAL_HTML_KEYS.cookies],
+    };
   }
 
+  static async getPlatformLegalSettings(): Promise<PlatformLegalSettings> {
+    const raw = await this.loadPlatformLegalRaw();
+    return resolvePlatformLegalSettings(raw);
+  }
+
+  static async getPlatformLegalUrls(): Promise<PlatformLegalUrls> {
+    const settings = await this.getPlatformLegalSettings();
+    return {
+      origin: settings.origin,
+      privacy: settings.privacy,
+      terms: settings.terms,
+      cookies: settings.cookies,
+    };
+  }
+
+  static async updatePlatformLegalSettings(input: {
+    privacyUrl?: string;
+    termsUrl?: string;
+    cookiesUrl?: string;
+    privacy?: string;
+    terms?: string;
+    cookies?: string;
+    privacyHtml?: string;
+    termsHtml?: string;
+    cookiesHtml?: string;
+  }): Promise<PlatformLegalSettings> {
+    const privacyUrl = input.privacyUrl ?? input.privacy;
+    const termsUrl = input.termsUrl ?? input.terms;
+    const cookiesUrl = input.cookiesUrl ?? input.cookies;
+
+    if (privacyUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.privacyUrl, String(privacyUrl).trim() || null);
+    }
+    if (termsUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.termsUrl, String(termsUrl).trim() || null);
+    }
+    if (cookiesUrl !== undefined) {
+      await this.set(PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl, String(cookiesUrl).trim() || null);
+    }
+    if (input.privacyHtml !== undefined) {
+      await this.set(
+        PLATFORM_LEGAL_HTML_KEYS.privacy,
+        normalizePlatformLegalHtml(input.privacyHtml) || null
+      );
+    }
+    if (input.termsHtml !== undefined) {
+      await this.set(
+        PLATFORM_LEGAL_HTML_KEYS.terms,
+        normalizePlatformLegalHtml(input.termsHtml) || null
+      );
+    }
+    if (input.cookiesHtml !== undefined) {
+      await this.set(
+        PLATFORM_LEGAL_HTML_KEYS.cookies,
+        normalizePlatformLegalHtml(input.cookiesHtml) || null
+      );
+    }
+    return this.getPlatformLegalSettings();
+  }
+
+  /** @deprecated use updatePlatformLegalSettings */
   static async updatePlatformLegalUrls(input: {
     privacyUrl?: string;
     termsUrl?: string;
     cookiesUrl?: string;
   }): Promise<PlatformLegalUrls> {
-    if (input.privacyUrl !== undefined) {
-      await this.set(PLATFORM_LEGAL_SETTING_KEYS.privacyUrl, input.privacyUrl.trim() || null);
-    }
-    if (input.termsUrl !== undefined) {
-      await this.set(PLATFORM_LEGAL_SETTING_KEYS.termsUrl, input.termsUrl.trim() || null);
-    }
-    if (input.cookiesUrl !== undefined) {
-      await this.set(PLATFORM_LEGAL_SETTING_KEYS.cookiesUrl, input.cookiesUrl.trim() || null);
-    }
-    return this.getPlatformLegalUrls();
+    const settings = await this.updatePlatformLegalSettings(input);
+    return {
+      origin: settings.origin,
+      privacy: settings.privacy,
+      terms: settings.terms,
+      cookies: settings.cookies,
+    };
+  }
+
+  static async getPlatformLegalPageBySlug(pageSlug: string): Promise<{
+    slug: string;
+    title: string;
+    htmlContent: string;
+  } | null> {
+    const id = PLATFORM_LEGAL_SLUG_TO_ID[pageSlug];
+    if (!id) return null;
+    const settings = await this.getPlatformLegalSettings();
+    const htmlContent = platformLegalHtmlById(settings, id);
+    if (!normalizePlatformLegalHtml(htmlContent)) return null;
+    return {
+      slug: pageSlug,
+      title: defaultPlatformLegalPageTitle(id),
+      htmlContent,
+    };
   }
 
   static async getDesktopBranding(): Promise<DesktopBranding> {
@@ -604,5 +776,16 @@ export class PlatformSettingsService {
       );
     }
     return this.getDesktopBranding();
+  }
+
+  static async getMerchantAboutHtml(): Promise<string> {
+    const stored = await this.get(PLATFORM_MERCHANT_ABOUT_KEY);
+    return normalizePlatformMerchantAboutHtml(stored);
+  }
+
+  static async updateMerchantAboutHtml(html: string): Promise<string> {
+    const trimmed = String(html ?? "").trim();
+    await this.set(PLATFORM_MERCHANT_ABOUT_KEY, trimmed || null);
+    return this.getMerchantAboutHtml();
   }
 }

@@ -196,7 +196,7 @@ export const merchants = pgTable(
      * Global online-shop appearance / SEO:
      * { brandColor, metaTitle: {en,fr,de,it}, metaDescription, gaMeasurementId, faviconUrl }
      */
-    shopSiteSettings: json("shop_site_settings").$type<Record<string, unknown> | null>(),
+    shopSiteSettings: jsonb("shop_site_settings").$type<Record<string, unknown> | null>(),
     latitude: decimal("latitude", { precision: 10, scale: 7 }),
     longitude: decimal("longitude", { precision: 10, scale: 7 }),
     pickupEtaMinutes: integer("pickup_eta_minutes").default(25),
@@ -213,6 +213,14 @@ export const merchants = pgTable(
      * instead of the flat delivery_menu_markup.
      */
     categoryPricingEnabled: boolean("category_pricing_enabled").default(false).notNull(),
+    /**
+     * Multi-location catalog ownership:
+     * per_location (default) — products/categories belong to one branch;
+     * shared — merchant-wide master menu with optional HQ push to branches.
+     */
+    catalogScopeMode: varchar("catalog_scope_mode", { length: 20 })
+      .default("per_location")
+      .notNull(),
     /** Driver pay: hourly | per_order | both */
     deliveryDriverPayMode: varchar("delivery_driver_pay_mode", { length: 20 })
       .default("both")
@@ -262,12 +270,25 @@ export const merchants = pgTable(
     giftCardSettings: json("gift_card_settings").$type<Record<string, unknown> | null>(),
     /** Paid gift cards addon (reseller/superadmin extra). */
     giftCardAddonEnabled: boolean("gift_card_addon_enabled").default(false).notNull(),
+    /** Paid Esendex SMS addon (OTP, transactional alerts, marketing). */
+    smsAddonEnabled: boolean("sms_addon_enabled").default(false).notNull(),
+    /** starter | growth | pro — monthly SMS allowance. */
+    smsTier: varchar("sms_tier", { length: 20 }).default("starter").notNull(),
+    /** Billable unit price per GSM segment in Rappen (default 15 = CHF 0.15). */
+    smsUnitPriceCents: integer("sms_unit_price_cents").default(15).notNull(),
+    /**
+     * SMS templates + event toggles:
+     * { senderName, defaultCountry, events, templates }
+     */
+    smsSettings: jsonb("sms_settings").$type<Record<string, unknown> | null>(),
     /** Fiskaly SIGN DE / SIGN FR merchant credentials */
-    fiskalySettings: json("fiskaly_settings").$type<Record<string, unknown> | null>(),
+    fiskalySettings: jsonb("fiskaly_settings").$type<Record<string, unknown> | null>(),
     /** Como Sense loyalty — merchant API key + branch/POS ids (secrets stay server-side). */
-    comoSettings: json("como_settings").$type<Record<string, unknown> | null>(),
+    comoSettings: jsonb("como_settings").$type<Record<string, unknown> | null>(),
     /** Phone ordering — public number, hours, Twilio/generic webhook secret. */
-    phoneOrderingSettings: json("phone_ordering_settings").$type<Record<string, unknown> | null>(),
+    phoneOrderingSettings: jsonb("phone_ordering_settings").$type<Record<string, unknown> | null>(),
+    /** Paid phone ordering addon (desk + inbound SMS/voice). */
+    phoneOrderingAddonEnabled: boolean("phone_ordering_addon_enabled").default(false).notNull(),
     /** Fixed CHF surcharge added to online card checkouts */
     onlineCardFeeFixed: decimal("online_card_fee_fixed", { precision: 10, scale: 2 }).default("0"),
     /** Percent surcharge on (subtotal+tax+delivery+tip) for online card checkouts */
@@ -329,15 +350,15 @@ export const merchants = pgTable(
       .default(false)
       .notNull(),
     aiWebSeoAddonEnabled: boolean("ai_web_seo_addon_enabled").default(false).notNull(),
-    marketingAutomationSettings: json("marketing_automation_settings").$type<
+    marketingAutomationSettings: jsonb("marketing_automation_settings").$type<
       MarketingAutomationSettings | null
     >(),
-    smartSegmentsSettings: json("smart_segments_settings").$type<SmartSegmentsSettings | null>(),
-    aiCoachCache: json("ai_coach_cache").$type<AiCoachCache | null>(),
-    googleReputationSettings: json("google_reputation_settings").$type<
+    smartSegmentsSettings: jsonb("smart_segments_settings").$type<SmartSegmentsSettings | null>(),
+    aiCoachCache: jsonb("ai_coach_cache").$type<AiCoachCache | null>(),
+    googleReputationSettings: jsonb("google_reputation_settings").$type<
       GoogleReputationSettings | null
     >(),
-    aiWebSeoSettings: json("ai_web_seo_settings").$type<AiWebSeoSettings | null>(),
+    aiWebSeoSettings: jsonb("ai_web_seo_settings").$type<AiWebSeoSettings | null>(),
     /**
      * Paid Reborn Screens (digital menu boards). Superadmin/reseller only — TVs do not consume POS seats.
      */
@@ -356,12 +377,12 @@ export const merchants = pgTable(
      * Self-order kiosk configuration:
      * { accessToken, promoSlides, enabledLanguages, terminalId, tableMode, ... }
      */
-    kioskSettings: json("kiosk_settings").$type<KioskSettings | null>(),
+    kioskSettings: jsonb("kiosk_settings").$type<KioskSettings | null>(),
     /**
      * Customer-facing display (CDS) for dual-screen tills:
      * { accessToken, promoSlides, slideIntervalSec, theme, enabled }
      */
-    customerDisplaySettings: json("customer_display_settings").$type<CustomerDisplaySettings | null>(),
+    customerDisplaySettings: jsonb("customer_display_settings").$type<CustomerDisplaySettings | null>(),
     /** Paid Just Eat / JET Connect order integration addon. */
     justEatAddonEnabled: boolean("just_eat_addon_enabled").default(false).notNull(),
     /** Paid Uber Eats order integration addon. */
@@ -454,12 +475,12 @@ export const merchants = pgTable(
      * Time-based product pricing windows:
      * { enabled, slots: [{ id, start, end, label? }] }
      */
-    timeSlotPricingSettings: json("time_slot_pricing_settings").$type<Record<string, unknown> | null>(),
+    timeSlotPricingSettings: jsonb("time_slot_pricing_settings").$type<Record<string, unknown> | null>(),
     /**
      * Pizza maker templates:
      * { templates: [{ id, name, portionType, steps, quantityLevels, freeTopping*, linkedProductIds }] }
      */
-    pizzaBuilderSettings: json("pizza_builder_settings").$type<Record<string, unknown> | null>(),
+    pizzaBuilderSettings: jsonb("pizza_builder_settings").$type<Record<string, unknown> | null>(),
     /**
      * Just Eat / Uber Eats credentials + toggles:
      * { justEat: { enabled, testMode, storeId, apiKey, webhookSecret, autoAccept }, uberEats: { ... } }
@@ -469,7 +490,7 @@ export const merchants = pgTable(
      * Bexio / Odoo credentials, account mapping, last sync metadata:
      * { bexio: { ... }, odoo: { ... } }
      */
-    accountingIntegrationSettings: json("accounting_integration_settings").$type<
+    accountingIntegrationSettings: jsonb("accounting_integration_settings").$type<
       Record<string, unknown> | null
     >(),
     status: varchar("status", { length: 50 }).default("active").notNull(), // active, suspended, trial, expired
@@ -488,7 +509,7 @@ export const merchants = pgTable(
      * Reseller-hidden sidebar entries for this merchant (group ids + route paths).
      * Example: ["cms", "customers", "/merchant/online-shop"]
      */
-    panelNavHidden: json("panel_nav_hidden").$type<string[] | null>(),
+    panelNavHidden: jsonb("panel_nav_hidden").$type<string[] | null>(),
     /** Reseller shop commission % on completed web_shop order subtotals (null/0 = off). */
     shopCommissionPercent: decimal("shop_commission_percent", { precision: 6, scale: 3 }),
     /** Assigned POS edition / feature pack (null = legacy full access) */
@@ -504,6 +525,8 @@ export const merchants = pgTable(
     inviteTokenHash: varchar("invite_token_hash", { length: 64 }),
     inviteTokenExpiresAt: timestamp("invite_token_expires_at"),
     inviteSentAt: timestamp("invite_sent_at"),
+    /** Storefront footer SEO blocks (links, text) rendered on the public shop. */
+    shopSeoFooter: jsonb("shop_seo_footer"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -568,6 +591,8 @@ export const merchantStaff = pgTable(
     passwordHash: varchar("password_hash", { length: 255 }),
     /** Can sign in to merchant backend panel (email + password) */
     canAccessPanel: boolean("can_access_panel").default(false).notNull(),
+    /** When true, /login email+password is blocked even if a password hash exists (POS PIN only). */
+    pinOnly: boolean("pin_only").default(false).notNull(),
     /** After email login: panel (backend), pos (register), or auto (from permissions). */
     loginHome: varchar("login_home", { length: 20 }).default("auto").notNull(),
     /** Adyen POI terminal id preferred by this staff member on WebPOS/waiter. */
@@ -610,14 +635,46 @@ export const locations = pgTable(
     timezone: varchar("timezone", { length: 64 }).default("Europe/Zurich"),
     isDefault: boolean("is_default").default(false).notNull(),
     status: varchar("status", { length: 20 }).default("active").notNull(),
-    settings: json("settings").$type<LocationSettings>(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    settings: jsonb("settings").$type<LocationSettings>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("locations_merchant_id_idx").on(table.merchantId),
     merchantSlugIdx: uniqueIndex("locations_merchant_slug_idx").on(table.merchantId, table.slug),
     merchantDefaultIdx: index("locations_merchant_default_idx").on(table.merchantId, table.isDefault),
+  })
+);
+
+/** Merchant-level Adyen credential profile (optional per-location scope). */
+export const paymentProfiles = pgTable(
+  "payment_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 120 }).notNull(),
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
+    isDefault: boolean("is_default").default(false).notNull(),
+    adyenMerchantAccount: varchar("adyen_merchant_account", { length: 255 }),
+    adyenApiKey: text("adyen_api_key"),
+    adyenClientId: varchar("adyen_client_id", { length: 255 }),
+    adyenStoreReference: varchar("adyen_store_reference", { length: 255 }),
+    adyenHmacKey: text("adyen_hmac_key"),
+    adyenLiveEnvironment: boolean("adyen_live_environment").default(false).notNull(),
+    adyenLiveUrlPrefix: varchar("adyen_live_url_prefix", { length: 255 }),
+    adyenLiveRegion: varchar("adyen_live_region", { length: 10 }).default("EU").notNull(),
+    adyenUseLegacyEndpoint: boolean("adyen_use_legacy_endpoint").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("payment_profiles_merchant_id_idx").on(table.merchantId),
+    merchantDefaultIdx: index("payment_profiles_merchant_default_idx").on(
+      table.merchantId,
+      table.isDefault
+    ),
   })
 );
 
@@ -632,18 +689,21 @@ export const posStations = pgTable(
     locationId: uuid("location_id")
       .notNull()
       .references(() => locations.id, { onDelete: "cascade" }),
+    paymentProfileId: uuid("payment_profile_id").references(() => paymentProfiles.id, {
+      onDelete: "set null",
+    }),
     name: varchar("name", { length: 120 }).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
     status: varchar("status", { length: 20 }).default("active").notNull(),
-    settings: json("settings")
+    settings: jsonb("settings")
       .$type<{
         kitchenPrinterName?: string | null;
         receiptPrinterName?: string | null;
       }>()
       .default({}),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("pos_stations_merchant_id_idx").on(table.merchantId),
@@ -669,7 +729,7 @@ export const merchantStaffLocations = pgTable(
     locationId: uuid("location_id")
       .notNull()
       .references(() => locations.id, { onDelete: "cascade" }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     staffLocationIdx: uniqueIndex("merchant_staff_locations_staff_location_idx").on(
@@ -693,11 +753,11 @@ export const hqCatalogVersions = pgTable(
       .references(() => merchants.id, { onDelete: "cascade" }),
     version: integer("version").default(1).notNull(),
     name: varchar("name", { length: 255 }).default("HQ Menu").notNull(),
-    payloadJson: json("payload_json").$type<Record<string, unknown>>().default({}).notNull(),
+    payloadJson: jsonb("payload_json").$type<Record<string, unknown>>().default({}).notNull(),
     createdByStaffId: uuid("created_by_staff_id").references(() => merchantStaff.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("hq_catalog_versions_merchant_idx").on(table.merchantId, table.createdAt),
@@ -717,12 +777,12 @@ export const locationCatalogLinks = pgTable(
     hqProductId: uuid("hq_product_id").notNull(),
     localProductId: uuid("local_product_id").references(() => products.id, { onDelete: "set null" }),
     syncStatus: varchar("sync_status", { length: 30 }).default("synced").notNull(),
-    overridesJson: json("overrides_json").$type<Record<string, unknown>>().default({}).notNull(),
+    overridesJson: jsonb("overrides_json").$type<Record<string, unknown>>().default({}).notNull(),
     fromHqVersionId: uuid("from_hq_version_id").references(() => hqCatalogVersions.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     locHqProductIdx: uniqueIndex("location_catalog_links_loc_hq_product_idx").on(
@@ -751,10 +811,10 @@ export const locationProductOverrides = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     priceOverride: decimal("price_override", { precision: 10, scale: 2 }),
-    visibility: json("visibility").$type<{ channels: string[] } | null>(),
+    visibility: jsonb("visibility").$type<{ channels: string[] } | null>(),
     isAvailable: boolean("is_available"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     locProductIdx: uniqueIndex("location_product_overrides_loc_product_idx").on(
@@ -771,9 +831,9 @@ export const pricingBulkJobs = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
-    locationIds: json("location_ids").$type<string[]>().default([]).notNull(),
-    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
-    productIds: json("product_ids").$type<string[]>().default([]).notNull(),
+    locationIds: jsonb("location_ids").$type<string[]>().default([]).notNull(),
+    categoryIds: jsonb("category_ids").$type<string[]>().default([]).notNull(),
+    productIds: jsonb("product_ids").$type<string[]>().default([]).notNull(),
     operation: varchar("operation", { length: 20 }).notNull(),
     valueType: varchar("value_type", { length: 20 }).notNull(),
     value: decimal("value", { precision: 12, scale: 4 }).notNull(),
@@ -783,7 +843,7 @@ export const pricingBulkJobs = pgTable(
       onDelete: "set null",
     }),
     createdByName: varchar("created_by_name", { length: 255 }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("pricing_bulk_jobs_merchant_idx").on(table.merchantId, table.createdAt),
@@ -799,26 +859,26 @@ export const hqMenus = pgTable(
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 120 }).notNull(),
-    channels: json("channels").$type<string[]>().default(["pos", "shop", "qr_table"]).notNull(),
-    daysOfWeek: json("days_of_week").$type<number[]>().default([0, 1, 2, 3, 4, 5, 6]).notNull(),
+    channels: jsonb("channels").$type<string[]>().default(["pos", "shop", "qr_table"]).notNull(),
+    daysOfWeek: jsonb("days_of_week").$type<number[]>().default([0, 1, 2, 3, 4, 5, 6]).notNull(),
     timeStart: varchar("time_start", { length: 5 }).default("00:00").notNull(),
     timeEnd: varchar("time_end", { length: 5 }).default("23:59").notNull(),
     /** daily | weekly | monthly — weekly uses daysOfWeek, monthly uses daysOfMonth */
     scheduleType: varchar("schedule_type", { length: 16 }).default("weekly").notNull(),
-    daysOfMonth: json("days_of_month").$type<number[]>().default([]).notNull(),
-    timeRanges: json("time_ranges").$type<Array<{ start: string; end: string }>>().default([]).notNull(),
-    productPrices: json("product_prices").$type<Record<string, number>>().default({}).notNull(),
+    daysOfMonth: jsonb("days_of_month").$type<number[]>().default([]).notNull(),
+    timeRanges: jsonb("time_ranges").$type<Array<{ start: string; end: string }>>().default([]).notNull(),
+    productPrices: jsonb("product_prices").$type<Record<string, number>>().default({}).notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
-    locationIds: json("location_ids").$type<string[]>().default([]).notNull(),
+    locationIds: jsonb("location_ids").$type<string[]>().default([]).notNull(),
     hqVersionId: uuid("hq_version_id").references(() => hqCatalogVersions.id, {
       onDelete: "set null",
     }),
-    productIds: json("product_ids").$type<string[]>().default([]).notNull(),
-    categoryIds: json("category_ids").$type<string[]>().default([]).notNull(),
+    productIds: jsonb("product_ids").$type<string[]>().default([]).notNull(),
+    categoryIds: jsonb("category_ids").$type<string[]>().default([]).notNull(),
     isActive: boolean("is_active").default(true).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     merchantIdx: index("hq_menus_merchant_idx").on(table.merchantId, table.sortOrder),
@@ -1159,6 +1219,8 @@ export const categories = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    /** When set, category is owned by this branch (per_location catalog mode). */
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
     color: varchar("color", { length: 7 }), // hex color
@@ -1171,7 +1233,7 @@ export const categories = pgTable(
       .default({ channels: ["pos", "shop", "qr_table", "kiosk"] })
       .notNull(),
     /** Optional shop schedule: show category on online shop only during configured days/times. */
-    shopSchedule: json("shop_schedule").$type<Record<string, unknown>>().default({}).notNull(),
+    shopSchedule: jsonb("shop_schedule").$type<Record<string, unknown>>().default({}).notNull(),
     /** When category_pricing_enabled on merchant, apply extra_delivery_price on delivery orders */
     deliveryPricingEnabled: boolean("delivery_pricing_enabled").default(false).notNull(),
     extraDeliveryPrice: decimal("extra_delivery_price", { precision: 10, scale: 2 }).default("0"),
@@ -1182,6 +1244,10 @@ export const categories = pgTable(
   },
   (table) => ({
     merchantIdIdx: index("categories_merchant_id_idx").on(table.merchantId),
+    merchantLocationIdx: index("categories_merchant_location_idx").on(
+      table.merchantId,
+      table.locationId
+    ),
     clientIdIdx: index("categories_client_id_idx").on(table.clientId),
   })
 );
@@ -1193,6 +1259,8 @@ export const products = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    /** When set, product is owned by this branch (per_location catalog mode). */
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "set null" }),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
     name: varchar("name", { length: 255 }).notNull(),
     sku: varchar("sku", { length: 100 }),
@@ -1229,7 +1297,7 @@ export const products = pgTable(
       >()
       .default([]),
     /** Catering / prepackaged menu: guest count, package vs per-person pricing */
-    cateringConfig: json("catering_config").$type<Record<string, unknown>>().default({}),
+    cateringConfig: jsonb("catering_config").$type<Record<string, unknown>>().default({}),
     // [{ id, name, price, saleStatus, isDefault, sortOrder }] size/spec variants
     specifications: json("specifications")
       .$type<
@@ -1258,20 +1326,24 @@ export const products = pgTable(
       .default({ channels: ["pos", "shop", "qr_table", "kiosk"] })
       .notNull(),
     /** Product IDs suggested in online shop cart upsell slider */
-    similarProductIds: json("similar_product_ids").$type<string[]>().default([]),
+    similarProductIds: jsonb("similar_product_ids").$type<string[]>().default([]),
     /** Shop dietary filters: individual_packaging | gluten_free | vegan | vegetarian */
-    dietaryTags: json("dietary_tags").$type<string[]>().default([]),
+    dietaryTags: jsonb("dietary_tags").$type<string[]>().default([]),
     /** Retail catalog brand (optional). */
     brand: varchar("brand", { length: 255 }),
     /** Additional EAN/UPC codes that scan to this product. */
-    extraBarcodes: json("extra_barcodes").$type<string[]>().default([]),
+    extraBarcodes: jsonb("extra_barcodes").$type<string[]>().default([]),
     /** Per-slot prices when merchant time-slot pricing is enabled: { [slotId]: { price?, multiplier? } } */
-    timeSlotPrices: json("time_slot_prices").$type<Record<string, { price?: number; multiplier?: number }>>().default({}),
+    timeSlotPrices: jsonb("time_slot_prices").$type<Record<string, { price?: number; multiplier?: number }>>().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
     merchantIdIdx: index("products_merchant_id_idx").on(table.merchantId),
+    merchantLocationIdx: index("products_merchant_location_idx").on(
+      table.merchantId,
+      table.locationId
+    ),
     barcodeIdx: index("products_barcode_idx").on(table.barcode),
     barcodeUniqueIdx: uniqueIndex("products_merchant_barcode_uidx")
       .on(table.merchantId, table.barcode)
@@ -1383,11 +1455,21 @@ export const customers = pgTable(
     totalSpent: decimal("total_spent", { precision: 10, scale: 2 }).default("0"),
     /** Opt-in for newsletters / marketing (default true when email known from orders) */
     marketingOptIn: boolean("marketing_opt_in").default(true).notNull(),
+    /** Separate consent for marketing SMS (never inferred from email opt-in). */
+    marketingSmsOptIn: boolean("marketing_sms_opt_in").default(false).notNull(),
+    /** Set when the customer verifies their phone via SMS OTP. */
+    phoneVerifiedAt: timestamp("phone_verified_at"),
     /** Denormalized last paid/completed web or POS order time */
     lastOrderAt: timestamp("last_order_at"),
     /** Last automatic reorder-reminder email sent */
     lastReorderReminderAt: timestamp("last_reorder_reminder_at"),
     crmTags: jsonb("crm_tags").$type<string[]>().default([]).notNull(),
+    /** Guest CRM profile fields — added live via column patches, declared here so
+     *  the generated schema matches the database. */
+    allergies: text("allergies"),
+    habits: text("habits"),
+    membershipPlanId: varchar("membership_plan_id", { length: 80 }),
+    photoUrl: varchar("photo_url", { length: 500 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -1490,9 +1572,9 @@ export const orders = pgTable(
     adyenCashierReceiptJson: text("adyen_cashier_receipt_json"),
     notes: text("notes"),
     /** Fiskaly KassenSichV / NF525 signature payload for the receipt */
-    fiskalySignature: json("fiskaly_signature").$type<Record<string, unknown> | null>(),
+    fiskalySignature: jsonb("fiskaly_signature").$type<Record<string, unknown> | null>(),
     /** Como Sense submitPurchase mapping (transaction id / confirmation). */
-    comoLoyalty: json("como_loyalty").$type<Record<string, unknown> | null>(),
+    comoLoyalty: jsonb("como_loyalty").$type<Record<string, unknown> | null>(),
     shippingAddress: text("shipping_address"),
     /** Geocoded destination for delivery map (shop checkout / assign). */
     deliveryLatitude: decimal("delivery_latitude", { precision: 10, scale: 7 }),
@@ -2188,6 +2270,8 @@ export type ReservationSettings = {
   bufferMinutes?: number;
   minPartySize?: number;
   maxPartySize?: number;
+  /** Party size at or above this value: web bookings show call-us message (0/null = off) */
+  largePartyCallThreshold?: number | null;
   /** Guest must book at least this many hours before the slot */
   minHoursBefore?: number;
   /** How far ahead guests can book (days) */
@@ -2213,11 +2297,18 @@ export type ReservationSettings = {
   slotDiscounts?: Array<{
     id: string;
     name: string;
-    percentOff: number;
+    /** percent (default) | free_wine | dine_free (book N pay M) */
+    kind?: "percent" | "free_wine" | "dine_free";
+    percentOff?: number;
+    payCovers?: number;
+    receiveCovers?: number;
     scheduleMode?: "specific_days" | "whole_week";
     daysOfWeek?: string[]; // mon..sun
     timeStart?: string | null; // HH:mm
     timeEnd?: string | null;
+    /** When set, promotion applies only at these slot times (e.g. 19:00, 19:30). */
+    specificTimes?: string[];
+    peekMessage?: string | null;
     enabled?: boolean;
   }>;
   /** Email merchant account on new / updated reservations (default true) */
@@ -2493,7 +2584,7 @@ export const reservations = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-    extras: json("extras").$type<{
+    extras: jsonb("extras").$type<{
       depositAmount?: number | null;
       depositStatus?: "none" | "due" | "collected" | "refunded" | "forfeited";
       quotedWaitMinutes?: number | null;
@@ -2604,6 +2695,9 @@ export const paymentTerminals = pgTable(
     merchantId: uuid("merchant_id")
       .notNull()
       .references(() => merchants.id, { onDelete: "cascade" }),
+    paymentProfileId: uuid("payment_profile_id").references(() => paymentProfiles.id, {
+      onDelete: "set null",
+    }),
     terminalId: varchar("terminal_id", { length: 255 }).notNull().unique(), // Swisspayout / Adyen terminal ID
     terminalName: varchar("terminal_name", { length: 255 }).notNull(),
     serialNumber: varchar("serial_number", { length: 255 }),
@@ -2618,6 +2712,40 @@ export const paymentTerminals = pgTable(
   (table) => ({
     merchantIdIdx: index("payment_terminals_merchant_id_idx").on(table.merchantId),
     terminalIdIdx: uniqueIndex("payment_terminals_terminal_id_idx").on(table.terminalId),
+  })
+);
+
+export const deviceEnrollments = pgTable(
+  "device_enrollments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    deviceId: varchar("device_id", { length: 128 }).notNull(),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "cascade" }),
+    stationId: uuid("station_id").references(() => posStations.id, { onDelete: "set null" }),
+    paymentProfileId: uuid("payment_profile_id")
+      .notNull()
+      .references(() => paymentProfiles.id, { onDelete: "restrict" }),
+    paymentTerminalId: uuid("payment_terminal_id")
+      .notNull()
+      .references(() => paymentTerminals.id, { onDelete: "restrict" }),
+    printSnapshot: jsonb("print_snapshot").$type<Record<string, unknown>>().default({}),
+    enrolledByStaffId: uuid("enrolled_by_staff_id").references(() => merchantStaff.id, {
+      onDelete: "set null",
+    }),
+    enrolledAt: timestamp("enrolled_at", { withTimezone: true }).defaultNow().notNull(),
+    lockEnrollment: boolean("lock_enrollment").default(true).notNull(),
+  },
+  (table) => ({
+    merchantDeviceIdx: uniqueIndex("device_enrollments_merchant_device_idx").on(
+      table.merchantId,
+      table.deviceId
+    ),
+    merchantIdIdx: index("device_enrollments_merchant_id_idx").on(table.merchantId),
   })
 );
 
@@ -2669,8 +2797,8 @@ export const deliveryZipRules = pgTable(
     estimatedMinutes: integer("estimated_minutes").default(45),
     isActive: boolean("is_active").default(true).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     merchantIdIdx: index("delivery_zip_rules_merchant_id_idx").on(table.merchantId),
@@ -2873,10 +3001,12 @@ export const giftCardPurchases = pgTable(
     totalCharged: decimal("total_charged", { precision: 10, scale: 2 }),
     /** pending_shipment | shipped | digital_sent */
     fulfillmentStatus: varchar("fulfillment_status", { length: 30 }),
-    shippedAt: timestamp("shipped_at"),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
     adyenReference: varchar("adyen_reference", { length: 255 }),
     cardId: uuid("card_id").references(() => giftCards.id, { onDelete: "set null" }),
     fulfilledAt: timestamp("fulfilled_at"),
+    /** Schedule a digital voucher to be delivered later instead of immediately. */
+    scheduledDeliverAt: timestamp("scheduled_deliver_at", { withTimezone: true }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -3074,7 +3204,7 @@ export const vouchers = pgTable(
     discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
     minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
     /** Empty = all channels. Otherwise takeaway | delivery | dine_in. */
-    orderTypes: json("order_types").$type<string[]>().default([]).notNull(),
+    orderTypes: jsonb("order_types").$type<string[]>().default([]).notNull(),
     validFrom: timestamp("valid_from", { withTimezone: true }),
     validTo: timestamp("valid_to", { withTimezone: true }),
     isActive: boolean("is_active").default(true).notNull(),
@@ -3334,7 +3464,9 @@ export const merchantsRelations = relations(merchants, ({ many, one }) => ({
   products: many(products),
   customers: many(customers),
   orders: many(orders),
+  paymentProfiles: many(paymentProfiles),
   paymentTerminals: many(paymentTerminals),
+  deviceEnrollments: many(deviceEnrollments),
   paymentTransactions: many(paymentTransactions),
   loyaltyCards: many(loyaltyCards),
   loyaltyTransactions: many(loyaltyTransactions),
@@ -3603,8 +3735,32 @@ export const deliveryZipRulesRelations = relations(deliveryZipRules, ({ one }) =
   merchant: one(merchants, { fields: [deliveryZipRules.merchantId], references: [merchants.id] }),
 }));
 
+export const paymentProfilesRelations = relations(paymentProfiles, ({ one, many }) => ({
+  merchant: one(merchants, { fields: [paymentProfiles.merchantId], references: [merchants.id] }),
+  location: one(locations, { fields: [paymentProfiles.locationId], references: [locations.id] }),
+  terminals: many(paymentTerminals),
+}));
+
 export const paymentTerminalsRelations = relations(paymentTerminals, ({ one }) => ({
   merchant: one(merchants, { fields: [paymentTerminals.merchantId], references: [merchants.id] }),
+  paymentProfile: one(paymentProfiles, {
+    fields: [paymentTerminals.paymentProfileId],
+    references: [paymentProfiles.id],
+  }),
+}));
+
+export const deviceEnrollmentsRelations = relations(deviceEnrollments, ({ one }) => ({
+  merchant: one(merchants, { fields: [deviceEnrollments.merchantId], references: [merchants.id] }),
+  location: one(locations, { fields: [deviceEnrollments.locationId], references: [locations.id] }),
+  station: one(posStations, { fields: [deviceEnrollments.stationId], references: [posStations.id] }),
+  paymentProfile: one(paymentProfiles, {
+    fields: [deviceEnrollments.paymentProfileId],
+    references: [paymentProfiles.id],
+  }),
+  paymentTerminal: one(paymentTerminals, {
+    fields: [deviceEnrollments.paymentTerminalId],
+    references: [paymentTerminals.id],
+  }),
 }));
 
 /** Trackable reservation invite campaigns (Growth SKU). */
@@ -3622,8 +3778,8 @@ export const reservationGrowthCampaigns = pgTable(
     clickCount: integer("click_count").default(0).notNull(),
     bookingCount: integer("booking_count").default(0).notNull(),
     active: boolean("active").default(true).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     merchantCodeUq: uniqueIndex("reservation_growth_campaigns_merchant_code_uq").on(
@@ -3691,6 +3847,105 @@ export const emailSendLog = pgTable(
       table.merchantId,
       table.createdAt
     ),
+  })
+);
+
+/** Outbound SMS log (OTP, transactional, marketing). */
+export const smsMessages = pgTable(
+  "sms_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    campaignId: uuid("campaign_id"),
+    toE164: varchar("to_e164", { length: 20 }).notNull(),
+    type: varchar("type", { length: 20 }).notNull(),
+    event: varchar("event", { length: 60 }).notNull(),
+    body: text("body").notNull(),
+    segments: integer("segments").default(1).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("queued"),
+    providerId: varchar("provider_id", { length: 80 }),
+    providerBatchId: varchar("provider_batch_id", { length: 80 }),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("sms_messages_merchant_idx").on(table.merchantId, table.createdAt),
+    toIdx: index("sms_messages_to_idx").on(table.merchantId, table.toE164),
+    typeIdx: index("sms_messages_type_idx").on(table.merchantId, table.type),
+  })
+);
+
+/** Hashed SMS OTP codes (never store the raw code). */
+export const smsOtps = pgTable(
+  "sms_otps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    phoneE164: varchar("phone_e164", { length: 20 }).notNull(),
+    purpose: varchar("purpose", { length: 20 }).notNull(),
+    codeHash: varchar("code_hash", { length: 64 }).notNull(),
+    meta: jsonb("meta").$type<Record<string, unknown> | null>(),
+    ip: varchar("ip", { length: 64 }),
+    attempts: integer("attempts").default(0).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    lookupIdx: index("sms_otps_lookup_idx").on(table.merchantId, table.phoneE164, table.purpose),
+    createdIdx: index("sms_otps_created_idx").on(table.merchantId, table.createdAt),
+  })
+);
+
+/** Monthly SMS usage per merchant (atomic increment). */
+export const smsUsage = pgTable(
+  "sms_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    periodYm: varchar("period_ym", { length: 7 }).notNull(),
+    sentCount: integer("sent_count").default(0).notNull(),
+    failedCount: integer("failed_count").default(0).notNull(),
+    segmentsBilled: integer("segments_billed").default(0).notNull(),
+    billableCents: integer("billable_cents").default(0).notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantPeriodUq: uniqueIndex("sms_usage_merchant_period_uq").on(table.merchantId, table.periodYm),
+  })
+);
+
+/** Marketing SMS campaigns (parallel to newsletter). */
+export const smsCampaigns = pgTable(
+  "sms_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 200 }).notNull(),
+    body: text("body").notNull(),
+    audience: varchar("audience", { length: 20 }).notNull().default("all"),
+    selectedPhones: jsonb("selected_phones").$type<string[] | null>(),
+    status: varchar("status", { length: 20 }).notNull().default("draft"),
+    recipientCount: integer("recipient_count").default(0).notNull(),
+    sentCount: integer("sent_count").default(0).notNull(),
+    failedCount: integer("failed_count").default(0).notNull(),
+    skippedCount: integer("skipped_count").default(0).notNull(),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdx: index("sms_campaigns_merchant_idx").on(table.merchantId, table.createdAt),
   })
 );
 
@@ -3862,7 +4117,7 @@ export const inventoryLocationStock = pgTable(
       .notNull()
       .references(() => inventoryItems.id, { onDelete: "cascade" }),
     onHand: decimal("on_hand", { precision: 14, scale: 4 }).default("0").notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     locItemIdx: uniqueIndex("inventory_location_stock_loc_item_idx").on(
@@ -3897,8 +4152,8 @@ export const inventoryTransfers = pgTable(
       onDelete: "set null",
     }),
     createdByName: varchar("created_by_name", { length: 255 }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    confirmedAt: timestamp("confirmed_at"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   },
   (table) => ({
     merchantIdx: index("inventory_transfers_merchant_idx").on(table.merchantId, table.createdAt),
@@ -4345,10 +4600,10 @@ export const softwareReleases = pgTable(
     body: text("body").notNull().default(""),
     product: varchar("product", { length: 30 }).notNull().default("all"),
     isPublished: boolean("is_published").notNull().default(true),
-    publishedAt: timestamp("published_at").defaultNow().notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
     createdBySuperadminId: uuid("created_by_superadmin_id"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     publishedIdx: index("software_releases_published_idx").on(table.isPublished, table.publishedAt),
@@ -4425,10 +4680,10 @@ export const publishedPullRequests = pgTable(
     htmlUrl: varchar("html_url", { length: 500 }).notNull().default(""),
     author: varchar("author", { length: 120 }).notNull().default(""),
     baseBranch: varchar("base_branch", { length: 80 }).notNull().default(""),
-    mergedAt: timestamp("merged_at").notNull(),
-    syncedAt: timestamp("synced_at").defaultNow().notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    mergedAt: timestamp("merged_at", { withTimezone: true }).notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     numberIdx: uniqueIndex("published_pull_requests_number_idx").on(table.number),
@@ -4448,3 +4703,53 @@ export const supportTicketMessagesRelations = relations(supportTicketMessages, (
     references: [supportTickets.id],
   }),
 }));
+
+/**
+ * Catering enquiry form submissions from the public shop.
+ * Created in production by a live column patch before it was declared here.
+ */
+export const cateringInquiries = pgTable(
+  "catering_inquiries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    phone: varchar("phone", { length: 64 }).notNull(),
+    eventDate: varchar("event_date", { length: 40 }).notNull(),
+    guestCount: varchar("guest_count", { length: 32 }).notNull(),
+    message: text("message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("catering_inquiries_merchant_id_idx").on(table.merchantId),
+  })
+);
+
+/**
+ * Como loyalty transactions submitted alongside an order.
+ * Created in production by a live column patch before it was declared here.
+ */
+export const comoTransactions = pgTable(
+  "como_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantId: uuid("merchant_id")
+      .notNull()
+      .references(() => merchants.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id").notNull(),
+    comoTransactionId: varchar("como_transaction_id", { length: 128 }).notNull(),
+    comoConfirmation: varchar("como_confirmation", { length: 255 }),
+    membershipKey: varchar("membership_key", { length: 255 }),
+    status: varchar("status", { length: 30 }).default("submitted").notNull(),
+    selectedAssets: jsonb("selected_assets").$type<unknown[]>().default([]).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    merchantIdIdx: index("como_transactions_merchant_id_idx").on(table.merchantId),
+    orderIdIdx: index("como_transactions_order_id_idx").on(table.orderId),
+  })
+);

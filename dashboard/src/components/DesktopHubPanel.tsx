@@ -6,6 +6,7 @@ import {
   Clock,
   LayoutGrid,
   Package,
+  Puzzle,
   Settings,
   ShoppingCart,
   Store,
@@ -13,15 +14,18 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import {
-  DESKTOP_HUB_NAV,
+  desktopHubNavForFloorStaff,
   isDesktopHubNavActive,
   normalizeDesktopPath,
 } from '@/lib/desktop-hub';
+import { hasPermission, hasPosHardwareGearAccess, loadWebPosStaffSession } from '@/lib/permissions';
+import { useAuthStore } from '@/store/auth';
 
 const HUB_ICONS = {
   pos: ShoppingCart,
   products: Package,
   categories: LayoutGrid,
+  modifiers: Puzzle,
   reports: BarChart3,
   store: Store,
   timings: Clock,
@@ -38,6 +42,14 @@ export default function DesktopHubPanel({ open, onClose }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const path = normalizeDesktopPath(location.pathname);
+  const authUser = useAuthStore((s) => s.user);
+  const jwtIsOwner = authUser?.role === 'merchant' && authUser?.isOwner !== false;
+  const pinSession = loadWebPosStaffSession();
+  const perms = pinSession?.permissions ?? (authUser?.permissions as import('@/lib/permissions').Permission[]);
+  const canManageSettings = hasPermission(perms, 'MANAGE_SETTINGS', jwtIsOwner);
+  const hardwareOnly =
+    !!pinSession && hasPosHardwareGearAccess(perms, false) && !canManageSettings && !jwtIsOwner;
+  const hubNav = desktopHubNavForFloorStaff(hardwareOnly);
 
   useEffect(() => {
     if (!open) return;
@@ -55,7 +67,7 @@ export default function DesktopHubPanel({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const activeItem = DESKTOP_HUB_NAV.find((item) => isDesktopHubNavActive(path, item.path));
+  const activeItem = hubNav.find((item) => isDesktopHubNavActive(path, item.path));
 
   return createPortal(
     <div className="desktop-hub-panel-root fixed inset-0 z-[205] flex flex-col pt-[calc(2.5rem+env(safe-area-inset-top,0px))]">
@@ -85,7 +97,7 @@ export default function DesktopHubPanel({ open, onClose }: Props) {
               </button>
             </div>
             <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
-              {DESKTOP_HUB_NAV.map((item) => {
+              {hubNav.map((item) => {
                 const Icon = HUB_ICONS[item.id];
                 const active = isDesktopHubNavActive(path, item.path);
                 return (

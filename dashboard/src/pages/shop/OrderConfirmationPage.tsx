@@ -9,6 +9,7 @@ import {
   resolveShopLocationSlug,
   shopBasePath,
   shopCustomerAuthConfig,
+  shopMenuLandingPath,
 } from '@/lib/shop-cart';
 import { useI18n } from '@/lib/i18n';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -25,7 +26,9 @@ import {
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
 import { useShopCmsTheme } from '@/hooks/useShopCmsTheme';
+import { useShopNavFlags } from '@/hooks/useShopNavFlags';
 import { localizedShopCopy } from '@/lib/shop-site-settings';
+import { customerShopError, isShopOnlineOrdersDisabled } from '@/lib/shop-public-error';
 
 type OrderItem = {
   id: string;
@@ -134,6 +137,7 @@ export default function OrderConfirmationPage() {
 
   const [order, setOrder] = useState<OrderView | null>(null);
   const [error, setError] = useState('');
+  const [shopOrdersDisabled, setShopOrdersDisabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [session, setSession] = useState<PaymentSession | null>(null);
@@ -144,6 +148,17 @@ export default function OrderConfirmationPage() {
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
   const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
+  const [shopProfile, setShopProfile] = useState<{
+    name?: string;
+    shopLogoUrl?: string | null;
+    reservationsEnabled?: boolean;
+    giftCards?: { enabled?: boolean };
+  } | null>(null);
+  const navFlags = useShopNavFlags(shopKey, {
+    showGiftCards: shopProfile?.giftCards?.enabled,
+    showReservations: shopProfile?.reservationsEnabled,
+  });
+  const menuPath = shopMenuLandingPath(shopKey, locSlug);
 
   const load = useCallback(async () => {
     if (!shopKey || !orderId) return;
@@ -162,7 +177,9 @@ export default function OrderConfirmationPage() {
         clearCart(shopKey);
       }
     } catch (e: any) {
-      setError(e.response?.data?.error || t('shopOrderNotFound'));
+      const raw = e.response?.data?.error;
+      setShopOrdersDisabled(isShopOnlineOrdersDisabled(raw));
+      setError(customerShopError(raw, t('shopOrderNotFound'), t));
     } finally {
       setLoading(false);
     }
@@ -181,11 +198,16 @@ export default function OrderConfirmationPage() {
       .get(`/api/shop/${encodeURIComponent(shopKey)}`)
       .then((res) => {
         if (cancelled) return;
-        const url = String(res.data?.data?.googleReviewUrl || '').trim();
+        const data = res.data?.data;
+        setShopProfile(data || null);
+        const url = String(data?.googleReviewUrl || '').trim();
         setGoogleReviewUrl(url.startsWith('http') ? url : null);
       })
       .catch(() => {
-        if (!cancelled) setGoogleReviewUrl(null);
+        if (!cancelled) {
+          setGoogleReviewUrl(null);
+          setShopProfile(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -419,12 +441,32 @@ export default function OrderConfirmationPage() {
         className="min-h-dvh"
         style={{ background: 'var(--shop-bg-muted, #f6f5f2)', color: 'var(--shop-text)' }}
       >
-        <ShopMinimalHeader basePath={basePath} shopKey={shopKey} loggedIn={loggedIn} />
-        <div className="shop-page-content flex min-h-[50vh] flex-col items-center justify-center gap-3 py-12">
-          <p className="text-red-600">{error || t('shopOrderNotFound')}</p>
-          <Link to={basePath || '/'} className="font-semibold text-stone-900 underline">
-            {t('shopBackToMenu')}
-          </Link>
+        <ShopMinimalHeader
+          basePath={basePath}
+          shopKey={shopKey}
+          loggedIn={loggedIn}
+          merchantName={shopProfile?.name || order?.store?.name}
+          logoUrl={shopProfile?.shopLogoUrl || order?.store?.shopLogoUrl}
+          showGiftCards={navFlags.showGiftCards}
+          showReservations={navFlags.showReservations}
+          showCatering={navFlags.showCatering}
+        />
+        <div className="shop-page-content flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 py-12 text-center">
+          <p
+            className={`max-w-md text-base leading-relaxed ${
+              shopOrdersDisabled ? 'text-stone-700' : 'text-red-600'
+            }`}
+          >
+            {error || t('shopOrderNotFound')}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm font-semibold text-stone-900">
+            <Link to={basePath || '/'} className="underline">
+              {t('shopBackToHome')}
+            </Link>
+            <Link to={menuPath} className="underline">
+              {t('shopBackToMenu')}
+            </Link>
+          </div>
         </div>
       </ShopThemeShell>
     );

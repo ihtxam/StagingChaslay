@@ -19,6 +19,8 @@ import {
   remainingRefundableAmount,
   type OnlinePaymentOrderLike,
 } from "@/lib/online-payment-refund";
+import { resolveAdyenTerminalCredentials } from "@/lib/adyen-terminal-credentials";
+import { PaymentProfilesService } from "@/services/payment-profiles.service";
 
 const ADYEN_API_BASE = process.env.ADYEN_API_BASE || "https://checkout-test.adyen.com/v71";
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY;
@@ -55,17 +57,10 @@ export class AdyenService {
       where: eq(schema.merchants.id, merchantId),
     });
 
-    let terminal:
-      | {
-          adyenMerchantAccount?: string | null;
-          adyenApiKey?: string | null;
-          adyenClientId?: string | null;
-          terminalId?: string;
-        }
-      | undefined;
+    let terminalRow: typeof schema.paymentTerminals.$inferSelect | undefined;
 
     if (terminalId) {
-      terminal =
+      terminalRow =
         (await db.query.paymentTerminals.findFirst({
           where: and(
             eq(schema.paymentTerminals.merchantId, merchantId),
@@ -81,19 +76,60 @@ export class AdyenService {
         undefined;
     }
 
-    const apiKey = terminal?.adyenApiKey || merchant?.adyenApiKey || ADYEN_API_KEY;
-    const merchantAccount =
-      terminal?.adyenMerchantAccount || merchant?.adyenMerchantAccount || ADYEN_MERCHANT_ACCOUNT;
-    const clientId = terminal?.adyenClientId || merchant?.adyenClientId || ADYEN_CLIENT_ID;
-    if (!apiKey || !merchantAccount) {
+    let profileRow: typeof schema.paymentProfiles.$inferSelect | undefined;
+    const profileId = terminalRow?.paymentProfileId;
+    if (profileId) {
+      profileRow = await db.query.paymentProfiles.findFirst({
+        where: and(
+          eq(schema.paymentProfiles.id, profileId),
+          eq(schema.paymentProfiles.merchantId, merchantId)
+        ),
+      });
+    } else if (terminalRow) {
+      profileRow = await PaymentProfilesService.ensureDefaultProfile(merchantId);
+    }
+
+    const resolved = resolveAdyenTerminalCredentials({
+      terminal: terminalRow
+        ? {
+            adyenApiKey: terminalRow.adyenApiKey,
+            adyenMerchantAccount: terminalRow.adyenMerchantAccount,
+            adyenClientId: terminalRow.adyenClientId,
+            terminalId: terminalRow.terminalId,
+          }
+        : terminalId
+          ? { terminalId }
+          : null,
+      profile: profileRow
+        ? {
+            adyenApiKey: profileRow.adyenApiKey,
+            adyenMerchantAccount: profileRow.adyenMerchantAccount,
+            adyenClientId: profileRow.adyenClientId,
+          }
+        : null,
+      merchant: merchant
+        ? {
+            adyenApiKey: merchant.adyenApiKey,
+            adyenMerchantAccount: merchant.adyenMerchantAccount,
+            adyenClientId: merchant.adyenClientId,
+          }
+        : null,
+      env: {
+        apiKey: ADYEN_API_KEY,
+        merchantAccount: ADYEN_MERCHANT_ACCOUNT,
+        clientId: ADYEN_CLIENT_ID,
+      },
+    });
+
+    if (!resolved.apiKey || !resolved.merchantAccount) {
       throw new Error("Swisspayout credentials not configured for this merchant");
     }
 
     return {
-      apiKey,
-      merchantAccount,
-      clientId,
-      terminalId: terminal?.terminalId || terminalId,
+      apiKey: resolved.apiKey,
+      merchantAccount: resolved.merchantAccount,
+      clientId: resolved.clientId,
+      terminalId: terminalRow?.terminalId || terminalId,
     };
   }
 

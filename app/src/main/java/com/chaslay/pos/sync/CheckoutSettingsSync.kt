@@ -32,6 +32,7 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
     }
     return copy(
         tipsEnabled = checkout.tipsEnabled,
+        terminalAskGratuityEnabled = checkout.terminalAskGratuityEnabled,
         allowCustomTip = checkout.allowCustomTip,
         tipPresetsPercentCsv = tipCsv,
         discountsEnabled = checkout.discountsEnabled,

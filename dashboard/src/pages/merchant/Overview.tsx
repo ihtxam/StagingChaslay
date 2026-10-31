@@ -23,6 +23,8 @@ import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import { useAuthStore } from '@/store/auth';
+import { useLocationStore } from '@/store/location';
+import { panelOverviewScopeParams } from '@/lib/panel-scope-nav';
 import { canShowWebPosQuickAction } from '@/lib/permissions';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import {
@@ -72,7 +74,13 @@ type OverviewData = {
   staff: Array<{ name: string; salesCount: number; total: number }>;
   businessName: string;
   eod?: Record<string, unknown>;
-  byLocation?: Array<{ locationId: string; name: string; revenue: number; orders: number }>;
+  byLocation?: Array<{
+    locationId: string;
+    name: string;
+    revenue: number;
+    orders: number;
+    customers?: number;
+  }>;
 };
 
 const CHART_COLORS = ['#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#3b82f6', '#64748b'];
@@ -101,6 +109,14 @@ type InsightsPreset = 'today' | 'yesterday' | 'last_week';
 
 export default function Overview() {
   const { t } = useI18n();
+  const locationId = useLocationStore((s) => s.locationId);
+  const isHqView = useLocationStore((s) => s.isHqView);
+  const locations = useLocationStore((s) => s.locations);
+  const panelScopeKey = isHqView ? 'hq' : locationId || '';
+  const overviewScopeParams = useMemo(
+    () => panelOverviewScopeParams({ locationCount: locations.length, isHqView }),
+    [locations.length, isHqView]
+  );
   const [preset, setPreset] = useState<Preset>('today');
   const [insightsPreset, setInsightsPreset] = useState<InsightsPreset>('today');
   const [insightsData, setInsightsData] = useState<OverviewData | null>(null);
@@ -111,13 +127,13 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
 
   const queryParams = useMemo(() => {
-    const params = new URLSearchParams({ preset });
+    const params = new URLSearchParams({ preset, ...overviewScopeParams });
     if (preset === 'custom') {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
     }
     return params;
-  }, [preset, from, to]);
+  }, [preset, from, to, overviewScopeParams]);
 
   const paymentMethods = useMemo(
     () =>
@@ -138,7 +154,7 @@ export default function Overview() {
     } finally {
       setLoading(false);
     }
-  }, [queryParams, t]);
+  }, [queryParams, panelScopeKey, t]);
 
   useEffect(() => {
     void load();
@@ -147,14 +163,15 @@ export default function Overview() {
   const loadInsights = useCallback(async () => {
     setInsightsLoading(true);
     try {
-      const res = await api.get(`/merchant/reports/overview?preset=${insightsPreset}`);
+      const insightsQs = new URLSearchParams({ preset: insightsPreset, ...overviewScopeParams });
+      const res = await api.get(`/merchant/reports/overview?${insightsQs}`);
       setInsightsData(res.data.overview);
     } catch {
       setInsightsData(null);
     } finally {
       setInsightsLoading(false);
     }
-  }, [insightsPreset]);
+  }, [insightsPreset, panelScopeKey, overviewScopeParams]);
 
   useEffect(() => {
     void loadInsights();
@@ -371,7 +388,7 @@ export default function Overview() {
         </div>
       )}
 
-      {(data?.byLocation?.length || 0) > 1 ? (
+      {isHqView && locations.length > 1 && (data?.byLocation?.length || 0) > 0 ? (
         <div className="card">
           <h2 className="text-sm font-semibold mb-3">{t('ovByLocation')}</h2>
           <table className="w-full text-sm">
@@ -379,6 +396,7 @@ export default function Overview() {
               <tr className="text-left text-[var(--text-muted)]">
                 <th className="py-1">{t('locationName')}</th>
                 <th className="py-1 text-right">{t('ovOrders')}</th>
+                <th className="py-1 text-right">{t('ovCustomers')}</th>
                 <th className="py-1 text-right">{t('revenue')}</th>
               </tr>
             </thead>
@@ -387,6 +405,7 @@ export default function Overview() {
                 <tr key={row.locationId} className="border-t border-[var(--border)]">
                   <td className="py-1.5">{row.name}</td>
                   <td className="py-1.5 text-right tabular-nums">{row.orders}</td>
+                  <td className="py-1.5 text-right tabular-nums">{row.customers ?? row.orders}</td>
                   <td className="py-1.5 text-right tabular-nums">CHF {row.revenue.toFixed(2)}</td>
                 </tr>
               ))}

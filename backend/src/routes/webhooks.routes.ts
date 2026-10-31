@@ -14,6 +14,7 @@ import {
   normalizePhoneOrderingSettings,
   timingSafeEqualSecret,
 } from "@/lib/phone-ordering-settings";
+import { isPhoneOrderingAddonEnabled } from "@/lib/phone-ordering-addon";
 import { OrderService } from "@/services/order.service";
 
 const router = Router();
@@ -128,9 +129,12 @@ router.get("/phone/:merchantId", async (req: Request, res: Response) => {
     const db = getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(schema.merchants.id, merchantId),
-      columns: { id: true, phoneOrderingSettings: true },
+      columns: { id: true, phoneOrderingSettings: true, phoneOrderingAddonEnabled: true },
     });
     if (!merchant) return res.status(404).json({ ok: false, error: "Merchant not found" });
+    if (!isPhoneOrderingAddonEnabled(merchant.phoneOrderingAddonEnabled)) {
+      return res.status(403).json({ ok: false, error: "Phone ordering add-on is not enabled" });
+    }
     const settings = normalizePhoneOrderingSettings(
       (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
     );
@@ -161,6 +165,13 @@ router.post("/phone/:merchantId", async (req: Request, res: Response) => {
       where: eq(schema.merchants.id, merchantId),
     });
     if (!merchant) return res.status(404).json({ ok: false, error: "Merchant not found" });
+    if (
+      !isPhoneOrderingAddonEnabled(
+        (merchant as { phoneOrderingAddonEnabled?: boolean }).phoneOrderingAddonEnabled
+      )
+    ) {
+      return res.status(403).json({ ok: false, error: "Phone ordering add-on is not enabled" });
+    }
     const settings = normalizePhoneOrderingSettings(
       (merchant as { phoneOrderingSettings?: Record<string, unknown> | null }).phoneOrderingSettings
     );
@@ -203,6 +214,27 @@ router.post("/phone/:merchantId", async (req: Request, res: Response) => {
       ok: false,
       error: error instanceof Error ? error.message : "Failed to create phone order",
     });
+  }
+});
+
+/**
+ * POST /api/webhooks/esendex
+ * Inbound SMS (STOP / ARRET / STOPP). Configure in Esendex account push notifications.
+ */
+router.post("/esendex", async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const from = String(body.from || body.originator || body.Originator || "").trim();
+    const text = String(body.body || body.message || body.MessageText || body.summary || "").trim();
+    const merchantId = String(body.merchantId || req.query.merchantId || "").trim() || null;
+    if (from && text) {
+      const { SmsService } = await import("@/services/sms.service");
+      await SmsService.honorInboundStop(from, text, merchantId);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[webhooks] esendex inbound failed", error);
+    res.json({ success: true });
   }
 });
 

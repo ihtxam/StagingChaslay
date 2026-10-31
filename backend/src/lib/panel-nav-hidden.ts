@@ -77,6 +77,7 @@ export const PANEL_NAV_ALLOWED_KEYS = new Set<string>([
   ...Object.values(PANEL_NAV_GROUP_PATHS).flat(),
   ...Object.values(PANEL_NAV_GROUP_ALIASES).flat(),
   "platform-shop",
+  "/merchant/settings",
 ]);
 
 export function parsePanelNavHidden(raw: unknown): string[] {

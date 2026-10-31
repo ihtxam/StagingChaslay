@@ -9,6 +9,7 @@ import paymentRoutes from "@/routes/payment.routes";
 import webshopRoutes from "@/routes/webshop.routes";
 import loyaltyRoutes from "@/routes/loyalty.routes";
 import giftCardsRoutes from "@/routes/gift-cards.routes";
+import smsRoutes from "@/routes/sms.routes";
 import syncRoutes from "@/routes/sync.routes";
 import terminalsRoutes from "@/routes/terminals.routes";
 import tapToPayRoutes from "@/routes/tap-to-pay.routes";
@@ -49,10 +50,14 @@ import { ensureUploadsRoot } from "@/services/media-upload.service";
 import { MarketingService } from "@/services/marketing.service";
 import { ReservationService } from "@/services/reservation.service";
 import { SubscriptionBillingService } from "@/services/subscription-billing.service";
+import { ensureAllMerchantSchema } from "@/lib/ensure-merchant-schema";
+import { getSchemaPatchMetrics } from "@/lib/schema-patch-metrics";
+import { getMerchantSchemaBootstrapMode } from "@/lib/schema-bootstrap-mode";
 import {
-  ensureMerchantSchemaAtStartup,
-  ensureAllMerchantSchema,
-} from "@/lib/ensure-merchant-schema";
+  getMerchantSchemaStartupState,
+  kickOffMerchantSchemaStartup,
+  merchantSchemaStartupMiddleware,
+} from "@/lib/schema-startup-state";
 import { ensureLicensesSchemaAtStartup } from "@/lib/ensure-licenses-schema";
 import { ensureSubscriptionSchemaAtStartup } from "@/lib/ensure-subscription-schema";
 import { sql } from "drizzle-orm";
@@ -68,6 +73,12 @@ dotenv.config();
 
 const app: Express = express();
 const PORT = process.env.PORT || 3000;
+
+app.use((_req, res, next) => {
+  const ring = process.env.DEPLOY_STACK === "chaslay" ? "staging" : "production";
+  res.setHeader("X-Reborn-Deploy-Ring", ring);
+  next();
+});
 
 function buildCorsOrigins(): string[] {
   const defaults = [
@@ -142,6 +153,8 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
+app.use(merchantSchemaStartupMiddleware);
+
 // Public uploaded media (vacation popup images, etc.)
 const uploadsRoot = ensureUploadsRoot();
 app.use(
@@ -162,27 +175,59 @@ app.use("/downloads", downloadsRoutes);
 // ROUTES
 // ============================================================================
 
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
+async function respondHealth(req: Request, res: Response) {
+  const deep = String(req.query.deep || "") === "1";
+  const body: Record<string, unknown> = {
     status: "ok",
     service: "reborn-backend",
     timestamp: new Date().toISOString(),
-  });
-});
+  };
+  if (!deep) {
+    res.json(body);
+    return;
+  }
+  try {
+    const start = Date.now();
+    await getDb().execute(sql`SELECT 1`);
+    body.database = "ok";
+    body.databaseLatencyMs = String(Date.now() - start);
+    body.schemaStartup = getMerchantSchemaStartupState();
+    body.schemaBootstrap = getMerchantSchemaBootstrapMode();
+    const schemaMetrics = getSchemaPatchMetrics();
+    if (body.schemaStartup === "pending") {
+      body.schemaMaintenance = "warming";
+    } else if (
+      schemaMetrics.duplicateEnsureKeys.length > 0 ||
+      schemaMetrics.duplicateColumnKeys.length > 0
+    ) {
+      body.schemaMaintenance = "warning";
+    } else {
+      body.schemaMaintenance = "ok";
+    }
+    res.json({ ...body, schemaMetrics });
+  } catch (error) {
+    console.error("[health] database probe failed:", error);
+    res.status(503).json({
+      status: "degraded",
+      service: "reborn-backend",
+      database: "error",
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+app.get("/health", respondHealth);
 
 /** Alias for probes that expect /api/health (dashboard same-origin /api prefix). */
-app.get("/api/health", (_req: Request, res: Response) => {
-  res.json({
-    status: "ok",
-    service: "reborn-backend",
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get("/api/health", respondHealth);
 
 /** Idempotent DB column repair — GET or POST (browser-safe). */
-async function handleSchemaRepair(_req: Request, res: Response) {
+async function handleSchemaRepair(req: Request, res: Response) {
   try {
-    const result = await ensureAllMerchantSchema();
+    const force = String(req.query.force || "") === "1";
+    const result = await ensureAllMerchantSchema(
+      force ? { resetPatchCaches: true } : undefined
+    );
     const ok =
       result.missingAfter.length === 0 &&
       result.ordersMissing.length === 0 &&
@@ -276,6 +321,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/webshop", webshopRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/gift-cards", giftCardsRoutes);
+app.use("/api/merchant/sms", smsRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/terminals", terminalsRoutes);
 app.use("/api/tap-to-pay", tapToPayRoutes);
@@ -332,16 +378,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-void (async () => {
-  try {
-    console.log("[schema] applying merchant schema patches before listen…");
-    await ensureMerchantSchemaAtStartup();
-    console.log("[schema] merchant schema patches complete");
-  } catch (err) {
-    console.warn("[schema] startup patch error (continuing):", err);
-  }
+kickOffMerchantSchemaStartup();
 
-  app.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`✅ ${APP_NAME} API running on port ${PORT}`);
   console.log(`🏥 Health check: /health`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
@@ -432,7 +471,6 @@ void (async () => {
   };
   setTimeout(() => void tick(), 45_000);
   setInterval(() => void tick(), 60 * 60 * 1000);
-  });
-})();
+});
 
 export default app;

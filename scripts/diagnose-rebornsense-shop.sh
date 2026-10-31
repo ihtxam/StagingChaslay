@@ -33,7 +33,7 @@ dc exec -T db psql -U "${POSTGRES_USER:-manupos}" -d "${POSTGRES_DB:-manupos}" -
 echo
 
 echo "--- API health ---"
-curl -sf http://127.0.0.1:3000/health 2>/dev/null || dc exec -T api wget -qO- http://127.0.0.1:3000/health || echo "API unreachable"
+curl -sf http://127.0.0.1:3000/health 2>/dev/null || dc exec -T api node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" || echo "API unreachable"
 echo
 
 echo

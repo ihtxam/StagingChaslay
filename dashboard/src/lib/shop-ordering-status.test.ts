@@ -16,6 +16,8 @@ const strings: Record<string, string> = {
   shopVacationReturn: 'We will be back on {date} at {time}',
   shopVacationReturnDateOnly: 'We will be back on {date}',
   shopNotAcceptingOrders: 'We are not accepting orders at the moment, please call us',
+  shopOnlineOrdersDisabled:
+    'We are not accepting online orders at the moment. Please visit our menu or visit later.',
 };
 
 const t = (key: string, params?: Record<string, string | number>) => {
@@ -72,6 +74,15 @@ assert.equal(
   formatShopVacationMessage(t, 'cart', vacationReturn),
   'We are closed due to vacations. We will be back on 15-01-2026 at 09:00'
 );
+
+const shopOff = resolveShopOrderingBlock({
+  vacationActive: false,
+  shopEnabled: false,
+  acceptingOrders: true,
+  t,
+});
+assert.equal(shopOff.reason, 'shop_offline');
+assert.equal(shopOff.blocked, true);
 
 const paused = resolveShopOrderingBlock({
   vacationActive: false,

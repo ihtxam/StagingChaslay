@@ -262,6 +262,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled,
+      phoneOrderingAddonEnabled,
       cateringAddonEnabled,
     } = req.body || {};
     const trimmedBusinessName = typeof businessName === "string" ? businessName.trim() : "";
@@ -304,6 +305,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odooAddonEnabled: odooAddonEnabled === true,
       growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
       guestCrmAddonEnabled: guestCrmAddonEnabled === true,
+      phoneOrderingAddonEnabled: phoneOrderingAddonEnabled === true,
       cateringAddonEnabled: cateringAddonEnabled === true,
     });
     res.status(201).json({ success: true, merchant });
@@ -339,6 +341,7 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled,
+      phoneOrderingAddonEnabled,
       cateringAddonEnabled,
     } = req.body || {};
     const merchant = await ResellerService.updateMerchantPosLimits(
@@ -393,6 +396,8 @@ router.put("/merchants/:merchantId/pos-limits", async (req: Request, res: Respon
           growthAnalyticsAddonEnabled != null ? growthAnalyticsAddonEnabled === true : undefined,
         guestCrmAddonEnabled:
           guestCrmAddonEnabled != null ? guestCrmAddonEnabled === true : undefined,
+        phoneOrderingAddonEnabled:
+          phoneOrderingAddonEnabled != null ? phoneOrderingAddonEnabled === true : undefined,
         cateringAddonEnabled:
           cateringAddonEnabled != null ? isCateringAddonEnabled(cateringAddonEnabled) : undefined,
       }

@@ -44,10 +44,17 @@ export default function ChaslayStorefrontNavbar({
     (async () => {
       try {
         const [pageRes, navRes] = await Promise.all([
-          axios.get(`/api/shop/${shopKey}/pages/home`),
+          axios.get(`/api/shop/${shopKey}/pages/home`, {
+            validateStatus: (status) => status === 200 || status === 404,
+          }),
           axios.get(`/api/shop/${shopKey}/site-pages`).catch(() => null),
         ]);
         if (cancelled) return;
+        if (pageRes.status !== 200) {
+          setNavbarState(null);
+          onPresenceRef.current?.(false);
+          return;
+        }
         const page = pageRes.data?.data;
         const extracted =
           page?.engine === 'chaslay' && page.editorState

@@ -66,18 +66,19 @@ export function shopSlugFromPath(path: string): string | null {
     "cds",
     "receipt",
     "receipts",
+    "payment-logos",
+    "icons",
+    "brand",
+    "embed",
   ]);
   if (reserved.has(segment.toLowerCase())) return null;
   return segment;
 }
 
-export function requestLooksLikeSpaDocument(path: string, accept: string): boolean {
+export function requestLooksLikeSpaDocument(path: string, _accept?: string): boolean {
   const lowerPath = String(path || "").split("?")[0];
-  if (/\.[a-z0-9]{2,8}$/i.test(lowerPath)) return false;
-  const acceptHeader = String(accept || "").toLowerCase();
-  if (acceptHeader.includes("text/html")) return true;
-  if (!acceptHeader || acceptHeader === "*/*") return true;
-  return false;
+  // Extension-less paths on shop hosts are always the customer SPA (never JSON API routes).
+  return !/\.[a-z0-9]{2,8}$/i.test(lowerPath);
 }
 
 export { hostFromRequest };

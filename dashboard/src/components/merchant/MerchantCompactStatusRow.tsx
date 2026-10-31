@@ -21,6 +21,8 @@ interface MerchantCompactStatusRowProps {
   showMenuButton?: boolean;
   registerDisplay?: { name: string; roleLabel: string };
   showAcceptingMenu?: boolean;
+  /** Tighter top bar on phones — hide duplicate name and low-priority actions. */
+  mobileDense?: boolean;
 }
 
 /**
@@ -32,6 +34,7 @@ export default function MerchantCompactStatusRow({
   showMenuButton = false,
   registerDisplay,
   showAcceptingMenu = true,
+  mobileDense = false,
 }: MerchantCompactStatusRowProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -131,7 +134,9 @@ export default function MerchantCompactStatusRow({
       <button
         type="button"
         onClick={hardRefresh}
-        className="inline-flex items-center justify-center rounded-md p-1 hover:bg-[var(--bg-muted)] shrink-0"
+        className={`inline-flex items-center justify-center rounded-md p-1 hover:bg-[var(--bg-muted)] shrink-0 ${
+          mobileDense ? 'hidden sm:inline-flex' : ''
+        }`}
         aria-label={t('panelHardRefresh')}
         title={t('panelHardRefresh')}
       >
@@ -141,7 +146,9 @@ export default function MerchantCompactStatusRow({
       <button
         type="button"
         onClick={toggleTheme}
-        className="inline-flex items-center justify-center rounded-md p-1 hover:bg-[var(--bg-muted)] shrink-0"
+        className={`inline-flex items-center justify-center rounded-md p-1 hover:bg-[var(--bg-muted)] shrink-0 ${
+          mobileDense ? 'hidden sm:inline-flex' : ''
+        }`}
         aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
         title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
       >
@@ -165,7 +172,11 @@ export default function MerchantCompactStatusRow({
           </button>
         </span>
       ) : registerDisplay?.name || user?.name ? (
-        <span className="font-medium text-[var(--text)] truncate max-w-[12rem] sm:max-w-none">
+        <span
+          className={`font-medium text-[var(--text)] truncate max-w-[12rem] sm:max-w-none ${
+            mobileDense ? 'hidden sm:inline' : ''
+          }`}
+        >
           {registerDisplay?.name || user?.name}
         </span>
       ) : null}
@@ -194,7 +205,7 @@ export default function MerchantCompactStatusRow({
 
       <MerchantOnboarding enabled={showMerchantOnboarding} />
 
-      {showAcceptingMenu ? <AcceptingMenu /> : null}
+      {showAcceptingMenu ? <AcceptingMenu compact={mobileDense} /> : null}
     </div>
   );
 }

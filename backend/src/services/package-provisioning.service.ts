@@ -164,6 +164,9 @@ export class PackageProvisioningService {
         patch.maxLocations = current === 0 ? qty : current + qty;
         break;
       }
+      case "phone_ordering":
+        patch.phoneOrderingAddonEnabled = true;
+        break;
       default:
         throw new Error(`Unknown add-on type: ${addon.addonKey}`);
     }

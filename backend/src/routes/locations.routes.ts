@@ -1,7 +1,9 @@
 import { Router, Request, Response } from "express";
 import { verifyToken, requireMerchantAccess, setMerchantContext } from "@/middleware/auth.middleware";
 import { setLocationContext } from "@/middleware/location.middleware";
+import { resolvePanelLocationSwitch } from "@/lib/panel-location-context";
 import { LocationsService } from "@/services/locations.service";
+import type { Permission } from "@/lib/permissions";
 import { PosStationsService } from "@/services/pos-stations.service";
 import { MerchantEntitlementsService } from "@/services/merchant-entitlements.service";
 
@@ -31,7 +33,27 @@ router.get("/locations", async (req: Request, res: Response) => {
       planSlug: null,
       planName: null,
     }));
-    res.json({ success: true, locations, limits });
+    const { canSwitchPanelLocation: canSwitch, boundStaffId } = resolvePanelLocationSwitch(req, {
+      merchantId,
+      authRole: req.user?.role,
+      roleName: req.user?.roleName,
+      isOwner: ctx.isOwner,
+      jwtPermissions: (req.user?.permissions || []) as Permission[],
+    });
+    let boundLocationId: string | null = null;
+    const boundForStaffId = boundStaffId || (!canSwitch ? ctx.staffId : null);
+    if (!canSwitch && boundForStaffId) {
+      boundLocationId = await LocationsService.resolveStaffBoundLocationId(
+        merchantId,
+        boundForStaffId
+      );
+    }
+    res.json({
+      success: true,
+      locations,
+      limits,
+      panelLocation: { canSwitchPanelLocation: canSwitch, boundLocationId },
+    });
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to list locations",

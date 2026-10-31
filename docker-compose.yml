@@ -58,6 +58,8 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GH_TOKEN: ${GH_TOKEN:-}
       GITHUB_REPO: ${GITHUB_REPO:-ihtxam/rebornSense}
+      DEPLOY_STACK: ${DEPLOY_STACK:-rebornsense}
+      MERCHANT_SCHEMA_BOOTSTRAP: ${MERCHANT_SCHEMA_BOOTSTRAP:-lazy}
     volumes:
       - uploads_data:/app/uploads
       # Host-built print-agent EXE (gitignored). Deploy script rebuilds into this path.
@@ -83,9 +85,15 @@ services:
       SEED_SUPERADMIN_EMAIL: ${SEED_SUPERADMIN_EMAIL:-admin@manupos.webprintmedia.swiss}
       SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-ChangeMeNow!123}
       SEED_SUPERADMIN_NAME: ${SEED_SUPERADMIN_NAME:-Reborn Admin}
+    # `drizzle-kit migrate` applies the committed migrations under backend/drizzle/
+    # and records each one, so it runs a migration exactly once. It replaces
+    # `push --force`, which introspected the whole database and diffed it in memory
+    # (exit 137 / OOM on this VM) and applied destructive changes without asking.
+    # run-schema-patches.ts stays for now as the safety net until several deploys
+    # have gone through migrations cleanly.
     command: >
       sh -c "npx tsx src/db/run-schema-patches.ts || true;
-             npx drizzle-kit push --force &&
+             npx drizzle-kit migrate &&
              npx tsx src/db/seed.ts || true"
     restart: "no"
 
@@ -98,6 +106,7 @@ services:
         VITE_PUBLIC_DOMAIN: ${DOMAIN:-rebornsense.com}
         VITE_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://app.rebornsense.com}
         VITE_PUBLIC_RECEIPT_BASE_URL: ${PUBLIC_RECEIPT_BASE_URL:-https://pay.rebornsense.com}
+        VITE_DEPLOY_RING: ${VITE_DEPLOY_RING:-production}
     restart: unless-stopped
     depends_on:
       api:

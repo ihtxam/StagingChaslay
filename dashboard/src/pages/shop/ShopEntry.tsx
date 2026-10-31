@@ -67,8 +67,10 @@ export default function ShopEntry() {
 
         if (data?.cmsHomepageEnabled) {
           try {
-            const homeRes = await axios.get(`/api/shop/${shopKey}/pages/home`);
-            if (!cancelled && homeRes.data?.data?.engine === 'chaslay') {
+            const homeRes = await axios.get(`/api/shop/${shopKey}/pages/home`, {
+              validateStatus: (status) => status === 200 || status === 404,
+            });
+            if (!cancelled && homeRes.status === 200 && homeRes.data?.data?.engine === 'chaslay') {
               setMode('chaslay');
               return;
             }

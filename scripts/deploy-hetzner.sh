@@ -646,9 +646,14 @@ print(sorted(vers)[-1] if vers else "")
 PY
       )"
       if [[ -n "$STALE_APK_VERSION" && "$STALE_APK_VERSION" != "$BRIDGE_VERSION" ]]; then
-        echo "ERROR: Refusing deploy — APK build failed and $BRIDGE_APK is still v${STALE_APK_VERSION} (source requires v${BRIDGE_VERSION})."
-        echo "  Tablets cannot upgrade until a fresh APK is built and copied to downloads/."
-        exit 1
+        if [[ "${DEPLOY_STACK:-}" == "chaslay" ]]; then
+          echo "WARNING: Bridge APK build failed and $BRIDGE_APK is still v${STALE_APK_VERSION} (source requires v${BRIDGE_VERSION})."
+          echo "  Continuing Chaslay staging deploy (app/shop/API). Rebuild APK before tablet upgrades."
+        else
+          echo "ERROR: Refusing deploy — APK build failed and $BRIDGE_APK is still v${STALE_APK_VERSION} (source requires v${BRIDGE_VERSION})."
+          echo "  Tablets cannot upgrade until a fresh APK is built and copied to downloads/."
+          exit 1
+        fi
       fi
     fi
   fi
@@ -915,7 +920,16 @@ while IFS= read -r orphan_api; do
   [[ -z "$orphan_api" ]] && continue
   docker rm -f "$orphan_api" 2>/dev/null || true
 done < <(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E "(^|_)${migrate_project}-api-" || true)
+export DEPLOY_STACK="${DEPLOY_STACK:-rebornsense}"
+if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
+  export VITE_DEPLOY_RING=staging
+else
+  export VITE_DEPLOY_RING=production
+fi
 dc up -d --build --remove-orphans db api dashboard caddy
+# Dashboard JS/CSS are baked into the image tag :latest — compose can keep an old
+# container running after `docker build` updates the image (stale index-*.js on prod).
+dc up -d --force-recreate dashboard
 
 # Caddyfile is bind-mounted. `caddy reload` can leave stale site blocks (e.g. new
 # order.rebornsense.com hub) — force-recreate when the file changes or reload fails.

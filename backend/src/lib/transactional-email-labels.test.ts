@@ -12,14 +12,19 @@ import { buildShopOrderGuestEmailHtml } from './shop-order-email-template';
 
 const confirmed = shopOrderEmailCopy('confirmed', 'Cafe Gandhi', 'WEB-FD09-12', 'en');
 assert.match(confirmed.subject, /WEB-FD09-12/);
-assert.match(confirmed.body.toLowerCase(), /kitchen/);
+assert.match(confirmed.body.toLowerCase(), /accepted/);
 
 const frConfirmed = shopOrderEmailCopy('confirmed', 'Tavannas Kebab', '6N6FZJ', 'fr');
 assert.equal(frConfirmed.subject, 'Commande #6N6FZJ acceptée');
-assert.match(frConfirmed.body, /cuisine a commencé/i);
+assert.match(frConfirmed.body, /acceptée/i);
 
 const frReceived = shopOrderEmailCopy('received', 'Tavannas Kebab', '6N6FZJ', 'fr');
 assert.match(frReceived.subject, /confirmée/i);
+
+const enAwaiting = shopOrderEmailCopy('received', 'Cafe', 'A1', 'en', {
+  awaitingRestaurantConfirm: true,
+});
+assert.match(enAwaiting.body.toLowerCase(), /confirm it shortly/);
 
 const merchant = merchantNewOrderEmailCopy('Cafe Gandhi', 'WEB-FD09-12', 'en');
 assert.match(merchant.subject, /WEB-FD09-12/);

@@ -5,7 +5,7 @@ import {
   parsePaymentReceipts,
   type AdyenTerminalReceipt,
 } from "@/lib/adyen-receipt";
-import { normalizePosCheckoutSettings } from "@/lib/pos-checkout-settings";
+import { normalizePosCheckoutSettings, shouldAskGratuityOnTerminal } from "@/lib/pos-checkout-settings";
 import { AdyenService } from "@/services/adyen.service";
 
 export type TerminalPoiResult = {
@@ -657,12 +657,8 @@ function resolveAskGratuityOnTerminal(
   merchant: { posCheckoutSettings?: Record<string, unknown> | null } | null | undefined,
   opts: { askGratuity?: boolean; posTipAmount?: number }
 ): boolean {
-  const posTip = roundMoney2(Math.max(0, Number(opts.posTipAmount) || 0));
-  if (posTip > 0) return false;
-  if (opts.askGratuity === false) return false;
-  if (opts.askGratuity === true) return true;
   const checkout = normalizePosCheckoutSettings(merchant?.posCheckoutSettings);
-  return checkout.tipsEnabled !== false;
+  return shouldAskGratuityOnTerminal(checkout, opts);
 }
 
 export class AdyenTerminalPoiService {

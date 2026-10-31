@@ -36,13 +36,17 @@ export function useShopNavFlags(
     Promise.all([
       axios.get(`/api/shop/${shopKey}`),
       axios.get(`/api/shop/${shopKey}/locations`).catch(() => ({ data: {} })),
+      axios.get(`/api/shop/${shopKey}/reservations/config`).catch(() => null),
     ])
-      .then(([shopRes, locRes]) => {
+      .then(([shopRes, locRes, reservationsRes]) => {
         if (cancelled) return;
         const m = shopRes.data?.data;
+        const reservationsLive =
+          !!m?.reservationsEnabled &&
+          !!reservationsRes?.data?.config?.enabled;
         setFetched({
           showGiftCards: !!m?.giftCards?.enabled,
-          showReservations: !!m?.reservationsEnabled,
+          showReservations: reservationsLive,
           showCatering:
             overrides?.showCatering ??
             (!!m?.cateringEnabled && !!locRes.data?.hasCatering),

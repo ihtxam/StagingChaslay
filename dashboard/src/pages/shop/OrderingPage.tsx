@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -418,7 +418,7 @@ export default function OrderingPage() {
           }
         }
       } catch (e: any) {
-        setError(customerShopError(e.response?.data?.error, t('shopFailedLoad')));
+        setError(customerShopError(e.response?.data?.error, t('shopFailedLoad'), t));
       } finally {
         setLoading(false);
       }
@@ -1128,6 +1128,7 @@ export default function OrderingPage() {
   const checkoutDisabled =
     !cart.length ||
     !!merchant?.vacation?.active ||
+    merchant?.shopEnabled === false ||
     merchant?.acceptingOrders === false ||
     (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) ||
     minOrderNotMet;
@@ -1152,11 +1153,18 @@ export default function OrderingPage() {
       resolveShopOrderingBlock({
         vacationActive: !!merchant?.vacation?.active,
         vacationReturn,
+        shopEnabled: merchant?.shopEnabled,
         acceptingOrders: merchant?.acceptingOrders,
         t,
         variant: 'cart',
       }),
-    [merchant?.vacation?.active, vacationReturn, merchant?.acceptingOrders, t]
+    [
+      merchant?.vacation?.active,
+      vacationReturn,
+      merchant?.shopEnabled,
+      merchant?.acceptingOrders,
+      t,
+    ]
   );
 
   const orderingBlockHeader = useMemo(
@@ -1164,11 +1172,18 @@ export default function OrderingPage() {
       resolveShopOrderingBlock({
         vacationActive: !!merchant?.vacation?.active,
         vacationReturn,
+        shopEnabled: merchant?.shopEnabled,
         acceptingOrders: merchant?.acceptingOrders,
         t,
         variant: 'header',
       }),
-    [merchant?.vacation?.active, vacationReturn, merchant?.acceptingOrders, t]
+    [
+      merchant?.vacation?.active,
+      vacationReturn,
+      merchant?.shopEnabled,
+      merchant?.acceptingOrders,
+      t,
+    ]
   );
 
   const checkoutBlockedMessage = useMemo(() => {
@@ -1195,6 +1210,10 @@ export default function OrderingPage() {
     if (!cart.length) return;
     if (minOrderNotMet) {
       setError(effectiveDeliveryInfo?.message || t('shopMinOrderNotMet'));
+      return;
+    }
+    if (merchant?.shopEnabled === false) {
+      setError(t('shopOnlineOrdersDisabled'));
       return;
     }
     if (merchant?.acceptingOrders === false) {
@@ -1391,6 +1410,16 @@ export default function OrderingPage() {
     active?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }, [selectedCategory]);
 
+  const scrollToMenuAfterDietaryFilter = useCallback(() => {
+    const bar = document.querySelector('.shop-sticky-category-bar');
+    if (bar) {
+      const y = bar.getBoundingClientRect().top + window.scrollY - 8;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      return;
+    }
+    document.getElementById('shop-menu-start')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-600">
@@ -1401,7 +1430,7 @@ export default function OrderingPage() {
 
   if (error && !merchant) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 text-red-700 font-medium px-4 text-center">
+      <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4 text-center text-red-700 font-medium">
         {error}
       </div>
     );
@@ -2072,6 +2101,7 @@ export default function OrderingPage() {
                 <ShopMenuDietaryFilter
                   active={dietaryFilters}
                   onChange={setDietaryFilters}
+                  onApplied={scrollToMenuAfterDietaryFilter}
                   t={t}
                 />
               ) : null}
@@ -2278,7 +2308,10 @@ export default function OrderingPage() {
                 <button
                   type="button"
                   className="mt-4 inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:border-stone-400 hover:bg-stone-50"
-                  onClick={() => setDietaryFilters([])}
+                  onClick={() => {
+                    setDietaryFilters([]);
+                    scrollToMenuAfterDietaryFilter();
+                  }}
                 >
                   {t('shopDietaryClearFilters')}
                 </button>

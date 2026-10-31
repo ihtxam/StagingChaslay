@@ -46,6 +46,7 @@ const allTabs = new Set(
     'email',
     'language',
     'users',
+    'extra-modules',
   ] as const
 );
 
@@ -272,6 +273,15 @@ test('retail tables→pos redirect is skipped when search query is set', () => {
       showTablesSettings: true,
       isRetailMerchant: false,
       reservationsLicensed: false,
+      query: '',
+    }),
+    'business'
+  );
+  assert.equal(
+    nextTabForHiddenRetailSettings('shop', {
+      showTablesSettings: true,
+      showShopSettings: false,
+      isRetailMerchant: false,
       query: '',
     }),
     'business'

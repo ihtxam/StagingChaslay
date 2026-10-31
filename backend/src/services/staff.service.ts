@@ -2,6 +2,12 @@ import { getDb, schema } from "@/db";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { AuthService } from "@/services/auth.service";
 import {
+  assertValidStaffPin,
+  isValidStaffPin,
+  normalizeStaffPinInput,
+  STAFF_PIN_VALIDATION_ERROR,
+} from "@/lib/staff-pin";
+import {
   ALL_PERMISSIONS,
   DEFAULT_ROLE_TEMPLATES,
   applyRolePermissionPolicy,
@@ -47,6 +53,19 @@ export class StaffService {
       message === this.NO_PASSWORD_LOGIN_MESSAGE ||
       message === this.NO_ENTRY_PERMISSION_MESSAGE
     );
+  }
+
+  /** Reason email/password /login must be rejected (null = password check may proceed). */
+  static emailLoginBlockedReason(staff: {
+    pinOnly?: boolean | null;
+    passwordHash?: string | null;
+    pinHash?: string | null;
+  }): string | null {
+    if (staff.pinOnly) return this.PIN_ONLY_LOGIN_MESSAGE;
+    if (!staff.passwordHash) {
+      return staff.pinHash ? this.PIN_ONLY_LOGIN_MESSAGE : this.NO_PASSWORD_LOGIN_MESSAGE;
+    }
+    return null;
   }
 
   private static normalizeStaffPhone(raw?: string | null): string | null {
@@ -136,6 +155,7 @@ export class StaffService {
     await this.enforceWaiterFloorRestrictions(merchantId);
     await this.enforceStorekeeperPanelRestrictions(merchantId);
     await this.ensureCashierRolePermissions(merchantId);
+    await this.ensureRegisterStaffEodPermissions(merchantId);
     await this.syncCashierLoginHome(merchantId);
     defaultRolesReady.add(merchantId);
     return db.query.merchantRoles.findMany({
@@ -262,9 +282,7 @@ export class StaffService {
   }
 
   private static normalizePinInput(pin: unknown): string {
-    return String(pin ?? "")
-      .trim()
-      .replace(/\D/g, "");
+    return normalizeStaffPinInput(pin);
   }
 
   private static async assignStaffPin(merchantId: string, staffId: string, pin: string) {
@@ -476,14 +494,45 @@ export class StaffService {
     if (!role) return;
     const current = parsePermissions(role.permissions);
     const required: Permission[] = ["USE_WEBPOS", "USE_POS", "PROCESS_PAYMENTS"];
-    const missing = required.filter((p) => !current.includes(p));
-    if (!missing.length) return;
-    const merged = encodePermissions([...new Set([...current, ...template.permissions])]);
+    const reportKeys: Permission[] = ["VIEW_REPORTS", "END_OF_DAY"];
+    const missingCore = required.filter((p) => !current.includes(p));
+    const missingReports = reportKeys.filter((p) => !current.includes(p));
+    if (!missingCore.length && !missingReports.length) return;
+    const merged = encodePermissions([
+      ...new Set([...current, ...template.permissions, ...reportKeys]),
+    ]);
     if (role.permissions === merged) return;
     await db
       .update(schema.merchantRoles)
       .set({ permissions: merged, updatedAt: new Date() })
       .where(eq(schema.merchantRoles.id, role.id));
+  }
+
+  /**
+   * Register-only roles (POS without back office) need EOD print in the POS gear menu.
+   * Adds VIEW_REPORTS + END_OF_DAY without stripping merchant customizations.
+   */
+  static async ensureRegisterStaffEodPermissions(merchantId: string) {
+    const db = getDb();
+    const roles = await db.query.merchantRoles.findMany({
+      where: eq(schema.merchantRoles.merchantId, merchantId),
+    });
+    const reportKeys: Permission[] = ["VIEW_REPORTS", "END_OF_DAY"];
+    for (const role of roles) {
+      const perms = parsePermissions(role.permissions);
+      const onRegister = perms.includes("USE_WEBPOS") || perms.includes("USE_POS");
+      const hasPanel = perms.includes("ACCESS_PANEL");
+      if (!onRegister || hasPanel) continue;
+      const missing = reportKeys.filter((p) => !perms.includes(p));
+      if (!missing.length) continue;
+      await db
+        .update(schema.merchantRoles)
+        .set({
+          permissions: encodePermissions([...perms, ...missing]),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.merchantRoles.id, role.id));
+    }
   }
 
   /**
@@ -614,6 +663,7 @@ export class StaffService {
         extraPermissions: parsePermissions(s.extraPermissions),
         phone: s.phone || null,
         canAccessPanel: s.canAccessPanel,
+        pinOnly: s.pinOnly,
         isActive: s.isActive,
         pinSet: !!s.pinHash,
         pin: s.pinDisplay || null,
@@ -636,6 +686,7 @@ export class StaffService {
       phone?: string;
       password?: string;
       canAccessPanel?: boolean;
+      pinOnly?: boolean;
       loginHome?: StaffLoginHome;
       extraPermissions?: Permission[];
     }
@@ -659,14 +710,20 @@ export class StaffService {
     }
 
     const pin = input.pin?.trim();
-    if (pin && (pin.length < 4 || pin.length > 8)) {
-      throw new Error("PIN must be 4-8 digits");
+    if (pin && !isValidStaffPin(pin)) {
+      throw new Error(STAFF_PIN_VALIDATION_ERROR);
     }
     if (pin) await this.assertPinUnique(merchantId, pin);
 
     const password = input.password?.trim() || "";
     // Email + password on create always enables official /login (do not require a checkbox).
-    const canAccessPanel = !!input.canAccessPanel || !!(email && password);
+    let canAccessPanel = !!input.canAccessPanel || !!(email && password);
+    let pinOnly =
+      input.pinOnly === true || (!canAccessPanel && !email && !password);
+    if (pinOnly) canAccessPanel = false;
+    if (canAccessPanel && pinOnly) {
+      throw new Error("PIN-only staff cannot use official email login");
+    }
     if (canAccessPanel && !email) {
       throw new Error("Email is required for panel access");
     }
@@ -698,6 +755,7 @@ export class StaffService {
         pinDisplay: pin || null,
         passwordHash: password ? await AuthService.hashPassword(password) : null,
         canAccessPanel,
+        pinOnly,
         loginHome,
         extraPermissions:
           input.extraPermissions !== undefined
@@ -720,6 +778,7 @@ export class StaffService {
       email?: string | null;
       password?: string | null;
       canAccessPanel?: boolean;
+      pinOnly?: boolean;
       isActive?: boolean;
       deliveryHourlyRateOverride?: number | null;
       deliveryPerOrderFeeOverride?: number | null;
@@ -770,7 +829,7 @@ export class StaffService {
         patch.pinDisplay = null;
       } else {
         const pin = String(input.pin).trim();
-        if (pin.length < 4 || pin.length > 8) throw new Error("PIN must be 4-8 digits");
+        if (!isValidStaffPin(pin)) throw new Error(STAFF_PIN_VALIDATION_ERROR);
         await this.assertPinUnique(merchantId, pin, staffId);
         patch.pinHash = await AuthService.hashPassword(pin);
         patch.pinDisplay = pin;
@@ -806,8 +865,17 @@ export class StaffService {
     // Setting email + a new password enables official /login even if the checkbox was off.
     if (settingPassword && nextEmail) {
       patch.canAccessPanel = true;
+      patch.pinOnly = false;
     } else if (input.canAccessPanel !== undefined) {
       patch.canAccessPanel = !!input.canAccessPanel;
+      if (patch.canAccessPanel) patch.pinOnly = false;
+    }
+    if (input.pinOnly !== undefined) {
+      patch.pinOnly = !!input.pinOnly;
+      if (patch.pinOnly) {
+        patch.canAccessPanel = false;
+        patch.passwordHash = null;
+      }
     }
 
     const nextCanAccess =
@@ -895,9 +963,7 @@ export class StaffService {
     await this.ensureManagerPosPin(merchantId);
     const normalized = this.normalizePinInput(pin);
     if (!normalized) throw new Error("PIN is required");
-    if (normalized.length < 4 || normalized.length > 8) {
-      throw new Error("PIN must be 4-8 digits");
-    }
+    assertValidStaffPin(normalized);
 
     // Ensure system Waiter privileges stay floor-only before returning PIN session.
     await this.enforceWaiterFloorRestrictions(merchantId);
@@ -991,7 +1057,7 @@ export class StaffService {
   static async updatePosPreferences(
     merchantId: string,
     staffId: string,
-    prefs: { preferredTerminalId?: string | null }
+    prefs: { preferredTerminalId?: string | null; deviceId?: string | null }
   ) {
     const db = getDb();
     const staff = await db.query.merchantStaff.findFirst({
@@ -1013,6 +1079,21 @@ export class StaffService {
         ),
       });
       if (!terminal) throw new Error("Terminal not found");
+
+      const { PaymentProfilesService } = await import("@/services/payment-profiles.service");
+      const { DeviceEnrollmentService } = await import("@/services/device-enrollment.service");
+      const { terminalBelongsToProfile } = await import("@/lib/adyen-terminal-credentials");
+      const defaultProfileId = await PaymentProfilesService.getDefaultProfileId(merchantId);
+      const scopeProfileId = await DeviceEnrollmentService.resolveProfileScopeForDevice(
+        merchantId,
+        prefs.deviceId
+      );
+      if (
+        scopeProfileId &&
+        !terminalBelongsToProfile(terminal.paymentProfileId, scopeProfileId, defaultProfileId)
+      ) {
+        throw new Error("Terminal must use the same payment profile as this device");
+      }
     }
 
     await db
@@ -1042,10 +1123,9 @@ export class StaffService {
       throw new Error("Invalid email or password");
     }
 
-    if (!staff.passwordHash) {
-      throw new Error(
-        staff.pinHash ? this.PIN_ONLY_LOGIN_MESSAGE : this.NO_PASSWORD_LOGIN_MESSAGE
-      );
+    const loginBlocked = this.emailLoginBlockedReason(staff);
+    if (loginBlocked) {
+      throw new Error(loginBlocked);
     }
 
     const ok = await AuthService.comparePassword(password, staff.passwordHash);
@@ -1106,6 +1186,7 @@ export class StaffService {
       extraPermissions: parsePermissions(staff.extraPermissions),
       phone: staff.phone || null,
       canAccessPanel: staff.canAccessPanel,
+      pinOnly: staff.pinOnly,
       isActive: staff.isActive,
       pinSet: !!staff.pinHash,
       pin: staff.pinDisplay || null,

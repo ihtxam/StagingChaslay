@@ -4,7 +4,7 @@ import { Search, X } from 'lucide-react';
 import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
-import { useOnScreenKeyboard } from '@/components/OnScreenKeyboard';
+import { useOnScreenKeyboard } from '@/lib/on-screen-keyboard-context';
 import { useModalKeyboardScroll } from '@/lib/useModalKeyboardScroll';
 
 export type WebPosCustomer = {

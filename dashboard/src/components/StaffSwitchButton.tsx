@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useState } from 'react';
 import { UserCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { toastInfo } from '@/lib/toast-notify';
 import WebPosPinModal from '@/components/WebPosPinModal';
 import { useI18n } from '@/lib/i18n';
 import { registerPosSession } from '@/lib/pos-session';
@@ -90,7 +91,7 @@ const StaffSwitchButton = forwardRef<StaffSwitchButtonHandle, Props>(function St
             staffName: session.name,
           });
           if (reg.ok && reg.kickedSessionIds.length > 0) {
-            toast.info(t('webPosSessionReclaimed'));
+            toastInfo(t('webPosSessionReclaimed'));
           }
           setOpen(false);
           toast.success(t('webPosSignedInAs').replace('{name}', staff.name));

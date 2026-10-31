@@ -65,6 +65,7 @@ export class ShopCustomerService {
       firstName?: string;
       lastName?: string;
       phone?: string;
+      marketingSmsOptIn?: boolean;
     }
   ) {
     const db = getDb();
@@ -83,6 +84,30 @@ export class ShopCustomerService {
 
     const passwordHash = await AuthService.hashPassword(input.password);
 
+    const { merchantHasSmsLicense } = await import("@/lib/sms-addon");
+    const smsOn = await merchantHasSmsLicense(merchantId).catch(() => false);
+    if (smsOn && input.phone) {
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(schema.merchants.id, merchantId),
+        columns: { name: true },
+      });
+      const { SmsOtpService } = await import("@/services/sms-otp.service");
+      const otp = await SmsOtpService.request({
+        merchantId,
+        phone: input.phone,
+        purpose: "signup",
+        signup: {
+          email,
+          passwordHash,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          marketingSmsOptIn: input.marketingSmsOptIn === true,
+        },
+        shopName: merchant?.name || undefined,
+      });
+      return { pendingSmsVerification: true, ...otp };
+    }
+
     if (existing) {
       const [updated] = await db
         .update(schema.customers)
@@ -91,6 +116,8 @@ export class ShopCustomerService {
           firstName: input.firstName || existing.firstName,
           lastName: input.lastName || existing.lastName,
           phone: input.phone || existing.phone,
+          marketingSmsOptIn:
+            input.marketingSmsOptIn === true ? true : existing.marketingSmsOptIn,
           updatedAt: new Date(),
         })
         .where(eq(schema.customers.id, existing.id))
@@ -107,6 +134,7 @@ export class ShopCustomerService {
         firstName: input.firstName,
         lastName: input.lastName,
         phone: input.phone,
+        marketingSmsOptIn: input.marketingSmsOptIn === true,
       })
       .returning();
 
@@ -210,6 +238,7 @@ export class ShopCustomerService {
       defaultAddress?: string;
       defaultZip?: string;
       defaultCity?: string;
+      marketingSmsOptIn?: boolean;
     }
   ) {
     const db = getDb();
@@ -526,7 +555,14 @@ export class ShopCustomerService {
       addresses,
       hasAccount: !!c.passwordHash,
       loyaltyPoints: c.loyaltyPoints ?? 0,
+      marketingOptIn: c.marketingOptIn !== false,
+      marketingSmsOptIn: c.marketingSmsOptIn === true,
+      phoneVerifiedAt: c.phoneVerifiedAt || null,
     };
+  }
+
+  static async tokenForPublic(customer: typeof schema.customers.$inferSelect) {
+    return this.tokenFor(customer);
   }
 
   private static async tokenFor(customer: typeof schema.customers.$inferSelect) {

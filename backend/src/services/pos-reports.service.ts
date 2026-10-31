@@ -1,6 +1,7 @@
 import { getDb, schema } from "@/db";
 import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
 import { loadMerchantRowById } from "@/lib/ensure-merchant-schema";
+import { addDaysYmd } from "@/lib/ymd";
 import { normalizePaymentMethod, paymentMethodLabelEn, netPaymentBucketsAfterRefund, refundBucketsFromCumulative, netTaxableSale } from "@/lib/payment-breakdown";
 
 export type ReportPreset =
@@ -55,11 +56,9 @@ function ymdInZurich(d = new Date()): string {
   }).format(d);
 }
 
-function addDaysYmd(ymd: string, delta: number): string {
-  const { start } = zurichDayBounds(ymd);
-  const next = new Date(start.getTime() + delta * 24 * 3600_000);
-  return ymdInZurich(next);
-}
+// Calendar-date stepping lives in @/lib/ymd so it can be unit tested without
+// pulling in the database. See the note there: adding 24h to a Zurich midnight
+// does not advance the date when the clocks go back.
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -82,6 +81,12 @@ function channelLabel(ch: string): string {
       return "Dine-in";
     case "delivery":
       return "Delivery";
+    case "in_store":
+    case "pos":
+    case "retail":
+      return "In store";
+    case "takeaway":
+      return "Takeaway";
     default:
       return "Takeaway";
   }
@@ -791,9 +796,18 @@ export class PosReportsService {
     } else {
       const byDay = new Map<string, number>();
       let cursor = range.from;
-      while (cursor <= range.to) {
+      // Hard stop: a cursor that fails to advance must never pin the event
+      // loop again. Ten years of daily buckets is far beyond any real report.
+      for (let guard = 0; cursor <= range.to && guard < 3700; guard += 1) {
         byDay.set(cursor, 0);
-        cursor = addDaysYmd(cursor, 1);
+        const next = addDaysYmd(cursor, 1);
+        if (next <= cursor) {
+          console.warn(
+            `[reports] day cursor failed to advance at ${cursor} (range ${range.from}..${range.to}); stopping`
+          );
+          break;
+        }
+        cursor = next;
       }
       for (const o of completed) {
         const day = new Intl.DateTimeFormat("en-CA", {
@@ -908,6 +922,7 @@ export class PosReportsService {
         refundAmount: true,
         status: true,
         paymentStatus: true,
+        guestCount: true,
       },
     });
     const locations = await db.query.locations.findMany({
@@ -919,28 +934,39 @@ export class PosReportsService {
       locations.find((l) => l.isDefault)?.id ?? locations[0]?.id ?? null;
 
     const completed = orders.filter((o) => isCountableSale(o));
-    const byLoc = new Map<string, { revenue: number; orders: number }>();
+    const byLoc = new Map<string, { revenue: number; orders: number; customers: number }>();
+    for (const loc of locations) {
+      byLoc.set(loc.id, { revenue: 0, orders: 0, customers: 0 });
+    }
     for (const o of completed) {
       let key = o.locationId;
       if (!key || !nameById.has(key)) {
         key = defaultLocationId ?? key ?? "unknown";
       }
-      const cur = byLoc.get(key) || { revenue: 0, orders: 0 };
+      if (!byLoc.has(key)) {
+        byLoc.set(key, { revenue: 0, orders: 0, customers: 0 });
+      }
+      const cur = byLoc.get(key)!;
       cur.revenue += netTaxableSale(
         Number(o.total || 0),
         Number(o.tipAmount || 0),
         Number(o.refundAmount || 0)
       );
       cur.orders += 1;
+      const guests = Number(o.guestCount) || 0;
+      cur.customers += guests > 0 ? guests : 1;
       byLoc.set(key, cur);
     }
     const defaultName = defaultLocationId ? nameById.get(defaultLocationId) : null;
-    return [...byLoc.entries()].map(([locationId, stats]) => ({
-      locationId,
-      name: nameById.get(locationId) || defaultName || "Unknown",
-      revenue: round2(stats.revenue),
-      orders: stats.orders,
-    }));
+    return [...byLoc.entries()]
+      .map(([locationId, stats]) => ({
+        locationId,
+        name: nameById.get(locationId) || defaultName || "Unknown",
+        revenue: round2(stats.revenue),
+        orders: stats.orders,
+        customers: stats.customers,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** HQ dashboard — org-wide summary with per-location breakdown. */

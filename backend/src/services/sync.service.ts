@@ -844,7 +844,7 @@ export class SyncService {
             : null;
         const seatRaw = item.seatNumber;
         const seatNumber =
-          seatRaw != null && String(searRaw).trim() !== "" && Number.isFinite(Number(seatRaw))
+          seatRaw != null && String(seatRaw).trim() !== "" && Number.isFinite(Number(seatRaw))
             ? Math.floor(Number(seatRaw))
             : null;
 
@@ -934,6 +934,7 @@ export class SyncService {
               tableId: sale.tableId,
               paidTotal: Number(sale.total) || Number(order.total) || 0,
               settleKitchen: true,
+              paymentSettled: true,
             });
           } catch (heldErr) {
             console.warn("[sync] held release failed:", heldErr);

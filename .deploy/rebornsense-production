@@ -1,3 +1,4 @@
+# Deploy 2026-10-22T10:05:00Z — POS open-ticket ledger: paid/cancel heal, KDS ghost prevention (#843)
 # Deploy 2026-10-21T14:40:00Z — POS cancelled kitchen tickets leave Actives (#826), KDS dismiss, sw v16
 # Deploy 2026-10-20T05:55:00Z — Bridge download manifest 0.4.46, canonical APK route fix
 # Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
@@ -34,3 +35,42 @@
 # Deploy 2026-10-20T09:30:00Z — WebPOS register picker solid white modal panel
 # Deploy 2026-10-20T08:05:00Z — shop catering nav/scroll, WebPOS register picker scroll + contrast, waiter table labels
 # Deploy 2026-10-20T05:35:00Z — POS floor stations, Bridge 0.4.46 USB permission, PIN loginHome routing, shop hub landing fix
+# Deploy 2026-10-22T21:46:07Z — staging verified #854-858 (shop assets, branch settings, desktop keyboard, merchant TDZ)
+# Deploy 2026-10-22T21:52:00Z — PIN-only floor staff and hardware gear (#853)
+# Deploy 2026-10-23T05:18:00Z — URGENT: merchant panel TDZ fix (#860) — split OnScreenKeyboardToggle imports
+# Deploy 2026-10-23T05:23:00Z — URGENT: isolate keyboard provider + lazy login (merchant TDZ)
+# Deploy 2026-10-23T05:35:00Z — URGENT: lazy merchant panel route (Sr TDZ / index chunk init order)
+# Deploy 2026-10-23T05:40:00Z — RETRY prod deploy: index-Cr6uXlek.js lazy merchant Dashboard chunk
+# Deploy 2026-10-23T05:45:00Z — CRITICAL: split Dashboard Header/Settings/WebPos lazy chunks (xs TDZ / MerchantShell)
+# Deploy 2026-10-23T05:50:00Z — RETRY: Dashboard-KLxvyctz.js index-BAKdOiHU.js (891c03bb)
+# Deploy 2026-10-23T05:54:00Z — URGENT: force-recreate dashboard after build (stale BNLO2bvC / TDZ)
+# Deploy 2026-10-23T06:05:00Z — CRITICAL: merchant lazy route graph (Dashboard ~49kb shell, vt TDZ / webpos-print-relay cycle)
+# Deploy 2026-10-23T06:10:00Z — RETRY prod: index-BFeU9EYQ + Dashboard-CxmejqM2.js (replace stale CUWkP6L1 monolith / vt TDZ)
+# Deploy 2026-10-23T06:10:00Z — RETRY: 4136fc66 vt TDZ lazy merchant-lazy-routes (Dashboard-CxmejqM2)
+# Deploy 2026-10-23T06:15:00Z — CRITICAL bbb21f04: slim Dashboard-B4ZRzvar ~49kb index-CdsGIaaf (vt TDZ fix)
+# Deploy 2026-10-23T06:09:00Z — RETRY prod: still index-BNLO2bvC / Dashboard-CUWkP6L1 1.3MB (expect f9b2189a CdsGIaaf B4ZRzvar)
+# Deploy 2026-10-23T06:24:00Z — fix merchantSettingsPath TDZ (panelChromeRestricted before use, minified A)
+# Deploy 2026-10-23T06:33:00Z — CRITICAL WebPOS TDZ: canManageSettings before hardwareGearOnly (minified Bf)
+# Deploy 2026-10-23T12:05:00Z — URGENT: Android cash receipt QR garbled strip fix (raster-only QR, #864)
+# Deploy 2026-10-24T10:58:00Z — PROD: Sunmi receipt header/QR feed (#868), payment profile Adyen sync, hide single-location enrollment UI
+# Deploy 2026-10-24T11:00:00Z — PROD: RebornPOS login DOM credential read (on-screen keyboard vs Chrome)
+# Deploy 2026-10-24T11:05:00Z — PROD: Windows RebornPOS 80mm receipt bitmap header + QR pre-cut feed (not Sunmi-only)
+# Deploy 2026-10-24T23:25:00Z — PROD batch: #878 branch settings, #879 EOD staff perf, #880 4-digit PINs, #881 Settings About, #882 iOS product form zoom, #883 per-location catalog
+# Deploy 2026-10-24T23:28:00Z — RETRY prod deploy after Bridge Sunmi LCD compile fix (unblocks hetzner deploy)
+# Touch this file and push to main to deploy app.rebornsense.com (triggers Deploy to Rebornsense workflow).
+# Last deploy request: 2026-10-24T23:51:20Z — MeliMelo POS retail/EOD/onboarding (#884)
+# Deploy 2026-10-25T00:01:09Z — cashier EOD in hardware gear menu
+# Deploy 2026-10-25T00:15:00Z — RETRY prod: cashier EOD gear (skip Bridge APK build)
+# Deploy 2026-10-25T00:22:00Z — POS printer socket toast + paid-cart guard false positives
+# Deploy 2026-10-25T13:40:00Z — URGENT: login 502 — schema storm fix, panel nav from POS, platform legal (main @ 3a0b9c94)
+# Deploy 2026-10-25T16:10:00Z — URGENT: PIN keypad touch input + API-down UX; recreate API (502)
+# Deploy 2026-10-25T16:25:00Z — schema hot-path memoization, deep health probe, production health watch CI
+# Deploy 2026-10-25T22:45:00Z — PROD: API auto-heal, SMS metered billing, POS→backoffice nav fix (demo@chaslay.com)
+# Deploy 2026-10-25T23:05:00Z — fix: kiosk orders use KIOSK-xxxx-nnn (not WEB-xxxx)
+# Deploy 2026-10-25T23:15:00Z — fix: hide Shop settings tab when edition lacks online_shop (POS-only)
+# Deploy 2026-10-25T23:20:00Z — fix: restart workflow health check (node fetch, not wget in API image)
+# Deploy 2026-10-25T23:50:00Z — PROD #894: listen before merchant schema patches; health-watch scheduled auto-heal
+# Deploy 2026-10-27T23:50:00Z — PROD: receipt header raster (22px store name), POS→backoffice shell fix (#901)
+# Deploy 2026-10-27T23:48:00Z — PROD retry: Navigate off /merchant/pos when leaving POS app mode (demo backoffice)
+# Deploy 2026-10-28T00:00:00Z — PROD trigger: receipt header #901 + backoffice shell fix (#903 merged)
+# Deploy 2026-10-26T06:20:00Z — URGENT: lazy schema bootstrap default, stop ensureAllMerchantSchema cache wipe (07:08 outage)

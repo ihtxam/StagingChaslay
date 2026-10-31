@@ -28,5 +28,7 @@ assert.equal(isPanelNavGroupHidden("products", ["catalog"]), true);
 assert.equal(isPanelNavHidden("/merchant/products/catering-guide", ["products"]), true);
 assert.equal(isPanelNavHidden("/merchant/platform-shop", ["platform-shop"]), true);
 assert.equal(isPanelNavHidden("/merchant/inventory", ["products"]), false);
+assert.equal(isPanelNavHidden("/merchant/settings", ["/merchant/settings"]), true);
+assert.deepEqual(normalizePanelNavHidden(["/merchant/settings"]), ["/merchant/settings"]);
 
 console.log("panel-nav-hidden tests passed");

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ShopAuthShell from '@/components/shop/ShopAuthShell';
@@ -14,6 +14,7 @@ type Props = {
   merchantName?: string;
   logoUrl?: string | null;
   hideBranding?: boolean;
+  smsLoginEnabled?: boolean;
   onAuthed: (token: string) => Promise<void>;
 };
 
@@ -23,6 +24,7 @@ export default function ShopAccountGuestAuth({
   merchantName = '',
   logoUrl,
   hideBranding = false,
+  smsLoginEnabled: smsLoginEnabledProp,
   onAuthed,
 }: Props) {
   const { t } = useI18n();
@@ -45,6 +47,31 @@ export default function ShopAccountGuestAuth({
   const [registerPassword2, setRegisterPassword2] = useState('');
 
   const [resetEmail, setResetEmail] = useState('');
+  const [smsEnabled, setSmsEnabled] = useState(smsLoginEnabledProp === true);
+  const [phoneMode, setPhoneMode] = useState(false);
+  const [loginPhone, setLoginPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSentTo, setOtpSentTo] = useState('');
+  const [marketingSmsOptIn, setMarketingSmsOptIn] = useState(false);
+
+  useEffect(() => {
+    if (smsLoginEnabledProp === true) {
+      setSmsEnabled(true);
+      return;
+    }
+    let cancelled = false;
+    axios
+      .get(`/api/shop/${shopKey}`)
+      .then((res) => {
+        if (!cancelled && res.data?.data?.smsLoginEnabled === true) setSmsEnabled(true);
+      })
+      .catch(() => {
+        /* optional */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shopKey, smsLoginEnabledProp]);
 
   const homePath = base || '/';
 
@@ -81,11 +108,57 @@ export default function ShopAccountGuestAuth({
         firstName: registerFirstName,
         lastName: registerLastName,
         phone: registerPhone,
+        marketingSmsOptIn,
       });
+      if (res.data.pendingSmsVerification) {
+        setOtpSentTo(res.data.phone || registerPhone);
+        setPhoneMode(true);
+        setInfo(t('shopSmsCodeSent').replace('{phone}', res.data.phone || registerPhone));
+        return;
+      }
       saveCustomerToken(shopKey, res.data.token);
       await onAuthed(res.data.token);
     } catch (err: any) {
       setError(err.response?.data?.error || t('shopRegisterFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRequestPhoneLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    setInfo('');
+    try {
+      const res = await axios.post(`/api/shop/${shopKey}/auth/phone/request`, {
+        phone: loginPhone,
+        purpose: 'login',
+      });
+      setOtpSentTo(res.data.phone || loginPhone);
+      setInfo(t('shopSmsCodeSent').replace('{phone}', res.data.phone || loginPhone));
+    } catch (err: any) {
+      setError(err.response?.data?.error || t('shopLoginFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const purpose = isRegister ? 'signup' : 'login';
+      const res = await axios.post(`/api/shop/${shopKey}/auth/phone/verify`, {
+        phone: otpSentTo || loginPhone || registerPhone,
+        code: otpCode,
+        purpose,
+      });
+      saveCustomerToken(shopKey, res.data.token);
+      await onAuthed(res.data.token);
+    } catch (err: any) {
+      setError(err.response?.data?.error || t('shopLoginFailed'));
     } finally {
       setBusy(false);
     }
@@ -170,7 +243,7 @@ export default function ShopAccountGuestAuth({
       }
     >
       {isRegister ? (
-        <form onSubmit={onRegister} className="space-y-3">
+        <form onSubmit={otpSentTo ? onVerifyOtp : onRegister} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
               <span className={SHOP_LABEL_CLASS}>{t('shopFirstName')}</span>
@@ -225,9 +298,79 @@ export default function ShopAccountGuestAuth({
               minLength={6}
             />
           </label>
+          {smsEnabled ? (
+            <label className="flex items-start gap-2 text-sm text-stone-700">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={marketingSmsOptIn}
+                onChange={(e) => setMarketingSmsOptIn(e.target.checked)}
+              />
+              <span>{t('shopMarketingSmsOptIn')}</span>
+            </label>
+          ) : null}
+          {otpSentTo ? (
+            <div className="space-y-3">
+              <p className="text-sm text-emerald-700">
+                {t('shopSmsCodeSent').replace('{phone}', otpSentTo)}
+              </p>
+              <label className="block">
+                <span className={SHOP_LABEL_CLASS}>{t('shopSmsCode')}</span>
+                <input
+                  className={SHOP_INPUT_CLASS}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                />
+              </label>
+            </div>
+          ) : null}
+          {error && !otpSentTo ? <p className="text-sm text-red-600">{error}</p> : null}
+          {info && !otpSentTo ? <p className="text-sm text-emerald-700">{info}</p> : null}
+          {!otpSentTo ? (
+            <button type="submit" disabled={busy} className={`w-full ${SHOP_BTN_PRIMARY_CLASS}`}>
+              {busy ? t('shopLoading') : t('shopCreateAccount')}
+            </button>
+          ) : null}
+        </form>
+      ) : phoneMode && smsEnabled ? (
+        <form onSubmit={otpSentTo ? onVerifyOtp : onRequestPhoneLogin} className="space-y-3">
+          <label className="block">
+            <span className={SHOP_LABEL_CLASS}>{t('shopPhone')}</span>
+            <ShopPhoneField value={loginPhone} onChange={setLoginPhone} />
+          </label>
+          {otpSentTo ? (
+            <label className="block">
+              <span className={SHOP_LABEL_CLASS}>{t('shopSmsCode')}</span>
+              <input
+                className={SHOP_INPUT_CLASS}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required
+              />
+            </label>
+          ) : null}
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
           <button type="submit" disabled={busy} className={`w-full ${SHOP_BTN_PRIMARY_CLASS}`}>
-            {busy ? t('shopLoading') : t('shopCreateAccount')}
+            {busy ? t('shopLoading') : otpSentTo ? t('shopVerifyCode') : t('shopSendCode')}
+          </button>
+          <button
+            type="button"
+            className="w-full text-sm underline text-stone-600"
+            onClick={() => {
+              setPhoneMode(false);
+              setOtpSentTo('');
+              setOtpCode('');
+              setError('');
+              setInfo('');
+            }}
+          >
+            {t('shopUseEmailInstead')}
           </button>
         </form>
       ) : (
@@ -265,6 +408,19 @@ export default function ShopAccountGuestAuth({
           <button type="submit" disabled={busy} className={`w-full ${SHOP_BTN_PRIMARY_CLASS}`}>
             {busy ? t('shopLoading') : t('shopLogIn')}
           </button>
+          {smsEnabled ? (
+            <button
+              type="button"
+              className="w-full text-sm underline text-stone-600"
+              onClick={() => {
+                setPhoneMode(true);
+                setError('');
+                setInfo('');
+              }}
+            >
+              {t('shopPhoneLogin')}
+            </button>
+          ) : null}
         </form>
       )}
     </ShopAuthShell>

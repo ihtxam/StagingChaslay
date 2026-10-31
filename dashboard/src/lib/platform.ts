@@ -163,7 +163,17 @@ export function shouldUseWebPosOnScreenKeyboard(): boolean {
 
 /** Auto-show on-screen keyboard when a text field is focused (kiosk / touch / PWA). */
 export function shouldAutoOpenOnScreenKeyboard(): boolean {
-  return shouldUseWebPosOnScreenKeyboard();
+  if (!shouldUseWebPosOnScreenKeyboard()) return false;
+  try {
+    const path = window.location.pathname || '';
+    // Login: only auto-open on touch-first devices so mouse+keyboard PCs are not blocked.
+    if (/^\/login(\/|$)/.test(path) && !isTouchPrimaryDevice()) {
+      return false;
+    }
+  } catch {
+    /* ignore */
+  }
+  return true;
 }
 
 /** On-screen keyboard toggle (kiosk / tablet / desktop shell — not Android or phones). */

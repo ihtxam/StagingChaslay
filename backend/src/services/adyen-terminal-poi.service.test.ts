@@ -6,6 +6,26 @@ import {
   buildTerminalSaleToAcquirerData,
   parseTerminalTipFromPaymentResponse,
 } from "./adyen-terminal-poi.service.ts";
+import { shouldAskGratuityOnTerminal, normalizePosCheckoutSettings } from "../lib/pos-checkout-settings.ts";
+
+assert.equal(
+  shouldAskGratuityOnTerminal(normalizePosCheckoutSettings({ tipsEnabled: true }), {}),
+  false
+);
+assert.equal(
+  shouldAskGratuityOnTerminal(
+    normalizePosCheckoutSettings({ tipsEnabled: true, terminalAskGratuityEnabled: true }),
+    {}
+  ),
+  true
+);
+assert.equal(
+  shouldAskGratuityOnTerminal(
+    normalizePosCheckoutSettings({ terminalAskGratuityEnabled: true }),
+    { posTipAmount: 2 }
+  ),
+  false
+);
 
 assert.equal(
   buildTerminalSaleToAcquirerData({ askGratuity: true }),

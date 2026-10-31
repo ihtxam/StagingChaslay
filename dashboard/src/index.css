@@ -152,6 +152,28 @@ button {
     overscroll-behavior: none;
   }
 
+  @media (max-width: 1023px) {
+    html.panel-vv-sync .panel-shell {
+      height: var(--panel-vvh, 100dvh);
+      max-height: var(--panel-vvh, 100dvh);
+    }
+
+    html.panel-vv-sync.panel-kb-open .panel-shell {
+      position: fixed;
+      top: var(--panel-vv-top, 0px);
+      left: var(--panel-vv-left, 0px);
+      width: var(--panel-vvw, 100%);
+      height: var(--panel-vvh, 100dvh);
+      max-height: var(--panel-vvh, 100dvh);
+      right: auto;
+      z-index: 1;
+    }
+
+    html.panel-vv-sync.panel-kb-open .reborn-powered-by--panel {
+      display: none;
+    }
+  }
+
   /* Merchant/reseller/superadmin nav — Reborn burgundy brand gradient */
   .panel-sidebar {
     --sidebar-active: rgba(0, 0, 0, 0.22);
@@ -259,8 +281,8 @@ button {
   html.webpos-lock body,
   html.webpos-lock #root {
     width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden;
+    max-width: 100%;
+    overflow: hidden;
     height: 100%;
     height: 100dvh;
     -webkit-text-size-adjust: 100%;
@@ -315,7 +337,10 @@ button {
    */
   .webpos-shell.webpos-shell--fill {
     height: calc(100dvh / var(--webpos-zoom));
-    width: calc(100vw / var(--webpos-zoom));
+    /* 100vw includes the scrollbar and scrolls the document, which sticks as a
+       left/top gap after leaving Settings. Fill the parent instead. */
+    width: calc(100% / var(--webpos-zoom));
+    max-width: 100%;
     max-height: calc(100dvh / var(--webpos-zoom));
   }
   .webpos-shell.webpos-shell--embedded {
@@ -523,7 +548,7 @@ button {
     color: var(--webpos-text) !important;
   }
 
-  /* Prevent iOS Safari zoom-on-focus for POS inputs (needs >= 16px). */
+  /* Prevent iOS Safari zoom-on-focus (inputs need >= 16px or the page zooms and feels "stuck"). */
   .webpos-shell input,
   .webpos-shell textarea,
   .webpos-shell select,
@@ -535,6 +560,17 @@ button {
   .kds-shell select {
     font-size: 16px !important;
     touch-action: manipulation;
+  }
+
+  @media (max-width: 1023px), (pointer: coarse) {
+    .panel-shell input,
+    .panel-shell textarea,
+    .panel-shell select,
+    .panel-shell .input,
+    .panel-shell .field-input {
+      font-size: 16px !important;
+      touch-action: manipulation;
+    }
   }
 
   /* Desktop search: smaller text + flexible width so full query stays visible. */
@@ -1762,8 +1798,8 @@ button {
     .webpos-shell[data-narrow='1'] {
       --webpos-zoom: 1;
       zoom: 1;
-      width: 100vw !important;
-      max-width: 100vw;
+      width: 100% !important;
+      max-width: 100%;
       height: 100dvh !important;
       max-height: 100dvh !important;
       overflow: hidden;
@@ -1916,6 +1952,46 @@ button {
     animation: webpos-pin-shake 0.4s ease-in-out;
   }
 
+  /* Phones: clock → message → keypad as one block above the footer (30px before keypad). */
+  @media (max-width: 639px) {
+    .webpos-pin-gate-body {
+      justify-content: flex-end;
+    }
+
+    .webpos-pin-gate-entry {
+      flex: 0 0 auto;
+    }
+
+    .webpos-pin-gate-stack {
+      width: 100%;
+    }
+
+    .webpos-pin-gate-mobile-clock {
+      margin-bottom: 0.75rem;
+    }
+
+    .webpos-pin-gate-mobile-clock .webpos-pin-gate-time {
+      font-size: clamp(2.15rem, 8.5vw, 3.25rem);
+    }
+
+    .webpos-pin-gate-keypad-shell {
+      width: 100%;
+      margin-top: 30px;
+      padding-top: 0;
+      padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+    }
+
+    .webpos-pin-gate-keypad {
+      max-width: min(20rem, 92vw);
+      gap: 0.5rem;
+    }
+
+    .webpos-pin-gate-key {
+      height: 3rem;
+      font-size: 1.35rem;
+    }
+  }
+
   /* Small tablets / phones in landscape (e.g. 6" POS) — keep PIN copy and logo visible */
   @media (orientation: landscape) and (max-height: 520px) {
     .webpos-pin-gate-time {
@@ -1936,7 +2012,10 @@ button {
       padding-bottom: 0.25rem;
     }
 
-    .webpos-pin-gate-clock,
+    .webpos-pin-gate-clock {
+      justify-content: flex-start;
+    }
+
     .webpos-pin-gate-entry {
       justify-content: flex-start;
     }
@@ -2133,6 +2212,48 @@ html.shop-shell #root {
 }
 
 /* Global shop footer: full viewport width, pinned below page content */
+@keyframes shop-reservation-fab-pulse {
+  0%,
+  100% {
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+  }
+  50% {
+    box-shadow:
+      0 10px 28px rgba(15, 23, 42, 0.22),
+      0 0 0 10px rgba(28, 53, 87, 0.18);
+  }
+}
+
+.shop-reservation-fab--pulse {
+  animation: shop-reservation-fab-pulse 1.05s ease-in-out 2;
+}
+
+/* Scroll-reveal booking peek (half dock + full strip) */
+.shop-reservation-peek {
+  opacity: 0;
+  transform: translateY(1.25rem);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+}
+
+.shop-reservation-peek--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.shop-reservation-peek__card {
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shop-reservation-peek--half.shop-reservation-peek--visible .shop-reservation-peek__card {
+  transform: translateY(46%);
+}
+
+.shop-reservation-peek--full.shop-reservation-peek--visible .shop-reservation-peek__card {
+  transform: translateY(0);
+}
+
 .shop-route-layout__footer {
   width: 100%;
   max-width: none;

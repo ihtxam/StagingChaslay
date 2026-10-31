@@ -299,6 +299,55 @@ router.put("/platform-settings/mailco", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/platform-settings/esendex", async (_req: Request, res: Response) => {
+  try {
+    const esendex = await PlatformSettingsService.getEsendexSettingsPublic();
+    res.json({ success: true, esendex });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load Esendex settings",
+    });
+  }
+});
+
+router.put("/platform-settings/esendex", async (req: Request, res: Response) => {
+  try {
+    const esendex = await PlatformSettingsService.updateEsendexSettings(req.body || {});
+    res.json({ success: true, esendex });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save Esendex settings",
+    });
+  }
+});
+
+/** Monthly SMS usage billing for all merchants with the Esendex addon. */
+router.get("/sms-billing", async (req: Request, res: Response) => {
+  try {
+    const { SmsBillingService } = await import("@/services/sms-billing.service");
+    const month = String(req.query.month || "").trim() || undefined;
+    const summary = await SmsBillingService.listAddonMerchantsBilling(month);
+    res.json({ success: true, ...summary });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to load SMS billing",
+    });
+  }
+});
+
+router.get("/merchants/:merchantId/sms-billing", async (req: Request, res: Response) => {
+  try {
+    const { SmsBillingService } = await import("@/services/sms-billing.service");
+    const month = String(req.query.month || "").trim() || undefined;
+    const report = await SmsBillingService.getMonthlyReport(req.params.merchantId, month);
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to load SMS billing",
+    });
+  }
+});
+
 /**
  * GET /api/superadmin/platform-settings/desktop
  */
@@ -369,7 +418,7 @@ router.post(
  */
 router.get("/platform-settings/legal", async (_req: Request, res: Response) => {
   try {
-    const legal = await PlatformSettingsService.getPlatformLegalUrls();
+    const legal = await PlatformSettingsService.getPlatformLegalSettings();
     res.json({ success: true, legal });
   } catch (error) {
     console.error("Error getting platform legal settings:", error);
@@ -384,12 +433,42 @@ router.get("/platform-settings/legal", async (_req: Request, res: Response) => {
  */
 router.put("/platform-settings/legal", async (req: Request, res: Response) => {
   try {
-    const legal = await PlatformSettingsService.updatePlatformLegalUrls(req.body || {});
+    const legal = await PlatformSettingsService.updatePlatformLegalSettings(req.body || {});
     res.json({ success: true, legal });
   } catch (error) {
     console.error("Error updating platform legal settings:", error);
     res.status(400).json({
       error: error instanceof Error ? error.message : "Failed to save platform legal settings",
+    });
+  }
+});
+
+/**
+ * GET /api/superadmin/platform-settings/merchant-about
+ */
+router.get("/platform-settings/merchant-about", async (_req: Request, res: Response) => {
+  try {
+    const html = await PlatformSettingsService.getMerchantAboutHtml();
+    res.json({ success: true, about: { html } });
+  } catch (error) {
+    console.error("Error getting merchant about settings:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load merchant about content",
+    });
+  }
+});
+
+/**
+ * PUT /api/superadmin/platform-settings/merchant-about
+ */
+router.put("/platform-settings/merchant-about", async (req: Request, res: Response) => {
+  try {
+    const html = await PlatformSettingsService.updateMerchantAboutHtml(String(req.body?.html ?? ""));
+    res.json({ success: true, about: { html } });
+  } catch (error) {
+    console.error("Error updating merchant about settings:", error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Failed to save merchant about content",
     });
   }
 });
@@ -608,6 +687,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
       odooAddonEnabled,
       growthAnalyticsAddonEnabled,
       guestCrmAddonEnabled,
+      phoneOrderingAddonEnabled,
       marketingAutomationAddonEnabled,
       smartSegmentsAddonEnabled,
       reservationCampaignsAddonEnabled,
@@ -654,6 +734,7 @@ router.post("/merchants", async (req: Request, res: Response) => {
         odooAddonEnabled: odooAddonEnabled === true,
         growthAnalyticsAddonEnabled: growthAnalyticsAddonEnabled === true,
         guestCrmAddonEnabled: guestCrmAddonEnabled === true,
+        phoneOrderingAddonEnabled: phoneOrderingAddonEnabled === true,
         marketingAutomationAddonEnabled: marketingAutomationAddonEnabled === true,
         smartSegmentsAddonEnabled: smartSegmentsAddonEnabled === true,
         reservationCampaignsAddonEnabled: reservationCampaignsAddonEnabled === true,
@@ -733,10 +814,14 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       updates.cateringAddonEnabled != null ||
       updates.growthAnalyticsAddonEnabled != null ||
       updates.guestCrmAddonEnabled != null ||
+      updates.phoneOrderingAddonEnabled != null ||
       updates.marketingAutomationAddonEnabled != null ||
       updates.smartSegmentsAddonEnabled != null ||
       updates.reservationCampaignsAddonEnabled != null ||
-      updates.aiCoachAddonEnabled != null
+      updates.aiCoachAddonEnabled != null ||
+      updates.smsAddonEnabled != null ||
+      updates.smsTier != null ||
+      updates.smsUnitPriceCents != null
     ) {
       await MerchantService.updatePosPostLimits(merchantId, {
         maxPosPosts: updates.maxPosPosts != null ? Number(updates.maxPosPosts) : undefined,
@@ -802,6 +887,10 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
           updates.guestCrmAddonEnabled != null
             ? updates.guestCrmAddonEnabled === true
             : undefined,
+        phoneOrderingAddonEnabled:
+          updates.phoneOrderingAddonEnabled != null
+            ? updates.phoneOrderingAddonEnabled === true
+            : undefined,
         marketingAutomationAddonEnabled:
           updates.marketingAutomationAddonEnabled != null
             ? updates.marketingAutomationAddonEnabled === true
@@ -816,6 +905,11 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
             : undefined,
         aiCoachAddonEnabled:
           updates.aiCoachAddonEnabled != null ? updates.aiCoachAddonEnabled === true : undefined,
+        smsAddonEnabled:
+          updates.smsAddonEnabled != null ? updates.smsAddonEnabled === true : undefined,
+        smsTier: updates.smsTier != null ? String(updates.smsTier) : undefined,
+        smsUnitPriceCents:
+          updates.smsUnitPriceCents != null ? Number(updates.smsUnitPriceCents) : undefined,
       });
       delete updates.maxPosPosts;
       delete updates.maxWaiterPosts;
@@ -839,10 +933,14 @@ router.put("/merchants/:merchantId", async (req: Request, res: Response) => {
       delete updates.cateringAddonEnabled;
       delete updates.growthAnalyticsAddonEnabled;
       delete updates.guestCrmAddonEnabled;
+      delete updates.phoneOrderingAddonEnabled;
       delete updates.marketingAutomationAddonEnabled;
       delete updates.smartSegmentsAddonEnabled;
       delete updates.reservationCampaignsAddonEnabled;
       delete updates.aiCoachAddonEnabled;
+      delete updates.smsAddonEnabled;
+      delete updates.smsTier;
+      delete updates.smsUnitPriceCents;
     }
 
     const merchant =
