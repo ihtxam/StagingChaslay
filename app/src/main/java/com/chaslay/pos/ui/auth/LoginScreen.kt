@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -55,14 +56,14 @@ import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
-import com.chaslay.pos.domain.model.STAFF_PIN_MAX_LENGTH
 import com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH
+import com.chaslay.pos.domain.model.STAFF_PIN_QUICK_LOGIN_LENGTH
 import com.chaslay.pos.ui.theme.ChaslayBrand
 import com.chaslay.pos.ui.theme.rebornLoginBackground
 import kotlinx.coroutines.delay
 
 private const val PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH
-private const val PIN_MAX_LENGTH = STAFF_PIN_MAX_LENGTH
+private const val PIN_MAX_LENGTH = STAFF_PIN_QUICK_LOGIN_LENGTH
 private const val PIN_AUTO_DELAY_MS = 420L
 private val WIDE_LAYOUT_BREAKPOINT = 720.dp
 
@@ -78,10 +79,10 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
 
-    if (state.isLoggedIn) {
-        onLoggedIn()
-        return
+    LaunchedEffect(state.isLoggedIn) {
+        if (state.isLoggedIn) onLoggedIn()
     }
+    if (state.isLoggedIn) return
 
     if (state.pinSetupUserName != null) {
         PinSetupScreen(
@@ -130,13 +131,7 @@ fun LoginScreen(
 
     fun appendPinDigit(d: String) {
         if (pin.length >= PIN_MAX_LENGTH) return
-        val next = pin + d
-        pin = next
-        if (next.length >= PIN_MAX_LENGTH) {
-            viewModel.loginWithPin(next)
-        } else if (next.length >= PIN_MIN_LENGTH) {
-            viewModel.tryAutoLoginWithPin(next)
-        }
+        pin += d
     }
 
     fun triggerBiometric() {
@@ -166,6 +161,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .rebornLoginBackground()
+            .imePadding()
     ) {
         val isWide = maxWidth >= WIDE_LAYOUT_BREAKPOINT
 
@@ -181,6 +177,7 @@ fun LoginScreen(
                         .weight(1f)
                         .fillMaxHeight()
                         .rebornLoginBackground()
+                        .imePadding()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 48.dp, vertical = 40.dp),
                     contentAlignment = Alignment.Center
@@ -212,13 +209,14 @@ fun LoginScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .imePadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 32.dp),
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 CompactHero()
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 AuthCardContent(
                     showEmail = showEmailLogin,
                     pin = pin,
@@ -288,21 +286,21 @@ private fun CompactHero() {
         Image(
             painter = painterResource(R.drawable.reborn_logo_white),
             contentDescription = stringResource(R.string.app_name),
-            modifier = Modifier.height(96.dp),
+            modifier = Modifier.height(72.dp),
             contentScale = ContentScale.Fit
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.app_name),
             color = ChaslayBrand.WarmWhite,
             fontWeight = FontWeight.Bold,
-            fontSize = 28.sp
+            fontSize = 24.sp
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.login_enter_pin_to_continue),
             color = ChaslayBrand.WarmWhite.copy(alpha = 0.8f),
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             textAlign = TextAlign.Center
         )
     }
@@ -330,9 +328,9 @@ private fun AuthCardContent(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(ChaslayBrand.WarmWhite)
-            .padding(horizontal = 28.dp, vertical = 32.dp),
+            .padding(horizontal = 22.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (!showEmail) {
@@ -340,11 +338,11 @@ private fun AuthCardContent(
                 text = stringResource(R.string.enter_pin),
                 color = ChaslayBrand.Gray900,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 20.sp
+                fontSize = 18.sp
             )
-            Spacer(modifier = Modifier.height(20.dp))
-            PinDotsDisplay(pinLength = pin.length, maxLength = PIN_MAX_LENGTH)
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            PinDotsDisplay(pinLength = pin.length)
+            Spacer(modifier = Modifier.height(14.dp))
             PinLoginKeypad(
                 onDigit = onDigit,
                 onBackspace = onBackspace,
@@ -353,15 +351,15 @@ private fun AuthCardContent(
                 enterEnabled = enterEnabled
             )
             errorMessage?.let {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     it,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
-                    fontSize = 14.sp
+                    fontSize = 13.sp
                 )
             }
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -521,8 +519,8 @@ private fun PinSetupScreen(
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(20.dp))
-            PinDotsDisplay(pinLength = pinLength, maxLength = PIN_MAX_LENGTH)
-            Spacer(modifier = Modifier.height(28.dp))
+            PinDotsDisplay(pinLength = pinLength)
+            Spacer(modifier = Modifier.height(12.dp))
             PinLoginKeypad(
                 onDigit = onDigit,
                 onBackspace = onBackspace,

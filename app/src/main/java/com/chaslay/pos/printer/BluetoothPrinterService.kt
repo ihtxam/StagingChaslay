@@ -14,6 +14,7 @@ import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.data.local.entity.TableOrderItemEntity
 import com.chaslay.pos.data.local.entity.TransactionEntity
 import com.chaslay.pos.data.local.entity.TransactionItemEntity
+import com.chaslay.pos.domain.model.AppLanguage
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.CartSummary
@@ -27,6 +28,7 @@ import com.chaslay.pos.domain.model.formatMoneyAmount
 import com.chaslay.pos.domain.model.roundMoney
 import com.chaslay.pos.data.repository.ReceiptPublicUrls
 import com.chaslay.pos.receipt.ReceiptQrGenerator
+import com.chaslay.pos.util.TextEncoding
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -58,6 +60,12 @@ class BluetoothPrinterService @Inject constructor(
 ) {
     private val kitchenQtyLine = Regex("^\\d+x\\s+", RegexOption.IGNORE_CASE)
     private val kitchenDiscountNote = Regex("""^\d+(\.\d+)?% off$|(?i)^adjusted from """)
+
+    private fun receiptLanguageCode(settings: BusinessSettingsEntity): String =
+        ReceiptPrintLanguage.codeFor(context, settings)
+
+    private fun receiptLabels(settings: BusinessSettingsEntity): ReceiptLabels =
+        ReceiptPrintLanguage.labelsFor(context, settings)
 
     private fun bluetoothAdapter(): BluetoothAdapter? {
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -515,7 +523,7 @@ class BluetoothPrinterService @Inject constructor(
         val sym = settings.currencySymbol
         val sep = "=".repeat(lineWidth)
         val thin = "-".repeat(lineWidth)
-        val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
+        val labels = ReceiptPrintLanguage.labelsFor(context, settings)
         val displayCode = com.chaslay.pos.domain.model.GiftCardCode.barcodePayload(code)
         val taxRate = giftCardVatRate(settings, settings.defaultServiceType)
         val vatRow = ReceiptVatCalculator.vatRowForGiftCardAmount(
@@ -700,7 +708,7 @@ class BluetoothPrinterService @Inject constructor(
         lines: List<RefundReceiptLine>,
         lineWidth: Int
     ): ByteArray {
-        val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
+        val labels = ReceiptPrintLanguage.labelsFor(context, settings)
         val sep = "=".repeat(lineWidth.coerceAtMost(32))
         val thin = "-".repeat(lineWidth)
         val dateTimeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
@@ -708,13 +716,21 @@ class BluetoothPrinterService @Inject constructor(
         val sb = StringBuilder()
         sb.appendLine(sep)
         appendCenteredLines(sb, settings.businessName, lineWidth, bold = false)
-        sb.appendLine(center("REFUND", lineWidth))
+        sb.appendLine(center(labels.refundTitle, lineWidth))
         sb.appendLine(sep)
         val orderRef = com.chaslay.pos.util.OrderNumberFormat.displayForTransaction(transaction)
         if (orderRef.isNotBlank()) {
-            sb.appendLine(leftRight("Order:", orderRef.take(lineWidth - 8), lineWidth))
+            sb.appendLine(
+                leftRight(
+                    labels.refundOrderLabel,
+                    orderRef.take(lineWidth - labels.refundOrderLabel.length),
+                    lineWidth
+                )
+            )
         }
-        sb.appendLine(leftRight("Date:", dateTimeFmt.format(Date(refundedAt)), lineWidth))
+        sb.appendLine(
+            leftRight(labels.refundDateLabel, dateTimeFmt.format(Date(refundedAt)), lineWidth)
+        )
         sb.appendLine(thin)
         lines.forEach { line ->
             sb.appendLine(
@@ -829,7 +845,8 @@ class BluetoothPrinterService @Inject constructor(
         products: List<ProductEntity> = emptyList()
     ): ByteArray {
         val sb = StringBuilder()
-        val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
+        appendEscPosStyleReset(sb)
+        val labels = ReceiptPrintLanguage.labelsFor(context, settings)
         val timeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
         val sepEq = "=".repeat(lineWidth)
         val dash = sepDash(lineWidth)
@@ -1008,7 +1025,8 @@ class BluetoothPrinterService @Inject constructor(
         lineWidth: Int = LINE_WIDTH_80
     ): ByteArray {
         val sb = StringBuilder()
-        val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
+        appendEscPosStyleReset(sb)
+        val labels = receiptLabels(settings)
         val dateTimeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
         val sepEq = "=".repeat(lineWidth.coerceAtMost(32))
         val subtotal = cart.subtotal - cart.itemDiscountTotal
@@ -1031,7 +1049,7 @@ class BluetoothPrinterService @Inject constructor(
         )
 
         if (context.isProvisional) {
-            appendCenteredLines(sb, "PROVISIONAL", lineWidth, bold = true)
+            appendCenteredLines(sb, labels.provisionalInvoice, lineWidth, bold = true)
             sb.appendLine(center(sepEq, lineWidth))
         }
         appendReceiptStoreBlock(sb, settings, lineWidth)
@@ -1091,7 +1109,7 @@ class BluetoothPrinterService @Inject constructor(
             }
             item.cartModifierRows().forEach { row ->
                 val priceSuffix = row.price?.let { " ${formatMoney(it, settings.currencySymbol)}" }.orEmpty()
-                wrapText("  - ${row.label}$priceSuffix", lineWidth).forEach { sb.appendLine(it) }
+                wrapText("  ${row.ticketPrefix()} ${row.label}$priceSuffix", lineWidth).forEach { sb.appendLine(it) }
             }
             item.freeformNotes()?.lines()?.map { it.trim() }?.filter { it.isNotBlank() }?.forEach { note ->
                 wrapText("  ${labels.note} $note", lineWidth).forEach { sb.appendLine(it) }
@@ -1108,7 +1126,7 @@ class BluetoothPrinterService @Inject constructor(
 
         appendReceiptTotal(sb, labels.total, total, settings.currencySymbol, lineWidth)
 
-        appendLoyaltyReceiptLines(sb, context.loyaltyPointsEarned, context.loyaltyPointsBalance, lineWidth)
+        appendLoyaltyReceiptLines(sb, settings, context.loyaltyPointsEarned, context.loyaltyPointsBalance, lineWidth)
 
         if (!context.isProvisional) {
             context.paymentMethod?.let { method ->
@@ -1159,7 +1177,8 @@ class BluetoothPrinterService @Inject constructor(
         loyaltyPointsBalance: Int? = null
     ): ByteArray {
         val sb = StringBuilder()
-        val labels = ReceiptLabels.forLanguage(settings.defaultLanguage)
+        appendEscPosStyleReset(sb)
+        val labels = ReceiptPrintLanguage.labelsFor(context, settings)
         val dateTimeFmt = SimpleDateFormat("dd-MM-yyyy HH:mm", Locale.getDefault())
         val sepEq = "=".repeat(lineWidth.coerceAtMost(32))
         val itemBrut = items.sumOf { it.lineTotal }
@@ -1287,7 +1306,7 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
 
-        appendLoyaltyReceiptLines(sb, loyaltyPointsEarned, loyaltyPointsBalance, lineWidth)
+        appendLoyaltyReceiptLines(sb, settings, loyaltyPointsEarned, loyaltyPointsBalance, lineWidth)
 
         parseGiftCardPaymentAmount(transaction.notes)?.let { giftPaid ->
             sb.appendLine(
@@ -1321,6 +1340,7 @@ class BluetoothPrinterService @Inject constructor(
             com.chaslay.pos.domain.model.FulfillmentType.WALK_IN,
             serviceType
         )
+        val orderMeta = com.chaslay.pos.util.parseOrderMetaFromNotes(transaction.notes)
         appendReceiptMetaFooter(
             sb = sb,
             dateTime = dateTimeFmt.format(Date(transaction.createdAt)),
@@ -1328,12 +1348,16 @@ class BluetoothPrinterService @Inject constructor(
             showStaff = settings.receiptShowStaffLine,
             lineWidth = lineWidth,
             orderNumber = transaction.transactionNumber,
+            orderDisplay = orderMeta.ticketDisplay,
+            tabNumber = orderMeta.tabNumber
+                ?: transaction.guestCount?.takeIf { it > 0 }?.toString(),
             orderType = orderType
         )
         transaction.notes?.lines()
             ?.filter { line ->
                 val trimmed = line.trim()
                 trimmed.isNotBlank() &&
+                    !com.chaslay.pos.util.isOrderMetaStorageLine(trimmed) &&
                     !trimmed.startsWith("Gift card payment:") &&
                     !trimmed.startsWith("Gift card remaining:") &&
                     !PaymentTenderNotes.isTenderLine(trimmed)
@@ -1378,20 +1402,27 @@ class BluetoothPrinterService @Inject constructor(
         lineWidth: Int = LINE_WIDTH_80,
         includeProductsSold: Boolean = true
     ): ByteArray {
+        val labels = ReceiptPrintLanguage.labelsFor(context, settings)
         val sym = settings.currencySymbol
         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val divider = "=".repeat(lineWidth)
         val dashes = "-".repeat(lineWidth)
         val compact = lineWidth <= LINE_WIDTH_58
         val sb = StringBuilder()
+        appendEscPosStyleReset(sb)
 
         sb.appendLine(divider)
         appendCenteredLines(sb, settings.businessName, lineWidth, bold = false)
         sb.appendLine(divider)
         sb.appendLine("")
-        appendCenteredLines(sb, "END OF DAY", lineWidth, bold = false)
+        val lang = receiptLanguageCode(settings)
+        appendCenteredLines(sb, eodReportTitle(lang), lineWidth, bold = false)
+        report.scopeStaffName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
+            sb.appendLine("")
+            appendCenteredLines(sb, eodScopeStaffLine(lang, staffName), lineWidth, bold = false)
+        }
         sb.appendLine("")
-        appendCenteredLines(sb, "Report Period", lineWidth, bold = false)
+        appendCenteredLines(sb, eodReportPeriodTitle(lang), lineWidth, bold = false)
         val periodLabel = if (report.periodStart > 0) {
             "${dateFmt.format(Date(report.periodStart))} to ${dateFmt.format(Date(report.periodEnd))}"
         } else {
@@ -1400,17 +1431,17 @@ class BluetoothPrinterService @Inject constructor(
         wrapText(periodLabel, lineWidth).forEach { sb.appendLine(center(it, lineWidth)) }
         sb.appendLine("")
         sb.appendLine(dashes)
-        sb.appendLine(center("SALES SUMMARY", lineWidth))
+        sb.appendLine(center(eodSalesSummaryTitle(lang), lineWidth))
         sb.appendLine(dashes)
-        sb.appendLine(leftRight("Subtotal", formatMoney(report.subtotal, sym), lineWidth))
+        sb.appendLine(leftRight(eodSubtotalLabel(lang), formatMoney(report.subtotal, sym), lineWidth))
         sb.appendLine("")
 
-        sb.appendLine(if (compact) "TVA" else center("TVA", lineWidth))
-        sb.appendLine(vatRow("Type", "Net", "TVA", "Brut", lineWidth))
+        sb.appendLine(if (compact) labels.vatTitle else center(labels.vatTitle, lineWidth))
+        sb.appendLine(vatRow(labels.vatType, labels.vatNet, labels.vatTax, labels.vatGross, lineWidth))
         report.vatRows.forEach { row ->
             sb.appendLine(
                 vatRow(
-                    row.label,
+                    eodVatRowLabel(row.label, labels),
                     twoDp(row.net),
                     twoDp(row.tva),
                     twoDp(row.brut),
@@ -1420,7 +1451,7 @@ class BluetoothPrinterService @Inject constructor(
         }
         sb.appendLine(
             vatRow(
-                "Total",
+                labels.total,
                 twoDp(report.netTotal),
                 twoDp(report.taxTotal),
                 twoDp(report.brutTotal),
@@ -1428,10 +1459,10 @@ class BluetoothPrinterService @Inject constructor(
             )
         )
         sb.appendLine(dashes)
-        appendReceiptTotal(sb, "TOTAL", report.brutTotal, sym, lineWidth)
+        sb.appendLine(leftRight(labels.total, formatMoney(report.brutTotal, sym), lineWidth))
         if (report.tipsTotal > 0.0) {
-            sb.appendLine(leftRight("Tips (not taxable)", formatMoney(report.tipsTotal, sym), lineWidth))
-            sb.appendLine(leftRight("GRAND TOTAL", formatMoney(report.grandTotal, sym), lineWidth))
+            sb.appendLine(leftRight(eodTipsNotTaxableLabel(lang), formatMoney(report.tipsTotal, sym), lineWidth))
+            sb.appendLine(leftRight(eodGrandTotalLabel(lang), formatMoney(report.grandTotal, sym), lineWidth))
         }
         sb.appendLine(leftRight("Orders", report.salesCount.toString(), lineWidth))
         report.coversServed?.let { covers ->
@@ -1465,7 +1496,7 @@ class BluetoothPrinterService @Inject constructor(
         report.paymentRows.forEach { row ->
             sb.appendLine(
                 payRow(
-                    row.label,
+                    eodPaymentMethodLabel(row.label, labels),
                     "${"%.1f".format(row.percent)}%",
                     formatMoney(row.amount, sym),
                     lineWidth
@@ -1482,7 +1513,7 @@ class BluetoothPrinterService @Inject constructor(
         report.orderTypeRows.forEach { row ->
             sb.appendLine(
                 orderTypeRow(
-                    row.label,
+                    eodOrderTypeLabel(row.label, labels),
                     row.count.toString(),
                     "${"%.1f".format(row.percent)}%",
                     formatMoney(row.amount, sym),
@@ -1500,11 +1531,144 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(dashes)
             sb.appendLine(leftRight("Total qty", report.productsSold.sumOf { it.quantitySold }.toString(), lineWidth))
             report.productsSold.forEach { product ->
-                sb.appendLine(productQtyRow(product.productName, product.quantitySold.toString(), lineWidth))
+                sb.appendLine(
+                    productQtyRow(
+                        TextEncoding.repairCatalogText(product.productName),
+                        product.quantitySold.toString(),
+                        lineWidth
+                    )
+                )
             }
         }
+        if (report.staffBreakdown.isNotEmpty()) {
+            sb.appendLine("")
+            sb.appendLine(dashes)
+            sb.appendLine(center(eodStaffPerformanceTitle(lang), lineWidth))
+            sb.appendLine(dashes)
+            report.staffBreakdown.forEach { row ->
+                sb.appendLine(
+                    leftRight(
+                        row.name.take(20),
+                        formatMoney(row.revenue, sym),
+                        lineWidth
+                    )
+                )
+                sb.appendLine(
+                    leftRight(
+                        "  ${eodStaffOrdersNote(lang, row.salesCount)}",
+                        "",
+                        lineWidth
+                    )
+                )
+            }
+        }
+        appendEscPosStyleReset(sb)
         sb.appendLine("\n\n\n")
         return encodePayload(sb.toString())
+    }
+
+    private fun appendEscPosStyleReset(sb: StringBuilder) {
+        sb.append(escAlignLeft())
+        sb.append(escBold(false))
+        sb.append(escDoubleHeight(false))
+        sb.append(escDoubleSize(false))
+    }
+
+    private fun eodReportTitle(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "FIN DE JOURNEE"
+            AppLanguage.GERMAN -> "TAGESABSCHLUSS"
+            AppLanguage.ITALIAN -> "FINE GIORNATA"
+            else -> "END OF DAY"
+        }
+
+    private fun eodScopeStaffLine(languageCode: String, staffName: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Mes ventes : $staffName"
+            AppLanguage.GERMAN -> "Meine Verkaeufe: $staffName"
+            AppLanguage.ITALIAN -> "Le mie vendite: $staffName"
+            else -> "My sales: $staffName"
+        }
+
+    private fun eodStaffPerformanceTitle(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "VENTES PAR EMPLOYE"
+            AppLanguage.GERMAN -> "VERKAUF PRO MITARBEITER"
+            AppLanguage.ITALIAN -> "VENDITE PER DIPENDENTE"
+            else -> "STAFF SALES"
+        }
+
+    private fun eodStaffOrdersNote(languageCode: String, count: Int): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "$count commande(s)"
+            AppLanguage.GERMAN -> "$count Bestellung(en)"
+            AppLanguage.ITALIAN -> "$count ordini"
+            else -> "$count order(s)"
+        }
+
+    private fun eodReportPeriodTitle(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "P\u00E9riode du rapport"
+            AppLanguage.GERMAN -> "Berichtszeitraum"
+            AppLanguage.ITALIAN -> "Periodo del report"
+            else -> "Report Period"
+        }
+
+    private fun eodSalesSummaryTitle(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "RESUME DES VENTES"
+            AppLanguage.GERMAN -> "VERKAUFSUEBERSICHT"
+            AppLanguage.ITALIAN -> "RIEPILOGO VENDITE"
+            else -> "SALES SUMMARY"
+        }
+
+    private fun eodSubtotalLabel(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Sous-total"
+            AppLanguage.GERMAN -> "Zwischensumme"
+            AppLanguage.ITALIAN -> "Subtotale"
+            else -> "Subtotal"
+        }
+
+    private fun eodTipsNotTaxableLabel(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Pourboires (non imposables)"
+            AppLanguage.GERMAN -> "Trinkgeld (nicht steuerpflichtig)"
+            AppLanguage.ITALIAN -> "Mance (non tassabili)"
+            else -> "Tips (not taxable)"
+        }
+
+    private fun eodGrandTotalLabel(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "TOTAL GENERAL"
+            AppLanguage.GERMAN -> "GESAMTSUMME"
+            AppLanguage.ITALIAN -> "TOTALE GENERALE"
+            else -> "GRAND TOTAL"
+        }
+
+    private fun eodPaymentMethodLabel(raw: String, labels: ReceiptLabels): String = when (raw) {
+        "Cash" -> labels.cash
+        "Card" -> labels.card
+        "Tap-to-Pay" -> labels.tapToPay
+        else -> raw
+    }
+
+    private fun eodOrderTypeLabel(raw: String, labels: ReceiptLabels): String = when {
+        raw.equals("Dine-in", ignoreCase = true) -> labels.dineIn
+        raw.equals("Take away", ignoreCase = true) -> labels.takeaway
+        else -> raw
+    }
+
+    private fun eodVatRowLabel(raw: String, labels: ReceiptLabels): String {
+        val dine = ServiceType.DINE_IN.displayName
+        val take = ServiceType.TAKEAWAY.displayName
+        return when {
+            raw.startsWith(dine, ignoreCase = true) ->
+                raw.replace(dine, labels.dineIn, ignoreCase = true)
+            raw.startsWith(take, ignoreCase = true) ->
+                raw.replace(take, labels.takeaway, ignoreCase = true)
+            else -> raw
+        }
     }
 
     private fun appendReceiptStoreBlock(
@@ -1515,7 +1679,7 @@ class BluetoothPrinterService @Inject constructor(
         if (settings.receiptHeader.isNotBlank()) {
             appendHeader(sb, settings.receiptHeader, lineWidth)
         } else {
-            appendCenteredLines(sb, settings.businessName, lineWidth, bold = true)
+            appendCenteredLines(sb, settings.businessName, lineWidth, bold = false)
             listOfNotNull(
                 settings.address.trim().takeIf { it.isNotEmpty() },
                 settings.phone.trim().takeIf { it.isNotEmpty() },
@@ -1576,18 +1740,20 @@ class BluetoothPrinterService @Inject constructor(
 
     private fun appendLoyaltyReceiptLines(
         sb: StringBuilder,
+        settings: BusinessSettingsEntity,
         pointsEarned: Int?,
         pointsBalance: Int?,
         lineWidth: Int
     ) {
         if ((pointsEarned ?: 0) <= 0 && pointsBalance == null) return
+        val langCtx = ReceiptPrintLanguage.localizedContext(context, receiptLanguageCode(settings))
         sb.appendLine(center(sepDash(lineWidth), lineWidth))
         pointsEarned?.takeIf { it > 0 }?.let {
-            sb.appendLine(context.getString(R.string.receipt_order_gave_you_points, it))
+            sb.appendLine(langCtx.getString(R.string.receipt_order_gave_you_points, it))
         }
         pointsBalance?.let {
             sb.appendLine(
-                leftRight(context.getString(R.string.receipt_points_so_far), "$it", lineWidth)
+                leftRight(langCtx.getString(R.string.receipt_points_so_far), "$it", lineWidth)
             )
         }
     }
@@ -1656,21 +1822,12 @@ class BluetoothPrinterService @Inject constructor(
         lineWidth: Int
     ) {
         val amount = formatMoney(total, currencySymbol)
-        val compact = lineWidth <= LINE_WIDTH_58
         sb.append(escAlignLeft())
-        sb.append(escDoubleHeight(false))
         sb.append(escBold(true))
-        if (compact) {
-            sb.appendLine(center(totalLabel, lineWidth))
-            sb.appendLine(center(amount, lineWidth))
-        } else {
-            sb.append(escAlignCenter())
-            sb.append(escDoubleHeight(true))
-            sb.appendLine(leftRight(totalLabel, amount, lineWidth))
-            sb.append(escDoubleHeight(false))
-        }
+        sb.append(escDoubleHeight(true))
+        sb.appendLine(leftRight(totalLabel, amount, lineWidth))
+        sb.append(escDoubleHeight(false))
         sb.append(escBold(false))
-        sb.append(escAlignLeft())
     }
 
     private fun appendReceiptVatSection(
@@ -1717,23 +1874,31 @@ class BluetoothPrinterService @Inject constructor(
         showStaff: Boolean,
         lineWidth: Int,
         orderNumber: String? = null,
+        orderDisplay: String? = null,
+        tabNumber: String? = null,
         orderType: String? = null
     ) {
-        val guestRef = com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(orderNumber)
-        val metaParts = buildList {
-            add(dateTime)
+        val guestRef = com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(
+            orderNumber = orderNumber,
+            orderDisplay = orderDisplay,
+            tabNumber = tabNumber
+        )
+        sb.append(escAlignLeft())
+        sb.append(escDoubleHeight(false))
+        sb.append(escBold(false))
+        if (guestRef.isNotBlank()) {
+            sb.appendLine(leftRight(dateTime, guestRef, lineWidth))
+        } else {
+            sb.appendLine(dateTime)
+        }
+        val secondaryParts = buildList {
             orderType?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
             if (showStaff) {
                 staffName?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
             }
         }
-        sb.append(escDoubleHeight(false))
-        sb.append(escBold(false))
-        if (guestRef.isNotBlank()) {
-            sb.appendLine(center(guestRef, lineWidth))
-        }
-        if (metaParts.isNotEmpty()) {
-            sb.appendLine(center(metaParts.joinToString(" | "), lineWidth))
+        if (secondaryParts.isNotEmpty()) {
+            sb.appendLine(center(secondaryParts.joinToString(" | "), lineWidth))
         }
     }
 
@@ -1843,7 +2008,10 @@ class BluetoothPrinterService @Inject constructor(
         cutFeedLines: Int = 4
     ): ByteArray {
         val logo = settings?.let { receiptLogoBytes(it, lineWidth) } ?: byteArrayOf()
-        return ESC_INIT + ESC_CODEPAGE_CP850 + logo + body + qrBytes + paperCutCommand(cutFeedLines)
+        val header = ESC_INIT
+        val afterLogo = if (logo.isNotEmpty()) logo + ESC_INIT else byteArrayOf()
+        val qrPrefix = if (qrBytes.isNotEmpty()) ESC_CODEPAGE_CP850 else byteArrayOf()
+        return header + afterLogo + ESC_CODEPAGE_CP850 + body + qrPrefix + qrBytes + paperCutCommand(cutFeedLines)
     }
 
     private fun paperCutCommand(feedLines: Int = 4): ByteArray =
@@ -1902,7 +2070,8 @@ class BluetoothPrinterService @Inject constructor(
                 val bitmap = BitmapFactory.decodeStream(stream, null, options) ?: return null
                 val raster = EscPosImageEncoder.encodeRaster(bitmap, maxWidthPx, maxHeightPx) ?: return null
                 if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
-                EscPosEncoder.encode("\n${escAlignCenter()}") + raster + EscPosEncoder.encode("${escAlignLeft()}\n")
+                EscPosEncoder.encode("\n${escAlignCenter()}") + raster + EscPosEncoder.encode("${escAlignLeft()}\n") +
+                    ESC_CODEPAGE_CP850
             }.also { bytes ->
                 if (bytes != null) {
                     cachedLogoKey = cacheKey
@@ -2270,6 +2439,7 @@ class BluetoothPrinterService @Inject constructor(
         private const val LINE_WIDTH = LINE_WIDTH_80
         private val SPP_UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val ESC_INIT = byteArrayOf(0x1B, 0x40)
+        /** ESC t 2 — IBM CP850; avoids GBK-default firmware misreading UTF-8 as Chinese glyphs. */
         private val ESC_CODEPAGE_CP850 = byteArrayOf(0x1B, 0x74, 0x02)
         private val ESC_CUT = byteArrayOf(0x1D, 0x56, 0x00)
 

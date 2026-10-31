@@ -1,10 +1,11 @@
 package com.rebornsense.printbridge.scale
 
 import android.content.Context
-import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import com.rebornsense.printbridge.usb.UsbDeviceClassifier
+
+/** vid:pid permission key — never includes serial (serial needs USB permission). */
 
 data class ScaleUsbDevice(
     val stableAddress: String,
@@ -33,11 +34,24 @@ object ScaleUsbHelper {
         return trimmed
     }
 
+    fun permissionKey(address: String): String {
+        parseStableAddress(normalizeStoredAddressWithoutContext(address))?.let { (vid, pid, _) ->
+            return "$USB_PREFIX$vid:$pid"
+        }
+        return address.trim()
+    }
+
+    private fun normalizeStoredAddressWithoutContext(address: String): String {
+        val trimmed = address.trim()
+        if (trimmed.startsWith(USB_PREFIX)) return trimmed
+        return trimmed
+    }
+
     fun listDevices(context: Context): List<ScaleUsbDevice> {
         val manager = usbManager(context) ?: return emptyList()
         return manager.deviceList.values
             .filter { device ->
-                !UsbDeviceClassifier.isUsbNetworkAdapter(context, device) && isLikelyScale(device)
+                !UsbDeviceClassifier.isUsbNetworkAdapter(context, device) && isLikelyScale(context, device)
             }
             .map { device ->
                 val permitted = manager.hasPermission(device)
@@ -78,13 +92,9 @@ object ScaleUsbHelper {
         return Triple(vid, pid, serial)
     }
 
-    private fun isLikelyScale(device: UsbDevice): Boolean {
-        if (device.vendorId == ACLAS_VENDOR_ID && device.productId == ACLAS_PRODUCT_ID) return true
-        if (device.vendorId == QINHENG_VENDOR_ID) return true
-        return (0 until device.interfaceCount).any { index ->
-            val usbInterface = device.getInterface(index)
-            usbInterface.interfaceClass == UsbConstants.USB_CLASS_CDC_DATA ||
-                usbInterface.interfaceClass == UsbConstants.USB_CLASS_COMM
+    private fun isLikelyScale(context: Context, device: UsbDevice): Boolean {
+        return ScaleUsbMatcher.isLikelyScale(device) {
+            UsbDeviceClassifier.isUsbPrinterCandidate(context, it)
         }
     }
 
@@ -106,7 +116,4 @@ object ScaleUsbHelper {
     private fun usbManager(context: Context): UsbManager? =
         context.getSystemService(Context.USB_SERVICE) as? UsbManager
 
-    private const val ACLAS_VENDOR_ID = 6790
-    private const val ACLAS_PRODUCT_ID = 29987
-    private const val QINHENG_VENDOR_ID = 0x1A86
 }

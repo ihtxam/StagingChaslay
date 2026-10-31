@@ -29,10 +29,18 @@ import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +54,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EndOfDayReportScreen(
     report: EndOfDayReport,
@@ -54,6 +63,13 @@ fun EndOfDayReportScreen(
     modifier: Modifier = Modifier,
     includeProductsOnPrint: Boolean = true,
     onIncludeProductsOnPrintChange: (Boolean) -> Unit = {},
+    includeStaffBreakdownOnPrint: Boolean = false,
+    onIncludeStaffBreakdownOnPrintChange: (Boolean) -> Unit = {},
+    showStaffBreakdownToggle: Boolean = false,
+    eodDayPreset: EodDayPreset = EodDayPreset.TODAY,
+    eodCustomDayStartMs: Long = 0L,
+    onEodDayPresetSelected: (EodDayPreset) -> Unit = {},
+    onEodCustomDaySelected: (Long) -> Unit = {},
     staffOptions: List<EodStaffOption> = emptyList(),
     selectedStaffId: Long? = null,
     onStaffSelected: (Long?) -> Unit = {},
@@ -78,6 +94,13 @@ fun EndOfDayReportScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         EndOfDayHeader(onPrint = onPrint)
+        EodDateSelector(
+            preset = eodDayPreset,
+            customDayStartMs = eodCustomDayStartMs,
+            onPresetSelected = onEodDayPresetSelected,
+            onCustomDaySelected = onEodCustomDaySelected,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -95,7 +118,32 @@ fun EndOfDayReportScreen(
                 color = ReportDashColors.TextPrimary,
             )
         }
+        if (showStaffBreakdownToggle) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 4.dp)
+                    .clickable { onIncludeStaffBreakdownOnPrintChange(!includeStaffBreakdownOnPrint) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = includeStaffBreakdownOnPrint,
+                    onCheckedChange = onIncludeStaffBreakdownOnPrintChange,
+                )
+                Text(
+                    stringResource(R.string.eod_include_staff_on_print),
+                    fontSize = 13.sp,
+                    color = ReportDashColors.TextPrimary,
+                )
+            }
+        }
         if (staffOptions.isNotEmpty()) {
+            Text(
+                stringResource(R.string.eod_staff_picker_hint),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
+                fontSize = 11.sp,
+                color = ReportDashColors.TextSecondary,
+            )
             EodStaffSelector(
                 options = staffOptions,
                 selectedStaffId = selectedStaffId,
@@ -172,8 +220,111 @@ fun EndOfDayReportScreen(
                     ReportTopProductRow(item = product, sym = currencySymbol)
                 }
             }
+            if (report.staffBreakdown.isNotEmpty() && selectedStaffId == null) {
+                item {
+                    ReportBreakdownCard(
+                        title = stringResource(R.string.eod_staff_breakdown_title),
+                        icon = Icons.Outlined.PointOfSale,
+                        accent = ReportDashColors.Accent,
+                        rows = report.staffBreakdown.map {
+                            ReportBreakdownRow(it.name, it.salesCount, it.revenue)
+                        },
+                        sym = currencySymbol,
+                    )
+                }
+            }
             item { Spacer(Modifier.height(24.dp)) }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EodDateSelector(
+    preset: EodDayPreset,
+    customDayStartMs: Long,
+    onPresetSelected: (EodDayPreset) -> Unit,
+    onCustomDaySelected: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var datePickerOpen by remember { mutableStateOf(false) }
+    val customLabel = remember(customDayStartMs) {
+        if (customDayStartMs <= 0L) return@remember ""
+        SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(customDayStartMs))
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(
+            EodDayPreset.TODAY to stringResource(R.string.today),
+            EodDayPreset.YESTERDAY to stringResource(R.string.yesterday),
+        ).forEach { (dayPreset, label) ->
+            val selected = preset == dayPreset
+            EodChip(label = label, selected = selected) { onPresetSelected(dayPreset) }
+        }
+        val customSelected = preset == EodDayPreset.CUSTOM
+        val pickLabel = if (customSelected && customLabel.isNotBlank()) {
+            customLabel
+        } else {
+            stringResource(R.string.eod_pick_date)
+        }
+        EodChip(label = pickLabel, selected = customSelected) { datePickerOpen = true }
+    }
+    if (datePickerOpen) {
+        val initialMs = when {
+            customDayStartMs > 0L -> customDayStartMs
+            preset == EodDayPreset.YESTERDAY -> {
+                java.util.Calendar.getInstance().apply {
+                    add(java.util.Calendar.DAY_OF_YEAR, -1)
+                }.timeInMillis
+            }
+            else -> System.currentTimeMillis()
+        }
+        val state = rememberDatePickerState(initialSelectedDateMillis = initialMs)
+        DatePickerDialog(
+            onDismissRequest = { datePickerOpen = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { onCustomDaySelected(it) }
+                    datePickerOpen = false
+                }) {
+                    Text(stringResource(R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { datePickerOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        ) {
+            DatePicker(state = state)
+        }
+    }
+}
+
+@Composable
+private fun EodChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) ReportDashColors.Accent else ReportDashColors.SurfaceDeeper)
+            .border(
+                1.dp,
+                if (selected) ReportDashColors.Accent else ReportDashColors.HairlineLight,
+                RoundedCornerShape(10.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(
+            label,
+            color = if (selected) ReportDashColors.OnAccent else ReportDashColors.TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -205,7 +356,11 @@ private fun EodStaffSelector(
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
                 Text(
-                    option.name,
+                    if (option.userId == null) {
+                        stringResource(R.string.eod_company_wide)
+                    } else {
+                        option.name
+                    },
                     color = if (selected) ReportDashColors.OnAccent else ReportDashColors.TextPrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -362,7 +517,12 @@ private fun RefundsCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Undo, contentDescription = null, tint = ReportDashColors.Danger, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Refunds", color = ReportDashColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                stringResource(R.string.report_refunds),
+                color = ReportDashColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {

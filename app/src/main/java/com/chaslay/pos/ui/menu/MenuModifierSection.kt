@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.ModifierGroupEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
+import com.chaslay.pos.domain.ModifierNos
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 
@@ -91,7 +92,7 @@ fun ModifierListSection(groups: List<ModifierGroupEntity>, viewModel: MenuViewMo
 }
 
 @Composable
-private fun ModifierGroupCard(
+internal fun ModifierGroupCard(
     group: ModifierGroupEntity,
     viewModel: MenuViewModel,
     onEdit: () -> Unit,
@@ -107,7 +108,13 @@ private fun ModifierGroupCard(
     }
 
     val badges = buildList {
-        add(stringResource(R.string.menu_free_choice))
+        when {
+            ModifierNos.isNosModifierGroup(group.name) ->
+                add(stringResource(R.string.extras_nos_badge_nos))
+            ModifierNos.isExtrasModifierGroup(group.name) ->
+                add(stringResource(R.string.extras_nos_badge_extras))
+            else -> add(stringResource(R.string.menu_free_choice))
+        }
         add(
             if (group.required) stringResource(R.string.required_option)
             else stringResource(R.string.optional_option)
@@ -128,7 +135,7 @@ private fun ModifierGroupCard(
 }
 
 @Composable
-private fun ModifierEditorDialog(
+internal fun ModifierEditorDialog(
     group: ModifierGroupEntity?,
     viewModel: MenuViewModel,
     onDismiss: () -> Unit,

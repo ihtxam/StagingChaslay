@@ -18,6 +18,7 @@ import com.chaslay.pos.data.repository.MenuRepository
 import com.chaslay.pos.domain.model.AddonGroupModel
 import com.chaslay.pos.domain.model.ComboMealModel
 import com.chaslay.pos.domain.model.ModifierGroupModel
+import com.chaslay.pos.util.PosLocalPrefs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +35,7 @@ import javax.inject.Inject
 enum class MenuSection {
     PRODUCT_LIST,
     IMPORT_EXPORT,
-    MODIFIERS,
-    ADDONS,
+    EXTRAS_AND_NOS,
     COMBOS
 }
 
@@ -91,7 +91,7 @@ class MenuViewModel @Inject constructor(
 
     fun setSection(section: MenuSection) {
         _section.value = section
-        if (section == MenuSection.MODIFIERS || section == MenuSection.ADDONS) refreshGroupMeta()
+        if (section == MenuSection.EXTRAS_AND_NOS) refreshGroupMeta()
     }
 
     private fun refreshGroupMeta() {
@@ -198,7 +198,13 @@ class MenuViewModel @Inject constructor(
                 isOpenPrice = false,
                 isWeighed = false
             )
-            menuRepository.saveComboMeal(entity, slots)
+            val savedId = menuRepository.saveComboMeal(entity, slots)
+            PosLocalPrefs.saveLocalProductPrice(
+                appContext,
+                savedId,
+                price,
+                entity.remoteId?.takeIf { it.isNotBlank() }
+            )
             _message.value = "Combo saved"
             onDone()
         }

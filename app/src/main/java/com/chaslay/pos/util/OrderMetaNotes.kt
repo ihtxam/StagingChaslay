@@ -28,6 +28,12 @@ fun formatOrderMetaTabTag(tab: String): String {
     return "[tab:$cleaned]"
 }
 
+/** Parsed `[ticket:…]` / `[tab:…]` lines stored in transaction notes — not for guest receipts. */
+fun isOrderMetaStorageLine(line: String): Boolean {
+    val trimmed = line.trim()
+    return TICKET_NOTE_RE.matches(trimmed) || TAB_NOTE_RE.matches(trimmed)
+}
+
 private fun normalizeTicketShout(value: String): String {
     val trimmed = value.trim()
     if (trimmed.isEmpty()) return trimmed

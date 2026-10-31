@@ -79,7 +79,7 @@ object PrinterPreferences {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val next = prefs.getStringSet("lan_hosts", emptySet())?.toMutableSet() ?: return
         next.remove(host.trim())
-        prefs.edit().putStringSet("lan_hosts", next).apply()
+        prefs.edit().putStringSet("lan_hosts", next).commit()
     }
 
     fun rememberedUsbDevices(context: Context): Set<String> {
@@ -108,6 +108,7 @@ object PrinterPreferences {
     private const val KEY_USB_DEVICES = "usb_granted_vid_pid"
     private const val KEY_HIDDEN_PRINTERS = "hidden_printer_ids"
 
+    /** LAN / default / USB grant prefs are device-local — not overwritten by cloud sync. */
     fun hiddenPrinterIds(context: Context): Set<String> {
         return runCatching {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

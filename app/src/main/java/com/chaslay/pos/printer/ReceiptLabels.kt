@@ -6,7 +6,7 @@ import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.ServiceType
 import java.util.Locale
 
-/** Localized receipt / print labels (uses business default language). */
+/** Localized receipt / print labels (app locale, else business default). */
 data class ReceiptLabels(
     val provisionalInvoice: String,
     val orderNumber: String,
@@ -58,7 +58,10 @@ data class ReceiptLabels(
     val sourceOnline: String,
     val refunded: String,
     val netPaid: String,
-    val refundReason: String
+    val refundReason: String,
+    val refundTitle: String,
+    val refundOrderLabel: String,
+    val refundDateLabel: String
 ) {
     fun fulfillmentLabel(fulfillmentType: FulfillmentType, serviceType: ServiceType): String =
         when (fulfillmentType) {
@@ -158,7 +161,10 @@ data class ReceiptLabels(
             sourceOnline = "Online",
             refunded = "Refunded:",
             netPaid = "Net paid:",
-            refundReason = "Refund reason:"
+            refundReason = "Refund reason:",
+            refundTitle = "REFUND",
+            refundOrderLabel = "Order:",
+            refundDateLabel = "Date:"
         )
 
         private fun french() = ReceiptLabels(
@@ -212,7 +218,10 @@ data class ReceiptLabels(
             sourceOnline = "En ligne",
             refunded = "Remboursé :",
             netPaid = "Net payé :",
-            refundReason = "Motif :"
+            refundReason = "Motif :",
+            refundTitle = "REMBOURSEMENT",
+            refundOrderLabel = "Commande :",
+            refundDateLabel = "Date :"
         )
 
         private fun german() = ReceiptLabels(
@@ -266,7 +275,10 @@ data class ReceiptLabels(
             sourceOnline = "Online",
             refunded = "Erstattet:",
             netPaid = "Netto bezahlt:",
-            refundReason = "Grund:"
+            refundReason = "Grund:",
+            refundTitle = "ERSTATTUNG",
+            refundOrderLabel = "Bestellung:",
+            refundDateLabel = "Datum:"
         )
 
         private fun italian() = ReceiptLabels(
@@ -320,7 +332,10 @@ data class ReceiptLabels(
             sourceOnline = "Online",
             refunded = "Rimborsato:",
             netPaid = "Netto pagato:",
-            refundReason = "Motivo:"
+            refundReason = "Motivo:",
+            refundTitle = "RIMBORSO",
+            refundOrderLabel = "Ordine:",
+            refundDateLabel = "Data:"
         )
     }
 }

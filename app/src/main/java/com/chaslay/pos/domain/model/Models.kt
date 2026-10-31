@@ -1,5 +1,7 @@
 package com.chaslay.pos.domain.model
 
+import com.chaslay.pos.domain.ModifierNos
+
 import com.chaslay.pos.domain.resolveBillDiscountAmount
 import com.chaslay.pos.domain.resolveCartBillDiscountAmount
 enum class UserRole {
@@ -311,7 +313,7 @@ data class CartItem(
     fun hasModifierPopupContent(): Boolean =
         !isCombo && (modifiers.isNotEmpty() || addons.isNotEmpty() || variantName != null)
 
-    /** Indented cart / receipt modifier rows (WebPOS `- label`, no `1x` qty prefix). */
+    /** Indented cart / receipt modifier rows (`+` paid extras, `-` No's / included choices). */
     fun cartModifierRows(): List<CartModifierRow> {
         val rows = mutableListOf<CartModifierRow>()
         comboSelections.forEach { sel ->
@@ -324,30 +326,32 @@ data class CartItem(
                 else -> null
             }
             head?.let { rows.add(CartModifierRow(it)) }
-            sel.modifiers.forEach { rows.add(CartModifierRow(it.name.trim())) }
+            sel.modifiers.forEach { mod ->
+                mod.name.trim().takeIf { it.isNotBlank() }?.let { rows.add(cartModifierRowForModifier(it)) }
+            }
             sel.extras.forEach { extra ->
                 val name = extra.name.trim()
                 if (name.isNotBlank()) {
-                    rows.add(CartModifierRow(name, extra.price.takeIf { it > 0.0 }))
+                    rows.add(cartModifierRowForAddon(name, extra.price))
                 }
             }
         }
         if (comboSelections.isEmpty()) {
             modifiers.forEach { mod ->
-                mod.name.trim().takeIf { it.isNotBlank() }?.let { rows.add(CartModifierRow(it)) }
+                mod.name.trim().takeIf { it.isNotBlank() }?.let { rows.add(cartModifierRowForModifier(it)) }
             }
             addons.forEach { addon ->
                 addon.name.trim().takeIf { it.isNotBlank() }?.let { name ->
-                    rows.add(CartModifierRow(name, addon.price.takeIf { it > 0.0 }))
+                    rows.add(cartModifierRowForAddon(name, addon.price))
                 }
             }
         } else {
             modifiers.forEach { mod ->
-                mod.name.trim().takeIf { it.isNotBlank() }?.let { rows.add(CartModifierRow(it)) }
+                mod.name.trim().takeIf { it.isNotBlank() }?.let { rows.add(cartModifierRowForModifier(it)) }
             }
             addons.forEach { addon ->
                 addon.name.trim().takeIf { it.isNotBlank() }?.let { name ->
-                    rows.add(CartModifierRow(name, addon.price.takeIf { it > 0.0 }))
+                    rows.add(cartModifierRowForAddon(name, addon.price))
                 }
             }
         }
@@ -431,12 +435,8 @@ data class CartSummary(
         get() = items.sumOf { computeLineTax(it.lineSubtotal, it.taxRate, vatIncludedInPrice) }
     val discountValue: Double
         get() = resolveCartBillDiscountAmount(this)
-    private val merchandiseBase: Double
-        get() = if (vatIncludedInPrice) {
-            roundMoney(netSubtotal + rawTaxTotal)
-        } else {
-            netSubtotal
-        }
+    /** Order-discount and tax-adjustment base. Line subtotals are gross (TTC) when [vatIncludedInPrice]. */
+    private val merchandiseBase: Double get() = netSubtotal
     val taxTotal: Double
         get() = adjustTaxForOrderDiscount(
             rawTaxTotal,
@@ -497,7 +497,36 @@ data class ProductVariantModel(
     val barcode: String?
 )
 
-data class ModifierOptionModel(val id: Long, val name: String, val inStock: Boolean = true)
+/** True when the cashier must pick a size/spec (matches WebPOS productHasSizeChoice). */
+fun ProductWithVariants.hasSizeChoice(): Boolean = variants.size > 1
+
+/**
+ * Whether tapping the product should open the customize modal (matches WebPOS productHasModifiers).
+ * Single default spec, empty modifier links, and no extras → add straight to cart.
+ */
+fun productRequiresCustomizeModal(
+    product: ProductWithVariants,
+    modifierGroups: List<ModifierGroupModel>,
+    addonGroups: List<AddonGroupModel>,
+): Boolean {
+    if (product.hasSizeChoice()) return true
+    if (modifierGroups.any { it.options.isNotEmpty() }) return true
+    if (addonGroups.any { it.options.isNotEmpty() }) return true
+    return false
+}
+
+fun filterNonEmptyCustomizeGroups(
+    modifierGroups: List<ModifierGroupModel>,
+    addonGroups: List<AddonGroupModel>,
+): Pair<List<ModifierGroupModel>, List<AddonGroupModel>> =
+    modifierGroups.filter { it.options.isNotEmpty() } to addonGroups.filter { it.options.isNotEmpty() }
+
+data class ModifierOptionModel(
+    val id: Long,
+    val name: String,
+    val inStock: Boolean = true,
+    val isDefault: Boolean = false,
+)
 
 data class ModifierGroupModel(
     val id: Long,
@@ -505,12 +534,20 @@ data class ModifierGroupModel(
     val limitQuantity: Int = 1,
     val required: Boolean = false,
     val options: List<ModifierOptionModel> = emptyList(),
-    val linkedProductIds: List<Long> = emptyList()
+    val linkedProductIds: List<Long> = emptyList(),
+    /** Display order on the product (product_modifier_groups.sort_order). */
+    val productSortOrder: Int = 0,
 ) {
     val isSingleSelect: Boolean get() = limitQuantity <= 1
 }
 
-data class AddonOptionModel(val id: Long, val name: String, val price: Double, val inStock: Boolean = true)
+data class AddonOptionModel(
+    val id: Long,
+    val name: String,
+    val price: Double,
+    val inStock: Boolean = true,
+    val isDefault: Boolean = false,
+)
 
 data class AddonGroupModel(
     val id: Long,
@@ -519,8 +556,41 @@ data class AddonGroupModel(
     val required: Boolean = false,
     val allowMultipleSame: Boolean = false,
     val options: List<AddonOptionModel> = emptyList(),
-    val linkedProductIds: List<Long> = emptyList()
+    val linkedProductIds: List<Long> = emptyList(),
+    /** Display order on the product (product_addon_groups.sort_order). */
+    val productSortOrder: Int = 0,
 )
+
+/** Free modifier or paid extra group in one list (matches WebPOS effectiveGroups ordering). */
+sealed class UnifiedExtraGroup {
+    abstract val productSortOrder: Int
+    abstract val name: String
+    abstract val required: Boolean
+
+    data class Modifier(val group: ModifierGroupModel) : UnifiedExtraGroup() {
+        override val productSortOrder get() = group.productSortOrder
+        override val name get() = group.name
+        override val required get() = group.required
+    }
+
+    data class Addon(val group: AddonGroupModel) : UnifiedExtraGroup() {
+        override val productSortOrder get() = group.productSortOrder
+        override val name get() = group.name
+        override val required get() = group.required
+    }
+}
+
+fun mergeProductExtraGroups(
+    modifierGroups: List<ModifierGroupModel>,
+    addonGroups: List<AddonGroupModel>,
+): List<UnifiedExtraGroup> =
+    (modifierGroups.map { UnifiedExtraGroup.Modifier(it) } + addonGroups.map { UnifiedExtraGroup.Addon(it) })
+        .sortedWith(compareBy({ it.productSortOrder }, { it.name.lowercase() }))
+
+fun UnifiedExtraGroup.hasCustomizableOptions(): Boolean = when (this) {
+    is UnifiedExtraGroup.Modifier -> group.options.any { it.inStock }
+    is UnifiedExtraGroup.Addon -> group.options.any { it.inStock }
+}
 
 data class ProductCustomizeState(
     val product: ProductWithVariants,
@@ -539,10 +609,34 @@ data class SelectedModifier(val name: String, val quantity: Int = 1)
 
 data class SelectedAddon(val name: String, val price: Double, val quantity: Int = 1)
 
+enum class CartModifierLineKind {
+    ADDON,
+    NOS,
+    STANDARD,
+}
+
 data class CartModifierRow(
     val label: String,
-    val price: Double? = null
-)
+    val price: Double? = null,
+    val kind: CartModifierLineKind = CartModifierLineKind.STANDARD,
+) {
+    fun ticketPrefix(): String = when (kind) {
+        CartModifierLineKind.ADDON -> "+"
+        CartModifierLineKind.NOS, CartModifierLineKind.STANDARD -> "-"
+    }
+}
+
+private fun cartModifierRowForModifier(name: String): CartModifierRow {
+    val kind = if (ModifierNos.isNosModifierLabel(name)) {
+        CartModifierLineKind.NOS
+    } else {
+        CartModifierLineKind.STANDARD
+    }
+    return CartModifierRow(name, kind = kind)
+}
+
+private fun cartModifierRowForAddon(name: String, price: Double): CartModifierRow =
+    CartModifierRow(name, price.takeIf { it > 0.0 }, kind = CartModifierLineKind.ADDON)
 
 private val cartNoteQtyPrefix = Regex("^\\d+x\\s+(.+)$", RegexOption.IGNORE_CASE)
 
@@ -555,7 +649,7 @@ private fun parseCartModifierRowsFromNotes(notes: String?): List<CartModifierRow
             CartModifierRow(line)
         } else {
             cartNoteQtyPrefix.find(line)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
-                ?.let { CartModifierRow(it) }
+                ?.let { cartModifierRowForModifier(it) }
         }
     }
 }
@@ -793,6 +887,13 @@ data class RefundedOrderRow(
     val refundedAt: Long? = null
 )
 
+/** Compact per-staff line for company EOD print (WebPOS userPerformance parity). */
+data class EodStaffSummaryRow(
+    val name: String,
+    val salesCount: Int,
+    val revenue: Double,
+)
+
 data class EndOfDayReport(
     val periodStart: Long = 0L,
     val periodEnd: Long = 0L,
@@ -820,7 +921,11 @@ data class EndOfDayReport(
     val refundCount: Int = 0,
     val refundedOrders: List<RefundedOrderRow> = emptyList(),
     /** Sum of guest/cover counts from dine-in transactions (when seating plan tracking enabled). */
-    val coversServed: Int? = null
+    val coversServed: Int? = null,
+    /** When set, print header shows scoped staff (own / selected employee). */
+    val scopeStaffName: String? = null,
+    /** Optional team breakdown appended on company-wide EOD print. */
+    val staffBreakdown: List<EodStaffSummaryRow> = emptyList(),
 )
 
 data class DiscountPreset(

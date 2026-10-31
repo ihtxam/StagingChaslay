@@ -85,6 +85,7 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.MonitorWeight
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
@@ -254,24 +255,71 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
         if (state.selectedSection == SettingsSection.GENERAL) {
-        SettingsPageHeader(
-            title = stringResource(R.string.general_settings),
-            subtitle = stringResource(R.string.online_settings_hint)
-        )
+        SettingsPageHeader(title = stringResource(R.string.general_settings))
 
-        SettingsSectionCard(title = stringResource(R.string.online_settings_title), icon = Icons.Outlined.Cloud) {
-            Text(
-                stringResource(R.string.online_settings_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = viewModel::openOnlineSettings,
-                modifier = Modifier.fillMaxWidth(),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = SettingsDashColors.Accent)
+        val session = state.posSession
+        if (
+            session.staffName != null ||
+            session.merchantAccountEmail != null ||
+            session.merchantShopName != null
+        ) {
+            SettingsSectionCard(
+                title = stringResource(R.string.settings_signed_in_title),
+                icon = Icons.Outlined.Person
             ) {
-                Text(stringResource(R.string.online_settings_open))
+                session.merchantShopName?.let { shop ->
+                    SettingsReadOnlyRow(
+                        label = stringResource(R.string.settings_signed_in_shop),
+                        value = shop
+                    )
+                }
+                session.merchantAccountEmail?.let { email ->
+                    SettingsReadOnlyRow(
+                        label = stringResource(R.string.settings_signed_in_merchant_account),
+                        value = email
+                    )
+                }
+                session.staffName?.let { name ->
+                    SettingsReadOnlyRow(
+                        label = stringResource(R.string.settings_signed_in_staff),
+                        value = buildString {
+                            append(name)
+                            session.staffRole?.let { role ->
+                                append(" · ")
+                                append(role)
+                            }
+                        }
+                    )
+                }
+                session.staffEmail?.takeIf { it != session.merchantAccountEmail }?.let { email ->
+                    SettingsReadOnlyRow(
+                        label = stringResource(R.string.settings_signed_in_staff_email),
+                        value = email
+                    )
+                }
+                when {
+                    session.isSyncedStaffAccount && session.merchantLinked -> {
+                        Text(
+                            stringResource(R.string.settings_signed_in_cloud_staff),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary
+                        )
+                    }
+                    !session.merchantLinked -> {
+                        Text(
+                            stringResource(R.string.settings_signed_in_offline_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary
+                        )
+                    }
+                    session.dashboardSignedIn && session.staffEmail == null -> {
+                        Text(
+                            stringResource(R.string.settings_signed_in_panel_session),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary
+                        )
+                    }
+                }
             }
         }
 
@@ -347,17 +395,6 @@ fun SettingsScreen(
         if (state.posMode == PosMode.RESTAURANT) {
             Spacer(modifier = Modifier.height(8.dp))
             SettingSwitch(
-                stringResource(R.string.pos_tables_enabled),
-                state.tablesEnabled,
-                viewModel::updateTablesEnabled
-            )
-            Text(
-                stringResource(R.string.pos_tables_enabled_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingSwitch(
                 stringResource(R.string.enable_courses),
                 state.coursesEnabled,
                 viewModel::updateCoursesEnabled
@@ -390,6 +427,23 @@ fun SettingsScreen(
                 viewModel::updateRetailDeliveryEnabled
             )
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingSwitch(
+            stringResource(R.string.pos_tables_enabled),
+            state.tablesEnabled,
+            viewModel::updateTablesEnabled
+        )
+        Text(
+            stringResource(
+                if (state.posMode == PosMode.RESTAURANT) {
+                    R.string.pos_tables_enabled_hint
+                } else {
+                    R.string.pos_tables_enabled_retail_hint
+                }
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textSecondary
+        )
         Spacer(modifier = Modifier.height(8.dp))
         SettingSwitch(
             stringResource(R.string.pos_require_table_dine_in),
@@ -825,7 +879,7 @@ fun SettingsScreen(
                     Text(
                         buildList {
                             if (printer.printOrderReceipts) add("Receipts")
-                            if (printer.printKitchenTickets) add("Kitchen")
+                            if (printer.printKitchenTickets) add(stringResource(R.string.printer_cap_kitchen))
                             if (printer.printEndOfDayReports) add("Reports")
                             if (printer.openCashDrawer) add("Drawer")
                         }.joinToString(" · "),
@@ -908,6 +962,86 @@ fun SettingsScreen(
             color = Color.Gray
         )
         SettingSwitch(stringResource(R.string.scale_enabled), state.scaleEnabled, viewModel::updateScaleEnabled)
+        state.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { selectedAddress ->
+            val connected = state.scaleUsbDeviceAttached && state.scaleUsbHasPermission
+            val needsPermission = state.scaleUsbDeviceAttached && !state.scaleUsbHasPermission
+            val cardBg = when {
+                connected -> Color(0xFFECFDF5)
+                needsPermission -> Color(0xFFFFF7ED)
+                else -> Color(0xFFF3F4F6)
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    when {
+                                        connected -> Color(0xFF16A34A)
+                                        needsPermission -> Color(0xFFEA580C)
+                                        else -> Color(0xFF9CA3AF)
+                                    }
+                                )
+                        )
+                        Text(
+                            when {
+                                connected -> stringResource(R.string.scale_connected)
+                                needsPermission -> stringResource(R.string.scale_tap_to_allow_usb)
+                                else -> stringResource(R.string.scale_not_found)
+                            },
+                            color = when {
+                                connected -> Color(0xFF166534)
+                                needsPermission -> Color(0xFF9A3412)
+                                else -> Color(0xFF4B5563)
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Text(
+                        viewModel.displayScaleUsbAddress(selectedAddress),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = when {
+                            connected -> Color(0xFF14532D)
+                            needsPermission -> Color(0xFF7C2D12)
+                            else -> Color(0xFF374151)
+                        }
+                    )
+                    Text(
+                        selectedAddress,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            connected -> Color(0xFF166534)
+                            needsPermission -> Color(0xFF9A3412)
+                            else -> Color(0xFF6B7280)
+                        }
+                    )
+                    Text(
+                        when {
+                            connected -> stringResource(R.string.scale_selected_help)
+                            needsPermission -> stringResource(R.string.scale_usb_permission_required)
+                            else -> stringResource(R.string.scale_replug_hint)
+                        },
+                        fontSize = 12.sp,
+                        color = when {
+                            connected -> Color(0xFF166534)
+                            needsPermission -> Color(0xFF9A3412)
+                            else -> Color(0xFF6B7280)
+                        }
+                    )
+                }
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = viewModel::scanScaleUsbDevices) {
                 Text(stringResource(R.string.scale_scan_usb))
@@ -919,17 +1053,14 @@ fun SettingsScreen(
                 Text(stringResource(R.string.scale_test_reading))
             }
         }
-        state.scaleUsbAddress?.let { selected ->
-            Text(
-                stringResource(R.string.scale_selected) + ": $selected",
-                fontSize = 12.sp,
-                color = Color(0xFF16A085)
-            )
-        }
         state.scaleTestReading?.let { reading ->
             Text(reading, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF16A085))
         }
-        state.scaleDevices.forEach { device ->
+        val otherScaleDevices = state.scaleDevices.filter { it.stableAddress != state.scaleUsbAddress }
+        if (otherScaleDevices.isNotEmpty()) {
+            Text(stringResource(R.string.scale_select_usb), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+        otherScaleDevices.forEach { device ->
             val isSelected = device.stableAddress == state.scaleUsbAddress
             Card(
                 modifier = Modifier
@@ -1041,6 +1172,18 @@ fun SettingsScreen(
                 onCheckedChange = viewModel::updateReceiptDeliveryDirectionsQr
             )
             Text(stringResource(R.string.receipt_delivery_directions_qr))
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = state.autoPrintReceipt, onCheckedChange = viewModel::updateAutoPrintReceipt)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.auto_print_receipt))
+                Text(
+                    stringResource(R.string.auto_print_receipt_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = state.adyenReceiptDigitalOnly, onCheckedChange = viewModel::updateAdyenReceiptDigitalOnly)
@@ -1206,6 +1349,23 @@ fun SettingsScreen(
             )
         }
         Text(stringResource(R.string.theme_help), style = MaterialTheme.typography.bodySmall)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.kiosk_fullscreen_title), fontWeight = FontWeight.Medium)
+                Text(
+                    stringResource(R.string.kiosk_fullscreen_help),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Switch(
+                checked = state.kioskFullscreenEnabled,
+                onCheckedChange = viewModel::updateKioskFullscreenEnabled
+            )
+        }
         }
 
         if (state.selectedSection == SettingsSection.LICENSE) {
@@ -1323,7 +1483,8 @@ fun SettingsScreen(
             initialForm = state.editingPrinter?.toForm(),
             isEdit = state.editingPrinter != null,
             isBusy = state.isPrinterBusy,
-            statusMessage = state.message,
+            isScanBusy = state.isDiscoveryScanBusy,
+            statusMessage = state.printerDiscoveryMessage,
             onScan = {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasBluetoothPermission) {
                     permissionLauncher.launch(

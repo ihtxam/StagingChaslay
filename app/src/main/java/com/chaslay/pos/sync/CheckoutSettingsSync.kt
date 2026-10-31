@@ -30,6 +30,12 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
     } else {
         checkout.vatIncludedInPrice
     }
+    val tables = when {
+        context != null && PosLocalPrefs.hasUserSetTablesEnabled(context) ->
+            PosLocalPrefs.applyTablesEnabledIfUserSet(context, tablesEnabled)
+        syncedMode == PosMode.RETAIL -> false
+        else -> checkout.tablesEnabled
+    }
     return copy(
         tipsEnabled = checkout.tipsEnabled,
         terminalAskGratuityEnabled = checkout.terminalAskGratuityEnabled,
@@ -44,7 +50,7 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
         vatIncludedInPrice = vatIncluded,
         vatAfterDiscount = checkout.vatAfterDiscount,
         posMode = syncedMode,
-        tablesEnabled = if (syncedMode == PosMode.RETAIL) false else checkout.tablesEnabled,
+        tablesEnabled = tables,
         retailDineInEnabled = checkout.retailDineInEnabled,
         retailTakeawayEnabled = checkout.retailTakeawayEnabled,
         retailDeliveryEnabled = checkout.retailDeliveryEnabled,
@@ -57,4 +63,13 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
         // Single panel toggle for Cash/Card/Terminal buttons under products.
         expressEnabled = checkout.expressCheckoutEnabled
     )
+}
+
+/** True when local values sent to POST /v1/sync/terminals would differ. */
+fun BusinessSettingsEntity.terminalSyncPayloadChanged(other: BusinessSettingsEntity): Boolean {
+    return adyenTerminalId.trim() != other.adyenTerminalId.trim() ||
+        adyenTerminalEnabled != other.adyenTerminalEnabled ||
+        adyenApiKey.trim() != other.adyenApiKey.trim() ||
+        adyenMerchantAccount.trim() != other.adyenMerchantAccount.trim() ||
+        adyenClientId.trim() != other.adyenClientId.trim()
 }

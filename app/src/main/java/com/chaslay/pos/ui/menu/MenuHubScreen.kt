@@ -41,7 +41,11 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
     state.message?.let { msg ->
         AlertDialog(
             onDismissRequest = viewModel::clearMessage,
-            confirmButton = { TextButton(onClick = viewModel::clearMessage) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearMessage) {
+                    Text(stringResource(R.string.ok))
+                }
+            },
             text = { Text(msg) }
         )
     }
@@ -70,8 +74,7 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                             when (section) {
                                 MenuSection.PRODUCT_LIST -> R.string.product_list
                                 MenuSection.IMPORT_EXPORT -> R.string.menu_import_export
-                                MenuSection.MODIFIERS -> R.string.modifiers
-                                MenuSection.ADDONS -> R.string.addons
+                                MenuSection.EXTRAS_AND_NOS -> R.string.pos_extras_and_nos
                                 MenuSection.COMBOS -> R.string.combos
                             }
                         ),
@@ -94,13 +97,10 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                     onDismissPreview = viewModel::dismissImportPreview,
                     onExportTemplate = viewModel::exportTemplate
                 )
-                MenuSection.MODIFIERS -> ModifierListSection(
-                    groups = state.modifierGroups,
-                    viewModel = viewModel
-                )
-                MenuSection.ADDONS -> AddonListSection(
-                    groups = state.addonGroups,
-                    viewModel = viewModel
+                MenuSection.EXTRAS_AND_NOS -> ExtrasAndNosListSection(
+                    modifierGroups = state.modifierGroups,
+                    addonGroups = state.addonGroups,
+                    viewModel = viewModel,
                 )
                 MenuSection.COMBOS -> CombosSectionHost(viewModel = viewModel)
             }

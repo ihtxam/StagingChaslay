@@ -74,6 +74,31 @@ router.post("/staff/verify-pin", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /v1/sync/reports/profit-margin
+ * Cloud profit & margin (same engine as merchant dashboard). Sync API key auth.
+ * Query: preset, granularity=day|week|month, staffId (optional — scope to one staff member).
+ */
+router.get("/reports/profit-margin", async (req: Request, res: Response) => {
+  try {
+    const preset = String(req.query.preset || "today") as import("@/services/pos-reports.service").ReportPreset;
+    const staffId = req.query.staffId ? String(req.query.staffId) : null;
+    const { ProfitMarginService } = await import("@/services/profit-margin.service");
+    const report = await ProfitMarginService.getProfitMarginReport(req.chaslayMerchantId!, {
+      preset,
+      from: req.query.from ? String(req.query.from) : undefined,
+      to: req.query.to ? String(req.query.to) : undefined,
+      granularity: req.query.granularity ? String(req.query.granularity) : undefined,
+      staffId,
+    });
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load profit margin report",
+    });
+  }
+});
+
 /** Android POS crash/error logs — superadmin System Logs only. */
 router.post("/diagnostic-report", async (req: Request, res: Response) => {
   try {

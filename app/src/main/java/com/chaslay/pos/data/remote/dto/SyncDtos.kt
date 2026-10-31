@@ -20,6 +20,7 @@ data class SyncProductDto(
     val name: String,
     val description: String? = null,
     val price: Double = 0.0,
+    @SerializedName("cost") val costPrice: Double? = null,
     val tax_rate: Double? = null,
     val sku: String? = null,
     val barcode: String? = null,
@@ -66,6 +67,8 @@ data class SyncModifierOptionDto(
     val id: String? = null,
     val name: String? = null,
     val price: Double? = null,
+    @SerializedName(value = "isDefault", alternate = ["is_default"])
+    val isDefault: Boolean? = null,
     @SerializedName(value = "saleStatus", alternate = ["sale_status"])
     val saleStatus: String? = null,
     val sortOrder: Int? = null
@@ -291,6 +294,7 @@ data class SyncPrintDto(
     @SerializedName("adyen_receipt_digital_only") val adyenReceiptDigitalOnly: Boolean = false,
     @SerializedName("receipt_delivery_directions_qr") val receiptDeliveryDirectionsQr: Boolean = true,
     @SerializedName("auto_print_kitchen") val autoPrintKitchen: Boolean = true,
+    @SerializedName("auto_print_receipt") val autoPrintReceipt: Boolean = true,
     @SerializedName("waiter_till_bell_enabled") val waiterTillBellEnabled: Boolean = true,
     @SerializedName("kitchen_print_retry_enabled") val kitchenPrintRetryEnabled: Boolean = true,
     @SerializedName("kitchen_print_retry_attempts") val kitchenPrintRetryAttempts: Int = 5,
@@ -410,4 +414,44 @@ data class PushCatalogResponse(
     val serverTime: Long = 0L,
     val categoryMap: Map<String, String> = emptyMap(),
     val productMap: Map<String, String> = emptyMap()
+)
+
+data class ProfitMarginReportResponse(
+    val success: Boolean = true,
+    val report: RemoteProfitMarginReport? = null
+)
+
+data class RemoteProfitMarginReport(
+    val granularity: String? = null,
+    val previousRange: RemoteProfitRange? = null,
+    val summary: RemoteProfitSummary? = null,
+    @SerializedName("byProduct") val byProduct: List<RemoteProfitRow>? = null,
+    @SerializedName("byCategory") val byCategory: List<RemoteProfitRow>? = null,
+    @SerializedName("byPeriod") val byPeriod: List<RemoteProfitRow>? = null
+)
+
+data class RemoteProfitRange(
+    val label: String? = null
+)
+
+data class RemoteProfitSummary(
+    val revenue: Double = 0.0,
+    val cogs: Double = 0.0,
+    val profit: Double = 0.0,
+    @SerializedName("marginPct") val marginPct: Double? = null,
+    @SerializedName("revenueChangePct") val revenueChangePct: Double? = null,
+    @SerializedName("profitChangePct") val profitChangePct: Double? = null,
+    @SerializedName("linesMissingBuyingPrice") val linesMissingBuyingPrice: Int = 0
+)
+
+data class RemoteProfitRow(
+    val id: String = "",
+    val label: String = "",
+    val quantity: Double = 0.0,
+    val revenue: Double = 0.0,
+    val cogs: Double = 0.0,
+    val profit: Double = 0.0,
+    @SerializedName("marginPct") val marginPct: Double? = null,
+    @SerializedName("revenueChangePct") val revenueChangePct: Double? = null,
+    @SerializedName("profitChangePct") val profitChangePct: Double? = null
 )

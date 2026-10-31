@@ -72,7 +72,7 @@ class ProgrammedOrdersViewModel @Inject constructor(
                         source = ProgrammedOrderSource.HELD,
                         customerLabel = order.deliveryName ?: order.deliveryPhone,
                         statusLabel = when (order.status) {
-                            HeldOrderStatus.SENT_TO_KITCHEN -> "Kitchen sent"
+                            HeldOrderStatus.SENT_TO_KITCHEN -> appContext.getString(com.chaslay.pos.R.string.status_kitchen_sent)
                             HeldOrderStatus.HELD -> "Awaiting payment"
                         }
                     )

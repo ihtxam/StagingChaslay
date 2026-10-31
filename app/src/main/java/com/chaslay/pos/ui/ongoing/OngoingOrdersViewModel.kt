@@ -158,7 +158,7 @@ class OngoingOrdersViewModel @Inject constructor(
                 itemCount = items.sumOf { it.quantity },
                 statusLabel = when {
                     isPayLater -> "Awaiting payment"
-                    order.status == HeldOrderStatus.SENT_TO_KITCHEN -> "Kitchen sent"
+                    order.status == HeldOrderStatus.SENT_TO_KITCHEN -> appContext.getString(com.chaslay.pos.R.string.status_kitchen_sent)
                     else -> "On hold"
                 },
                 source = OngoingOrderSource.HELD,
@@ -183,7 +183,7 @@ class OngoingOrdersViewModel @Inject constructor(
                         total = if (cartItems.isEmpty()) 0.0 else CartSummary(cartItems).total,
                         itemCount = items.sumOf { it.quantity },
                         statusLabel = when (order.status) {
-                            TableOrderStatus.SENT -> "Kitchen sent"
+                            TableOrderStatus.SENT -> appContext.getString(com.chaslay.pos.R.string.status_kitchen_sent)
                             TableOrderStatus.HELD -> "On hold"
                             else -> "Open"
                         },
@@ -370,7 +370,9 @@ class OngoingOrdersViewModel @Inject constructor(
                     meta = payload.meta
                 )
             }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Kitchen print failed")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: appContext.getString(com.chaslay.pos.R.string.kitchen_print_failed)
+                )
             }
         }
     }

@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.Scale
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,10 +59,26 @@ fun PriceKeypadDialog(
     currencySymbol: String,
     initialValue: String = "",
     confirmLabel: String = stringResource(R.string.add_to_cart),
+    /** ~2× layout for tablet readability (e.g. Divers / misc). */
+    layoutExpanded: Boolean = false,
+    showScaleHint: Boolean = false,
     onConfirm: (Double) -> Unit,
     onDismiss: () -> Unit
 ) {
     var buffer by remember { mutableStateOf(initialValue) }
+
+    val keyRowHeight = if (layoutExpanded) 56.dp else KeyRowHeight
+    val keySpacing = if (layoutExpanded) 6.dp else KeySpacing
+    val actionColumnWidth = if (layoutExpanded) 88.dp else ActionColumnWidth
+    val enterKeyHeight = keyRowHeight * 2 + keySpacing
+    val dialogMinWidth = if (layoutExpanded) 440.dp else 220.dp
+    val dialogMaxWidth = if (layoutExpanded) 560.dp else 280.dp
+    val dialogWidthFraction = if (layoutExpanded) 0.62f else 0.46f
+    val titleSize = if (layoutExpanded) 20.sp else 15.sp
+    val subtitleSize = if (layoutExpanded) 13.sp else 11.sp
+    val displaySize = if (layoutExpanded) 26.sp else 18.sp
+    val buttonHeight = if (layoutExpanded) 52.dp else 40.dp
+    val contentPadding = if (layoutExpanded) 20.dp else 12.dp
 
     fun appendKey(key: String) {
         buffer = when (key) {
@@ -85,21 +102,21 @@ fun PriceKeypadDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 220.dp, max = 280.dp)
-                .fillMaxWidth(0.46f),
+                .widthIn(min = dialogMinWidth, max = dialogMaxWidth)
+                .fillMaxWidth(dialogWidthFraction),
             shape = RoundedCornerShape(14.dp),
             color = Color.White,
             shadowElevation = 8.dp
         ) {
             Column(
                 modifier = Modifier
-                    .padding(12.dp)
+                    .padding(contentPadding)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(if (layoutExpanded) 12.dp else 8.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text(subtitle, fontSize = 11.sp, color = Color.Gray)
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = titleSize)
+                    Text(subtitle, fontSize = subtitleSize, color = Color.Gray)
                 }
 
                 Box(
@@ -114,17 +131,49 @@ fun PriceKeypadDialog(
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        fontSize = displaySize
                     )
+                }
+
+                if (showScaleHint) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Scale,
+                                contentDescription = null,
+                                tint = Color(0xFF78716C)
+                            )
+                            Text(
+                                stringResource(R.string.scale_section_aclas),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF78716C)
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.scale_hid_wedge_hint),
+                            fontSize = 11.sp,
+                            color = Color(0xFF78716C)
+                        )
+                    }
                 }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(KeySpacing)
+                    horizontalArrangement = Arrangement.spacedBy(keySpacing)
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(KeySpacing)
+                        verticalArrangement = Arrangement.spacedBy(keySpacing)
                     ) {
                         listOf(
                             listOf("7", "8", "9"),
@@ -134,12 +183,13 @@ fun PriceKeypadDialog(
                         ).forEach { row ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(KeySpacing)
+                                horizontalArrangement = Arrangement.spacedBy(keySpacing)
                             ) {
                                 row.forEach { key ->
                                     PriceKey(
                                         label = key,
                                         modifier = Modifier.weight(1f),
+                                        keyHeight = keyRowHeight,
                                         onClick = { appendKey(key) }
                                     )
                                 }
@@ -147,25 +197,27 @@ fun PriceKeypadDialog(
                         }
                     }
                     Column(
-                        modifier = Modifier.width(ActionColumnWidth),
-                        verticalArrangement = Arrangement.spacedBy(KeySpacing)
+                        modifier = Modifier.width(actionColumnWidth),
+                        verticalArrangement = Arrangement.spacedBy(keySpacing)
                     ) {
                         PriceKey(
                             label = "",
                             icon = Icons.AutoMirrored.Filled.Backspace,
                             modifier = Modifier.fillMaxWidth(),
+                            keyHeight = keyRowHeight,
                             onClick = { buffer = buffer.dropLast(1) }
                         )
                         PriceKey(
                             label = stringResource(R.string.keypad_clear),
                             modifier = Modifier.fillMaxWidth(),
+                            keyHeight = keyRowHeight,
                             onClick = { buffer = "" }
                         )
                         PriceKey(
                             label = "",
                             icon = Icons.AutoMirrored.Filled.KeyboardReturn,
                             modifier = Modifier.fillMaxWidth(),
-                            keyHeight = EnterKeyHeight,
+                            keyHeight = enterKeyHeight,
                             highlight = true,
                             onClick = ::confirm
                         )
@@ -180,20 +232,29 @@ fun PriceKeypadDialog(
                         onClick = onDismiss,
                         modifier = Modifier
                             .weight(1f)
-                            .height(40.dp),
+                            .height(buttonHeight),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text(stringResource(R.string.cancel), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(
+                            stringResource(R.string.cancel),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = if (layoutExpanded) 14.sp else 12.sp
+                        )
                     }
                     Button(
                         onClick = ::confirm,
                         modifier = Modifier
                             .weight(1f)
-                            .height(40.dp),
+                            .height(buttonHeight),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
                     ) {
-                        Text(confirmLabel, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                        Text(
+                            confirmLabel,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = if (layoutExpanded) 14.sp else 12.sp
+                        )
                     }
                 }
             }

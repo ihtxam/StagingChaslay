@@ -25,7 +25,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.chaslay.pos.R
 import java.util.Locale
 
 internal object ReportDashColors {
@@ -131,7 +133,12 @@ internal fun ReportBreakdownCard(
         }
         Spacer(Modifier.size(12.dp))
         if (rows.isEmpty()) {
-            Text("No data", color = ReportDashColors.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                stringResource(R.string.report_no_data),
+                color = ReportDashColors.TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         } else {
             rows.forEach { row ->
                 val pct = if (total > 0.0) (row.total / total * 100.0) else 0.0
@@ -232,7 +239,12 @@ internal fun ReportTaxBreakdownCard(rows: List<ReportTaxRow>, sym: String) {
                 modifier = Modifier.size(18.dp)
             )
             Spacer(Modifier.size(8.dp))
-            Text("Tax Breakdown", color = ReportDashColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                stringResource(R.string.report_tax_breakdown),
+                color = ReportDashColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
         Spacer(Modifier.size(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {

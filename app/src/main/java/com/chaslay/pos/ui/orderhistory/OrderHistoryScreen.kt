@@ -95,13 +95,13 @@ fun OrderHistoryScreen(
         var searchText by remember(state.searchQuery) { mutableStateOf(state.searchQuery) }
         AlertDialog(
             onDismissRequest = { showSearchDialog = false },
-            title = { Text("Search orders") },
+            title = { Text(stringResource(R.string.order_history_search_title)) },
             text = {
                 OutlinedTextField(
                     value = searchText,
                     onValueChange = { searchText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("ORDER ID...") },
+                    placeholder = { Text(stringResource(R.string.order_history_search_hint)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     singleLine = true
                 )
@@ -117,7 +117,7 @@ fun OrderHistoryScreen(
                     searchText = ""
                     viewModel.setSearchQuery("")
                     showSearchDialog = false
-                }) { Text("Clear") }
+                }) { Text(stringResource(R.string.clear)) }
             }
         )
     }
@@ -269,7 +269,7 @@ fun OrderHistoryScreen(
                         IconButton(onClick = { showSearchDialog = true }) {
                             Icon(
                                 Icons.Default.Search,
-                                contentDescription = "Search",
+                                contentDescription = stringResource(R.string.search_orders),
                                 tint = if (state.searchQuery.isNotBlank()) AccentGreen else Color.Unspecified
                             )
                         }
@@ -497,13 +497,13 @@ private fun RecordsFilterBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            FilterSectionLabel("DATE")
+            FilterSectionLabel(stringResource(R.string.order_history_filter_date))
             listOf(
                 HistoryDateFilter.TODAY to stringResource(R.string.today),
                 HistoryDateFilter.YESTERDAY to stringResource(R.string.yesterday),
-                HistoryDateFilter.WEEK to "Week",
+                HistoryDateFilter.WEEK to stringResource(R.string.week),
                 HistoryDateFilter.MONTH to stringResource(R.string.month),
-                HistoryDateFilter.THREE_MONTHS to "3 Mo",
+                HistoryDateFilter.THREE_MONTHS to stringResource(R.string.order_history_three_months),
                 HistoryDateFilter.ALL to stringResource(R.string.all)
             ).forEach { (filter, label) ->
                 RecordsTabChip(
@@ -516,13 +516,13 @@ private fun RecordsFilterBar(
 
             FilterDivider()
 
-            FilterSectionLabel("STATUS")
+            FilterSectionLabel(stringResource(R.string.order_history_filter_status))
             RecordsTabChip(label = stringResource(R.string.all), selected = state.statusFilter == null, compact = true, onClick = { onStatus(null) })
             PaymentStatus.entries
                 .filter { it != PaymentStatus.PENDING && it != PaymentStatus.FAILED }
                 .forEach { status ->
                     RecordsTabChip(
-                        label = statusShortLabel(status),
+                        label = orderHistoryPaymentStatusChipLabel(status),
                         selected = state.statusFilter == status,
                         compact = true,
                         onClick = { onStatus(status) }
@@ -551,24 +551,6 @@ private fun FilterDivider() {
             .width(1.dp)
             .background(Color(0xFFE5E7EB))
     )
-}
-
-private fun statusShortLabel(status: PaymentStatus): String = when (status) {
-    PaymentStatus.COMPLETED -> "Done"
-    PaymentStatus.REFUNDED -> "Refund"
-    PaymentStatus.CANCELLED -> "Cancel"
-    PaymentStatus.PARTIALLY_REFUNDED -> "Part"
-    else -> status.name.take(6)
-}
-
-private fun paymentShortLabel(method: PaymentMethod): String = when (method) {
-    PaymentMethod.CASH -> "Cash"
-    PaymentMethod.CARD -> "Card"
-    PaymentMethod.TAP_TO_PAY -> "Tap"
-    PaymentMethod.ADYEN_TERMINAL -> "Term"
-    PaymentMethod.PAY_LATER -> "Later"
-    PaymentMethod.INVOICE -> "Invoice"
-    PaymentMethod.GIFT_CARD -> "Gift"
 }
 
 @Composable
@@ -681,21 +663,21 @@ private fun RecordsTableRow(
             )
             if (isSplit) {
                 Spacer(Modifier.width(4.dp))
-                StatusPill("S", Color(0xFFF97316), compact = true)
+                StatusPill(stringResource(R.string.order_history_split_badge), Color(0xFFF97316), compact = true)
             }
         }
         Box(modifier = Modifier.width(68.dp)) {
-            StatusPill(orderTypeLabel(order.serviceType), orderTypeColor(order.serviceType), compact = true)
+            StatusPill(orderHistoryServiceTypeChipLabel(order.serviceType), orderTypeColor(order.serviceType), compact = true)
         }
         Box(modifier = Modifier.width(88.dp)) {
-            StatusPill(orderStatusShort(order.paymentStatus), statusColor(order.paymentStatus), compact = true)
+            StatusPill(orderHistoryPaymentStatusChipLabel(order.paymentStatus), statusColor(order.paymentStatus), compact = true)
         }
         CellText(
             formatMoney(displayAmount, currencySymbol),
             76.dp,
             fontWeight = FontWeight.Bold
         )
-        CellText(paymentShortLabel(order.paymentMethod), 56.dp, color = TextMuted)
+        CellText(orderHistoryPaymentMethodChipLabel(order.paymentMethod), 56.dp, color = TextMuted)
         CellText(
             order.userName.take(8),
             72.dp,
@@ -707,14 +689,6 @@ private fun RecordsTableRow(
             }
         )
     }
-}
-
-private fun orderStatusShort(status: PaymentStatus): String = when (status) {
-    PaymentStatus.COMPLETED -> "Done"
-    PaymentStatus.REFUNDED -> "Refund"
-    PaymentStatus.CANCELLED -> "Cancel"
-    PaymentStatus.PARTIALLY_REFUNDED -> "Part"
-    else -> status.name.take(5)
 }
 
 @Composable
@@ -769,12 +743,6 @@ private fun shortOrderId(number: String, notes: String? = null): String {
     }
 }
 
-private fun orderTypeLabel(serviceType: ServiceType?): String = when (serviceType) {
-    ServiceType.DINE_IN -> "DINE IN"
-    ServiceType.TAKEAWAY -> "PICKUP"
-    else -> "WALK IN"
-}
-
 private fun orderTypeColor(serviceType: ServiceType?): Color = when (serviceType) {
     ServiceType.DINE_IN -> Color(0xFF92400E)
     ServiceType.TAKEAWAY -> Color(0xFF7C3AED)
@@ -786,16 +754,6 @@ private fun statusColor(status: PaymentStatus): Color = when (status) {
     PaymentStatus.CANCELLED -> Color(0xFFDC2626)
     PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED -> Color(0xFFD97706)
     else -> Color(0xFF6B7280)
-}
-
-private fun paymentLabel(method: PaymentMethod): String = when (method) {
-    PaymentMethod.CASH -> "Cash"
-    PaymentMethod.CARD -> "Card"
-    PaymentMethod.ADYEN_TERMINAL -> "Terminal"
-    PaymentMethod.TAP_TO_PAY -> "Tap"
-    PaymentMethod.PAY_LATER -> "Pay Later"
-    PaymentMethod.INVOICE -> "Invoice"
-    PaymentMethod.GIFT_CARD -> "Gift card"
 }
 
 @Composable

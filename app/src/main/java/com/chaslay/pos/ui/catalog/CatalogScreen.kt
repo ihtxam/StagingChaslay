@@ -164,10 +164,11 @@ fun CatalogScreen(viewModel: CatalogViewModel = hiltViewModel()) {
             addonGroups = state.addonGroups,
             viewModel = viewModel,
             onDismiss = { showProductDialog = false },
-            onSave = { name, price, categoryId, tax, openPrice, isWeighed, sortOrder, variants, modIds, addonIds, barcode, sku, stockQty, lowStock ->
+            onSave = { name, price, categoryId, tax, openPrice, isWeighed, sortOrder, variants, modIds, addonIds, barcode, sku, stockQty, lowStock, buyingPrice ->
                 viewModel.saveProduct(
                     name, price, categoryId, tax, openPrice, isWeighed, sortOrder,
-                    variants, modIds, addonIds, barcode, sku, stockQty, lowStock, editingProduct?.id ?: 0
+                    variants, modIds, addonIds, barcode, sku, stockQty, lowStock,
+                    costPrice = buyingPrice, id = editingProduct?.id ?: 0
                 )
                 showProductDialog = false
             }
@@ -571,7 +572,7 @@ private fun ProductDialog(
     onSave: (
         String, Double, Long?, Double, Boolean, Boolean, Int,
         List<ProductVariantDraft>, List<Long>, List<Long>,
-        String?, String?, Int?, Int?
+        String?, String?, Int?, Int?, Double?
     ) -> Unit
 ) {
     var name by remember(product) { mutableStateOf(product?.name ?: "") }
@@ -581,6 +582,7 @@ private fun ProductDialog(
     var lowStockThreshold by remember(product) { mutableStateOf(product?.lowStockThreshold?.toString().orEmpty()) }
     var showScanner by remember { mutableStateOf(false) }
     var price by remember(product) { mutableStateOf(product?.price?.toString() ?: "") }
+    var costPrice by remember(product) { mutableStateOf(product?.costPrice?.toString().orEmpty()) }
     var tax by remember(product) { mutableStateOf(product?.taxRate?.toString() ?: "2.6") }
     var sortOrder by remember(product) { mutableStateOf((product?.sortOrder ?: 0).toString()) }
     var openPrice by remember(product) { mutableStateOf(product?.isOpenPrice ?: false) }
@@ -734,6 +736,20 @@ private fun ProductDialog(
                                 label = stringResource(R.string.tax_rate),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (!openPrice) {
+                            CatalogField(
+                                value = costPrice,
+                                onValueChange = { costPrice = it },
+                                label = stringResource(R.string.product_buying_price),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.fillMaxWidth(0.5f)
+                            )
+                            Text(
+                                text = stringResource(R.string.product_buying_price_hint),
+                                fontSize = 11.sp,
+                                color = CatalogMuted
                             )
                         }
                     } else if (!isWeighed) {
@@ -967,7 +983,8 @@ private fun ProductDialog(
                                 barcode.takeIf { it.isNotBlank() },
                                 sku,
                                 stockQuantity.toIntOrNull(),
-                                lowStockThreshold.toIntOrNull()
+                                lowStockThreshold.toIntOrNull(),
+                                costPrice.toDoubleOrNull()
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = CatalogTeal)

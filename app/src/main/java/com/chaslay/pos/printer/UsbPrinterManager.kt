@@ -11,10 +11,12 @@ package com.chaslay.pos.printer
  * **When to show the system USB dialog (Ojavana-style — not on app open)**
  * - [requestPermission] when the user **prints** ([sendBytes]) and `!hasPermission`, or from
  *   Settings when they pick / test a USB printer.
- * - USB **ATTACHED** receiver auto-requests only for [setMonitoredPrinterAddresses] or
- *   [rememberedGrantedAddresses] ([shouldAutoRequestPermission]) — not on cold start / onResume.
- * - [syncForegroundUsbPermissionState] from [com.chaslay.pos.MainActivity.onResume]: sync grants
- *   only; never calls [UsbManager.requestPermission]. Never prompt from background timers / warmup.
+ * - USB **ATTACHED** receiver auto-requests only for [setMonitoredPrinterAddresses] after
+ *   [UsbBootAttachGrace] (not on app open right after reboot). Print path uses [shouldAutoRequestPermission].
+ * - [syncForegroundUsbPermissionState] from [com.chaslay.pos.MainActivity.onResume]: sync grants;
+ *   **one** [requestPermission] per reboot when a saved USB printer or scale is attached but unauthorized
+ *   (Android often clears USB grant on reboot while the cable stays connected). Never on every resume
+ *   when [UsbManager.hasPermission] is already true. No background timers / warmup dialogs.
  * - [syncGrantedDevicesFromSystem] / [recordAlreadyGrantedDevices] sync Android’s grant without UI.
  *
  * **Do not regress**
@@ -37,6 +39,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.chaslay.pos.printer.EscPosEncoder
+import com.chaslay.pos.scale.ScaleUsbMatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -67,8 +70,15 @@ class UsbPrinterManager @Inject constructor(
     private val pendingCallbacks = ConcurrentHashMap<String, (Boolean) -> Unit>()
     private var permissionReceiverRegistered = false
     private var attachReceiverRegistered = false
+    private var detachReceiverRegistered = false
     @Volatile
     private var monitoredPrinterAddresses: Set<String> = emptySet()
+    @Volatile
+    private var monitoredPrinterAddressesSynced = false
+    @Volatile
+    private var monitoredScaleAddresses: Set<String> = emptySet()
+    @Volatile
+    private var monitoredScaleAddressesSynced = false
     private val permissionQueueInFlight = AtomicBoolean(false)
     @Volatile
     private var pendingPermissionDeviceId: Int? = null
@@ -79,14 +89,41 @@ class UsbPrinterManager @Inject constructor(
         override fun onReceive(ctx: Context?, intent: Intent?) {
             if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
             val device = intent.getUsbDeviceExtra() ?: return
-            if (!isLikelyPrinter(device)) return
             val manager = usbManager ?: return
             val address = permissionKey(stableAddress(device))
-            if (shouldAutoRequestPermission(address) && !manager.hasPermission(device)) {
-                requestPermission(address) { granted ->
-                    if (granted) Log.i(TAG, "USB permission re-granted on attach for $address")
-                }
+            if (manager.hasPermission(device)) {
+                rememberGrantedAddress(address)
+                return
             }
+            val isPrinter = isLikelyPrinter(device)
+            val isScale = ScaleUsbMatcher.isLikelyScale(device, ::isLikelyPrinter)
+            if (!isPrinter && !isScale) return
+            if (UsbBootAttachGrace.isWithinPostBootGrace(context)) {
+                Log.d(TAG, "USB attach — defer permission until after boot grace ($address)")
+                return
+            }
+            val shouldAuto = (isPrinter && shouldAutoRequestOnAttach(address)) ||
+                (isScale && shouldAutoRequestScaleOnAttach(address))
+            if (!shouldAuto) {
+                Log.d(TAG, "USB attach — skip auto prompt (not a saved POS USB device)")
+                return
+            }
+            if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(context, device)) {
+                Log.d(TAG, "USB attach — permission prompt debounced for $address")
+                return
+            }
+            UsbAttachPromptGuard.markPromptIssued(context, device)
+            requestPermission(address) { granted ->
+                if (granted) Log.i(TAG, "USB permission re-granted on attach for $address")
+            }
+        }
+    }
+
+    private val detachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            if (intent?.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
+            val device = intent.getUsbDeviceExtra() ?: return
+            UsbAttachPromptGuard.clearSuppressForDevice(context, device)
         }
     }
 
@@ -109,6 +146,9 @@ class UsbPrinterManager @Inject constructor(
             .filter { isLikelyPrinter(it) }
             .map { deviceToInfo(it, manager.hasPermission(it)) }
     }
+
+    /** Used by scale USB scan to hide ESC/POS printers from the scale picker. */
+    fun isLikelyEscPosPrinter(device: UsbDevice): Boolean = isLikelyPrinter(device)
 
     fun hasPermission(address: String): Boolean {
         val manager = usbManager ?: return false
@@ -156,6 +196,7 @@ class UsbPrinterManager @Inject constructor(
                 flags
             )
             Log.i(TAG, "Requesting USB permission for $key deviceId=${device.deviceId}")
+            UsbAttachPromptGuard.markPromptIssued(context, device)
             manager.requestPermission(device, permissionIntent)
         }.onFailure {
             permissionQueueInFlight.set(false)
@@ -169,6 +210,7 @@ class UsbPrinterManager @Inject constructor(
     fun startMonitoring() {
         ensurePermissionReceiverRegistered()
         ensureAttachReceiverRegistered()
+        ensureDetachReceiverRegistered()
         recordAlreadyGrantedDevices()
     }
 
@@ -178,6 +220,16 @@ class UsbPrinterManager @Inject constructor(
             .map { permissionKey(normalizeStoredAddress(it)) }
             .filter { isUsbAddress(it) }
             .toSet()
+        monitoredPrinterAddressesSynced = true
+    }
+
+    /** Saved Aclas / scale USB addresses (stable usb:vid:pid). */
+    fun setMonitoredScaleAddresses(addresses: Collection<String>) {
+        monitoredScaleAddresses = addresses
+            .map { permissionKey(normalizeStoredAddress(it)) }
+            .filter { isUsbAddress(it) }
+            .toSet()
+        monitoredScaleAddressesSynced = true
     }
 
     /** Sync granted devices from the system; does not show dialogs (safe from background). */
@@ -186,14 +238,146 @@ class UsbPrinterManager @Inject constructor(
     }
 
     /**
-     * Call from Activity [onResume]: reconcile pending state and remember already-granted devices.
-     * Does **not** show the system USB allow dialog (defer to print, Settings, or USB attach).
+     * Call from Activity [onResume]: reconcile pending state, remember already-granted devices, and
+     * (once per reboot) prompt for a saved USB printer that lost host permission while still attached.
      */
     fun syncForegroundUsbPermissionState() {
         val manager = usbManager ?: return
         recordAlreadyGrantedDevices()
         reconcilePendingWithGrant(manager)
         clearStalePendingRequest(manager)
+        maybeRequestPostBootMonitoredUsbPermission(manager)
+        maybeRequestPostBootMonitoredScaleUsbPermission(manager)
+        maybeRequestForegroundMonitoredScaleUsbPermission(manager)
+    }
+
+    /**
+     * When a saved scale is plugged in but unauthorized, prompt from the foreground (login / POS resume),
+     * not only from Settings → Scale. Debounced via [UsbAttachPromptGuard] after dismiss.
+     */
+    private fun maybeRequestForegroundMonitoredScaleUsbPermission(manager: UsbManager) {
+        if (!monitoredScaleAddressesSynced) return
+        if (monitoredScaleAddresses.isEmpty()) return
+        if (pendingPermissionDeviceId != null) return
+
+        val missingAddress = monitoredScaleAddresses.firstOrNull { address ->
+            val device = resolveDevice(address) ?: return@firstOrNull false
+            ScaleUsbMatcher.isLikelyScale(device, ::isLikelyPrinter) && !manager.hasPermission(device)
+        } ?: return
+
+        val device = resolveDevice(missingAddress) ?: return
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(context, device)) {
+            Log.d(TAG, "Foreground scale USB prompt debounced for $missingAddress")
+            return
+        }
+        Log.i(TAG, "Foreground scale USB permission prompt for monitored scale $missingAddress")
+        requestPermission(missingAddress) { granted ->
+            if (granted) Log.i(TAG, "USB permission granted for scale $missingAddress")
+        }
+    }
+
+    /**
+     * Ojavana-style post-reboot single prompt on login / first POS frame. Skipped when permission
+     * is already granted or no monitored device is connected (replug uses the attach receiver).
+     */
+    private fun maybeRequestPostBootMonitoredUsbPermission(manager: UsbManager) {
+        if (!UsbBootAttachGrace.shouldOfferPostBootForegroundPrompt(context)) return
+        if (!monitoredPrinterAddressesSynced) return
+        if (monitoredPrinterAddresses.isEmpty()) {
+            UsbBootAttachGrace.markPostBootForegroundPromptCompleted(context)
+            return
+        }
+        if (pendingPermissionDeviceId != null) return
+
+        val missingAddress = monitoredPrinterAddresses.firstOrNull { address ->
+            val device = resolveDevice(address) ?: return@firstOrNull false
+            isLikelyPrinter(device) && !manager.hasPermission(device)
+        }
+        if (missingAddress == null) {
+            UsbBootAttachGrace.markPostBootForegroundPromptCompleted(context)
+            return
+        }
+
+        UsbBootAttachGrace.markPostBootForegroundPromptCompleted(context)
+        val device = resolveDevice(missingAddress) ?: return
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(context, device)) {
+            Log.d(TAG, "Post-boot USB prompt debounced for $missingAddress")
+            return
+        }
+        Log.i(TAG, "Post-boot USB permission prompt for monitored printer $missingAddress")
+        requestPermission(missingAddress) { granted ->
+            if (granted) Log.i(TAG, "USB permission granted after reboot for $missingAddress")
+        }
+    }
+
+    private fun maybeRequestPostBootMonitoredScaleUsbPermission(manager: UsbManager) {
+        if (!UsbBootAttachGrace.shouldOfferPostBootScaleForegroundPrompt(context)) return
+        if (!monitoredScaleAddressesSynced) return
+        if (monitoredScaleAddresses.isEmpty()) {
+            UsbBootAttachGrace.markPostBootScaleForegroundPromptCompleted(context)
+            return
+        }
+        if (pendingPermissionDeviceId != null) return
+
+        val missingAddress = monitoredScaleAddresses.firstOrNull { address ->
+            val device = resolveDevice(address) ?: return@firstOrNull false
+            ScaleUsbMatcher.isLikelyScale(device, ::isLikelyPrinter) && !manager.hasPermission(device)
+        }
+        if (missingAddress == null) {
+            UsbBootAttachGrace.markPostBootScaleForegroundPromptCompleted(context)
+            return
+        }
+
+        UsbBootAttachGrace.markPostBootScaleForegroundPromptCompleted(context)
+        val device = resolveDevice(missingAddress) ?: return
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(context, device)) {
+            Log.d(TAG, "Post-boot scale USB prompt debounced for $missingAddress")
+            return
+        }
+        Log.i(TAG, "Post-boot USB permission prompt for monitored scale $missingAddress")
+        requestPermission(missingAddress) { granted ->
+            if (granted) Log.i(TAG, "USB permission granted after reboot for scale $missingAddress")
+        }
+    }
+
+    /**
+     * Settings → Scale or test reading when host permission was cleared but the scale stayed plugged in.
+     * Skips when permission is already granted; respects the single in-flight permission queue.
+     */
+    fun requestMonitoredScalePermissionFromSettings(address: String?, onResult: ((Boolean) -> Unit)? = null) {
+        val normalized = address?.trim()?.takeIf { it.isNotEmpty() } ?: run {
+            onResult?.invoke(false)
+            return
+        }
+        val key = permissionKey(normalizeStoredAddress(normalized))
+        if (key !in monitoredScaleAddresses) {
+            onResult?.invoke(false)
+            return
+        }
+        val manager = usbManager ?: run {
+            onResult?.invoke(false)
+            return
+        }
+        val device = resolveDevice(normalized) ?: run {
+            onResult?.invoke(false)
+            return
+        }
+        if (manager.hasPermission(device)) {
+            rememberGrantedAddress(key)
+            onResult?.invoke(true)
+            return
+        }
+        if (pendingPermissionDeviceId != null) {
+            onResult?.invoke(false)
+            return
+        }
+        if (UsbAttachPromptGuard.shouldSuppressPermissionDialog(context, device)) {
+            onResult?.invoke(false)
+            return
+        }
+        requestPermission(normalized) { granted ->
+            onResult?.invoke(granted)
+        }
     }
 
     fun normalizeStoredAddress(address: String): String {
@@ -219,7 +403,13 @@ class UsbPrinterManager @Inject constructor(
     }
 
     fun buildTestPayload(): ByteArray {
-        val text = "RebornPOS\nUSB: é è ü Ø\n\n\n"
+        val text = buildString {
+            appendLine("RebornPOS")
+            appendLine("TEST PRINT")
+            appendLine("Fran\u00E7ais: esp\u00E8ces caf\u00E9 cr\u00E8me")
+            appendLine("Test: \u00E9 \u00E8 \u00FC \u00D8")
+            appendLine("\n\n\n")
+        }
         return byteArrayOf(0x1B, 0x40, 0x1B, 0x74, 0x02) +
             EscPosEncoder.encode(text) +
             byteArrayOf(0x1D, 0x56, 0x00)
@@ -381,6 +571,18 @@ class UsbPrinterManager @Inject constructor(
         attachReceiverRegistered = true
     }
 
+    private fun ensureDetachReceiverRegistered() {
+        if (detachReceiverRegistered) return
+        val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(detachReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(detachReceiver, filter)
+        }
+        detachReceiverRegistered = true
+    }
+
     private fun ensurePermissionReceiverRegistered() {
         if (permissionReceiverRegistered) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -412,6 +614,17 @@ class UsbPrinterManager @Inject constructor(
         return normalized in rememberedGrantedAddresses()
     }
 
+    /** Attach-time prompts: saved POS printers only (not “remembered grant” prefs after reboot). */
+    private fun shouldAutoRequestOnAttach(address: String): Boolean {
+        val normalized = permissionKey(normalizeStoredAddress(address))
+        return normalized in monitoredPrinterAddresses
+    }
+
+    private fun shouldAutoRequestScaleOnAttach(address: String): Boolean {
+        val normalized = permissionKey(normalizeStoredAddress(address))
+        return normalized in monitoredScaleAddresses
+    }
+
     /** vid:pid key used for permission prefs/callbacks — never includes serial (serial needs permission). */
     private fun permissionKey(address: String): String {
         parseStableAddress(normalizeStoredAddress(address))?.let { (vid, pid, _) ->
@@ -440,8 +653,14 @@ class UsbPrinterManager @Inject constructor(
     private fun recordAlreadyGrantedDevices() {
         val manager = usbManager ?: return
         manager.deviceList.values
-            .filter { isLikelyPrinter(it) && manager.hasPermission(it) }
-            .forEach { rememberGrantedAddress(stableAddress(it)) }
+            .filter { manager.hasPermission(it) }
+            .forEach { device ->
+                when {
+                    isLikelyPrinter(device) -> rememberGrantedAddress(stableAddress(device))
+                    ScaleUsbMatcher.isLikelyScale(device, ::isLikelyPrinter) ->
+                        rememberGrantedAddress(stableAddress(device))
+                }
+            }
     }
 
     private fun reconcilePendingWithGrant(manager: UsbManager) {

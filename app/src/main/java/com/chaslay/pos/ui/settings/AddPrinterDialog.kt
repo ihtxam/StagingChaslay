@@ -81,6 +81,7 @@ fun AddPrinterDialog(
     initialForm: AddPrinterForm? = null,
     isEdit: Boolean = false,
     isBusy: Boolean = false,
+    isScanBusy: Boolean = false,
     statusMessage: String? = null,
     onScan: () -> Unit,
     onScanUsb: () -> Unit = {},
@@ -100,6 +101,7 @@ fun AddPrinterDialog(
     }
     val connectionTypes = listOf("BLUETOOTH", "WIFI", "USB")
     val canSave = form.address.trim().isNotBlank()
+    val scanButtonsEnabled = !isScanBusy
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -183,7 +185,7 @@ fun AddPrinterDialog(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = scanAction,
-                                enabled = !isBusy,
+                                enabled = scanButtonsEnabled,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
@@ -194,7 +196,7 @@ fun AddPrinterDialog(
                                     }
                                 )
                             }
-                            OutlinedButton(onClick = scanAction, enabled = !isBusy) {
+                            OutlinedButton(onClick = scanAction, enabled = scanButtonsEnabled) {
                                 Icon(Icons.Default.Search, contentDescription = null)
                             }
                         }
@@ -234,13 +236,11 @@ fun AddPrinterDialog(
                                 fontSize = 11.sp,
                                 color = Color.Gray
                             )
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 160.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                items(scanResults.take(20), key = { it.address }) { printer ->
+                                scanResults.take(20).forEach { printer ->
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -283,7 +283,7 @@ fun AddPrinterDialog(
                         if (form.connectionType == "WIFI" && form.address.trim().isNotBlank()) {
                             OutlinedButton(
                                 onClick = { onVerifyNetwork(form.address) },
-                                enabled = !isBusy,
+                                enabled = scanButtonsEnabled,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(stringResource(R.string.verify_printer_ip))
@@ -307,7 +307,7 @@ fun AddPrinterDialog(
                                 form = form.copy(paperWidthMm = 80)
                             }
                         }
-                        RoleToggle("KITCHEN TICKETS", form.printKitchenTickets) {
+                        RoleToggle(stringResource(R.string.printer_role_kitchen_tickets), form.printKitchenTickets) {
                             form = form.copy(printKitchenTickets = it)
                         }
                         RoleToggle("CUSTOMER TICKETS", form.printCustomerTickets) {

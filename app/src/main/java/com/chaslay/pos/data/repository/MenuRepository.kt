@@ -133,18 +133,32 @@ class MenuRepository @Inject constructor(
     }
 
     suspend fun getModifierGroupsForProduct(productId: Long): List<ModifierGroupModel> {
+        val sortByGroupId = productModifierGroupDao
+            .getGroupLinksForProduct(productId)
+            .associate { it.groupId to it.sortOrder }
         val groups = productModifierGroupDao.getGroupsForProduct(productId)
         return groups.map { group ->
             val options = modifierOptionDao.getByGroup(group.id).map { it.toModel() }
-            group.toModel(options, emptyList())
+            group.toModel(
+                options = options,
+                productIds = emptyList(),
+                productSortOrder = sortByGroupId[group.id] ?: 0
+            )
         }
     }
 
     suspend fun getAddonGroupsForProduct(productId: Long): List<AddonGroupModel> {
+        val sortByGroupId = productAddonGroupDao
+            .getGroupLinksForProduct(productId)
+            .associate { it.groupId to it.sortOrder }
         val groups = productAddonGroupDao.getGroupsForProduct(productId)
         return groups.map { group ->
             val options = addonOptionDao.getByGroup(group.id).map { it.toModel() }
-            group.toModel(options, emptyList())
+            group.toModel(
+                options = options,
+                productIds = emptyList(),
+                productSortOrder = sortByGroupId[group.id] ?: 0
+            )
         }
     }
 
@@ -310,33 +324,47 @@ class MenuRepository @Inject constructor(
         variants = emptyList()
     )
 
-    private fun ModifierGroupEntity.toModel(options: List<ModifierOptionModel>, productIds: List<Long>) =
-        ModifierGroupModel(
-            id = id,
-            name = name,
-            limitQuantity = limitQuantity,
-            required = required,
-            options = options,
-            linkedProductIds = productIds
-        )
+    private fun ModifierGroupEntity.toModel(
+        options: List<ModifierOptionModel>,
+        productIds: List<Long>,
+        productSortOrder: Int = 0,
+    ) = ModifierGroupModel(
+        id = id,
+        name = name,
+        limitQuantity = limitQuantity,
+        required = required,
+        options = options,
+        linkedProductIds = productIds,
+        productSortOrder = productSortOrder,
+    )
 
-    private fun ModifierOptionEntity.toModel() = ModifierOptionModel(id = id, name = name, inStock = inStock)
+    private fun ModifierOptionEntity.toModel() = ModifierOptionModel(
+        id = id,
+        name = name,
+        inStock = inStock,
+        isDefault = isDefault || name.trim().equals("default", ignoreCase = true),
+    )
 
-    private fun AddonGroupEntity.toModel(options: List<AddonOptionModel>, productIds: List<Long>) =
-        AddonGroupModel(
-            id = id,
-            name = name,
-            limitQuantity = limitQuantity,
-            required = required,
-            allowMultipleSame = allowMultipleSame,
-            options = options,
-            linkedProductIds = productIds
-        )
+    private fun AddonGroupEntity.toModel(
+        options: List<AddonOptionModel>,
+        productIds: List<Long>,
+        productSortOrder: Int = 0,
+    ) = AddonGroupModel(
+        id = id,
+        name = name,
+        limitQuantity = limitQuantity,
+        required = required,
+        allowMultipleSame = allowMultipleSame,
+        options = options,
+        linkedProductIds = productIds,
+        productSortOrder = productSortOrder,
+    )
 
     private fun AddonOptionEntity.toModel() = AddonOptionModel(
         id = id,
         name = name,
         price = price,
-        inStock = inStock
+        inStock = inStock,
+        isDefault = isDefault || name.trim().equals("default", ignoreCase = true),
     )
 }
