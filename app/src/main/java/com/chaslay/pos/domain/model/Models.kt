@@ -741,7 +741,11 @@ data class ProductSalesReport(
 data class UserPerformanceReport(
     val userName: String,
     val transactionCount: Int,
-    val revenue: Double
+    val revenue: Double,
+    val cashTotal: Double = 0.0,
+    /** Card + terminal (Adyen), aligned with EOD payment rows. */
+    val cardTotal: Double = 0.0,
+    val tapToPayTotal: Double = 0.0,
 )
 
 enum class TableStatus {
@@ -892,6 +896,11 @@ data class EodStaffSummaryRow(
     val name: String,
     val salesCount: Int,
     val revenue: Double,
+    val cashTotal: Double = 0.0,
+    /** Card + terminal (Adyen), aligned with EOD payment rows. */
+    val cardTotal: Double = 0.0,
+    val tapToPayTotal: Double = 0.0,
+    val otherTotal: Double = 0.0,
 )
 
 data class EndOfDayReport(

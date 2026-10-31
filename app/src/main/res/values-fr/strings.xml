@@ -421,6 +421,8 @@
     <string name="eod_pick_date">Choisir une date</string>
     <string name="eod_staff_picker_hint">Choisissez un employé pour voir ou imprimer son rapport, ou toute l\'entreprise pour le magasin.</string>
     <string name="eod_staff_breakdown_title">Ventes par employé</string>
+    <string name="eod_staff_my_payments_title">Ventes par mode de paiement</string>
+    <string name="eod_staff_other_payments">Autres</string>
     <string name="pos_printer">Imprimante de reçus / PDV</string>
     <string name="kitchen_printer">Imprimante de cuisine</string>
     <string name="receipt_design">Conception du reçu</string>

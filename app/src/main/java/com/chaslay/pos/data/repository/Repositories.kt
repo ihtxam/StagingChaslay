@@ -31,6 +31,8 @@ import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.DailySalesReport
 import com.chaslay.pos.domain.model.DashboardStats
+import com.chaslay.pos.domain.EodPaymentBuckets
+import com.chaslay.pos.domain.model.EodStaffSummaryRow
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.VatBreakdownRow
 import com.chaslay.pos.domain.model.PaymentMethodRow
@@ -851,9 +853,60 @@ class TransactionRepository @Inject constructor(
         end: Long,
         userId: Long? = null
     ): List<UserPerformanceReport> {
-        return transactionDao.getUserPerformance(start, end, userId ?: -1L).map {
-            UserPerformanceReport(it.userName, it.txCount, roundMoney(it.revenue))
+        val txs = transactionDao.searchTransactions(start, end, null, null)
+            .filter { it.paymentStatus.isPaidSale() }
+            .let { list ->
+                if (userId != null) list.filter { it.userId == userId } else list
+            }
+        return buildStaffEodBreakdown(txs).map {
+            UserPerformanceReport(
+                userName = it.name,
+                transactionCount = it.salesCount,
+                revenue = it.revenue,
+                cashTotal = it.cashTotal,
+                cardTotal = it.cardTotal,
+                tapToPayTotal = it.tapToPayTotal,
+            )
         }
+    }
+
+    fun buildStaffEodBreakdown(paidSales: List<TransactionEntity>): List<EodStaffSummaryRow> {
+        data class Agg(
+            var count: Int = 0,
+            var revenue: Double = 0.0,
+            var cash: Double = 0.0,
+            var card: Double = 0.0,
+            var terminal: Double = 0.0,
+            var tap: Double = 0.0,
+            var other: Double = 0.0,
+        )
+        val byStaff = linkedMapOf<String, Agg>()
+        for (tx in paidSales) {
+            val name = tx.userName.trim().ifEmpty { "Unassigned" }
+            val agg = byStaff.getOrPut(name) { Agg() }
+            agg.count += 1
+            agg.revenue += EodPaymentBuckets.netTaxableSale(tx)
+            for ((methodKey, amount) in EodPaymentBuckets.netPaymentBucketsForTransaction(tx)) {
+                when {
+                    EodPaymentBuckets.isCashKey(methodKey) -> agg.cash += amount
+                    methodKey == "card" -> agg.card += amount
+                    methodKey == "terminal" -> agg.terminal += amount
+                    EodPaymentBuckets.isTapToPayKey(methodKey) -> agg.tap += amount
+                    else -> agg.other += amount
+                }
+            }
+        }
+        return byStaff.map { (name, agg) ->
+            EodStaffSummaryRow(
+                name = name,
+                salesCount = agg.count,
+                revenue = roundMoney(agg.revenue),
+                cashTotal = roundMoney(agg.cash),
+                cardTotal = roundMoney(EodPaymentBuckets.cardBucketTotal(agg.card, agg.terminal)),
+                tapToPayTotal = roundMoney(agg.tap),
+                otherTotal = roundMoney(agg.other),
+            )
+        }.sortedByDescending { it.revenue }
     }
 
     suspend fun getEndOfDayReport(): EndOfDayReport {

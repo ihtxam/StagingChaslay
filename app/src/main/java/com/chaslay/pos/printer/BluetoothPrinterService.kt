@@ -1420,6 +1420,7 @@ class BluetoothPrinterService @Inject constructor(
         report.scopeStaffName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
             sb.appendLine("")
             appendCenteredLines(sb, eodScopeStaffLine(lang, staffName), lineWidth, bold = false)
+            appendScopedStaffPaymentLines(sb, report, sym, lang, lineWidth)
         }
         sb.appendLine("")
         appendCenteredLines(sb, eodReportPeriodTitle(lang), lineWidth, bold = false)
@@ -1560,6 +1561,10 @@ class BluetoothPrinterService @Inject constructor(
                         lineWidth
                     )
                 )
+                appendStaffPaymentLine(sb, lang, eodCashLabel(lang), row.cashTotal, sym, lineWidth)
+                appendStaffPaymentLine(sb, lang, eodCardLabel(lang), row.cardTotal, sym, lineWidth)
+                appendStaffPaymentLine(sb, lang, eodTapToPayLabel(lang), row.tapToPayTotal, sym, lineWidth)
+                appendStaffPaymentLine(sb, lang, eodOtherPaymentsLabel(lang), row.otherTotal, sym, lineWidth)
             }
         }
         appendEscPosStyleReset(sb)
@@ -1605,6 +1610,73 @@ class BluetoothPrinterService @Inject constructor(
             AppLanguage.ITALIAN -> "$count ordini"
             else -> "$count order(s)"
         }
+
+    private fun eodCashLabel(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Especes"
+            AppLanguage.GERMAN -> "Bar"
+            AppLanguage.ITALIAN -> "Contanti"
+            else -> "Cash"
+        }
+
+    private fun eodCardLabel(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Carte"
+            AppLanguage.GERMAN -> "Karte"
+            AppLanguage.ITALIAN -> "Carta"
+            else -> "Card"
+        }
+
+    private fun eodTapToPayLabel(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Tap to Pay"
+            AppLanguage.GERMAN -> "Tap to Pay"
+            AppLanguage.ITALIAN -> "Tap to Pay"
+            else -> "Tap to Pay"
+        }
+
+    private fun eodOtherPaymentsLabel(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Autres"
+            AppLanguage.GERMAN -> "Sonstige"
+            AppLanguage.ITALIAN -> "Altro"
+            else -> "Other"
+        }
+
+    private fun appendStaffPaymentLine(
+        sb: StringBuilder,
+        @Suppress("UNUSED_PARAMETER") lang: String,
+        label: String,
+        amount: Double,
+        sym: String,
+        lineWidth: Int,
+    ) {
+        if (amount <= 0.001) return
+        sb.appendLine(
+            leftRight(
+                "  $label",
+                formatMoney(amount, sym),
+                lineWidth
+            )
+        )
+    }
+
+    private fun appendScopedStaffPaymentLines(
+        sb: StringBuilder,
+        report: EndOfDayReport,
+        sym: String,
+        lang: String,
+        lineWidth: Int,
+    ) {
+        val cardCombined = report.cardTotal + report.adyenTotal
+        val known = report.cashTotal + cardCombined + report.tapToPayTotal
+        val other = (report.paymentRows.sumOf { it.amount } - known).coerceAtLeast(0.0)
+        sb.appendLine("")
+        appendStaffPaymentLine(sb, lang, eodCashLabel(lang), report.cashTotal, sym, lineWidth)
+        appendStaffPaymentLine(sb, lang, eodCardLabel(lang), cardCombined, sym, lineWidth)
+        appendStaffPaymentLine(sb, lang, eodTapToPayLabel(lang), report.tapToPayTotal, sym, lineWidth)
+        appendStaffPaymentLine(sb, lang, eodOtherPaymentsLabel(lang), other, sym, lineWidth)
+    }
 
     private fun eodReportPeriodTitle(languageCode: String): String =
         when (AppLanguage.fromCode(languageCode)) {

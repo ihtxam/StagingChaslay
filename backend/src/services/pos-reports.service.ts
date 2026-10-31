@@ -313,7 +313,19 @@ export class PosReportsService {
     const refundByMethod: Record<string, number> = {};
     const channels: Record<string, { count: number; total: number }> = {};
     const products = new Map<string, { name: string; qty: number; total: number }>();
-    const staffMap = new Map<string, { name: string; count: number; total: number }>();
+    const staffMap = new Map<
+      string,
+      {
+        name: string;
+        count: number;
+        total: number;
+        cash: number;
+        card: number;
+        terminal: number;
+        tap: number;
+        other: number;
+      }
+    >();
     const vatByChannel: Record<string, { brut: number; tva: number }> = {};
 
     for (const o of completed) {
@@ -370,9 +382,26 @@ export class PosReportsService {
       vatByChannel[ch]!.tva += taxKept;
 
       const staff = resolveStaffName(o);
-      const st = staffMap.get(staff) || { name: staff, count: 0, total: 0 };
+      const st = staffMap.get(staff) || {
+        name: staff,
+        count: 0,
+        total: 0,
+        cash: 0,
+        card: 0,
+        terminal: 0,
+        tap: 0,
+        other: 0,
+      };
       st.count += 1;
       st.total += brut;
+      for (const [method, net] of netBuckets) {
+        if (net <= 0) continue;
+        if (method === "cash") st.cash = round2(st.cash + net);
+        else if (method === "card") st.card = round2(st.card + net);
+        else if (method === "terminal") st.terminal = round2(st.terminal + net);
+        else if (method === "tap_to_pay") st.tap = round2(st.tap + net);
+        else st.other = round2(st.other + net);
+      }
       staffMap.set(staff, st);
 
       for (const item of o.items || []) {
@@ -472,6 +501,10 @@ export class PosReportsService {
         name: u.name,
         salesCount: u.count,
         total: round2(u.total),
+        cashTotal: round2(u.cash),
+        cardTotal: round2(u.card + u.terminal),
+        tapToPayTotal: round2(u.tap),
+        otherTotal: round2(u.other),
       }));
 
     const orderTypeRows = Object.entries(channels).map(([channel, v]) => ({

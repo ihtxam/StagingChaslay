@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 50,
-    "identityHash": "1bc8e24f26c07b1e4b86ca47560c152a",
+    "identityHash": "302cafb39bc59c906694648bba168846",
     "entities": [
       {
         "tableName": "users",
@@ -1497,7 +1497,7 @@
       },
       {
         "tableName": "business_settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `businessName` TEXT NOT NULL, `vatNumber` TEXT NOT NULL, `address` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `website` TEXT NOT NULL, `logoUri` TEXT, `defaultCurrency` TEXT NOT NULL, `currencySymbol` TEXT NOT NULL, `defaultLanguage` TEXT NOT NULL, `tapToPayEnabled` INTEGER NOT NULL, `adyenTerminalEnabled` INTEGER NOT NULL, `adyenTerminalId` TEXT NOT NULL, `adyenApiKey` TEXT NOT NULL, `adyenClientId` TEXT NOT NULL, `adyenMerchantAccount` TEXT NOT NULL, `adyenLiveEnvironment` INTEGER NOT NULL, `adyenLiveRegion` TEXT NOT NULL, `adyenUseLegacyEndpoint` INTEGER NOT NULL, `roundingStep` REAL NOT NULL, `tipsEnabled` INTEGER NOT NULL, `allowCustomTip` INTEGER NOT NULL, `tipPresetsPercentCsv` TEXT NOT NULL, `discountsEnabled` INTEGER NOT NULL, `quickCashEnabled` INTEGER NOT NULL, `quickCashDenominationsCsv` TEXT NOT NULL, `splitBillsEnabled` INTEGER NOT NULL, `maxSplitParts` INTEGER NOT NULL, `openHour` INTEGER NOT NULL, `openMinute` INTEGER NOT NULL, `closeHour` INTEGER NOT NULL, `closeMinute` INTEGER NOT NULL, `cashEnabled` INTEGER NOT NULL, `cardEnabled` INTEGER NOT NULL, `terminalEnabled` INTEGER NOT NULL, `expressEnabled` INTEGER NOT NULL, `paymentMethodsManagedByCloud` INTEGER NOT NULL, `giftCardsEnabled` INTEGER NOT NULL, `printerPrintReceipts` INTEGER NOT NULL, `printerPrintReports` INTEGER NOT NULL, `printerPrintKitchen` INTEGER NOT NULL, `kitchenPrinterPrintKitchen` INTEGER NOT NULL, `autoPrintKitchen` INTEGER NOT NULL, `autoPrintReceipt` INTEGER NOT NULL, `waiterTillBellEnabled` INTEGER NOT NULL, `kitchenPrintRetryEnabled` INTEGER NOT NULL, `kitchenPrintRetryAttempts` INTEGER NOT NULL, `kitchenPrintRetryIntervalSec` INTEGER NOT NULL, `printerMacAddress` TEXT, `printerName` TEXT, `kitchenPrinterMacAddress` TEXT, `kitchenPrinterName` TEXT, `dineInVatRate` REAL NOT NULL, `takeawayVatRate` REAL NOT NULL, `vatIncludedInPrice` INTEGER NOT NULL, `vatAfterDiscount` INTEGER NOT NULL, `defaultServiceType` TEXT NOT NULL, `posMode` TEXT NOT NULL, `tablesEnabled` INTEGER NOT NULL, `retailDineInEnabled` INTEGER NOT NULL, `retailTakeawayEnabled` INTEGER NOT NULL, `retailDeliveryEnabled` INTEGER NOT NULL, `requireTableForDineIn` INTEGER NOT NULL, `coursesEnabled` INTEGER NOT NULL, `courseSendMode` TEXT NOT NULL, `receiptBaseUrl` TEXT NOT NULL, `receiptHeader` TEXT NOT NULL, `receiptFooter` TEXT NOT NULL, `kitchenTicketHeader` TEXT NOT NULL, `kitchenTicketFooter` TEXT NOT NULL, `receiptShowVatTable` INTEGER NOT NULL, `receiptShowStaffLine` INTEGER NOT NULL, `receiptShowQrCode` INTEGER NOT NULL, `receiptDeliveryDirectionsQr` INTEGER NOT NULL, `adyenReceiptDigitalOnly` INTEGER NOT NULL, `kitchenLargeItemText` INTEGER NOT NULL, `kitchenLargeHeaderText` INTEGER NOT NULL, `kitchenItemTextScale` INTEGER NOT NULL, `kitchenHeaderTextScale` INTEGER NOT NULL, `receiptTemplateName` TEXT NOT NULL, `scaleEnabled` INTEGER NOT NULL, `scaleUsbAddress` TEXT, `floorSyncEnabled` INTEGER NOT NULL, `floorDeviceRole` TEXT NOT NULL, `trackCoversFromSeatingPlan` INTEGER NOT NULL, `mainPosLanUrl` TEXT NOT NULL, `floorConnectionMode` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `businessName` TEXT NOT NULL, `vatNumber` TEXT NOT NULL, `address` TEXT NOT NULL, `phone` TEXT NOT NULL, `email` TEXT NOT NULL, `website` TEXT NOT NULL, `logoUri` TEXT, `defaultCurrency` TEXT NOT NULL, `currencySymbol` TEXT NOT NULL, `defaultLanguage` TEXT NOT NULL, `tapToPayEnabled` INTEGER NOT NULL, `adyenTerminalEnabled` INTEGER NOT NULL, `adyenTerminalId` TEXT NOT NULL, `adyenApiKey` TEXT NOT NULL, `adyenClientId` TEXT NOT NULL, `adyenMerchantAccount` TEXT NOT NULL, `adyenLiveEnvironment` INTEGER NOT NULL, `adyenLiveRegion` TEXT NOT NULL, `adyenUseLegacyEndpoint` INTEGER NOT NULL, `roundingStep` REAL NOT NULL, `tipsEnabled` INTEGER NOT NULL, `terminalAskGratuityEnabled` INTEGER NOT NULL, `allowCustomTip` INTEGER NOT NULL, `tipPresetsPercentCsv` TEXT NOT NULL, `discountsEnabled` INTEGER NOT NULL, `quickCashEnabled` INTEGER NOT NULL, `quickCashDenominationsCsv` TEXT NOT NULL, `splitBillsEnabled` INTEGER NOT NULL, `maxSplitParts` INTEGER NOT NULL, `openHour` INTEGER NOT NULL, `openMinute` INTEGER NOT NULL, `closeHour` INTEGER NOT NULL, `closeMinute` INTEGER NOT NULL, `cashEnabled` INTEGER NOT NULL, `cardEnabled` INTEGER NOT NULL, `terminalEnabled` INTEGER NOT NULL, `expressEnabled` INTEGER NOT NULL, `paymentMethodsManagedByCloud` INTEGER NOT NULL, `giftCardsEnabled` INTEGER NOT NULL, `printerPrintReceipts` INTEGER NOT NULL, `printerPrintReports` INTEGER NOT NULL, `printerPrintKitchen` INTEGER NOT NULL, `kitchenPrinterPrintKitchen` INTEGER NOT NULL, `autoPrintKitchen` INTEGER NOT NULL, `autoPrintReceipt` INTEGER NOT NULL, `waiterTillBellEnabled` INTEGER NOT NULL, `kitchenPrintRetryEnabled` INTEGER NOT NULL, `kitchenPrintRetryAttempts` INTEGER NOT NULL, `kitchenPrintRetryIntervalSec` INTEGER NOT NULL, `printerMacAddress` TEXT, `printerName` TEXT, `kitchenPrinterMacAddress` TEXT, `kitchenPrinterName` TEXT, `dineInVatRate` REAL NOT NULL, `takeawayVatRate` REAL NOT NULL, `vatIncludedInPrice` INTEGER NOT NULL, `vatAfterDiscount` INTEGER NOT NULL, `defaultServiceType` TEXT NOT NULL, `posMode` TEXT NOT NULL, `tablesEnabled` INTEGER NOT NULL, `retailDineInEnabled` INTEGER NOT NULL, `retailTakeawayEnabled` INTEGER NOT NULL, `retailDeliveryEnabled` INTEGER NOT NULL, `requireTableForDineIn` INTEGER NOT NULL, `coursesEnabled` INTEGER NOT NULL, `courseSendMode` TEXT NOT NULL, `receiptBaseUrl` TEXT NOT NULL, `receiptHeader` TEXT NOT NULL, `receiptFooter` TEXT NOT NULL, `kitchenTicketHeader` TEXT NOT NULL, `kitchenTicketFooter` TEXT NOT NULL, `receiptShowVatTable` INTEGER NOT NULL, `receiptShowStaffLine` INTEGER NOT NULL, `receiptShowQrCode` INTEGER NOT NULL, `receiptDeliveryDirectionsQr` INTEGER NOT NULL, `adyenReceiptDigitalOnly` INTEGER NOT NULL, `kitchenLargeItemText` INTEGER NOT NULL, `kitchenLargeHeaderText` INTEGER NOT NULL, `kitchenItemTextScale` INTEGER NOT NULL, `kitchenHeaderTextScale` INTEGER NOT NULL, `receiptTemplateName` TEXT NOT NULL, `scaleEnabled` INTEGER NOT NULL, `scaleUsbAddress` TEXT, `floorSyncEnabled` INTEGER NOT NULL, `floorDeviceRole` TEXT NOT NULL, `trackCoversFromSeatingPlan` INTEGER NOT NULL, `mainPosLanUrl` TEXT NOT NULL, `floorConnectionMode` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -1628,6 +1628,12 @@
           {
             "fieldPath": "tipsEnabled",
             "columnName": "tipsEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "terminalAskGratuityEnabled",
+            "columnName": "terminalAskGratuityEnabled",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -3228,7 +3234,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1bc8e24f26c07b1e4b86ca47560c152a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '302cafb39bc59c906694648bba168846')"
     ]
   }
 }

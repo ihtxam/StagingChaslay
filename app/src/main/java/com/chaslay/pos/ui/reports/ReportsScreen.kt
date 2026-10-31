@@ -235,7 +235,21 @@ private fun ProductSalesTab(products: List<com.chaslay.pos.domain.model.ProductS
 private fun UserPerformanceTab(users: List<com.chaslay.pos.domain.model.UserPerformanceReport>, currency: String) {
     LazyColumn(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(users) { user ->
-            ReportRow(user.userName, "${user.transactionCount} · ${formatMoney(user.revenue, currency)}")
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                ReportRow(user.userName, "${user.transactionCount} · ${formatMoney(user.revenue, currency)}")
+                if (user.cashTotal > 0.001) {
+                    ReportRow("  ${stringResource(R.string.cash)}", formatMoney(user.cashTotal, currency))
+                }
+                if (user.cardTotal > 0.001) {
+                    ReportRow("  ${stringResource(R.string.card)}", formatMoney(user.cardTotal, currency))
+                }
+                if (user.tapToPayTotal > 0.001) {
+                    ReportRow(
+                        "  ${stringResource(R.string.tap_to_pay_method)}",
+                        formatMoney(user.tapToPayTotal, currency)
+                    )
+                }
+            }
         }
     }
 }

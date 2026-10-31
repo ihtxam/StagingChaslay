@@ -10,7 +10,6 @@ import com.chaslay.pos.data.repository.ProductRepository
 import com.chaslay.pos.data.repository.TransactionRepository
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.DailySalesReport
-import com.chaslay.pos.domain.model.EodStaffSummaryRow
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
@@ -280,9 +279,9 @@ class ReportsViewModel @Inject constructor(
                 fallback = profitReportLocal
             )
             val staffBreakdown = if (viewAll && scopeUserId == null) {
-                transactionRepository.getUserPerformance(eodStart, eodEnd).map {
-                    EodStaffSummaryRow(it.userName, it.transactionCount, it.revenue)
-                }
+                transactionRepository.buildStaffEodBreakdown(
+                    eodAllTx.filter { it.paymentStatus.isPaidSale() }
+                )
             } else {
                 emptyList()
             }

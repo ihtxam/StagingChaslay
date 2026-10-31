@@ -3480,6 +3480,10 @@ export type EodStaffPerformanceRow = {
   name: string;
   salesCount: number;
   total: number;
+  cashTotal?: number;
+  cardTotal?: number;
+  tapToPayTotal?: number;
+  otherTotal?: number;
 };
 
 export type EodReportPrint = {
@@ -3587,6 +3591,13 @@ export function generateEodReportText(report: EodReportPrint): string {
         `${L.mySales || 'My sales'}: ${report.scopeStaffName.trim()}`.slice(0, width),
         width
       ) + '\n';
+    const cardCombined = Number(report.cardTotal || 0) + Number(report.terminalTotal || 0);
+    if (Number(report.cashTotal || 0) > 0.001) {
+      r += padLine(`  ${paymentLabel(L, 'cash')}`, money(report.cashTotal), width) + '\n';
+    }
+    if (cardCombined > 0.001) {
+      r += padLine(`  ${paymentLabel(L, 'card')}`, money(cardCombined), width) + '\n';
+    }
   }
   r += '\n';
   r += centerLine(L.reportPeriod, width) + '\n';
@@ -3711,6 +3722,22 @@ export function generateEodReportText(report: EodReportPrint): string {
     for (const u of staffRows) {
       const left = `${nameFor(u.name)} · ${L.orders} ${u.salesCount}`;
       r += padLine(left.slice(0, Math.max(8, width - 14)), money(u.total), width) + '\n';
+      const cash = Number(u.cashTotal || 0);
+      const card = Number(u.cardTotal || 0);
+      const tap = Number(u.tapToPayTotal || 0);
+      const other = Number(u.otherTotal || 0);
+      if (cash > 0.001) {
+        r += padLine(`  ${paymentLabel(L, 'cash')}`, money(cash), width) + '\n';
+      }
+      if (card > 0.001) {
+        r += padLine(`  ${paymentLabel(L, 'card')}`, money(card), width) + '\n';
+      }
+      if (tap > 0.001) {
+        r += padLine(`  ${paymentLabel(L, 'tap_to_pay')}`, money(tap), width) + '\n';
+      }
+      if (other > 0.001) {
+        r += padLine(`  ${L.other || 'Other'}`, money(other), width) + '\n';
+      }
     }
   }
 

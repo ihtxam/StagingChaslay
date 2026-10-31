@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.EndOfDayReport
+import com.chaslay.pos.domain.model.roundMoney
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -222,13 +223,25 @@ fun EndOfDayReportScreen(
             }
             if (report.staffBreakdown.isNotEmpty() && selectedStaffId == null) {
                 item {
-                    ReportBreakdownCard(
+                    ReportStaffEodBreakdownCard(
                         title = stringResource(R.string.eod_staff_breakdown_title),
                         icon = Icons.Outlined.PointOfSale,
                         accent = ReportDashColors.Accent,
-                        rows = report.staffBreakdown.map {
-                            ReportBreakdownRow(it.name, it.salesCount, it.revenue)
-                        },
+                        rows = report.staffBreakdown,
+                        sym = currencySymbol,
+                    )
+                }
+            }
+            if (selectedStaffId != null) {
+                item {
+                    val cardCombined = report.cardTotal + report.adyenTotal
+                    val other = (report.paymentRows.sumOf { it.amount } -
+                        report.cashTotal - cardCombined - report.tapToPayTotal).coerceAtLeast(0.0)
+                    ReportScopedStaffPaymentsCard(
+                        cashTotal = report.cashTotal,
+                        cardTotal = cardCombined,
+                        tapToPayTotal = report.tapToPayTotal,
+                        otherTotal = roundMoney(other),
                         sym = currencySymbol,
                     )
                 }

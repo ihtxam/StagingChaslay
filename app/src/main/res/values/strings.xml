@@ -494,6 +494,8 @@
     <string name="eod_pick_date">Pick date</string>
     <string name="eod_staff_picker_hint">Select staff to view or print one person\'s EOD, or company-wide for the whole store.</string>
     <string name="eod_staff_breakdown_title">Staff sales</string>
+    <string name="eod_staff_my_payments_title">Sales by payment method</string>
+    <string name="eod_staff_other_payments">Other</string>
     <string name="today_sales">Today\'s Sales</string>
     <string name="transactions">Transactions</string>
     <string name="cash_revenue">Cash Revenue</string>

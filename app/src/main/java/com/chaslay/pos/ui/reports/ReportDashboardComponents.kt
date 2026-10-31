@@ -24,10 +24,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
+import com.chaslay.pos.domain.model.EodStaffSummaryRow
 import java.util.Locale
 
 internal object ReportDashColors {
@@ -346,3 +347,137 @@ internal fun ReportHairlineDivider() {
 
 internal fun reportMoney(sym: String, value: Double): String =
     "$sym ${"%.2f".format(Locale.US, value)}"
+
+@Composable
+internal fun ReportStaffEodBreakdownCard(
+    title: String,
+    icon: ImageVector,
+    accent: Color,
+    rows: List<EodStaffSummaryRow>,
+    sym: String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ReportDashColors.SurfaceDeeper)
+            .border(1.dp, ReportDashColors.HairlineLight, RoundedCornerShape(14.dp))
+            .padding(18.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.size(8.dp))
+            Text(title, color = ReportDashColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Spacer(Modifier.size(12.dp))
+        if (rows.isEmpty()) {
+            Text(
+                stringResource(R.string.report_no_data),
+                color = ReportDashColors.TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        } else {
+            val cashLabel = stringResource(R.string.cash)
+            val cardLabel = stringResource(R.string.card)
+            val tapLabel = stringResource(R.string.tap_to_pay_method)
+            rows.forEach { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            row.name,
+                            color = ReportDashColors.TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                        Text(
+                            "${row.salesCount}× · ${reportMoney(sym, row.revenue)}",
+                            color = ReportDashColors.TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = ReportMonoFont,
+                        )
+                    }
+                }
+                if (row.cashTotal > 0.001) {
+                    StaffPaymentSubRow(cashLabel, row.cashTotal, sym)
+                }
+                if (row.cardTotal > 0.001) {
+                    StaffPaymentSubRow(cardLabel, row.cardTotal, sym)
+                }
+                if (row.tapToPayTotal > 0.001) {
+                    StaffPaymentSubRow(tapLabel, row.tapToPayTotal, sym)
+                }
+                if (row.otherTotal > 0.001) {
+                    StaffPaymentSubRow(stringResource(R.string.eod_staff_other_payments), row.otherTotal, sym)
+                }
+                Spacer(Modifier.size(6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StaffPaymentSubRow(label: String, amount: Double, sym: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = ReportDashColors.TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            reportMoney(sym, amount),
+            color = ReportDashColors.TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = ReportMonoFont,
+        )
+    }
+}
+
+@Composable
+internal fun ReportScopedStaffPaymentsCard(
+    cashTotal: Double,
+    cardTotal: Double,
+    tapToPayTotal: Double,
+    otherTotal: Double,
+    sym: String,
+) {
+    val cashLabel = stringResource(R.string.cash)
+    val cardLabel = stringResource(R.string.card)
+    val tapLabel = stringResource(R.string.tap_to_pay_method)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ReportDashColors.SurfaceDeeper)
+            .border(1.dp, ReportDashColors.HairlineLight, RoundedCornerShape(14.dp))
+            .padding(18.dp),
+    ) {
+        Text(
+            stringResource(R.string.eod_staff_my_payments_title),
+            color = ReportDashColors.TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Spacer(Modifier.size(8.dp))
+        if (cashTotal > 0.001) StaffPaymentSubRow(cashLabel, cashTotal, sym)
+        if (cardTotal > 0.001) StaffPaymentSubRow(cardLabel, cardTotal, sym)
+        if (tapToPayTotal > 0.001) StaffPaymentSubRow(tapLabel, tapToPayTotal, sym)
+        if (otherTotal > 0.001) {
+            StaffPaymentSubRow(stringResource(R.string.eod_staff_other_payments), otherTotal, sym)
+        }
+    }
+}

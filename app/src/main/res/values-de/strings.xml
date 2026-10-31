@@ -418,6 +418,8 @@
     <string name="eod_pick_date">Datum wählen</string>
     <string name="eod_staff_picker_hint">Mitarbeiter wählen für dessen Tagesabschluss, oder Gesamtunternehmen für den Laden.</string>
     <string name="eod_staff_breakdown_title">Umsatz pro Mitarbeiter</string>
+    <string name="eod_staff_my_payments_title">Umsatz nach Zahlungsart</string>
+    <string name="eod_staff_other_payments">Sonstige</string>
     <string name="pos_printer">Quittungs- / POS-Drucker</string>
     <string name="kitchen_printer">Küchendrucker</string>
     <string name="receipt_design">Quittungsentwurf</string>
