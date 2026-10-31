@@ -10,6 +10,7 @@ import com.chaslay.pos.data.repository.ProductRepository
 import com.chaslay.pos.data.repository.TransactionRepository
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.DailySalesReport
+import com.chaslay.pos.domain.model.EodStaffSummaryRow
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
@@ -39,6 +40,9 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 enum class ReportRange { TODAY, YESTERDAY, LAST_WEEK, LAST_MONTH, LAST_3_MONTHS }
+
+/** Calendar day selection for the End of Day tab (single day, not multi-day ranges). */
+enum class EodDayPreset { TODAY, YESTERDAY, CUSTOM }
 
 data class EodStaffOption(val userId: Long?, val name: String)
 
@@ -124,7 +128,10 @@ data class ReportsUiState(
     val eodStaffOptions: List<EodStaffOption> = emptyList(),
     val selectedEodStaffId: Long? = null,
     val canViewAllSales: Boolean = true,
+    val eodDayPreset: EodDayPreset = EodDayPreset.TODAY,
+    val eodCustomDayStartMs: Long = 0L,
     val eodIncludeProductsSold: Boolean = true,
+    val eodIncludeStaffBreakdown: Boolean = false,
     val message: String? = null
 )
 
@@ -150,7 +157,10 @@ class ReportsViewModel @Inject constructor(
 
     init {
         _uiState.update {
-            it.copy(eodIncludeProductsSold = PosLocalPrefs.readEodIncludeProductsSold(appContext))
+            it.copy(
+                eodIncludeProductsSold = PosLocalPrefs.readEodIncludeProductsSold(appContext),
+                eodIncludeStaffBreakdown = PosLocalPrefs.readEodIncludeStaffBreakdown(appContext),
+            )
         }
         refresh()
     }
@@ -160,10 +170,31 @@ class ReportsViewModel @Inject constructor(
         _uiState.update { it.copy(eodIncludeProductsSold = include) }
     }
 
+    fun setEodIncludeStaffBreakdown(include: Boolean) {
+        PosLocalPrefs.writeEodIncludeStaffBreakdown(appContext, include)
+        _uiState.update { it.copy(eodIncludeStaffBreakdown = include) }
+    }
+
+    fun selectEodDayPreset(preset: EodDayPreset) {
+        _uiState.update { it.copy(eodDayPreset = preset) }
+        refresh()
+    }
+
+    fun selectEodCustomDay(dayStartMs: Long) {
+        _uiState.update {
+            it.copy(eodDayPreset = EodDayPreset.CUSTOM, eodCustomDayStartMs = dayStartMs)
+        }
+        refresh()
+    }
+
     fun refresh() {
         viewModelScope.launch {
             val range = _uiState.value.selectedRange
             val (start, end) = rangeBounds(range)
+            val (eodStart, eodEnd) = eodDayBounds(
+                _uiState.value.eodDayPreset,
+                _uiState.value.eodCustomDayStartMs,
+            )
             val settings = settingsRepository.getSettings()
             val access = sessionManager.currentUserAccess.first()
             val userId = sessionManager.currentUserId.first()
@@ -176,7 +207,7 @@ class ReportsViewModel @Inject constructor(
                 else -> null
             }
             val staffOptions = if (viewAll) {
-                val company = EodStaffOption(null, "Company-wide")
+                val company = EodStaffOption(null, "")
                 val waiters = authRepository.getAllUsersWithRoles()
                     .filter { (user, _) -> user.isActive }
                     .map { (user, _) -> EodStaffOption(user.id, user.name) }
@@ -185,7 +216,12 @@ class ReportsViewModel @Inject constructor(
             } else {
                 emptyList()
             }
+            val scopeStaffName = scopeUserId?.let { id ->
+                authRepository.getUser(id)?.name
+                    ?: staffOptions.firstOrNull { it.userId == id }?.name
+            }
             val allTx = transactionRepository.getTransactionsBetween(start, end)
+            val eodAllTx = transactionRepository.getTransactionsBetween(eodStart, eodEnd)
             val transactions =
                 if (scopeUserId != null) allTx.filter { it.userId == scopeUserId } else allTx
             val completed = transactions.filter { it.paymentStatus.isPaidSale() }
@@ -243,26 +279,40 @@ class ReportsViewModel @Inject constructor(
                 scopeUserId = scopeUserId,
                 fallback = profitReportLocal
             )
+            val staffBreakdown = if (viewAll && scopeUserId == null) {
+                transactionRepository.getUserPerformance(eodStart, eodEnd).map {
+                    EodStaffSummaryRow(it.userName, it.transactionCount, it.revenue)
+                }
+            } else {
+                emptyList()
+            }
+            val baseEod = transactionRepository.buildEndOfDayReport(
+                eodAllTx,
+                eodStart,
+                eodEnd,
+                scopeUserId,
+            )
             _uiState.value = ReportsUiState(
                 dailyReport = transactionRepository.getDailyReport(),
                 salesReport = salesReport,
                 selectedRange = range,
-                endOfDayReport = transactionRepository.buildEndOfDayReport(
-                    allTx,
-                    start,
-                    end,
-                    scopeUserId
+                endOfDayReport = baseEod.copy(
+                    scopeStaffName = scopeStaffName,
+                    staffBreakdown = staffBreakdown,
                 ),
                 topProducts = transactionRepository.getProductsSold(start, end, scopeUserId),
                 userPerformance = if (ownOnly) emptyList()
-                else transactionRepository.getUserPerformance(),
+                else transactionRepository.getUserPerformance(start, end),
                 profitMargin = profitReport.summary,
                 profitReport = profitReport,
                 profitBreakdown = _uiState.value.profitBreakdown,
                 eodStaffOptions = staffOptions,
                 selectedEodStaffId = if (viewAll) selectedStaff else null,
                 canViewAllSales = viewAll,
-                eodIncludeProductsSold = _uiState.value.eodIncludeProductsSold
+                eodDayPreset = _uiState.value.eodDayPreset,
+                eodCustomDayStartMs = _uiState.value.eodCustomDayStartMs,
+                eodIncludeProductsSold = _uiState.value.eodIncludeProductsSold,
+                eodIncludeStaffBreakdown = _uiState.value.eodIncludeStaffBreakdown,
             )
         }
     }
@@ -506,6 +556,20 @@ class ReportsViewModel @Inject constructor(
         return calendar.timeInMillis
     }
 
+    private fun eodDayBounds(preset: EodDayPreset, customDayStartMs: Long): Pair<Long, Long> {
+        val cal = java.util.Calendar.getInstance()
+        when (preset) {
+            EodDayPreset.TODAY -> Unit
+            EodDayPreset.YESTERDAY -> cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+            EodDayPreset.CUSTOM -> {
+                if (customDayStartMs > 0L) {
+                    cal.timeInMillis = customDayStartMs
+                }
+            }
+        }
+        return dayStart(cal) to dayEnd(cal)
+    }
+
     fun selectRange(range: ReportRange) {
         _uiState.update { it.copy(selectedRange = range) }
         refresh()
@@ -520,22 +584,34 @@ class ReportsViewModel @Inject constructor(
         viewModelScope.launch {
             val access = sessionManager.currentUserAccess.first()
             val userId = sessionManager.currentUserId.first()
+            val state = _uiState.value
             if (access != null && !access.canViewAllSales()) {
                 // Waiters may only print their own EOD.
-                val report = _uiState.value.endOfDayReport
+                val report = state.endOfDayReport
                 if (report.salesCount == 0 && report.revenue == 0.0) {
                     _uiState.update { it.copy(message = "No sales to report for your shift") }
                     return@launch
                 }
+            } else if (access != null && state.selectedEodStaffId != null &&
+                state.selectedEodStaffId != userId && !access.canViewAllSales()
+            ) {
+                _uiState.update { it.copy(message = "You do not have permission to print other staff EOD") }
+                return@launch
             }
             val settings = settingsRepository.getSettings()
-            val report = _uiState.value.endOfDayReport
+            val includeStaffOnPrint = state.canViewAllSales &&
+                state.selectedEodStaffId == null &&
+                state.eodIncludeStaffBreakdown
+            val report = state.endOfDayReport.copy(
+                staffBreakdown = if (includeStaffOnPrint) state.endOfDayReport.staffBreakdown
+                else emptyList(),
+            )
             val printError = eodPrintGuard(settings, access)
             if (printError != null) {
                 _uiState.update { it.copy(message = printError) }
                 return@launch
             }
-            val includeProducts = _uiState.value.eodIncludeProductsSold
+            val includeProducts = state.eodIncludeProductsSold
             withContext(Dispatchers.IO) {
                 printerService.routeEndOfDayReport(settings, report, includeProducts)
             }.onSuccess { _uiState.update { it.copy(message = "End of day report printed") } }

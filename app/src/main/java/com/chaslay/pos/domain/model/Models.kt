@@ -887,6 +887,13 @@ data class RefundedOrderRow(
     val refundedAt: Long? = null
 )
 
+/** Compact per-staff line for company EOD print (WebPOS userPerformance parity). */
+data class EodStaffSummaryRow(
+    val name: String,
+    val salesCount: Int,
+    val revenue: Double,
+)
+
 data class EndOfDayReport(
     val periodStart: Long = 0L,
     val periodEnd: Long = 0L,
@@ -914,7 +921,11 @@ data class EndOfDayReport(
     val refundCount: Int = 0,
     val refundedOrders: List<RefundedOrderRow> = emptyList(),
     /** Sum of guest/cover counts from dine-in transactions (when seating plan tracking enabled). */
-    val coversServed: Int? = null
+    val coversServed: Int? = null,
+    /** When set, print header shows scoped staff (own / selected employee). */
+    val scopeStaffName: String? = null,
+    /** Optional team breakdown appended on company-wide EOD print. */
+    val staffBreakdown: List<EodStaffSummaryRow> = emptyList(),
 )
 
 data class DiscountPreset(

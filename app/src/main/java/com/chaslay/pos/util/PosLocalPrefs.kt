@@ -10,6 +10,7 @@ private const val KEY_AUTO_PRINT_VALUE = "auto_print_receipt_value"
 private const val KEY_TABLES_USER_SET = "tables_enabled_user_set"
 private const val KEY_TABLES_VALUE = "tables_enabled_value"
 private const val KEY_EOD_INCLUDE_PRODUCTS = "eod_include_products_sold"
+private const val KEY_EOD_INCLUDE_STAFF = "eod_include_staff_breakdown"
 private const val KEY_LOCAL_PRODUCT_PRICES = "local_product_prices"
 private const val KEY_LOCAL_PRODUCT_PRICES_REMOTE = "local_product_prices_remote"
 private const val KEY_LOCAL_VARIANT_PRICES = "local_variant_prices"
@@ -75,6 +76,13 @@ object PosLocalPrefs {
 
     fun writeEodIncludeProductsSold(context: Context, include: Boolean) {
         prefs(context).edit().putBoolean(KEY_EOD_INCLUDE_PRODUCTS, include).apply()
+    }
+
+    fun readEodIncludeStaffBreakdown(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EOD_INCLUDE_STAFF, false)
+
+    fun writeEodIncludeStaffBreakdown(context: Context, include: Boolean) {
+        prefs(context).edit().putBoolean(KEY_EOD_INCLUDE_STAFF, include).apply()
     }
 
     /** Locally edited catalog prices — preserved across MERGE menu sync until REPLACE. */

@@ -846,8 +846,11 @@ class TransactionRepository @Inject constructor(
             ProductSalesReport(it.productName, it.qty, roundMoney(it.revenue))
         }
 
-    suspend fun getUserPerformance(userId: Long? = null): List<UserPerformanceReport> {
-        val (start, end) = dayBounds()
+    suspend fun getUserPerformance(
+        start: Long,
+        end: Long,
+        userId: Long? = null
+    ): List<UserPerformanceReport> {
         return transactionDao.getUserPerformance(start, end, userId ?: -1L).map {
             UserPerformanceReport(it.userName, it.txCount, roundMoney(it.revenue))
         }

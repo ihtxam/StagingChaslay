@@ -412,6 +412,12 @@
     <string name="use_for_kitchen">Verwendung für die Küche</string>
     <string name="end_of_day">Tagesabschluss</string>
     <string name="print_end_of_day">Tagesabschlussbericht drucken</string>
+    <string name="eod_include_products_on_print">Produktaufschlüsselung auf dem Tagesabschluss-Druck</string>
+    <string name="eod_include_staff_on_print">Mitarbeiter-Umsätze auf dem Tagesabschluss-Druck</string>
+    <string name="eod_company_wide">Gesamtunternehmen</string>
+    <string name="eod_pick_date">Datum wählen</string>
+    <string name="eod_staff_picker_hint">Mitarbeiter wählen für dessen Tagesabschluss, oder Gesamtunternehmen für den Laden.</string>
+    <string name="eod_staff_breakdown_title">Umsatz pro Mitarbeiter</string>
     <string name="pos_printer">Quittungs- / POS-Drucker</string>
     <string name="kitchen_printer">Küchendrucker</string>
     <string name="receipt_design">Quittungsentwurf</string>

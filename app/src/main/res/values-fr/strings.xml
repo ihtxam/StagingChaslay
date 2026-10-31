@@ -415,6 +415,12 @@
     <string name="use_for_kitchen">Utiliser pour la cuisine</string>
     <string name="end_of_day">Fin de la journée</string>
     <string name="print_end_of_day">Imprimer le rapport de fin de journée</string>
+    <string name="eod_include_products_on_print">Inclure le détail des produits sur l\'impression de fin de journée</string>
+    <string name="eod_include_staff_on_print">Inclure le détail des ventes par employé sur l\'impression</string>
+    <string name="eod_company_wide">Toute l\'entreprise</string>
+    <string name="eod_pick_date">Choisir une date</string>
+    <string name="eod_staff_picker_hint">Choisissez un employé pour voir ou imprimer son rapport, ou toute l\'entreprise pour le magasin.</string>
+    <string name="eod_staff_breakdown_title">Ventes par employé</string>
     <string name="pos_printer">Imprimante de reçus / PDV</string>
     <string name="kitchen_printer">Imprimante de cuisine</string>
     <string name="receipt_design">Conception du reçu</string>

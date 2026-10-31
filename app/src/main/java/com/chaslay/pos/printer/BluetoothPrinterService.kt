@@ -1417,6 +1417,10 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine("")
         val lang = receiptLanguageCode(settings)
         appendCenteredLines(sb, eodReportTitle(lang), lineWidth, bold = false)
+        report.scopeStaffName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
+            sb.appendLine("")
+            appendCenteredLines(sb, eodScopeStaffLine(lang, staffName), lineWidth, bold = false)
+        }
         sb.appendLine("")
         appendCenteredLines(sb, eodReportPeriodTitle(lang), lineWidth, bold = false)
         val periodLabel = if (report.periodStart > 0) {
@@ -1536,6 +1540,28 @@ class BluetoothPrinterService @Inject constructor(
                 )
             }
         }
+        if (report.staffBreakdown.isNotEmpty()) {
+            sb.appendLine("")
+            sb.appendLine(dashes)
+            sb.appendLine(center(eodStaffPerformanceTitle(lang), lineWidth))
+            sb.appendLine(dashes)
+            report.staffBreakdown.forEach { row ->
+                sb.appendLine(
+                    leftRight(
+                        row.name.take(20),
+                        formatMoney(row.revenue, sym),
+                        lineWidth
+                    )
+                )
+                sb.appendLine(
+                    leftRight(
+                        "  ${eodStaffOrdersNote(lang, row.salesCount)}",
+                        "",
+                        lineWidth
+                    )
+                )
+            }
+        }
         appendEscPosStyleReset(sb)
         sb.appendLine("\n\n\n")
         return encodePayload(sb.toString())
@@ -1554,6 +1580,30 @@ class BluetoothPrinterService @Inject constructor(
             AppLanguage.GERMAN -> "TAGESABSCHLUSS"
             AppLanguage.ITALIAN -> "FINE GIORNATA"
             else -> "END OF DAY"
+        }
+
+    private fun eodScopeStaffLine(languageCode: String, staffName: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "Mes ventes : $staffName"
+            AppLanguage.GERMAN -> "Meine Verkaeufe: $staffName"
+            AppLanguage.ITALIAN -> "Le mie vendite: $staffName"
+            else -> "My sales: $staffName"
+        }
+
+    private fun eodStaffPerformanceTitle(languageCode: String): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "VENTES PAR EMPLOYE"
+            AppLanguage.GERMAN -> "VERKAUF PRO MITARBEITER"
+            AppLanguage.ITALIAN -> "VENDITE PER DIPENDENTE"
+            else -> "STAFF SALES"
+        }
+
+    private fun eodStaffOrdersNote(languageCode: String, count: Int): String =
+        when (AppLanguage.fromCode(languageCode)) {
+            AppLanguage.FRENCH -> "$count commande(s)"
+            AppLanguage.GERMAN -> "$count Bestellung(en)"
+            AppLanguage.ITALIAN -> "$count ordini"
+            else -> "$count order(s)"
         }
 
     private fun eodReportPeriodTitle(languageCode: String): String =
