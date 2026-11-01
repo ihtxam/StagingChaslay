@@ -1275,8 +1275,10 @@ class BluetoothPrinterService @Inject constructor(
         appendReceiptTotal(sb, labels.total, transaction.total, settings.currencySymbol, lineWidth)
 
         val refundTotal = transaction.refundAmount.coerceAtLeast(0.0)
-        val netPaid = (transaction.total - refundTotal).coerceAtLeast(0.0)
-        if (refundTotal > 0.001) {
+        val goodwillTotal = transaction.goodwillAmount.coerceAtLeast(0.0)
+        val compensationTotal = refundTotal + goodwillTotal
+        val netPaid = (transaction.total - compensationTotal).coerceAtLeast(0.0)
+        if (compensationTotal > 0.001) {
             items.filter { it.refundedQuantity > 0 }.forEach { item ->
                 val unit = if (item.quantity > 0) item.lineTotal / item.quantity else 0.0
                 val lineRefund = unit * item.refundedQuantity.coerceAtLeast(0)
@@ -1293,13 +1295,23 @@ class BluetoothPrinterService @Inject constructor(
                     )
                 )
             }
-            sb.appendLine(
-                leftRight(
-                    labels.refunded,
-                    "-${formatMoney(refundTotal, settings.currencySymbol)}",
-                    lineWidth
+            if (goodwillTotal > 0.001 && refundTotal <= 0.001) {
+                sb.appendLine(
+                    leftRight(
+                        labels.refunded,
+                        "-${formatMoney(goodwillTotal, settings.currencySymbol)}",
+                        lineWidth
+                    )
                 )
-            )
+            } else if (compensationTotal > 0.001) {
+                sb.appendLine(
+                    leftRight(
+                        labels.refunded,
+                        "-${formatMoney(compensationTotal, settings.currencySymbol)}",
+                        lineWidth
+                    )
+                )
+            }
             sb.appendLine(leftRight(labels.netPaid, formatMoney(netPaid, settings.currencySymbol), lineWidth))
             transaction.refundReason?.takeIf { it.isNotBlank() }?.let { reason ->
                 sb.appendLine("${labels.refundReason} ${reason.take(lineWidth)}")

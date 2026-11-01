@@ -35,7 +35,7 @@ import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.domain.model.ComboPickState
 import com.chaslay.pos.domain.model.ComboSelection
 import com.chaslay.pos.domain.model.CartSummary
-import com.chaslay.pos.domain.model.CancelReasonLabels
+import com.chaslay.pos.util.CancelReasonLabels
 import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.DiscountPreset
@@ -246,7 +246,10 @@ data class PosUiState(
     val onlineOrderAlertQueueCount: Int = 0,
     val pendingOnlineOrderCount: Int = 0,
     val navigateToOrdersTab: Boolean = false,
-    val kitchenMessagePresets: List<KitchenMessagePreset> = emptyList()
+    val afterSaleGoToOrders: Boolean = false,
+    val kitchenMessagePresets: List<KitchenMessagePreset> = emptyList(),
+    val scanCreateBarcode: String? = null,
+    val scanCreateProductSaving: Boolean = false
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -479,7 +482,10 @@ class PosViewModel @Inject constructor(
             onlineOrderAlertQueueCount = extras.onlineOrderAlertQueueCount,
             pendingOnlineOrderCount = extras.pendingOnlineOrderCount,
             navigateToOrdersTab = extras.navigateToOrdersTab,
-            kitchenMessagePresets = buildKitchenMessagePresets()
+            afterSaleGoToOrders = extras.afterSaleGoToOrders,
+            kitchenMessagePresets = buildKitchenMessagePresets(),
+            scanCreateBarcode = extras.scanCreateBarcode,
+            scanCreateProductSaving = extras.scanCreateProductSaving
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosUiState())
 
@@ -489,6 +495,11 @@ class PosViewModel @Inject constructor(
     private var scaleWeighingSessionActive = false
 
     init {
+        updateExtras {
+            it.copy(
+                afterSaleGoToOrders = com.chaslay.pos.util.PosLocalPrefs.readAfterSaleGoToOrders(appContext)
+            )
+        }
         viewModelScope.launch {
             refreshGiftCardFeature()
             syncCloudPosSettings()
@@ -1247,8 +1258,91 @@ class PosViewModel @Inject constructor(
                     return@launch
                 }
             }
+            if (offerScanCreateForUnknownBarcode(code)) return@launch
             updateExtras {
                 it.copy(snackbarMessage = appContext.getString(R.string.barcode_not_found, code))
+            }
+        }
+    }
+
+    private suspend fun offerScanCreateForUnknownBarcode(code: String): Boolean {
+        if (!canManageProducts()) return false
+        if (!looksLikeRetailBarcodeInput(code)) return false
+        updateExtras { it.copy(scanCreateBarcode = code.trim()) }
+        return true
+    }
+
+    private suspend fun canManageProducts(): Boolean =
+        sessionManager.currentUserAccess.first()?.canManageProducts() == true
+
+    private fun looksLikeRetailBarcodeInput(code: String): Boolean {
+        if (code.isEmpty() || Regex("\\s").containsMatchIn(code)) return false
+        val digits = code.replace(Regex("\\D"), "")
+        if (digits.length >= 8 && digits.length == code.replace(Regex("[-\\s]"), "").length) return true
+        if (Regex("^[A-Za-z0-9][A-Za-z0-9._-]{7,}$").matches(code)) return true
+        return false
+    }
+
+    fun dismissScanCreateProductDialog() {
+        updateExtras { it.copy(scanCreateBarcode = null, scanCreateProductSaving = false) }
+    }
+
+    fun createProductFromScan(
+        name: String,
+        price: Double,
+        categoryId: Long,
+        stock: Int,
+        costPrice: Double?
+    ) {
+        val barcode = _uiExtras.value.scanCreateBarcode?.trim().orEmpty()
+        if (barcode.isEmpty() || name.isBlank()) return
+        viewModelScope.launch {
+            updateExtras { it.copy(scanCreateProductSaving = true) }
+            try {
+                val sanitizedBarcode = barcode.filter { it.isDigit() }.takeIf { it.isNotEmpty() }
+                val taxRate = resolveVatRate(
+                    0.0,
+                    cartManager.snapshot().serviceType,
+                    cachedSettings
+                )
+                val productId = productRepository.upsertProduct(
+                    ProductEntity(
+                        name = name.trim(),
+                        categoryId = categoryId,
+                        price = price,
+                        taxRate = taxRate,
+                        isOpenPrice = false,
+                        isWeighed = false,
+                        sortOrder = 0,
+                        barcode = sanitizedBarcode,
+                        stockQuantity = stock,
+                        costPrice = costPrice?.takeIf { it >= 0.0 },
+                        onlineVisible = true,
+                        createdAt = System.currentTimeMillis()
+                    )
+                )
+                menuRepository.replaceProductVariants(productId, emptyList())
+                menuRepository.setProductModifierLinks(productId, emptyList())
+                menuRepository.setProductAddonLinks(productId, emptyList())
+                com.chaslay.pos.util.PosLocalPrefs.saveLocalProductPrice(appContext, productId, price, null)
+                updateExtras {
+                    it.copy(
+                        scanCreateBarcode = null,
+                        scanCreateProductSaving = false,
+                        snackbarMessage = appContext.getString(R.string.pos_scan_create_product_created)
+                    )
+                }
+                val product = productRepository.getProductWithVariants(productId)
+                if (product != null) {
+                    addProductToCart(product, null, product.price)
+                }
+            } catch (_: Exception) {
+                updateExtras {
+                    it.copy(
+                        scanCreateProductSaving = false,
+                        snackbarMessage = appContext.getString(R.string.error)
+                    )
+                }
             }
         }
     }
@@ -1679,6 +1773,8 @@ class PosViewModel @Inject constructor(
                 val lookup = productRepository.findByBarcode(buffer)
                 if (lookup != null) {
                     addScannedProduct(lookup)
+                    updateExtras { it.copy(keypadBuffer = "") }
+                } else if (offerScanCreateForUnknownBarcode(buffer)) {
                     updateExtras { it.copy(keypadBuffer = "") }
                 } else {
                     updateExtras {
@@ -2285,22 +2381,34 @@ class PosViewModel @Inject constructor(
         if (!cachedSettings.splitBillsEnabled) return
         val cart = cartManager.snapshot()
         if (cart.isEmpty) return
-        if (cartManager.snapshot().splitCount <= 1) {
-            cartManager.increaseSplitCount()
+        val fromCheckout = _uiExtras.value.showCheckoutScreen
+        if (fromCheckout) {
+            cartManager.resetSplit()
         }
-        cartManager.setSplitByItems(true)
         updateExtras {
             it.copy(
                 showSplitBillScreen = true,
                 showSplitDialog = false,
                 showCheckoutScreen = false,
+                returnToSplitAfterCheckout = fromCheckout,
                 splitSelectedItemIds = emptySet()
             )
         }
     }
 
-    fun dismissSplitBillScreen() = updateExtras {
-        it.copy(showSplitBillScreen = false, splitSelectedItemIds = emptySet(), returnToSplitAfterCheckout = false)
+    fun dismissSplitBillScreen() {
+        val returnToCheckout = _uiExtras.value.returnToSplitAfterCheckout
+        if (returnToCheckout) {
+            cartManager.resetSplit()
+        }
+        updateExtras {
+            it.copy(
+                showSplitBillScreen = false,
+                splitSelectedItemIds = emptySet(),
+                returnToSplitAfterCheckout = false,
+                showCheckoutScreen = returnToCheckout || it.showCheckoutScreen
+            )
+        }
     }
 
     fun finishSplitBill() {
@@ -2342,15 +2450,44 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    fun moveSelectedToNewBill() {
+    fun moveSelectedToCheck(targetCheck: Int) {
         val selected = _uiExtras.value.splitSelectedItemIds
         if (selected.isEmpty()) return
+        val check = targetCheck.coerceIn(1, 8)
+        while (cartManager.snapshot().splitCount < check) {
+            cartManager.increaseSplitCount()
+        }
+        cartManager.assignItemsToCheck(selected, check)
+        if (cartManager.snapshot().splitCount > 1) {
+            cartManager.setSplitByItems(true)
+        }
+        updateExtras { it.copy(splitSelectedItemIds = emptySet()) }
+        persistTableOrderAsync()
+    }
+
+    fun moveSelectedToNewBill() {
         val cart = cartManager.snapshot()
         val usedChecks = cart.items.map { it.splitCheck }.toSet()
-        var targetCheck = (usedChecks.maxOrNull() ?: 1) + 1
+        var targetCheck = (maxOf(cart.splitCount, usedChecks.maxOrNull() ?: 1)) + 1
         while (targetCheck in usedChecks && targetCheck <= 8) targetCheck++
-        while (cartManager.snapshot().splitCount < targetCheck) cartManager.increaseSplitCount()
-        cartManager.assignItemsToCheck(selected, targetCheck)
+        if (targetCheck > 8) return
+        moveSelectedToCheck(targetCheck)
+    }
+
+    fun resetSplitBill() {
+        cartManager.resetSplit()
+        updateExtras { it.copy(splitSelectedItemIds = emptySet()) }
+        persistTableOrderAsync()
+    }
+
+    fun splitBySeats() {
+        val cart = cartManager.snapshot()
+        if (cart.tableId == null) return
+        val seats = cart.guestCount?.coerceIn(2, 8) ?: return
+        while (cartManager.snapshot().splitCount < seats) {
+            cartManager.increaseSplitCount()
+        }
+        cartManager.setSplitByItems(true)
         updateExtras { it.copy(splitSelectedItemIds = emptySet()) }
         persistTableOrderAsync()
     }
@@ -2396,7 +2533,6 @@ class PosViewModel @Inject constructor(
     }
 
     fun enableSplitByItems() {
-        if (cartManager.snapshot().splitCount <= 1) cartManager.increaseSplitCount()
         cartManager.setSplitByItems(true)
         updateExtras { it.copy(showSplitBillScreen = true, showSplitDialog = false) }
     }
@@ -3724,17 +3860,12 @@ class PosViewModel @Inject constructor(
         val cart = cartManager.snapshot()
         if (cart.tableId != null) {
             viewModelScope.launch {
-                val items = cart.items.map { it.copy(sentToKitchen = false) }
-                cart.tableOrderId?.let { tableOrderRepository.voidOpenOrder(it, "Converted to takeaway") }
-                cartManager.clear()
-                applyServiceTypeRates(ServiceType.TAKEAWAY)
-                if (isRestaurantMode()) {
-                    cartManager.setPickupOrder(suggestOrderNumber(), null)
-                } else {
-                    cartManager.applyRetailSilentDefault()
-                }
-                items.forEach { cartManager.addItem(it) }
-                refreshTables()
+                switchToTakeawayFromDineIn()
+                val updated = cartManager.snapshot()
+                val orderNumber = updated.orderNumber?.takeIf { it.isNotBlank() } ?: suggestOrderNumber()
+                cartManager.setPickupOrder(orderNumber, updated.pickupTimeMs)
+                tableOrderMutex.withLock { flushTableOrderSync() }
+                syncHeldOrderSnapshotIfExists()
                 updateExtras { it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_takeaway)) }
             }
             return
@@ -3757,6 +3888,20 @@ class PosViewModel @Inject constructor(
         }
     }
 
+    fun switchToRetailTakeawayFromMenu() {
+        if (!isRetailMode()) {
+            switchToTakeawayFromDineIn()
+            return
+        }
+        clearCounterDineInTicketIfNeeded()
+        setServiceType(ServiceType.TAKEAWAY)
+        cartManager.applyRetailSilentDefault()
+        viewModelScope.launch { syncHeldOrderSnapshotIfExists() }
+        updateExtras {
+            it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_takeaway))
+        }
+    }
+
     private fun switchToDineInFromTakeaway(cart: CartSummary) {
         if (shouldPickTableForDineIn()) {
             refreshTables()
@@ -3768,6 +3913,7 @@ class PosViewModel @Inject constructor(
         }
         val ticketLabel = ensureCounterDineInTicket()
         setServiceType(ServiceType.DINE_IN)
+        viewModelScope.launch { syncHeldOrderSnapshotIfExists() }
         updateExtras {
             it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_dine_in, ticketLabel))
         }
@@ -3779,6 +3925,7 @@ class PosViewModel @Inject constructor(
         if (isRetailMode()) {
             cartManager.applyRetailSilentDefault()
         }
+        viewModelScope.launch { syncHeldOrderSnapshotIfExists() }
         updateExtras {
             it.copy(snackbarMessage = appContext.getString(R.string.snackbar_switched_takeaway))
         }
@@ -3807,7 +3954,7 @@ class PosViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val reasons = CancelReasonLabels.localizedLabels(settings.defaultLanguage)
+            val reasons = CancelReasonLabels.localizedLabels(appContext, settings.defaultLanguage)
             updateExtras {
                 it.copy(showCartCancelDialog = true, cartCancelReasons = reasons)
             }
@@ -3831,7 +3978,7 @@ class PosViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val reasons = CancelReasonLabels.localizedLabels(settings.defaultLanguage)
+            val reasons = CancelReasonLabels.localizedLabels(appContext, settings.defaultLanguage)
             updateExtras {
                 it.copy(
                     showCartCancelItemDialog = true,
@@ -4056,10 +4203,12 @@ class PosViewModel @Inject constructor(
                 receiptEmailError = null
             )
         }
+        var continuingSplit = false
         when {
             cart.splitCount > 1 && !cart.splitByItems -> {
                 val paid = extras.equalSplitPaidCount
                 if (paid < cart.splitCount) {
+                    continuingSplit = true
                     cartManager.setActiveSplitCheck(paid + 1)
                     openCheckout(PaymentMethod.CASH, fromSplit = false)
                 }
@@ -4069,6 +4218,7 @@ class PosViewModel @Inject constructor(
                     cart.items.any { it.splitCheck == check }
                 }
                 if (nextCheck != null) {
+                    continuingSplit = true
                     cartManager.setActiveSplitCheck(nextCheck)
                     openCheckout(PaymentMethod.CASH, fromSplit = false)
                 }
@@ -4078,6 +4228,19 @@ class PosViewModel @Inject constructor(
         if (after.isEmpty && after.tableId == null) {
             cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
         }
+        maybeNavigateAfterSaleDismiss(continuingSplit)
+    }
+
+    private fun maybeNavigateAfterSaleDismiss(continuingSplit: Boolean) {
+        if (continuingSplit) return
+        if (_uiExtras.value.afterSaleGoToOrders) {
+            updateExtras { it.copy(navigateToOrdersTab = true) }
+        }
+    }
+
+    fun setAfterSaleGoToOrders(goToOrders: Boolean) {
+        com.chaslay.pos.util.PosLocalPrefs.writeAfterSaleGoToOrders(appContext, goToOrders)
+        updateExtras { it.copy(afterSaleGoToOrders = goToOrders) }
     }
 
     fun printCompletedReceipt() {
@@ -4253,7 +4416,8 @@ class PosViewModel @Inject constructor(
                 return@launch
             }
             val (transaction, items) = full
-            receiptRepository.ensureReceiptPublished(transaction, items, settings)
+            val splitPartCount = _uiExtras.value.splitPaymentTotal?.takeIf { it > 1 }
+            receiptRepository.ensureReceiptPublished(transaction, items, settings, splitPartCount)
                 .onFailure { e ->
                     updateExtras {
                         it.copy(
@@ -4263,9 +4427,15 @@ class PosViewModel @Inject constructor(
                         )
                     }
                 }
-                .onSuccess { publicUrl ->
-                    updateExtras { it.copy(receiptPublicUrl = publicUrl) }
-                    receiptRepository.sendReceiptEmail(transaction.id, email)
+                .onSuccess { published ->
+                    updateExtras { it.copy(receiptPublicUrl = published.publicUrl) }
+                    val emailReceiptId = published.serverOrderId ?: transaction.id
+                    receiptRepository.sendReceiptEmail(
+                        receiptId = emailReceiptId,
+                        email = email,
+                        orderNumber = transaction.transactionNumber,
+                        amount = transaction.total
+                    )
                         .onSuccess { message ->
                             updateExtras {
                                 it.copy(
@@ -4950,7 +5120,11 @@ class PosViewModel @Inject constructor(
                         checkoutDiscountAmount = saleDiscount,
                         overrideTotal = transactionTotal,
                         masterOrderId = masterId,
-                        splitCheckNumber = if (fullCart.splitByItems) fullCart.activeSplitCheck else null,
+                        splitCheckNumber = when {
+                            fullCart.splitByItems -> fullCart.activeSplitCheck
+                            fullCart.splitCount > 1 -> _uiExtras.value.equalSplitPaidCount + 1
+                            else -> null
+                        },
                         amountTendered = tender,
                         changeDue = changeDue,
                         transactionId = pendingTransactionId,
@@ -5240,12 +5414,8 @@ class PosViewModel @Inject constructor(
         updateExtras { it.copy(showClearCartDialog = false) }
     }
 
-    /** Restaurant mode: park the active cart (held / ongoing orders) and start a fresh order. */
+    /** Park the active cart (held / ongoing orders) and start a fresh order. */
     fun startNewOrder() {
-        if (!isRestaurantMode()) {
-            showNewOrderDialog()
-            return
-        }
         viewModelScope.launch {
             val cart = cartManager.snapshot()
             if (cart.isEmpty) {
@@ -5305,15 +5475,17 @@ class PosViewModel @Inject constructor(
 
     fun showPickupOrderDialog() {
         viewModelScope.launch {
-            val parked = parkCartIfNeeded()
-            val orderNumber = suggestOrderNumber()
-            cartManager.setPickupOrder(orderNumber, pickupTimeMs = null)
+            val cart = cartManager.snapshot()
+            val orderNumber = cart.orderNumber?.takeIf { it.isNotBlank() } ?: suggestOrderNumber()
+            cartManager.setPickupOrder(orderNumber, cart.pickupTimeMs)
+            applyServiceTypeRates(ServiceType.TAKEAWAY)
+            syncHeldOrderSnapshotIfExists()
             updateExtras {
                 it.copy(
-                    snackbarMessage = if (parked) {
-                        appContext.getString(R.string.snackbar_cart_parked_for_new_order)
-                    } else {
+                    snackbarMessage = if (cart.isEmpty) {
                         appContext.getString(R.string.snackbar_pickup_asap, orderNumber)
+                    } else {
+                        appContext.getString(R.string.snackbar_switched_takeaway)
                     }
                 )
             }
@@ -5349,15 +5521,26 @@ class PosViewModel @Inject constructor(
 
     fun showDeliveryOrderDialog() {
         viewModelScope.launch {
-            val parked = parkCartIfNeeded()
-            val orderNumber = suggestOrderNumber().replace("P-", "D-")
-            cartManager.startDeliveryAsap(orderNumber)
+            val cart = cartManager.snapshot()
+            val orderNumber = when {
+                cart.orderNumber.isNullOrBlank() -> suggestOrderNumber().replace("P-", "D-")
+                cart.fulfillmentType == FulfillmentType.DELIVERY -> cart.orderNumber!!
+                cart.orderNumber!!.startsWith("D-", ignoreCase = true) -> cart.orderNumber!!
+                else -> cart.orderNumber!!.replace("P-", "D-")
+            }
+            if (cart.isEmpty) {
+                cartManager.startDeliveryAsap(orderNumber)
+            } else {
+                cartManager.convertToDeliveryPreservingCart(orderNumber)
+            }
+            applyServiceTypeRates(ServiceType.TAKEAWAY)
+            syncHeldOrderSnapshotIfExists()
             updateExtras {
                 it.copy(
-                    snackbarMessage = if (parked) {
-                        appContext.getString(R.string.snackbar_cart_parked_for_new_order)
-                    } else {
+                    snackbarMessage = if (cart.isEmpty) {
                         appContext.getString(R.string.snackbar_delivery_asap_generic)
+                    } else {
+                        appContext.getString(R.string.switch_to_delivery)
                     }
                 )
             }
@@ -5510,10 +5693,15 @@ class PosViewModel @Inject constructor(
         if (!isDeviceOnline()) {
             return transaction.copy(receiptUrl = fallback) to fallback
         }
-        return receiptRepository.ensureReceiptPublished(transaction, items, settings).fold(
-            onSuccess = { url ->
-                transactionRepository.updateReceiptUrl(transaction.id, url)
-                transaction.copy(receiptUrl = url) to url
+        return receiptRepository.ensureReceiptPublished(
+            transaction,
+            items,
+            settings,
+            splitPartCount = _uiExtras.value.splitPaymentTotal?.takeIf { it > 1 }
+        ).fold(
+            onSuccess = { published ->
+                transactionRepository.updateReceiptUrl(transaction.id, published.publicUrl)
+                transaction.copy(receiptUrl = published.publicUrl) to published.publicUrl
             },
             onFailure = { e ->
                 Log.w("POS", "Receipt publish failed: ${e.message}", e)
@@ -5846,30 +6034,15 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    /** Saves the active cart to held/table orders before starting takeaway or delivery. */
-    private suspend fun parkCartIfNeeded(): Boolean {
-        val snapshot = cartManager.snapshot()
-        if (snapshot.isEmpty) return false
-
+    private suspend fun syncHeldOrderSnapshotIfExists() {
         val userId = sessionManager.currentUserId.first() ?: 0L
         val userName = sessionManager.currentUserName.first() ?: "Cashier"
-
-        if (snapshot.tableId != null) {
-            tableOrderMutex.withLock {
-                flushTableOrderSync()
-                cartManager.snapshot().tableOrderId?.let { tableOrderRepository.holdOrder(it) }
-            }
-        } else {
-            heldOrderRepository.createHeldOrder(
-                cart = snapshot,
-                sendToKitchen = false,
-                userId = userId,
-                userName = userName
-            )
-        }
-        cartManager.clear()
-        refreshTables()
-        return true
+        heldOrderRepository.updateHeldOrderIfExists(
+            cart = cartManager.snapshot(),
+            userId = userId,
+            userName = userName
+        )
+        persistTableOrderIfNeeded()
     }
 
     private suspend fun flushTableOrderSync(): String? {
@@ -6093,7 +6266,10 @@ class PosViewModel @Inject constructor(
         val onlineOrderAlert: com.chaslay.pos.sync.ImportedOnlineOrderAlert? = null,
         val onlineOrderAlertQueueCount: Int = 0,
         val pendingOnlineOrderCount: Int = 0,
-        val navigateToOrdersTab: Boolean = false
+        val navigateToOrdersTab: Boolean = false,
+        val afterSaleGoToOrders: Boolean = false,
+        val scanCreateBarcode: String? = null,
+        val scanCreateProductSaving: Boolean = false
     )
 
     fun toggleProductGridShowImages() =

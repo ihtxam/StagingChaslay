@@ -246,7 +246,10 @@ interface TransactionDao {
     @Transaction
     suspend fun insertFullTransaction(transaction: TransactionEntity, items: List<TransactionItemEntity>) {
         insertTransaction(transaction)
-        insertItems(items)
+        deleteItemsForTransaction(transaction.id)
+        if (items.isNotEmpty()) {
+            insertItems(items)
+        }
     }
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
@@ -739,6 +742,7 @@ interface HeldOrderDao {
         """
         SELECT * FROM held_orders
         WHERE status IN ('HELD', 'SENT_TO_KITCHEN')
+        AND pickupTimeMs IS NULL
         ORDER BY updatedAt DESC
         """
     )
@@ -770,6 +774,7 @@ interface HeldOrderDao {
         """
         SELECT COUNT(*) FROM held_orders
         WHERE status IN ('HELD', 'SENT_TO_KITCHEN')
+        AND pickupTimeMs IS NULL
         """
     )
     suspend fun countActive(): Int

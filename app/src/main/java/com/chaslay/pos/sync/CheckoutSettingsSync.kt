@@ -36,6 +36,21 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
         syncedMode == PosMode.RETAIL -> false
         else -> checkout.tablesEnabled
     }
+    val retailDineIn = if (context != null && PosLocalPrefs.hasUserSetRetailDineInEnabled(context)) {
+        PosLocalPrefs.applyRetailDineInEnabledIfUserSet(context, retailDineInEnabled)
+    } else {
+        checkout.retailDineInEnabled
+    }
+    val retailTakeaway = if (context != null && PosLocalPrefs.hasUserSetRetailTakeawayEnabled(context)) {
+        PosLocalPrefs.applyRetailTakeawayEnabledIfUserSet(context, retailTakeawayEnabled)
+    } else {
+        checkout.retailTakeawayEnabled
+    }
+    val retailDelivery = if (context != null && PosLocalPrefs.hasUserSetRetailDeliveryEnabled(context)) {
+        PosLocalPrefs.applyRetailDeliveryEnabledIfUserSet(context, retailDeliveryEnabled)
+    } else {
+        checkout.retailDeliveryEnabled
+    }
     return copy(
         tipsEnabled = checkout.tipsEnabled,
         terminalAskGratuityEnabled = checkout.terminalAskGratuityEnabled,
@@ -51,9 +66,9 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
         vatAfterDiscount = checkout.vatAfterDiscount,
         posMode = syncedMode,
         tablesEnabled = tables,
-        retailDineInEnabled = checkout.retailDineInEnabled,
-        retailTakeawayEnabled = checkout.retailTakeawayEnabled,
-        retailDeliveryEnabled = checkout.retailDeliveryEnabled,
+        retailDineInEnabled = retailDineIn,
+        retailTakeawayEnabled = retailTakeaway,
+        retailDeliveryEnabled = retailDelivery,
         requireTableForDineIn = requireTable,
         courseSendMode = if (checkout.courseSendMode == "send_all_once") {
             "send_all_once"

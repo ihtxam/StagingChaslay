@@ -106,6 +106,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
+import com.chaslay.pos.util.TextEncoding
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.data.local.entity.isAdyenTerminalCheckoutEnabled
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -118,6 +119,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.domain.model.PosVirtualCategories
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
 import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.scanner.BarcodeWedgeListener
@@ -203,7 +205,8 @@ fun PosScreen(
     val retailTakeawayEnabled = state.settings.retailTakeawayEnabled
     val retailDeliveryEnabled = state.settings.retailDeliveryEnabled
     val isTableServiceEnabled = tablesEnabled && (isRestaurantMode || isRetailMode)
-    val showRetailDineInToggle = isRetailMode && retailDineInEnabled
+    val showRetailOrderTypeMenu = isRetailMode &&
+        (retailDineInEnabled || retailDeliveryEnabled)
     var showBarcodeScanner by remember { mutableStateOf(false) }
     val hardwareScanEnabled =
         !showBarcodeScanner &&
@@ -215,7 +218,8 @@ fun PosScreen(
             !state.showGiftCardOpsMenu &&
             !state.showGiftCardOpsDialog &&
             !state.showGiftCardPayDialog &&
-            !state.showCashPaymentDialog
+            !state.showCashPaymentDialog &&
+            state.scanCreateBarcode.isNullOrBlank()
 
     DisposableEffect(hardwareScanEnabled) {
         BarcodeWedgeHub.enabled = hardwareScanEnabled
@@ -387,7 +391,10 @@ fun PosScreen(
             selectedItemIds = state.splitSelectedItemIds,
             onBack = viewModel::dismissSplitBillScreen,
             onToggleItem = viewModel::toggleSplitItemSelection,
+            onMoveToCheck = viewModel::moveSelectedToCheck,
             onMoveToNewBill = viewModel::moveSelectedToNewBill,
+            onReset = viewModel::resetSplitBill,
+            onSplitBySeats = viewModel::splitBySeats,
             onSplitEvenly = viewModel::splitEqually,
             onPayCheck = viewModel::checkoutSplitCheck,
             onDone = viewModel::finishSplitBill
@@ -462,8 +469,6 @@ fun PosScreen(
         val coursesEnabled = state.settings.coursesEnabled
         val courseSendMode = CourseSendMode.fromKey(state.settings.courseSendMode)
         OdooPosNavBar(
-            businessName = state.settings.businessName,
-            loggedInUserName = loggedInUserName,
             isTableServiceEnabled = isTableServiceEnabled,
             selectedTab = mainTab,
             pendingOnlineOrderCount = state.pendingOnlineOrderCount,
@@ -478,15 +483,10 @@ fun PosScreen(
             onToggleSortAlpha = viewModel::toggleProductGridSortAlpha,
             onToggleSortBestseller = viewModel::toggleProductGridSortBestseller,
             onCycleGridColumns = viewModel::cycleProductGridColumns,
+            afterSaleGoToOrders = state.afterSaleGoToOrders,
+            onAfterSaleGoToOrdersChange = viewModel::setAfterSaleGoToOrders,
             onTabSelected = { tab ->
-                when (tab) {
-                    PosMainTab.REGISTER -> {
-                        mainTab = PosMainTab.REGISTER
-                        viewModel.showNewOrderDialog()
-                    }
-                    PosMainTab.ORDERS -> mainTab = PosMainTab.ORDERS
-                    PosMainTab.TABLES -> mainTab = PosMainTab.TABLES
-                }
+                mainTab = tab
             },
             userAccess = userAccess,
             onNavigate = onNavigate,
@@ -495,6 +495,8 @@ fun PosScreen(
         Row(modifier = Modifier.weight(1f)) {
             val orderingItemsForRail = state.cart.items.filter { !it.sentToKitchen }
             CartActionSidebar(
+                businessName = state.settings.businessName,
+                loggedInUserName = loggedInUserName,
                 isRestaurantMode = isRestaurantMode,
                 showRetailTakeaway = isRetailMode && retailTakeawayEnabled,
                 showRetailDelivery = isRetailMode && retailDeliveryEnabled,
@@ -523,7 +525,6 @@ fun PosScreen(
                     viewModel.showDeliveryOrderDialog()
                 },
                 onHold = { viewModel.holdOrder(false) },
-                onNewOrder = viewModel::startNewOrder,
                 onSend = viewModel::sendCurrentOrderToKitchen,
                 onAddCourse = viewModel::addCourse,
                 onSendActiveCourse = viewModel::sendActiveCourseToKitchen,
@@ -597,13 +598,16 @@ fun PosScreen(
                         onKitchenMessage = viewModel::showKitchenMessageDialog,
                         onHoldOrder = { viewModel.holdOrder(false) },
                         onHoldAndSend = { viewModel.holdOrder(true) },
-                        onNewOrder = viewModel::showNewOrderDialog,
                         onPickup = viewModel::showPickupOrderDialog,
                         onDelivery = viewModel::showDeliveryOrderDialog,
                         isRestaurantMode = isRestaurantMode,
-                        showRetailDineInToggle = showRetailDineInToggle,
-                        showRetailDeliveryToggle = isRetailMode && retailDeliveryEnabled,
-                        onToggleRetailDineIn = viewModel::toggleRetailDineIn,
+                        showRetailOrderTypeMenu = showRetailOrderTypeMenu,
+                        retailDineInEnabled = retailDineInEnabled,
+                        retailTakeawayEnabled = retailTakeawayEnabled,
+                        retailDeliveryEnabled = retailDeliveryEnabled,
+                        onRetailDineIn = viewModel::toggleRetailDineIn,
+                        onRetailTakeaway = viewModel::switchToRetailTakeawayFromMenu,
+                        onRetailDelivery = viewModel::showDeliveryOrderDialog,
                         tablesEnabled = tablesEnabled,
                         coursesEnabled = coursesEnabled,
                         onMoveEntireTable = viewModel::startMoveEntireTable,
@@ -929,6 +933,17 @@ fun PosScreen(
         )
     }
 
+    state.scanCreateBarcode?.let { scannedBarcode ->
+        ScanCreateProductDialog(
+            barcode = scannedBarcode,
+            categories = state.categories.filter { !PosVirtualCategories.isAllCategories(it.id) && !PosVirtualCategories.isGiftCards(it.id) },
+            currencySymbol = state.currencySymbol,
+            saving = state.scanCreateProductSaving,
+            onDismiss = viewModel::dismissScanCreateProductDialog,
+            onCreate = viewModel::createProductFromScan
+        )
+    }
+
     if (state.showSplitDialog) {
         SplitBillDialog(
             splitCount = state.cart.splitCount,
@@ -1045,8 +1060,6 @@ fun PosScreen(
 
 @Composable
 private fun OdooPosNavBar(
-    businessName: String,
-    loggedInUserName: String? = null,
     isTableServiceEnabled: Boolean,
     selectedTab: PosMainTab,
     pendingOnlineOrderCount: Int = 0,
@@ -1061,6 +1074,8 @@ private fun OdooPosNavBar(
     onToggleSortAlpha: () -> Unit = {},
     onToggleSortBestseller: () -> Unit = {},
     onCycleGridColumns: () -> Unit = {},
+    afterSaleGoToOrders: Boolean = false,
+    onAfterSaleGoToOrdersChange: (Boolean) -> Unit = {},
     onTabSelected: (PosMainTab) -> Unit,
     userAccess: UserAccess,
     onNavigate: (String) -> Unit,
@@ -1107,31 +1122,6 @@ private fun OdooPosNavBar(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(1.dp)
-            ) {
-                Text(
-                    businessName,
-                    color = vc.textPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                loggedInUserName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
-                    Text(
-                        staffName,
-                        color = vc.textSecondary,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
             if (showProductFilters) {
                 ProductGridFilterMenu(
                     showProductImages = showProductImages,
@@ -1158,6 +1148,10 @@ private fun OdooPosNavBar(
                     )
                 }
             }
+            AfterSaleDestinationMenu(
+                goToOrders = afterSaleGoToOrders,
+                onGoToOrdersChange = onAfterSaleGoToOrdersChange
+            )
             if (userAccess.canAccessSettings() || userAccess.canManageProducts() || userAccess.canAccessReports()) {
                 IconButton(onClick = { onNavigate(AppRoute.Admin.route) }) {
                     Icon(
@@ -1216,6 +1210,71 @@ private fun PosBottomTabChip(
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun AfterSaleDestinationMenu(
+    goToOrders: Boolean,
+    onGoToOrdersChange: (Boolean) -> Unit
+) {
+    val vc = vectronColors()
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = stringResource(R.string.after_sale_destination_cd),
+                tint = if (goToOrders) Color(0xFF22C55E) else vc.textPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.after_sale_register) +
+                            if (!goToOrders) " ✓" else ""
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onGoToOrdersChange(false)
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.PointOfSale,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.after_sale_orders) +
+                            if (goToOrders) " ✓" else ""
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onGoToOrdersChange(true)
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.ReceiptLong,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            )
         }
     }
 }
@@ -1582,13 +1641,16 @@ private fun VectronOrderPanel(
     onKitchenMessage: () -> Unit,
     onHoldOrder: () -> Unit,
     onHoldAndSend: () -> Unit,
-    onNewOrder: () -> Unit,
     onPickup: () -> Unit,
     onDelivery: () -> Unit,
     isRestaurantMode: Boolean,
-    showRetailDineInToggle: Boolean = false,
-    showRetailDeliveryToggle: Boolean = false,
-    onToggleRetailDineIn: () -> Unit = {},
+    showRetailOrderTypeMenu: Boolean = false,
+    retailDineInEnabled: Boolean = false,
+    retailTakeawayEnabled: Boolean = false,
+    retailDeliveryEnabled: Boolean = false,
+    onRetailDineIn: () -> Unit = {},
+    onRetailTakeaway: () -> Unit = {},
+    onRetailDelivery: () -> Unit = {},
     tablesEnabled: Boolean = true,
     coursesEnabled: Boolean = false,
     onMoveEntireTable: () -> Unit = {},
@@ -1653,6 +1715,12 @@ private fun VectronOrderPanel(
             CartOrderMenuButton(
                 enabled = !cart.isEmpty,
                 isRestaurantMode = isRestaurantMode,
+                showRetailOrderTypeMenu = showRetailOrderTypeMenu,
+                retailDineInEnabled = retailDineInEnabled,
+                retailTakeawayEnabled = retailTakeawayEnabled,
+                retailDeliveryEnabled = retailDeliveryEnabled,
+                serviceType = serviceType,
+                fulfillmentType = cart.fulfillmentType,
                 showOrderTypeToggle = isRestaurantMode,
                 isDineIn = serviceType == ServiceType.DINE_IN || isTableMode,
                 isTableMode = isTableMode,
@@ -1663,6 +1731,9 @@ private fun VectronOrderPanel(
                 onPrintKitchen = onPrintKitchen,
                 onAddCustomer = onAddCustomer,
                 onChangeOrderType = onChangeOrderType,
+                onRetailDineIn = onRetailDineIn,
+                onRetailTakeaway = onRetailTakeaway,
+                onRetailDelivery = onRetailDelivery,
                 onCancelOrder = onCancelOrder,
                 onCancelItem = onCancelItem,
                 canCancelItem = canCancelItem,
@@ -1724,17 +1795,6 @@ private fun VectronOrderPanel(
                 }
             }
         }
-        if (showRetailDineInToggle) {
-            RetailBistroChannelRow(
-                serviceType = serviceType,
-                fulfillmentType = cart.fulfillmentType,
-                orderNumber = cart.orderNumber,
-                showDelivery = showRetailDeliveryToggle,
-                onToggleDineIn = onToggleRetailDineIn,
-                onDelivery = onDelivery
-            )
-        }
-
         if (showCartTabs) {
             Row(
                 modifier = Modifier
@@ -1931,49 +1991,16 @@ private fun formatScheduledTimeLabel(timeMs: Long?): String {
 }
 
 @Composable
-private fun RetailBistroChannelRow(
-    serviceType: ServiceType,
-    fulfillmentType: com.chaslay.pos.domain.model.FulfillmentType,
-    orderNumber: String?,
-    showDelivery: Boolean,
-    onToggleDineIn: () -> Unit,
-    onDelivery: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        FilterChip(
-            selected = serviceType == ServiceType.DINE_IN,
-            onClick = onToggleDineIn,
-            label = { Text(stringResource(R.string.dine_in), fontSize = 11.sp) }
-        )
-        if (showDelivery) {
-            FilterChip(
-                selected = fulfillmentType == com.chaslay.pos.domain.model.FulfillmentType.DELIVERY,
-                onClick = onDelivery,
-                label = { Text(stringResource(R.string.delivery), fontSize = 11.sp) }
-            )
-        }
-        if (serviceType == ServiceType.DINE_IN && orderNumber != null) {
-            Text(
-                text = orderNumber.takeIf { it.startsWith("D-") } ?: orderNumber,
-                color = Color(0xFF0277BD),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
 private fun CartOrderMenuButton(
     enabled: Boolean,
     isRestaurantMode: Boolean,
+    showRetailOrderTypeMenu: Boolean = false,
+    retailDineInEnabled: Boolean = false,
+    retailTakeawayEnabled: Boolean = false,
+    retailDeliveryEnabled: Boolean = false,
+    serviceType: ServiceType = ServiceType.TAKEAWAY,
+    fulfillmentType: com.chaslay.pos.domain.model.FulfillmentType =
+        com.chaslay.pos.domain.model.FulfillmentType.WALK_IN,
     showOrderTypeToggle: Boolean,
     isDineIn: Boolean,
     isTableMode: Boolean,
@@ -1983,6 +2010,9 @@ private fun CartOrderMenuButton(
     onPrintKitchen: () -> Unit,
     onAddCustomer: () -> Unit,
     onChangeOrderType: () -> Unit,
+    onRetailDineIn: () -> Unit = {},
+    onRetailTakeaway: () -> Unit = {},
+    onRetailDelivery: () -> Unit = {},
     onCancelOrder: () -> Unit,
     onCancelItem: () -> Unit = {},
     canCancelItem: Boolean = false,
@@ -2055,6 +2085,26 @@ private fun CartOrderMenuButton(
                     }
                 )
             }
+            if (showRetailOrderTypeMenu) {
+                if (retailDineInEnabled && serviceType != ServiceType.DINE_IN) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.switch_to_dine_in)) },
+                        onClick = {
+                            expanded = false
+                            onRetailDineIn()
+                        }
+                    )
+                }
+                if (retailDeliveryEnabled && fulfillmentType != FulfillmentType.DELIVERY) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.switch_to_delivery)) },
+                        onClick = {
+                            expanded = false
+                            onRetailDelivery()
+                        }
+                    )
+                }
+            }
             if (showOrderTypeToggle) {
                 DropdownMenuItem(
                     text = {
@@ -2114,7 +2164,7 @@ private fun CartCancelOrderDialog(
                             .clickable { selected = reason }
                     ) {
                         RadioButton(selected = selected == reason, onClick = { selected = reason })
-                        Text(reason)
+                        Text(TextEncoding.repairCatalogText(reason))
                     }
                 }
             }
@@ -2132,6 +2182,8 @@ private fun CartCancelOrderDialog(
 
 @Composable
 private fun CartActionSidebar(
+    businessName: String,
+    loggedInUserName: String?,
     isRestaurantMode: Boolean,
     showRetailTakeaway: Boolean = false,
     showRetailDelivery: Boolean = false,
@@ -2150,7 +2202,6 @@ private fun CartActionSidebar(
     onDelivery: () -> Unit,
     onSend: () -> Unit,
     onHold: () -> Unit,
-    onNewOrder: () -> Unit,
     onAddCourse: () -> Unit,
     onSendActiveCourse: () -> Unit,
     onSendAllCourses: () -> Unit,
@@ -2163,11 +2214,17 @@ private fun CartActionSidebar(
             .width(96.dp)
             .fillMaxHeight()
             .background(vc.sidebar, RoundedCornerShape(6.dp))
-            .verticalScroll(rememberScrollState())
             .padding(vertical = 8.dp, horizontal = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
         if (isRestaurantMode || showRetailTakeaway) {
             CartSidebarButton(
                 label = stringResource(R.string.pickup),
@@ -2207,15 +2264,6 @@ private fun CartActionSidebar(
             color = Color(0xFF7D6608),
             onClick = onHold
         )
-        if (isRestaurantMode) {
-            CartSidebarButton(
-                label = stringResource(R.string.new_order),
-                shortLabel = stringResource(R.string.new_short),
-                icon = Icons.Default.Add,
-                color = Color(0xFF2E7D32),
-                onClick = onNewOrder
-            )
-        }
         if (isRestaurantMode && coursesEnabled) {
             CartSidebarButton(
                 label = stringResource(R.string.add_course),
@@ -2295,6 +2343,29 @@ private fun CartActionSidebar(
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        }
+        HorizontalDivider(color = vc.textSecondary.copy(alpha = 0.25f))
+        Text(
+            businessName,
+            color = vc.textPrimary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 9.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+        loggedInUserName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
+            Text(
+                staffName,
+                color = vc.textSecondary,
+                fontSize = 9.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

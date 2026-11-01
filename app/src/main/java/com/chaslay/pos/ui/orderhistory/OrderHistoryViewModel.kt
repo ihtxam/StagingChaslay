@@ -14,6 +14,8 @@ import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ServiceType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +65,7 @@ data class OrderHistoryUiState(
 
 @HiltViewModel
 class OrderHistoryViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val transactionRepository: TransactionRepository,
     private val receiptRepository: com.chaslay.pos.data.repository.ReceiptRepository,
     private val heldOrderRepository: HeldOrderRepository,
@@ -112,7 +115,7 @@ class OrderHistoryViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val reasons = com.chaslay.pos.domain.model.CancelReasonLabels.localizedLabels(settings.defaultLanguage)
+            val reasons = com.chaslay.pos.util.CancelReasonLabels.localizedLabels(appContext, settings.defaultLanguage)
             val currency = settings.currencySymbol.ifBlank { "CHF" }
             val access = sessionManager.currentUserAccess.first()
             _uiState.value = _uiState.value.copy(
@@ -288,7 +291,7 @@ class OrderHistoryViewModel @Inject constructor(
     fun showCancelDialog() {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val reasons = com.chaslay.pos.domain.model.CancelReasonLabels.localizedLabels(settings.defaultLanguage)
+            val reasons = com.chaslay.pos.util.CancelReasonLabels.localizedLabels(appContext, settings.defaultLanguage)
             _uiState.value = _uiState.value.copy(showCancelDialog = true, cancelReasons = reasons)
         }
     }
@@ -666,9 +669,9 @@ class OrderHistoryViewModel @Inject constructor(
         settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity
     ): TransactionEntity {
         return receiptRepository.ensureReceiptPublished(order, items, settings).fold(
-            onSuccess = { url ->
-                transactionRepository.updateReceiptUrl(order.id, url)
-                order.copy(receiptUrl = url)
+            onSuccess = { published ->
+                transactionRepository.updateReceiptUrl(order.id, published.publicUrl)
+                order.copy(receiptUrl = published.publicUrl)
             },
             onFailure = {
                 val fallback = receiptRepository.buildPublicUrl(order.id, settings)

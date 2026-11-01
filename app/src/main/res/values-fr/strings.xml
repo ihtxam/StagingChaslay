@@ -82,7 +82,7 @@
     <string name="vat_included_in_price">TTC (TVA incluse)</string>
     <string name="vat_excluded_hint">Les prix produits sont hors taxes. La TVA est ajoutée au paiement.</string>
     <string name="vat_included_hint">Les prix produits incluent déjà la TVA. Le montant de TVA est calculé à partir du total.</string>
-    <string name="dine_in">Réservations</string>
+    <string name="dine_in">Sur place</string>
     <string name="take_away">À emporter</string>
     <string name="tables">Tables</string>
     <string name="table_short">Tableau</string>
@@ -223,6 +223,9 @@
     <string name="invoice_offline_queued">Facture enregistrée hors ligne. Le PDF sera généré en ligne.</string>
     <string name="pos_register">Caisse</string>
     <string name="pos_orders">Commandes</string>
+    <string name="after_sale_destination_cd">Destination après vente</string>
+    <string name="after_sale_register">Après vente : Caisse</string>
+    <string name="after_sale_orders">Après vente : Commandes</string>
     <string name="product_grid_images">Img</string>
     <string name="product_grid_images_cd">Afficher les images produits</string>
     <string name="product_grid_sort_alpha">A-Z</string>
@@ -326,6 +329,13 @@
     <string name="switch_to_takeaway">Passer à emporter</string>
     <string name="switch_to_dine_in">Passer sur place</string>
     <string name="cancel_order_reason_prompt">Choisissez un motif d\'annulation :</string>
+    <string name="cancel_reason_could_not_process">Impossible de traiter la commande</string>
+    <string name="cancel_reason_kitchen_busy">Cuisine trop occupée</string>
+    <string name="cancel_reason_client">Annulation client</string>
+    <string name="cancel_reason_out_of_stock">Rupture de stock</string>
+    <string name="cancel_reason_wrong_order">Mauvaise commande saisie</string>
+    <string name="cancel_reason_other">Autre</string>
+    <string name="switch_to_delivery">Passer en livraison</string>
     <string name="cancel_requires_kitchen_or_receipt">Envoyez en cuisine ou imprimez un reçu avant d\'annuler.</string>
     <string name="create_customer">Créer</string>
     <string name="search_customers">Recherche des clients</string>
@@ -415,8 +425,8 @@
     <string name="use_for_kitchen">Utiliser pour la cuisine</string>
     <string name="end_of_day">Fin de la journée</string>
     <string name="print_end_of_day">Imprimer le rapport de fin de journée</string>
-    <string name="eod_include_products_on_print">Inclure le détail des produits sur l\'impression de fin de journée</string>
-    <string name="eod_include_staff_on_print">Inclure le détail des ventes par employé sur l\'impression</string>
+    <string name="eod_include_products_on_print">Inclure le détail des produits</string>
+    <string name="eod_include_staff_on_print">Ajouter les ventes par employé</string>
     <string name="eod_company_wide">Toute l\'entreprise</string>
     <string name="eod_pick_date">Choisir une date</string>
     <string name="eod_staff_picker_hint">Choisissez un employé pour voir ou imprimer son rapport, ou toute l\'entreprise pour le magasin.</string>
@@ -510,6 +520,9 @@
     <string name="scan_barcode">Scannez code à barres</string>
     <string name="camera_permission_required">L\'autorisation de l\'appareil photo est requise pour scanner les codes-barres.</string>
     <string name="barcode_not_found">Aucun produit trouvé pour le code-barres %1$s</string>
+    <string name="pos_scan_create_product_title">Créer un produit depuis le scan</string>
+    <string name="pos_scan_create_product_hint">Le code « %1$s » n’est pas encore dans le catalogue.</string>
+    <string name="pos_scan_create_product_created">Produit créé et ajouté au panier</string>
     <string name="scan_at_checkout">Scanner les articles</string>
     <string name="category">Catégorie</string>
     <string name="tax_rate">Taux des taxes (%)</string>
@@ -572,6 +585,8 @@
     <string name="yes">Oui</string>
     <string name="users_accounts">Utilisateurs et rôles</string>
     <string name="users_accounts_help">Créez des comptes de personnel avec des codes PIN de point de vente, attribuez des rôles et réinitialisez les mots de passe.</string>
+    <string name="settings_users_tab">Utilisateurs</string>
+    <string name="settings_roles_tab">Rôles</string>
     <string name="users_list">Comptes De Personnel</string>
     <string name="roles_list">Rôles &amp; Permissions</string>
     <string name="add_user">Ajouter un utilisateur</string>

@@ -80,7 +80,7 @@
     <string name="vat_included_in_price">IVA inclusa</string>
     <string name="vat_excluded_hint">I prezzi sono netti. L\'IVA viene aggiunta al pagamento.</string>
     <string name="vat_included_hint">I prezzi includono già l\'IVA. L\'importo IVA è calcolato dal totale.</string>
-    <string name="dine_in">Réservations</string>
+    <string name="dine_in">Sul posto</string>
     <string name="take_away">Asporto</string>
     <string name="tables">Tavoli</string>
     <string name="table_short">Tavoloau</string>
@@ -314,6 +314,13 @@
     <string name="switch_to_takeaway">Passa ad asporto</string>
     <string name="switch_to_dine_in">Passa al tavolo</string>
     <string name="cancel_order_reason_prompt">Seleziona un motivo per annullare l\'ordine:</string>
+    <string name="cancel_reason_could_not_process">Impossibile elaborare l\'ordine</string>
+    <string name="cancel_reason_kitchen_busy">Cucina troppo occupata</string>
+    <string name="cancel_reason_client">Annullamento cliente</string>
+    <string name="cancel_reason_out_of_stock">Esaurito</string>
+    <string name="cancel_reason_wrong_order">Ordine errato inserito</string>
+    <string name="cancel_reason_other">Altro</string>
+    <string name="switch_to_delivery">Passa a consegna</string>
     <string name="create_customer">Crea</string>
     <string name="search_customers">Cerca clienti…</string>
     <string name="discard">Annulla</string>
@@ -362,6 +369,8 @@
     <string name="use_for_kitchen">Utiliser pour la cucina</string>
     <string name="end_of_day">Fin de la journée</string>
     <string name="print_end_of_day">Stampa le rapport de fin de journée</string>
+    <string name="eod_include_products_on_print">Includi dettaglio prodotti</string>
+    <string name="eod_include_staff_on_print">Aggiungi dati vendite dipendenti</string>
     <string name="pos_printer">Imprimante de reçus / PDV</string>
     <string name="kitchen_printer">Imprimante de cucina</string>
     <string name="receipt_design">Conception du reçu</string>
@@ -440,6 +449,9 @@
     <string name="scan_barcode">Scannez code à barres</string>
     <string name="camera_permission_required">L\'autorisation de l\'appareil photo est requise pour scanner les codes-barres.</string>
     <string name="barcode_not_found">Aucun produit trouvé pour le code-barres %1$s</string>
+    <string name="pos_scan_create_product_title">Créer un produit depuis le scan</string>
+    <string name="pos_scan_create_product_hint">Le code « %1$s » n’est pas encore dans le catalogue.</string>
+    <string name="pos_scan_create_product_created">Produit créé et ajouté au panier</string>
     <string name="scan_at_checkout">Scanner les articles</string>
     <string name="category">Catégorie</string>
     <string name="tax_rate">Taux des taxes (%)</string>

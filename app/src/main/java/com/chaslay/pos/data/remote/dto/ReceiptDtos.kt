@@ -23,7 +23,18 @@ data class ReceiptPublishRequest(
     @SerializedName("customer_email") val customerEmail: String? = null,
     @SerializedName("shipping_address") val shippingAddress: String? = null,
     @SerializedName("fulfillment_channel") val fulfillmentChannel: String? = null,
-    @SerializedName("pickup_time_ms") val pickupTimeMs: Long? = null
+    @SerializedName("pickup_time_ms") val pickupTimeMs: Long? = null,
+    @SerializedName("master_order_id") val masterOrderId: String? = null,
+    @SerializedName("split_check_number") val splitCheckNumber: Int? = null,
+    @SerializedName("split_part_count") val splitPartCount: Int? = null,
+    @SerializedName("rounding_amount") val roundingAmount: Double? = null,
+    @SerializedName("staff_name") val staffName: String? = null,
+    @SerializedName("payment_status") val paymentStatus: String? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("table_id") val tableId: String? = null,
+    @SerializedName("notes") val notes: String? = null,
+    @SerializedName("adyen_customer_receipt_json") val adyenCustomerReceiptJson: String? = null,
+    @SerializedName("adyen_cashier_receipt_json") val adyenCashierReceiptJson: String? = null
 )
 
 data class ReceiptTenderDto(
@@ -33,6 +44,7 @@ data class ReceiptTenderDto(
 
 data class ReceiptItemDto(
     @SerializedName("product_name") val productName: String,
+    @SerializedName("product_client_id") val productClientId: String? = null,
     @SerializedName("variant_name") val variantName: String? = null,
     @SerializedName("quantity") val quantity: Int,
     @SerializedName("line_total") val lineTotal: Double,
@@ -50,7 +62,10 @@ data class ReceiptPublishResponse(
 
 data class ReceiptEmailRequest(
     @SerializedName("email") val email: String,
-    @SerializedName("customer_name") val customerName: String? = null
+    @SerializedName("customer_name") val customerName: String? = null,
+    @SerializedName("order_number") val orderNumber: String? = null,
+    @SerializedName("transaction_number") val transactionNumber: String? = null,
+    @SerializedName("amount") val amount: Double? = null
 )
 
 data class ReceiptEmailResponse(

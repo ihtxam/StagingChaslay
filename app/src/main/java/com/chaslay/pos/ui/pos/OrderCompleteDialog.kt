@@ -141,7 +141,7 @@ private val OrderCompleteTextSecondary = Color(0xFF556377)
 
 
 
-/** Max on-screen QR side; uses full dialog content width up to this cap (stacked layout). */
+/** Max on-screen QR side within the right column (two-column order-complete layout). */
 
 internal val PosReceiptQrMaxDisplayDp = 340.dp
 
@@ -244,224 +244,246 @@ fun OrderCompleteDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        stringResource(R.string.total_paid),
-                        fontSize = 11.sp,
-                        color = OrderCompleteTextSecondary,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.8.sp
-                    )
-                    Text(
-                        formatMoney(transaction.total, currencySymbol),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace,
-                        color = OrderCompleteTextPrimary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                    transaction.changeDue?.takeIf { it > 0 }?.let { change ->
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Text(
-                            stringResource(R.string.checkout_change_due, formatMoney(change, currencySymbol)),
+                            stringResource(R.string.total_paid),
+                            fontSize = 11.sp,
+                            color = OrderCompleteTextSecondary,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.8.sp
+                        )
+                        Text(
+                            formatMoney(transaction.total, currencySymbol),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = FontFamily.Monospace,
+                            color = OrderCompleteTextPrimary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                        transaction.changeDue?.takeIf { it > 0 }?.let { change ->
+                            Text(
+                                stringResource(R.string.checkout_change_due, formatMoney(change, currencySymbol)),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF13A99A),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        Text(
+                            com.chaslay.pos.util.OrderNumberFormat.displayForTransaction(transaction),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF13A99A),
-                            modifier = Modifier.padding(top = 4.dp)
+                            color = OrderCompleteTextPrimary,
+                            modifier = Modifier.padding(top = 12.dp)
                         )
-                    }
-                    Text(
-                        com.chaslay.pos.util.OrderNumberFormat.displayForTransaction(transaction),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = OrderCompleteTextPrimary,
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
-                    Text(
-                        paymentMethodLabel(transaction.paymentMethod),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = OrderCompleteTextSecondary,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                    if (splitPaymentIndex != null && splitPaymentTotal != null) {
                         Text(
-                            stringResource(
-                                R.string.order_complete_split_payment,
-                                splitPaymentIndex,
-                                splitPaymentTotal
-                            ),
+                            paymentMethodLabel(transaction.paymentMethod),
                             fontSize = 13.sp,
-                            color = Color(0xFF16A085),
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                    if (showMultiSplitReceiptPrint) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            stringResource(R.string.order_complete_split_receipts_title),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Medium,
                             color = OrderCompleteTextSecondary,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Start
+                            modifier = Modifier.padding(top = 2.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        completedSplitOrders.forEachIndexed { index, split ->
-                            val splitLabel = split.splitCheckNumber ?: (index + 1)
-                            OutlinedButton(
-                                onClick = { onPrintSplitReceipt(split.id) },
+                        if (splitPaymentIndex != null && splitPaymentTotal != null) {
+                            Text(
+                                stringResource(
+                                    R.string.order_complete_split_payment,
+                                    splitPaymentIndex,
+                                    splitPaymentTotal
+                                ),
+                                fontSize = 13.sp,
+                                color = Color(0xFF16A085),
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        if (showMultiSplitReceiptPrint) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                stringResource(R.string.order_complete_split_receipts_title),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = OrderCompleteTextSecondary,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Start
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            completedSplitOrders.forEachIndexed { index, split ->
+                                val splitLabel = split.splitCheckNumber ?: (index + 1)
+                                OutlinedButton(
+                                    onClick = { onPrintSplitReceipt(split.id) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Print,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        stringResource(R.string.print_split_n, splitLabel),
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                            Button(
+                                onClick = onPrintAllSplitReceipts,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 2.dp),
-                                shape = RoundedCornerShape(12.dp)
+                                    .padding(top = 4.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5B21B6))
                             ) {
                                 Icon(
                                     Icons.Default.Print,
                                     contentDescription = null,
+                                    tint = Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    stringResource(R.string.print_split_n, splitLabel),
+                                    stringResource(R.string.print_all_split_receipts),
+                                    color = Color.White,
                                     fontSize = 13.sp
                                 )
                             }
                         }
-                        Button(
-                            onClick = onPrintAllSplitReceipts,
+                        orderCompleteNotice
+                            ?.takeIf { notice ->
+                                !notice.contains("printed", ignoreCase = true) &&
+                                    !notice.contains("sent", ignoreCase = true)
+                            }
+                            ?.let { notice ->
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFFFEF2F2)
+                                ) {
+                                    Text(
+                                        notice,
+                                        modifier = Modifier.padding(12.dp),
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFB91C1C),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            BoxWithConstraints(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                val qrDisplaySize = minOf(
+                                    maxWidth,
+                                    maxHeight.coerceAtLeast(120.dp),
+                                    PosReceiptQrMaxDisplayDp
+                                )
+                                val qrDensity = LocalDensity.current
+                                val qrBitmapPx = with(qrDensity) {
+                                    (qrDisplaySize * PosReceiptQrBitmapScale).roundToPx().coerceAtLeast(640)
+                                }
+                                val qrBitmap = remember(digitalUrl, qrBitmapPx) {
+                                    digitalUrl?.let { qrGenerator.generateQrBitmap(it, qrBitmapPx) }
+                                }
+
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    if (qrBitmap != null) {
+                                        Image(
+                                            bitmap = qrBitmap.asImageBitmap(),
+                                            contentDescription = stringResource(R.string.digital_receipt),
+                                            modifier = Modifier
+                                                .size(qrDisplaySize)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        )
+                                        Text(
+                                            stringResource(R.string.scan_digital_receipt),
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = OrderCompleteTextSecondary,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier
+                                                .padding(top = 8.dp)
+                                                .width(qrDisplaySize)
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Receipt,
+                                            contentDescription = null,
+                                            tint = OrderCompleteTextSecondary,
+                                            modifier = Modifier.size(40.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5B21B6))
+                                .heightIn(min = 64.dp)
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.Default.Print,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                            SuccessIconButton(
+                                icon = Icons.Default.Print,
+                                label = stringResource(R.string.print_receipt),
+                                onClick = onPrintReceipt
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.print_all_split_receipts),
-                                color = Color.White,
-                                fontSize = 13.sp
+                            SuccessIconButton(
+                                icon = Icons.AutoMirrored.Filled.Send,
+                                label = stringResource(R.string.email_receipt),
+                                onClick = onShareEmail
                             )
-                        }
-                    }
-                    orderCompleteNotice
-                        ?.takeIf { notice ->
-                            !notice.contains("printed", ignoreCase = true) &&
-                                !notice.contains("sent", ignoreCase = true)
-                        }
-                        ?.let { notice ->
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFFFEF2F2)
-                            ) {
-                                Text(
-                                    notice,
-                                    modifier = Modifier.padding(12.dp),
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFB91C1C),
-                                    textAlign = TextAlign.Center
+                            if (showAdyenPaymentReceipt) {
+                                SuccessIconButton(
+                                    icon = Icons.Default.CreditCard,
+                                    label = stringResource(R.string.print_customer_card_receipt),
+                                    onClick = onPrintAdyenPaymentReceipt
                                 )
                             }
-                        }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    BoxWithConstraints(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.TopCenter
-                    ) {
-                        val qrDisplaySize = minOf(maxWidth, PosReceiptQrMaxDisplayDp)
-                        val qrDensity = LocalDensity.current
-                        val qrBitmapPx = with(qrDensity) {
-                            (qrDisplaySize * PosReceiptQrBitmapScale).roundToPx().coerceAtLeast(640)
-                        }
-                        val qrBitmap = remember(digitalUrl, qrBitmapPx) {
-                            digitalUrl?.let { qrGenerator.generateQrBitmap(it, qrBitmapPx) }
-                        }
-
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (qrBitmap != null) {
-                                Image(
-                                    bitmap = qrBitmap.asImageBitmap(),
-                                    contentDescription = stringResource(R.string.digital_receipt),
-                                    modifier = Modifier
-                                        .size(qrDisplaySize)
-                                        .clip(RoundedCornerShape(8.dp))
-                                )
-                                Text(
-                                    stringResource(R.string.scan_digital_receipt),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = OrderCompleteTextSecondary,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .padding(top = 8.dp)
-                                        .width(qrDisplaySize)
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.Receipt,
-                                    contentDescription = null,
-                                    tint = OrderCompleteTextSecondary,
-                                    modifier = Modifier.size(40.dp)
+                            if (showAdyenCashierReceipt) {
+                                SuccessIconButton(
+                                    icon = Icons.Default.Receipt,
+                                    label = stringResource(R.string.print_merchant_card_receipt),
+                                    onClick = onPrintAdyenCashierReceipt
                                 )
                             }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 64.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SuccessIconButton(
-                            icon = Icons.Default.Print,
-                            label = stringResource(R.string.print_receipt),
-                            onClick = onPrintReceipt
-                        )
-                        SuccessIconButton(
-                            icon = Icons.AutoMirrored.Filled.Send,
-                            label = stringResource(R.string.email_receipt),
-                            onClick = onShareEmail
-                        )
-                        if (showAdyenPaymentReceipt) {
                             SuccessIconButton(
-                                icon = Icons.Default.CreditCard,
-                                label = stringResource(R.string.print_customer_card_receipt),
-                                onClick = onPrintAdyenPaymentReceipt
+                                icon = Icons.AutoMirrored.Filled.ArrowForward,
+                                label = stringResource(R.string.done),
+                                primary = true,
+                                onClick = onDone
                             )
                         }
-                        if (showAdyenCashierReceipt) {
-                            SuccessIconButton(
-                                icon = Icons.Default.Receipt,
-                                label = stringResource(R.string.print_merchant_card_receipt),
-                                onClick = onPrintAdyenCashierReceipt
-                            )
-                        }
-                        SuccessIconButton(
-                            icon = Icons.AutoMirrored.Filled.ArrowForward,
-                            label = stringResource(R.string.done),
-                            primary = true,
-                            onClick = onDone
-                        )
                     }
                 }
             }

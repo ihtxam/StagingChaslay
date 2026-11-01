@@ -18,6 +18,13 @@ private const val KEY_SCALE_USER_SET = "scale_enabled_user_set"
 private const val KEY_SCALE_VALUE = "scale_enabled_value"
 private const val KEY_SCALE_USB_USER_SET = "scale_usb_user_set"
 private const val KEY_SCALE_USB_VALUE = "scale_usb_address_value"
+private const val KEY_RETAIL_DINE_IN_USER_SET = "retail_dine_in_user_set"
+private const val KEY_RETAIL_DINE_IN_VALUE = "retail_dine_in_value"
+private const val KEY_RETAIL_TAKEAWAY_USER_SET = "retail_takeaway_user_set"
+private const val KEY_RETAIL_TAKEAWAY_VALUE = "retail_takeaway_value"
+private const val KEY_RETAIL_DELIVERY_USER_SET = "retail_delivery_user_set"
+private const val KEY_RETAIL_DELIVERY_VALUE = "retail_delivery_value"
+private const val KEY_AFTER_SALE_GO_TO_ORDERS = "after_sale_go_to_orders"
 
 object PosLocalPrefs {
     private fun prefs(context: Context) =
@@ -71,6 +78,54 @@ object PosLocalPrefs {
         return p.getBoolean(KEY_TABLES_VALUE, current)
     }
 
+    fun saveRetailDineInEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_RETAIL_DINE_IN_USER_SET, true)
+            .putBoolean(KEY_RETAIL_DINE_IN_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetRetailDineInEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_RETAIL_DINE_IN_USER_SET, false)
+
+    fun applyRetailDineInEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_RETAIL_DINE_IN_USER_SET, false)) return current
+        return p.getBoolean(KEY_RETAIL_DINE_IN_VALUE, current)
+    }
+
+    fun saveRetailTakeawayEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_RETAIL_TAKEAWAY_USER_SET, true)
+            .putBoolean(KEY_RETAIL_TAKEAWAY_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetRetailTakeawayEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_RETAIL_TAKEAWAY_USER_SET, false)
+
+    fun applyRetailTakeawayEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_RETAIL_TAKEAWAY_USER_SET, false)) return current
+        return p.getBoolean(KEY_RETAIL_TAKEAWAY_VALUE, current)
+    }
+
+    fun saveRetailDeliveryEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_RETAIL_DELIVERY_USER_SET, true)
+            .putBoolean(KEY_RETAIL_DELIVERY_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetRetailDeliveryEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_RETAIL_DELIVERY_USER_SET, false)
+
+    fun applyRetailDeliveryEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_RETAIL_DELIVERY_USER_SET, false)) return current
+        return p.getBoolean(KEY_RETAIL_DELIVERY_VALUE, current)
+    }
+
     fun readEodIncludeProductsSold(context: Context): Boolean =
         prefs(context).getBoolean(KEY_EOD_INCLUDE_PRODUCTS, true)
 
@@ -83,6 +138,14 @@ object PosLocalPrefs {
 
     fun writeEodIncludeStaffBreakdown(context: Context, include: Boolean) {
         prefs(context).edit().putBoolean(KEY_EOD_INCLUDE_STAFF, include).apply()
+    }
+
+    /** When true, POS opens the Orders tab after the order-complete dialog is dismissed. */
+    fun readAfterSaleGoToOrders(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AFTER_SALE_GO_TO_ORDERS, false)
+
+    fun writeAfterSaleGoToOrders(context: Context, goToOrders: Boolean) {
+        prefs(context).edit().putBoolean(KEY_AFTER_SALE_GO_TO_ORDERS, goToOrders).apply()
     }
 
     /** Locally edited catalog prices — preserved across MERGE menu sync until REPLACE. */

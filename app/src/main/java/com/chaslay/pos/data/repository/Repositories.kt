@@ -936,14 +936,20 @@ class TransactionRepository @Inject constructor(
         fun netPayment(tx: TransactionEntity) =
             (tx.total - tx.refundAmount.coerceAtLeast(0.0)).coerceAtLeast(0.0)
 
-        val refundTotal = roundMoney(paidSales.sumOf { it.refundAmount.coerceAtLeast(0.0) })
+        val refundTotal = roundMoney(
+            paidSales.sumOf {
+                it.refundAmount.coerceAtLeast(0.0) + it.goodwillAmount.coerceAtLeast(0.0)
+            }
+        )
         val refundedOrders = paidSales
-            .filter { it.refundAmount > 0.0 }
+            .filter { it.refundAmount > 0.0 || it.goodwillAmount > 0.0 }
             .sortedByDescending { it.refundedAt ?: it.createdAt }
             .map {
                 RefundedOrderRow(
                     orderNumber = it.transactionNumber,
-                    refundAmount = roundMoney(it.refundAmount),
+                    refundAmount = roundMoney(
+                        it.refundAmount.coerceAtLeast(0.0) + it.goodwillAmount.coerceAtLeast(0.0)
+                    ),
                     refundReason = it.refundReason,
                     refundedAt = it.refundedAt
                 )
@@ -1330,6 +1336,18 @@ class SettingsRepository @Inject constructor(
             scaleUsbAddress = com.chaslay.pos.util.PosLocalPrefs.applyScaleUsbAddressIfUserSet(
                 appContext,
                 settings.scaleUsbAddress
+            ),
+            retailDineInEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailDineInEnabledIfUserSet(
+                appContext,
+                settings.retailDineInEnabled
+            ),
+            retailTakeawayEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailTakeawayEnabledIfUserSet(
+                appContext,
+                settings.retailTakeawayEnabled
+            ),
+            retailDeliveryEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailDeliveryEnabledIfUserSet(
+                appContext,
+                settings.retailDeliveryEnabled
             )
         )
     }
@@ -1367,6 +1385,21 @@ class SettingsRepository @Inject constructor(
         } else {
             settings.scaleUsbAddress
         }
+        val retailDineIn = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailDineInEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailDineInEnabledIfUserSet(appContext, settings.retailDineInEnabled)
+        } else {
+            settings.retailDineInEnabled
+        }
+        val retailTakeaway = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailTakeawayEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailTakeawayEnabledIfUserSet(appContext, settings.retailTakeawayEnabled)
+        } else {
+            settings.retailTakeawayEnabled
+        }
+        val retailDelivery = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailDeliveryEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailDeliveryEnabledIfUserSet(appContext, settings.retailDeliveryEnabled)
+        } else {
+            settings.retailDeliveryEnabled
+        }
         settingsDao.upsert(
             settings.copy(
                 id = 1,
@@ -1374,7 +1407,10 @@ class SettingsRepository @Inject constructor(
                 autoPrintReceipt = autoPrint,
                 tablesEnabled = tables,
                 scaleEnabled = scaleEnabled,
-                scaleUsbAddress = scaleUsb?.trim()?.takeIf { it.isNotEmpty() }
+                scaleUsbAddress = scaleUsb?.trim()?.takeIf { it.isNotEmpty() },
+                retailDineInEnabled = retailDineIn,
+                retailTakeawayEnabled = retailTakeaway,
+                retailDeliveryEnabled = retailDelivery
             )
         )
     }
@@ -1853,6 +1889,19 @@ class CartManager @Inject constructor(
                 deliveryAddress = null,
                 deliveryZip = null,
                 deliveryPhone = null
+            )
+        }
+    }
+
+    fun convertToDeliveryPreservingCart(orderNumber: String) {
+        _cart.update { cart ->
+            cart.copy(
+                fulfillmentType = FulfillmentType.DELIVERY,
+                orderNumber = orderNumber,
+                serviceType = ServiceType.TAKEAWAY,
+                tableId = null,
+                tableOrderId = null,
+                tableName = null
             )
         }
     }
@@ -2647,6 +2696,23 @@ class HeldOrderRepository @Inject constructor(
         heldOrderItemDao.deleteByOrder(id)
         if (items.isNotEmpty()) heldOrderItemDao.insertAll(items)
         return entity
+    }
+
+    /** Updates an existing held order snapshot; does not create a new held row. */
+    suspend fun updateHeldOrderIfExists(
+        cart: CartSummary,
+        userId: Long,
+        userName: String
+    ): Boolean {
+        val orderNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() } ?: return false
+        val existing = heldOrderDao.getByOrderNumber(orderNumber) ?: return false
+        createHeldOrder(
+            cart = cart,
+            sendToKitchen = existing.status == HeldOrderStatus.SENT_TO_KITCHEN,
+            userId = userId,
+            userName = userName
+        )
+        return true
     }
 
     suspend fun createProgrammedPayLaterOrder(

@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,11 +30,11 @@ import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Undo
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -95,6 +97,14 @@ fun EndOfDayReportScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         EndOfDayHeader(onPrint = onPrint)
+        EodPrintOptionsRow(
+            includeProductsOnPrint = includeProductsOnPrint,
+            onIncludeProductsOnPrintChange = onIncludeProductsOnPrintChange,
+            includeStaffBreakdownOnPrint = includeStaffBreakdownOnPrint,
+            onIncludeStaffBreakdownOnPrintChange = onIncludeStaffBreakdownOnPrintChange,
+            showStaffBreakdownToggle = showStaffBreakdownToggle,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+        )
         EodDateSelector(
             preset = eodDayPreset,
             customDayStartMs = eodCustomDayStartMs,
@@ -102,42 +112,6 @@ fun EndOfDayReportScreen(
             onCustomDaySelected = onEodCustomDaySelected,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 4.dp)
-                .clickable { onIncludeProductsOnPrintChange(!includeProductsOnPrint) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(
-                checked = includeProductsOnPrint,
-                onCheckedChange = onIncludeProductsOnPrintChange,
-            )
-            Text(
-                stringResource(R.string.eod_include_products_on_print),
-                fontSize = 13.sp,
-                color = ReportDashColors.TextPrimary,
-            )
-        }
-        if (showStaffBreakdownToggle) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 4.dp)
-                    .clickable { onIncludeStaffBreakdownOnPrintChange(!includeStaffBreakdownOnPrint) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = includeStaffBreakdownOnPrint,
-                    onCheckedChange = onIncludeStaffBreakdownOnPrintChange,
-                )
-                Text(
-                    stringResource(R.string.eod_include_staff_on_print),
-                    fontSize = 13.sp,
-                    color = ReportDashColors.TextPrimary,
-                )
-            }
-        }
         if (staffOptions.isNotEmpty()) {
             Text(
                 stringResource(R.string.eod_staff_picker_hint),
@@ -248,6 +222,56 @@ fun EndOfDayReportScreen(
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EodPrintOptionsRow(
+    includeProductsOnPrint: Boolean,
+    onIncludeProductsOnPrintChange: (Boolean) -> Unit,
+    includeStaffBreakdownOnPrint: Boolean,
+    onIncludeStaffBreakdownOnPrintChange: (Boolean) -> Unit,
+    showStaffBreakdownToggle: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        EodPrintSwitch(
+            checked = includeProductsOnPrint,
+            onCheckedChange = onIncludeProductsOnPrintChange,
+            label = stringResource(R.string.eod_include_products_on_print),
+        )
+        if (showStaffBreakdownToggle) {
+            EodPrintSwitch(
+                checked = includeStaffBreakdownOnPrint,
+                onCheckedChange = onIncludeStaffBreakdownOnPrintChange,
+                label = stringResource(R.string.eod_include_staff_on_print),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EodPrintSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    label: String,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 2.dp),
+    ) {
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Text(
+            label,
+            fontSize = 13.sp,
+            color = ReportDashColors.TextPrimary,
+            modifier = Modifier.padding(start = 4.dp),
+        )
     }
 }
 

@@ -1396,6 +1396,15 @@ class SettingsViewModel @Inject constructor(
             if (settings.scaleUsbAddress != previous.scaleUsbAddress) {
                 com.chaslay.pos.util.PosLocalPrefs.saveScaleUsbAddress(appContext, settings.scaleUsbAddress)
             }
+            if (settings.retailDineInEnabled != previous.retailDineInEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailDineInEnabled(appContext, settings.retailDineInEnabled)
+            }
+            if (settings.retailTakeawayEnabled != previous.retailTakeawayEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailTakeawayEnabled(appContext, settings.retailTakeawayEnabled)
+            }
+            if (settings.retailDeliveryEnabled != previous.retailDeliveryEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailDeliveryEnabled(appContext, settings.retailDeliveryEnabled)
+            }
             settingsRepository.saveSettings(settings)
             currentSettings = settings
             val terminalSync = if (previous.terminalSyncPayloadChanged(settings)) {

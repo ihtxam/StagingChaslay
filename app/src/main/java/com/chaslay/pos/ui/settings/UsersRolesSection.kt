@@ -31,7 +31,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -39,6 +38,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +58,8 @@ import com.chaslay.pos.ui.theme.vectronColors
 
 private val AccentTeal = Color(0xFF00897B)
 
+private enum class UsersRolesSubTab { Users, Roles }
+
 @Composable
 fun UsersRolesSection(
     canManageRoles: Boolean,
@@ -63,6 +67,7 @@ fun UsersRolesSection(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = vectronColors()
+    var selectedTab by remember { mutableStateOf(UsersRolesSubTab.Users) }
 
     LaunchedEffect(state.message) {
         state.message?.let {
@@ -87,158 +92,182 @@ fun UsersRolesSection(
             Text(it, color = AccentTeal, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = viewModel::openNewUser,
-                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.add_user))
+        if (canManageRoles) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = selectedTab == UsersRolesSubTab.Users,
+                    onClick = { selectedTab = UsersRolesSubTab.Users },
+                    label = { Text(stringResource(R.string.settings_users_tab)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AccentTeal,
+                        selectedLabelColor = Color.White
+                    )
+                )
+                FilterChip(
+                    selected = selectedTab == UsersRolesSubTab.Roles,
+                    onClick = { selectedTab = UsersRolesSubTab.Roles },
+                    label = { Text(stringResource(R.string.settings_roles_tab)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AccentTeal,
+                        selectedLabelColor = Color.White
+                    )
+                )
             }
-            if (canManageRoles) {
-                OutlinedButton(onClick = viewModel::openNewRole) {
+        }
+
+        when {
+            !canManageRoles || selectedTab == UsersRolesSubTab.Users -> {
+                Button(
+                    onClick = viewModel::openNewUser,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(stringResource(R.string.add_user))
+                }
+                Text(
+                    stringResource(R.string.users_list),
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary,
+                    fontSize = 15.sp
+                )
+                if (state.users.isEmpty()) {
+                    Text(
+                        stringResource(R.string.no_users_yet),
+                        color = colors.textSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+                state.users.forEach { row ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = colors.panelLight),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(AccentTeal.copy(alpha = 0.18f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = AccentTeal,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    row.user.name,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary,
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    buildString {
+                                        append(row.roleName)
+                                        if (!row.user.isActive) append(" · inactive")
+                                    },
+                                    fontSize = 12.sp,
+                                    color = if (row.user.isActive) colors.textSecondary else Color(0xFFE57373)
+                                )
+                                row.user.email?.takeIf { it.isNotBlank() }?.let {
+                                    Text(it, fontSize = 11.sp, color = colors.textSecondary)
+                                }
+                            }
+                            IconButton(onClick = { viewModel.openEditUser(row.user) }) {
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit), tint = AccentTeal)
+                            }
+                        }
+                    }
+                }
+            }
+
+            selectedTab == UsersRolesSubTab.Roles -> {
+                Button(
+                    onClick = viewModel::openNewRole,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.add_role))
                 }
-            }
-        }
-
-        Text(
-            stringResource(R.string.users_list),
-            fontWeight = FontWeight.SemiBold,
-            color = colors.textPrimary,
-            fontSize = 15.sp
-        )
-        if (state.users.isEmpty()) {
-            Text(
-                stringResource(R.string.no_users_yet),
-                color = colors.textSecondary,
-                fontSize = 13.sp
-            )
-        }
-        state.users.forEach { row ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = colors.panelLight),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(AccentTeal.copy(alpha = 0.18f)),
-                        contentAlignment = Alignment.Center
+                Text(
+                    stringResource(R.string.roles_list),
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary,
+                    fontSize = 15.sp
+                )
+                state.roles.forEach { role ->
+                    val perms = PosPermission.decode(role.permissions)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = colors.panelLight)
                     ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            tint = AccentTeal,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            row.user.name,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            buildString {
-                                append(row.roleName)
-                                if (!row.user.isActive) append(" · inactive")
-                            },
-                            fontSize = 12.sp,
-                            color = if (row.user.isActive) colors.textSecondary else Color(0xFFE57373)
-                        )
-                        row.user.email?.takeIf { it.isNotBlank() }?.let {
-                            Text(it, fontSize = 11.sp, color = colors.textSecondary)
-                        }
-                    }
-                    IconButton(onClick = { viewModel.openEditUser(row.user) }) {
-                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit), tint = AccentTeal)
-                    }
-                }
-            }
-        }
-
-        if (canManageRoles) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                stringResource(R.string.roles_list),
-                fontWeight = FontWeight.SemiBold,
-                color = colors.textPrimary,
-                fontSize = 15.sp
-            )
-            state.roles.forEach { role ->
-                val perms = PosPermission.decode(role.permissions)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.panelLight)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
+                        Row(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF5C6BC0).copy(alpha = 0.18f)),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Security,
-                                contentDescription = null,
-                                tint = Color(0xFF5C6BC0),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                role.name,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textPrimary,
-                                fontSize = 15.sp
-                            )
-                            Text(
-                                if (perms.isEmpty()) "No permissions"
-                                else "${perms.size} permission(s)",
-                                fontSize = 12.sp,
-                                color = colors.textSecondary
-                            )
-                            Text(
-                                perms.take(4).joinToString(", ") { it.name.replace('_', ' ') } +
-                                    if (perms.size > 4) "…" else "",
-                                fontSize = 11.sp,
-                                color = colors.textSecondary,
-                                maxLines = 2
-                            )
-                        }
-                        IconButton(onClick = { viewModel.openEditRole(role) }) {
-                            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit), tint = AccentTeal)
-                        }
-                        if (!role.isSystem) {
-                            IconButton(onClick = { viewModel.deleteRole(role.id) }) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF5C6BC0).copy(alpha = 0.18f)),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.delete),
-                                    tint = Color(0xFFE57373)
+                                    Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = Color(0xFF5C6BC0),
+                                    modifier = Modifier.size(22.dp)
                                 )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    role.name,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary,
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    if (perms.isEmpty()) "No permissions"
+                                    else "${perms.size} permission(s)",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
+                                Text(
+                                    perms.take(4).joinToString(", ") { it.name.replace('_', ' ') } +
+                                        if (perms.size > 4) "…" else "",
+                                    fontSize = 11.sp,
+                                    color = colors.textSecondary,
+                                    maxLines = 2
+                                )
+                            }
+                            IconButton(onClick = { viewModel.openEditRole(role) }) {
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit), tint = AccentTeal)
+                            }
+                            if (!role.isSystem) {
+                                IconButton(onClick = { viewModel.deleteRole(role.id) }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = stringResource(R.string.delete),
+                                        tint = Color(0xFFE57373)
+                                    )
+                                }
                             }
                         }
                     }

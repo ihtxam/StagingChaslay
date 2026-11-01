@@ -162,7 +162,7 @@
     <string name="app_version">App-Version</string>
     <string name="app_version_format">%1$s (%2$d)</string>
     <string name="edit">Bearbeiten</string>
-    <string name="new_order">Rahmen</string>
+    <string name="new_order">Neue Bestellung</string>
     <string name="new_short">NEU</string>
     <string name="clear_cart_confirm">Den gesamten Warenkorb leeren? Alle Artikel werden entfernt.</string>
     <string name="pickup">Zum Mitnehmen</string>
@@ -221,6 +221,9 @@
     <string name="invoice_offline_queued">Rechnung offline gespeichert. PDF wird online erzeugt.</string>
     <string name="pos_register">Kasse</string>
     <string name="pos_orders">Bestellungen</string>
+    <string name="after_sale_destination_cd">Ziel nach Verkauf</string>
+    <string name="after_sale_register">Nach Verkauf: Kasse</string>
+    <string name="after_sale_orders">Nach Verkauf: Bestellungen</string>
     <string name="product_grid_images">Img</string>
     <string name="product_grid_images_cd">Produktbilder anzeigen</string>
     <string name="product_grid_sort_alpha">A-Z</string>
@@ -324,6 +327,13 @@
     <string name="switch_to_takeaway">Auf Mitnahme wechseln</string>
     <string name="switch_to_dine_in">Auf Vor-Ort wechseln</string>
     <string name="cancel_order_reason_prompt">Grund für die Stornierung wählen:</string>
+    <string name="cancel_reason_could_not_process">Bestellung konnte nicht bearbeitet werden</string>
+    <string name="cancel_reason_kitchen_busy">Küche überlastet</string>
+    <string name="cancel_reason_client">Stornierung durch Kunde</string>
+    <string name="cancel_reason_out_of_stock">Nicht auf Lager</string>
+    <string name="cancel_reason_wrong_order">Falsche Bestellung erfasst</string>
+    <string name="cancel_reason_other">Sonstiges</string>
+    <string name="switch_to_delivery">Auf Lieferung wechseln</string>
     <string name="create_customer">Erstellen</string>
     <string name="search_customers">Kunden suchen</string>
     <string name="discard">Verwerfen</string>
@@ -412,8 +422,8 @@
     <string name="use_for_kitchen">Verwendung für die Küche</string>
     <string name="end_of_day">Tagesabschluss</string>
     <string name="print_end_of_day">Tagesabschlussbericht drucken</string>
-    <string name="eod_include_products_on_print">Produktaufschlüsselung auf dem Tagesabschluss-Druck</string>
-    <string name="eod_include_staff_on_print">Mitarbeiter-Umsätze auf dem Tagesabschluss-Druck</string>
+    <string name="eod_include_products_on_print">Produktdetails einbeziehen</string>
+    <string name="eod_include_staff_on_print">Mitarbeiter-Verkaufsdaten hinzufügen</string>
     <string name="eod_company_wide">Gesamtunternehmen</string>
     <string name="eod_pick_date">Datum wählen</string>
     <string name="eod_staff_picker_hint">Mitarbeiter wählen für dessen Tagesabschluss, oder Gesamtunternehmen für den Laden.</string>
@@ -507,6 +517,9 @@
     <string name="scan_barcode">Barcode abscannen</string>
     <string name="camera_permission_required">Für das Scannen von Barcodes ist eine Kameraberechtigung erforderlich.</string>
     <string name="barcode_not_found">Kein Produkt für Barcode %1$s gefunden</string>
+    <string name="pos_scan_create_product_title">Produkt aus Scan anlegen</string>
+    <string name="pos_scan_create_product_hint">Barcode „%1$s“ ist noch nicht im Katalog.</string>
+    <string name="pos_scan_create_product_created">Produkt angelegt und in den Warenkorb gelegt</string>
     <string name="scan_at_checkout">Artikel Scannen</string>
     <string name="category">Kategorie</string>
     <string name="tax_rate">Steuersatz (%)</string>
@@ -569,6 +582,8 @@
     <string name="yes">Ja</string>
     <string name="users_accounts">tigte Nutzer / Rollen</string>
     <string name="users_accounts_help">Erstellen Sie Mitarbeiterkonten mit POS-PINs, weisen Sie Rollen zu und setzen Sie Passwörter zurück.</string>
+    <string name="settings_users_tab">Benutzer</string>
+    <string name="settings_roles_tab">Rollen</string>
     <string name="users_list">Personalkonten</string>
     <string name="roles_list">Rollen &amp; Berechtigungen</string>
     <string name="add_user">Benutzer hinzufügen</string>

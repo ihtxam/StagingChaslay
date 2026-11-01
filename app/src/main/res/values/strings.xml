@@ -363,6 +363,13 @@
     <string name="switch_to_takeaway">Switch to takeaway</string>
     <string name="switch_to_dine_in">Switch to dine-in</string>
     <string name="cancel_order_reason_prompt">Select a reason for cancelling this order:</string>
+    <string name="cancel_reason_could_not_process">Could not process order</string>
+    <string name="cancel_reason_kitchen_busy">Kitchen too busy</string>
+    <string name="cancel_reason_client">Client cancellation</string>
+    <string name="cancel_reason_out_of_stock">Out of stock</string>
+    <string name="cancel_reason_wrong_order">Wrong order entered</string>
+    <string name="cancel_reason_other">Other</string>
+    <string name="switch_to_delivery">Switch to delivery</string>
     <string name="cancel_order_confirm">Are you sure you want to cancel this order?</string>
     <string name="cancel_requires_kitchen_or_receipt">Send to kitchen or print a receipt before cancelling.</string>
     <string name="create_customer">Create</string>
@@ -470,6 +477,11 @@
     <string name="next_bill">Next</string>
     <string name="bills_paid_count">%1$d of %2$d paid</string>
     <string name="add_to_new_bill">Add To New Bill</string>
+    <string name="add_to_here">Add to here</string>
+    <string name="split_product">Split product</string>
+    <string name="split_by_seat">Split by seat</string>
+    <string name="split_reset">Reset</string>
+    <string name="split_bill_empty">No items on this bill</string>
     <string name="pay_bill">Pay Bill</string>
     <string name="split_parts">Number of parts</string>
     <string name="done">Done</string>
@@ -488,8 +500,8 @@
     <string name="daily_sales">Daily Sales</string>
     <string name="product_sales">Product Sales</string>
     <string name="user_performance">User Performance</string>
-    <string name="eod_include_products_on_print">Include product breakdown on EOD print</string>
-    <string name="eod_include_staff_on_print">Include staff sales breakdown on EOD print</string>
+    <string name="eod_include_products_on_print">Include detail for products</string>
+    <string name="eod_include_staff_on_print">Add employee sales data</string>
     <string name="eod_company_wide">Company-wide</string>
     <string name="eod_pick_date">Pick date</string>
     <string name="eod_staff_picker_hint">Select staff to view or print one person\'s EOD, or company-wide for the whole store.</string>
@@ -541,6 +553,9 @@
     <string name="scan_barcode">Scan barcode</string>
     <string name="camera_permission_required">Camera permission is required to scan barcodes.</string>
     <string name="barcode_not_found">No product found for barcode %1$s</string>
+    <string name="pos_scan_create_product_title">Create product from scan</string>
+    <string name="pos_scan_create_product_hint">Barcode “%1$s” is not in your catalog yet.</string>
+    <string name="pos_scan_create_product_created">Product created and added to cart</string>
     <string name="scan_at_checkout">Scan items</string>
     <string name="category">Category</string>
     <string name="tax_rate">Tax Rate (%)</string>
@@ -695,6 +710,8 @@
     <string name="yes">Yes</string>
     <string name="users_accounts">Users &amp; roles</string>
     <string name="users_accounts_help">Create staff accounts with POS PINs, assign roles, and reset passwords.</string>
+    <string name="settings_users_tab">Users</string>
+    <string name="settings_roles_tab">Roles</string>
     <string name="users_list">Staff accounts</string>
     <string name="no_users_yet">No users yet. Tap Add user to create one.</string>
     <string name="roles_list">Roles &amp; permissions</string>
@@ -937,6 +954,9 @@
     <string name="product_grid_columns">%1$d col</string>
     <string name="product_grid_columns_cd">Change grid column count</string>
     <string name="product_grid_filters_cd">Product filters</string>
+    <string name="after_sale_destination_cd">After sale destination</string>
+    <string name="after_sale_register">After sale: Register</string>
+    <string name="after_sale_orders">After sale: Orders</string>
     <string name="cart_fulfillment_summary">%1$s · %2$s</string>
     <string name="waiter_tables">Tables</string>
     <string name="waiter_order">Order</string>

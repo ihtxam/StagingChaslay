@@ -44,6 +44,7 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
     const total = Number(body.total ?? subtotal + taxTotal);
     const discountAmount = Number(body.discount_amount ?? body.item_discount_total ?? 0);
     const tipAmount = Number(body.tip_amount ?? body.tipAmount ?? 0);
+    const roundingAmount = Number(body.rounding_amount ?? body.roundingAmount ?? 0);
     const paymentMethod = String(body.payment_method || "cash").toLowerCase();
     const isPending =
       paymentMethod === "pending" ||
@@ -64,11 +65,16 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
         orderNumber,
         paymentMethod,
         paymentBreakdown: paymentBreakdown?.length ? paymentBreakdown : undefined,
-        paymentStatus: isPending ? "awaiting_payment" : "completed",
+        paymentStatus:
+          body.payment_status ||
+          body.paymentStatus ||
+          (isPending ? "awaiting_payment" : "completed"),
+        status: body.status || (isPending ? "preparing" : "completed"),
         subtotal,
         taxAmount: taxTotal,
         discountAmount,
         tipAmount,
+        roundingAmount,
         total,
         completedAt: body.created_at || Date.now(),
         fulfillmentChannel: body.fulfillmentChannel || body.fulfillment_channel || undefined,
@@ -80,7 +86,28 @@ router.post("/", requireChaslayApiKey, async (req: Request, res: Response) => {
         customerPhone: body.customer_phone || body.customerPhone || null,
         customerEmail: body.customer_email || body.customerEmail || null,
         shippingAddress: body.shipping_address || body.shippingAddress || null,
+        staffName: body.staff_name || body.staffName || null,
+        tableId: body.table_id || body.tableId || null,
+        notes: body.notes || undefined,
+        masterOrderId: body.master_order_id || body.masterOrderId || null,
+        splitCheckNumber:
+          body.split_check_number != null
+            ? Number(body.split_check_number)
+            : body.splitCheckNumber != null
+              ? Number(body.splitCheckNumber)
+              : null,
+        splitPartCount:
+          body.split_part_count != null
+            ? Number(body.split_part_count)
+            : body.splitPartCount != null
+              ? Number(body.splitPartCount)
+              : null,
+        adyenCustomerReceiptJson:
+          body.adyen_customer_receipt_json || body.adyenCustomerReceiptJson || null,
+        adyenCashierReceiptJson:
+          body.adyen_cashier_receipt_json || body.adyenCashierReceiptJson || null,
         items: items.map((item: any) => ({
+          productClientId: item.product_client_id || item.productClientId || undefined,
           productName: item.product_name || item.productName || "Item",
           quantity: Number(item.quantity || 1),
           unitPrice: Number(item.unit_price ?? item.unitPrice ?? 0),
