@@ -400,8 +400,9 @@ export default function WebPosProductArea({
         </div>
       </div>
 
+      <div className="webpos-register-stack">
       <div
-        className="webpos-product-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2 pb-3 touch-pan-y"
+        className="webpos-product-scroll min-h-0 overflow-y-auto overscroll-y-contain px-3 py-2 pb-3 touch-pan-y"
         data-webpos-product-grid="1"
         onClick={() => onBackgroundClick?.()}
       >
@@ -526,7 +527,7 @@ export default function WebPosProductArea({
           expressCheckout && (showCash || showCard || showTerminal) && !!onExpressPay;
         if (!hasQuickPay) return null;
         return (
-          <div className="shrink-0 border-t border-stone-200 bg-white p-3">
+          <div className="webpos-express-dock shrink-0 border-t border-stone-200 bg-white p-3">
             <div className="flex items-stretch gap-2">
               <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
                 {hasQuickPay && showCash ? (
@@ -567,6 +568,8 @@ export default function WebPosProductArea({
           </div>
         );
       })()}
+      <div className="webpos-register-tail-spacer" aria-hidden="true" />
+      </div>
     </section>
   );
 }

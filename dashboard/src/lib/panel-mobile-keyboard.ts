@@ -54,6 +54,44 @@ function clearKeyboardPin(root: HTMLElement): void {
   document.body.style.removeProperty('overflow');
 }
 
+export function clearWebPosVisualViewport(): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.style.removeProperty('--webpos-vvh');
+  root.style.removeProperty('--webpos-vv-top');
+}
+
+/** Pin POS shell height to the visual viewport (not a stale layout viewport). */
+export function syncWebPosVisualViewport(): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (!root.classList.contains('webpos-lock')) {
+    clearWebPosVisualViewport();
+    return;
+  }
+  const vv = window.visualViewport;
+  if (!vv) {
+    clearWebPosVisualViewport();
+    return;
+  }
+  root.style.setProperty('--webpos-vvh', `${Math.round(vv.height)}px`);
+  const top = Math.round(vv.offsetTop);
+  if (isIosVisualViewportPin() && top > 0) {
+    root.style.setProperty('--webpos-vv-top', `${top}px`);
+  } else {
+    root.style.removeProperty('--webpos-vv-top');
+  }
+}
+
+/** Drop a Settings keyboard pin and any stuck document scroll before POS paints. */
+export function releasePanelViewportOffset(): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.remove('panel-vv-sync');
+  clearKeyboardPin(root);
+  resetPanelViewportScroll();
+}
+
 export function isPanelMobileViewportPath(pathname: string): boolean {
   const p = pathname || '';
   if (!/^\/(merchant|reseller|superadmin)(\/|$)/.test(p)) return false;
@@ -78,19 +116,15 @@ export function syncPanelVisualViewportHeight(): void {
   if (pin) {
     root.classList.add('panel-kb-open');
     root.style.setProperty('--panel-vvh', `${Math.round(vv.height)}px`);
-    root.style.setProperty('--panel-vv-top', `${Math.round(vv.offsetTop)}px`);
-    root.style.setProperty('--panel-vv-left', `${Math.round(vv.offsetLeft)}px`);
-    root.style.setProperty('--panel-vvw', `${Math.round(vv.width)}px`);
+    root.style.removeProperty('--panel-vv-top');
+    root.style.removeProperty('--panel-vv-left');
     document.body.style.overflow = 'hidden';
     return;
   }
-  const wasPinned = root.classList.contains('panel-kb-open');
   clearKeyboardPin(root);
   // A focused field on Settings can scroll the layout viewport. That offset
   // stays after opening POS and looks like padding on the left and top.
-  if (wasPinned || window.scrollX > 1 || window.scrollY > 1) {
-    resetPanelViewportScroll();
-  }
+  resetPanelViewportScroll();
 }
 
 export function bindPanelMobileViewport(): () => void {
@@ -120,5 +154,36 @@ export function bindPanelMobileViewport(): () => void {
     window.visualViewport?.removeEventListener('scroll', onChange);
     window.removeEventListener('resize', onChange);
     document.removeEventListener('focusout', onFocusOut, true);
+  };
+}
+
+/** POS must not keep a document scroll left behind by the Settings gear. */
+export function bindWebPosScrollLock(): () => void {
+  if (typeof window === 'undefined') return () => {};
+  releasePanelViewportOffset();
+  const snap = () => {
+    syncWebPosVisualViewport();
+    if (
+      window.scrollX > 1 ||
+      window.scrollY > 1 ||
+      document.documentElement.scrollTop > 1 ||
+      document.documentElement.scrollLeft > 1 ||
+      document.body.scrollTop > 1 ||
+      document.body.scrollLeft > 1
+    ) {
+      resetPanelViewportScroll();
+    }
+  };
+  snap();
+  window.addEventListener('scroll', snap, true);
+  window.addEventListener('resize', snap);
+  window.visualViewport?.addEventListener('scroll', snap);
+  window.visualViewport?.addEventListener('resize', snap);
+  return () => {
+    window.removeEventListener('scroll', snap, true);
+    window.removeEventListener('resize', snap);
+    window.visualViewport?.removeEventListener('scroll', snap);
+    window.visualViewport?.removeEventListener('resize', snap);
+    clearWebPosVisualViewport();
   };
 }

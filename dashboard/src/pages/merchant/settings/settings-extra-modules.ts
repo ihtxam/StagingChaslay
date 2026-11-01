@@ -225,26 +225,25 @@ export function isLicensedSettingsAddonTab(
   settings: MerchantAddonSettings | null | undefined,
   ctx: ExtraModuleContext
 ): boolean {
-  if (!settings) return false;
   switch (tabId) {
     case 'kiosk':
-      return isKioskLicensed(settings);
+      return settings ? isKioskLicensed(settings) : false;
     case 'signage':
-      return isSignageLicensed(settings);
+      return settings ? isSignageLicensed(settings) : false;
     case 'phone':
-      return isPhoneOrderingLicensed(settings);
+      return settings ? isPhoneOrderingLicensed(settings) : false;
     case 'sms':
-      return isSmsLicensed(settings);
+      return settings ? isSmsLicensed(settings) : false;
     case 'accounting':
-      return isAccountingLicensed(settings);
+      return settings ? isAccountingLicensed(settings) : false;
     case 'kds':
-      return isKdsLicensed(settings);
+      return settings ? isKdsLicensed(settings) : false;
     case 'ods':
-      return isOdsLicensed(settings);
+      return settings ? isOdsLicensed(settings) : false;
     case 'como':
-      return isComoLicensed(settings);
+      return settings ? isComoLicensed(settings) : false;
     case 'fiscal':
-      return isFiskalyLicensed(settings);
+      return settings ? isFiskalyLicensed(settings) : false;
     default:
       return true;
   }

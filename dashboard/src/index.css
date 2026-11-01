@@ -159,10 +159,12 @@ button {
     }
 
     html.panel-vv-sync.panel-kb-open .panel-shell {
+      /* Stay in the top-left corner. top/left from visualViewport.offset*
+         stuck as a gap on Settings and then on POS after the keyboard closed. */
       position: fixed;
-      top: var(--panel-vv-top, 0px);
-      left: var(--panel-vv-left, 0px);
-      width: var(--panel-vvw, 100%);
+      top: 0;
+      left: 0;
+      width: 100%;
       height: var(--panel-vvh, 100dvh);
       max-height: var(--panel-vvh, 100dvh);
       right: auto;
@@ -284,9 +286,34 @@ button {
     max-width: 100%;
     overflow: hidden;
     height: 100%;
-    height: 100dvh;
+    height: var(--webpos-vvh, 100dvh);
+    margin: 0;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+
+  /* A leftover document scroll from Settings shows as padding on the left and top. */
+  html.webpos-lock,
+  html.webpos-lock body {
+    position: fixed;
+    top: var(--webpos-vv-top, 0px);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: var(--webpos-vvh, 100dvh);
+  }
+
+  html.webpos-lock #root {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  html.webpos-lock .panel-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100% !important;
+    max-height: 100% !important;
   }
 
   .webpos-shell {
@@ -336,16 +363,16 @@ button {
    * Compensate layout box so Pay / cart dock stay inside 100dvh.
    */
   .webpos-shell.webpos-shell--fill {
-    height: calc(100dvh / var(--webpos-zoom));
+    height: calc(var(--webpos-vvh, 100dvh) / var(--webpos-zoom));
     /* 100vw includes the scrollbar and scrolls the document, which sticks as a
        left/top gap after leaving Settings. Fill the parent instead. */
     width: calc(100% / var(--webpos-zoom));
     max-width: 100%;
-    max-height: calc(100dvh / var(--webpos-zoom));
+    max-height: calc(var(--webpos-vvh, 100dvh) / var(--webpos-zoom));
   }
   .webpos-shell.webpos-shell--embedded {
-    height: calc((100dvh - 4rem) / var(--webpos-zoom));
-    max-height: calc((100dvh - 4rem) / var(--webpos-zoom));
+    height: calc((var(--webpos-vvh, 100dvh) - 4rem) / var(--webpos-zoom));
+    max-height: calc((var(--webpos-vvh, 100dvh) - 4rem) / var(--webpos-zoom));
   }
 
   /* WebPOS toast stack — center-top column only; wrappers must not block top-bar clicks */
@@ -885,6 +912,28 @@ button {
     overscroll-behavior-y: contain;
     touch-action: pan-y;
     transform: translateZ(0);
+  }
+
+  /*
+   * Register: keep Cash/Card docked under the product grid. Extra viewport
+   * space goes below the express bar, not as a dead zone above it.
+   */
+  .webpos-register-stack {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 0%;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .webpos-register-stack .webpos-product-scroll {
+    flex: 0 1 auto;
+    max-height: calc(100% - var(--webpos-express-dock, 4.75rem));
+  }
+
+  .webpos-register-tail-spacer {
+    flex: 1 1 0%;
+    min-height: 0;
   }
 
   /* Self-order kiosk — portrait 23" / 27" touch screens (1080×1920 typical) */
@@ -1800,8 +1849,8 @@ button {
       zoom: 1;
       width: 100% !important;
       max-width: 100%;
-      height: 100dvh !important;
-      max-height: 100dvh !important;
+      height: var(--webpos-vvh, 100dvh) !important;
+      max-height: var(--webpos-vvh, 100dvh) !important;
       overflow: hidden;
     }
   }

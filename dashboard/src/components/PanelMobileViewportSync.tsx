@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { bindPanelMobileViewport, isPanelMobileViewportPath } from '@/lib/panel-mobile-keyboard';
+import {
+  bindPanelMobileViewport,
+  isPanelMobileViewportPath,
+  releasePanelViewportOffset,
+} from '@/lib/panel-mobile-keyboard';
 
 /** Keep merchant / reseller / superadmin panel height aligned with iOS visual viewport. */
 export default function PanelMobileViewportSync() {
@@ -8,7 +12,10 @@ export default function PanelMobileViewportSync() {
   const active = isPanelMobileViewportPath(pathname);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      releasePanelViewportOffset();
+      return;
+    }
     return bindPanelMobileViewport();
   }, [active]);
 

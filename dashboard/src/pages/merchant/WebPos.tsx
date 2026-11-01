@@ -2684,6 +2684,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const suitable = listSuitablePrinters(printers);
       const only = suitable[0]?.name;
       if (!only || bridgeAutoConfigRef.current) return;
+      const savedOther = (printSettings?.printers || []).some((p) => {
+        const saved = String(p.name || '').trim();
+        return !!saved && saved !== only;
+      });
+      // A one-printer scan (USB unplugged for a moment, only the remembered LAN host
+      // left) must not replace the printer the merchant already chose.
+      if (savedOther) return;
       bridgeAutoConfigRef.current = true;
       const next = buildPrinterProfileUpdate(printSettings, only);
       void applyBridgePrinterSetup({ printerName: only, printSettings: next }).then(() => {
