@@ -1,0 +1,1 @@
+import{ks as i}from"./index-Cz49-jji.js";import{l as p,g as s,q as o}from"./auto-accept-order-arrival-B1YXn4UU.js";async function f(e,t,n,c){const r=o(e,t,n,s());!r.printKitchen&&!r.printReceipt&&!r.printDeliveryReceipt||await i(r)}async function u(e,t,n,c){const r=p(e,t,n,s());r.printKitchen&&await i(r)}export{f as a,u as p};
