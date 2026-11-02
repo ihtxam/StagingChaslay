@@ -194,16 +194,23 @@ export default function WebPosCustomAmountModal({
   }, [scaleActive, agentOk, liveWeightKg, scaleMsg, t]);
 
   return (
-    <WebPosKeypadModalShell open={open} onClose={onClose} title={t('webPosCustomAmount')} subtitle={subtitle}>
-      <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-right">
-        <p className="text-2xl font-bold tabular-nums">{display}</p>
+    <WebPosKeypadModalShell
+      open={open}
+      onClose={onClose}
+      title={t('webPosCustomAmount')}
+      subtitle={subtitle}
+      size="lg"
+      onEnter={confirm}
+    >
+      <div className="rounded-xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-bg,var(--bg))] px-5 py-4 text-right">
+        <p className="text-3xl font-bold tabular-nums text-[var(--webpos-text,var(--text))]">{display}</p>
         {weighedMode ? (
-          <p className="mt-1 text-sm font-semibold tabular-nums text-stone-600">
+          <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--webpos-text-muted,var(--text-muted))]">
             = CHF {lineTotal.toFixed(2)}
           </p>
         ) : null}
         {scaleHint ? (
-          <p className="mt-2 text-left text-xs text-stone-500">{scaleHint}</p>
+          <p className="mt-2 text-left text-xs text-[var(--webpos-text-muted,var(--text-muted))]">{scaleHint}</p>
         ) : null}
       </div>
       <WebPosNumericKeypad
@@ -217,17 +224,17 @@ export default function WebPosCustomAmountModal({
         showSignToggle={false}
         hideApply
       />
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
-          className="rounded-lg border border-stone-200 py-3 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+          className="rounded-lg border border-[var(--webpos-border,var(--border))] py-3.5 text-sm font-semibold text-[var(--webpos-text,var(--text))] hover:bg-[var(--webpos-surface-2,var(--bg-muted))]"
           onClick={() => setBuffer('')}
         >
           {t('clear')}
         </button>
         <button
           type="button"
-          className="webpos-accent-btn rounded-lg py-3 text-sm font-semibold disabled:opacity-40"
+          className="webpos-accent-btn rounded-lg py-3.5 text-sm font-semibold disabled:opacity-40"
           disabled={lineTotal <= 0}
           onClick={confirm}
         >

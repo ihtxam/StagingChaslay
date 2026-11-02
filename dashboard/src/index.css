@@ -1776,6 +1776,29 @@ button {
 
   .webpos-keypad-modal {
     max-width: 28rem;
+    min-width: min(100%, 18rem);
+  }
+
+  .webpos-keypad-modal--lg {
+    max-width: min(36rem, 96vw);
+    min-width: min(100%, 20rem);
+  }
+
+  .webpos-keypad-modal--lg .webpos-keypad-key {
+    min-height: 3.25rem;
+    font-size: 1.25rem;
+  }
+
+  .product-edit-page,
+  .merchant-product-editor-modal {
+    color: var(--text);
+  }
+
+  .product-edit-page .field-input,
+  .merchant-product-editor-modal .field-input {
+    background: var(--bg-elevated);
+    color: var(--text);
+    border-color: var(--border);
   }
 
   .webpos-mobile-pay-cart {

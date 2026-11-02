@@ -1,0 +1,1 @@
+import{ku as i}from"./index-HEVq6_jy.js";import{l as s,g as c,q as o}from"./auto-accept-order-arrival-_F-fzxUa.js";async function d(e,t,n,p){const r=o(e,t,n,c());!r.printKitchen&&!r.printReceipt&&!r.printDeliveryReceipt||await i(r)}async function f(e,t,n,p){const r=s(e,t,n,c());r.printKitchen&&await i(r)}export{d as a,f as p};

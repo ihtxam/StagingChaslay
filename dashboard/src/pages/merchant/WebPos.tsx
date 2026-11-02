@@ -238,6 +238,7 @@ import {
 import { publishSunmiCustomerLcd } from '@/lib/sunmi-lcd-sync';
 import WebPosOrdersPanel from '@/components/WebPosOrdersPanel';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
+import WebPosOpenPriceModal from '@/components/webpos/WebPosOpenPriceModal';
 import WebPosWeightModal from '@/components/webpos/WebPosWeightModal';
 import WebPosScanCreateProductModal from '@/components/webpos/WebPosScanCreateProductModal';
 import WebPosCustomAmountModal from '@/components/webpos/WebPosCustomAmountModal';
@@ -12845,14 +12846,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         />
       )}
 
-      <WebPosTipKeypad
+      <WebPosOpenPriceModal
         open={!!pendingOpenPrice}
-        allowPercent={false}
-        title={
-          pendingOpenPrice
-            ? `${t('webPosEnterPrice')} - ${pendingOpenPrice.name}`
-            : t('webPosEnterPrice')
-        }
+        productName={pendingOpenPrice?.name}
         onClose={() => setPendingOpenPrice(null)}
         onConfirm={(amount) => {
           if (!pendingOpenPrice) return;

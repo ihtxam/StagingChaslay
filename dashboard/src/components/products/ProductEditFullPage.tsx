@@ -219,7 +219,7 @@ export default function ProductEditFullPage({
   const priceSuffix = soldByWeight && !isCombo ? 'CHF/kg' : 'CHF';
 
   return (
-    <div className="-mx-3 flex min-h-[calc(100dvh-8rem)] flex-col sm:-mx-4 md:-mx-6">
+    <div className="product-edit-page -mx-3 flex min-h-[calc(100dvh-8rem)] flex-col bg-[var(--bg)] text-[var(--text)] sm:-mx-4 md:-mx-6">
       <div className="shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-3 sm:px-4">
         <div className="mx-auto flex max-w-6xl flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start">
@@ -246,7 +246,7 @@ export default function ProductEditFullPage({
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#F5F6F7] px-3 py-4 dark:bg-[var(--bg)] sm:px-4"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[var(--bg)] px-3 py-4 sm:px-4"
       >
         <form id={formId} onSubmit={onSubmit} noValidate className="mx-auto max-w-6xl space-y-4">
           {branchPicker}
