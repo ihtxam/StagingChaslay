@@ -16,6 +16,7 @@ import {
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { escposKitchenCut, uint8ToBase64 } from '@/lib/webpos-receipt';
+import { normalizeAgentPrintBase64 } from '@/lib/escpos-payload';
 import { enqueueFailedPrintJob } from '@/lib/webpos-print-queue';
 import { isBrowserOnline } from '@/lib/webpos-offline/types';
 import {
@@ -252,7 +253,7 @@ export async function printViaAgentOrQueue(opts: {
   }
   const retryLocally = opts.retryLocally !== false && !isKioskPrintContext();
   const persistLocal = (error: unknown) => {
-    if (!opts.dataBase64) return;
+    if (!normalizeAgentPrintBase64(opts.dataBase64)) return;
     enqueueFailedPrintJob({
       kind: opts.jobKind,
       label: opts.jobLabel,

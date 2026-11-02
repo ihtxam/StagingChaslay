@@ -321,8 +321,6 @@ export type PosPrintSettingsClient = {
   receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
   /** Optional CHF→EUR rate (1 CHF = X EUR) for receipt EUR equivalent line. */
   receiptChfToEurRate?: number | null;
-  /** Receipt layout template (`Default` only for now). */
-  receiptTemplateName?: string;
   receiptLogoUrl?: string | null;
   /** Printed logo width in pixels (48–200, default 200). */
   receiptLogoWidthPx?: number;
@@ -4190,7 +4188,7 @@ export async function buildReceiptEscPos(
   );
 }
 
-export { isEscPosBase64, isEscPosBytePayload, isValidAgentRawPrintBase64 } from '@/lib/escpos-payload';
+export { isEscPosBase64, isEscPosBytePayload, isValidAgentRawPrintBase64, normalizeAgentPrintBase64 } from '@/lib/escpos-payload';
 
 export function uint8ToBase64(bytes: Uint8Array): string {
   if (typeof btoa === 'undefined') return '';

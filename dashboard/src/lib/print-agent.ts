@@ -7,7 +7,11 @@ import {
   installDesktopHardwareBridge,
 } from '@/lib/hardware/desktop-bridge';
 import { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
-import { isValidAgentRawPrintBase64 } from './escpos-payload';
+import {
+  agentPrintValidationErrorMessage,
+  classifyAgentPrintBase64,
+  normalizeAgentPrintBase64,
+} from './escpos-payload';
 import type { EscPosTextEncoding } from './escpos-encode';
 
 export { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
@@ -1430,11 +1434,10 @@ export async function printViaAgent(opts: {
   text?: string;
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
-  const b64 = String(opts.dataBase64 || '').trim();
-  if (!isValidAgentRawPrintBase64(b64)) {
-    throw new Error(
-      'Print data is not valid ESC/POS (corrupt or truncated). Hard-refresh Web POS and print again.'
-    );
+  const b64 = normalizeAgentPrintBase64(opts.dataBase64);
+  const validationIssue = classifyAgentPrintBase64(b64);
+  if (validationIssue) {
+    throw new Error(agentPrintValidationErrorMessage(validationIssue));
   }
   const dedupeKey = `${name}|${b64.length}|${b64.slice(0, 48)}`;
   const now = Date.now();
@@ -1470,7 +1473,7 @@ export async function printViaAgent(opts: {
       method: 'POST',
       body: JSON.stringify({
         printerName: opts.printerName || undefined,
-        dataBase64: opts.dataBase64,
+        dataBase64: b64,
         text: opts.text,
       }),
     },

@@ -2232,7 +2232,7 @@ export default function Settings() {
 
   return (
     <div
-      className="mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4"
+      className="flex w-full max-w-[1400px] flex-1 min-h-0 flex-col gap-3 overflow-hidden sm:gap-4"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
