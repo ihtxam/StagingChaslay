@@ -346,7 +346,16 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
       if (!p || typeof p !== "object") return null;
       const row = p as Record<string, unknown>;
       const name = String(row.name || "").trim().slice(0, 200);
-      if (!name) return null;
+      const keepsEmptyName =
+        row.printReceipts === true ||
+        row.printKitchenTickets === true ||
+        row.printEndOfDayReports === true ||
+        row.printLabels === true ||
+        (Array.isArray(row.linkedCategoryIds) && row.linkedCategoryIds.length > 0) ||
+        (Array.isArray(row.linkedProductIds) && row.linkedProductIds.length > 0);
+      // "Standarddrucker" stores an empty name (use the Bridge default). Dropping
+      // that row deleted the kitchen categories and tickets stopped.
+      if (!name && !keepsEmptyName) return null;
       return {
         id: String(row.id || `p-${i}-${Date.now()}`).slice(0, 64),
         name,

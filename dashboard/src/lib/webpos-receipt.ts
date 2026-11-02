@@ -1738,6 +1738,10 @@ export function resolveReceiptPaperWidthMm(
   return settings?.paperWidthMm === 58 ? 58 : 80;
 }
 
+function isProvisionalReceiptBanner(line: string): boolean {
+  return /provis/i.test(String(line || '').trim());
+}
+
 /** Remove the plain-text header so only the bitmap header is printed. */
 function dropPlainTextReceiptHeader(bodyText: string, headerLines: string[]): string {
   if (!headerLines.length) return bodyText;
@@ -1746,24 +1750,28 @@ function dropPlainTextReceiptHeader(bodyText: string, headerLines: string[]): st
     .filter((key) => key.length >= 3);
   const lines = bodyText.split('\n');
   let i = 0;
-  if (/provisional/i.test(lines[0] || '')) i = 1;
+  if (isProvisionalReceiptBanner(lines[0] || '')) i = 1;
   let removed = 0;
-  while (i < lines.length && removed < headerLines.length + 3) {
+  let matched = 0;
+  let blanks = 0;
+  // Title/body gap and the blank after Tel/VAT are part of the header block.
+  // Stopping at the first blank left the address on provisional tickets, under the bitmap header.
+  while (i < lines.length && removed < headerLines.length + 8 && blanks < 6) {
     const trimmed = (lines[i] || '').trim();
     if (!trimmed) {
-      if (removed) {
-        i += 1;
-        break;
-      }
       i += 1;
+      blanks += 1;
+      if (matched >= keys.length && removed > 0) break;
       continue;
     }
+    blanks = 0;
     if (/^[-=]{6,}$/.test(trimmed) || /^\d+\s*x\s/i.test(trimmed)) break;
     const key = decodeHtmlEntities(trimmed).replace(/\s+/g, '').replace(/-+$/g, '').toLowerCase();
-    const matches = keys.some((k) => key.includes(k) || k.includes(key));
-    if (removed === 0 || matches || /&(?:#\d+|[a-z]+);/i.test(trimmed)) {
+    const matches = keys.some((k) => key === k || key.includes(k) || k.includes(key));
+    if (matches || /&(?:#\d+|[a-z]+);/i.test(trimmed)) {
       i += 1;
       removed += 1;
+      if (matches) matched += 1;
       continue;
     }
     break;
@@ -1830,6 +1838,26 @@ function stripPaddedReceiptHeaderFromText(
     }
   }
   return bodyText;
+}
+
+/**
+ * Drop the plain-text shop/custom header before the bitmap header is prepended.
+ * Provisional tickets print a banner line first, so the header block is not at column 0.
+ */
+export function stripPlainReceiptHeaderFromBody(
+  bodyText: string,
+  headerLines: string[],
+  width: number,
+  align: ReceiptHeaderAlign = 'center',
+  titleBodyGap = false
+): string {
+  if (!headerLines.length || !bodyText) return bodyText;
+  const lines = bodyText.split('\n');
+  const banner = isProvisionalReceiptBanner(lines[0] || '') ? `${lines[0]}\n` : '';
+  const rest = banner ? lines.slice(1).join('\n') : bodyText;
+  const padded = stripPaddedReceiptHeaderFromText(rest, headerLines, width, align, titleBodyGap);
+  const dropped = dropPlainTextReceiptHeader(padded, headerLines);
+  return `${banner}${dropped.replace(/^\n+/, '')}`;
 }
 
 /** Centered course banner: >> COURSE 1 << */
@@ -4080,14 +4108,13 @@ export async function buildReceiptEscPos(
   let bodyText = text;
   if (headerLines.length > 0) {
     const titleBodyGap = opts.titleBodyGap ?? headerLines.length > 1;
-    bodyText = stripPaddedReceiptHeaderFromText(
+    bodyText = stripPlainReceiptHeaderFromBody(
       bodyText,
       headerLines,
       lineWidthForPaper(paper),
       opts.headerAlign ?? 'center',
       titleBodyGap
     );
-    bodyText = dropPlainTextReceiptHeader(bodyText, headerLines);
   }
   const textEncoding = opts.textEncoding ?? 'cp850';
   const receiptLineWidth = lineWidthForPaper(paper);
@@ -4137,7 +4164,7 @@ export async function buildReceiptEscPos(
   );
 }
 
-export { isEscPosBase64, isEscPosBytePayload } from '@/lib/escpos-payload';
+export { isEscPosBase64, isEscPosBytePayload, isValidAgentRawPrintBase64 } from '@/lib/escpos-payload';
 
 export function uint8ToBase64(bytes: Uint8Array): string {
   if (typeof btoa === 'undefined') return '';
@@ -4452,6 +4479,8 @@ export type KitchenPrintJob = {
   matchHint?: string | null;
   paperWidthMm: 58 | 80;
   items: KitchenTicketItem[];
+  /** Profile is "bridge default" (no queue name). Resolve to the live USB printer at print time. */
+  useBridgeDefault?: boolean;
 };
 
 function enabledKitchenPrinterProfiles(
@@ -4461,7 +4490,6 @@ function enabledKitchenPrinterProfiles(
     (p) =>
       p.enabled !== false &&
       p.printKitchenTickets &&
-      (p.name || p.portName) &&
       !looksLikeLabelPrinterName(p.name) &&
       !looksLikeLabelPrinterName(p.portName)
   );
@@ -4509,6 +4537,25 @@ export function resolveKitchenPrinterTarget(
   };
 }
 
+function kitchenPrinterHasExplicitRouting(printer: {
+  linkedCategoryIds?: string[];
+  printAllProducts?: boolean;
+}): boolean {
+  return (printer.linkedCategoryIds || []).length > 0 || printer.printAllProducts === false;
+}
+
+/** True when the merchant chose categories (or legacy exclusions) instead of "print everything". */
+function kitchenRoutingIsSelective(
+  settings: PosPrintSettingsClient | null | undefined,
+  kitchenPrinters: NonNullable<PosPrintSettingsClient['printers']>
+): boolean {
+  if ((settings?.kitchenExcludedCategoryIds || []).length > 0) return true;
+  if (settings?.kitchenPrintRouting && Object.keys(settings.kitchenPrintRouting).length > 0) {
+    return true;
+  }
+  return kitchenPrinters.some((p) => kitchenPrinterHasExplicitRouting(p));
+}
+
 function kitchenPrintJobsWithFallback(
   items: KitchenTicketItem[],
   settings: PosPrintSettingsClient | null | undefined,
@@ -4516,6 +4563,8 @@ function kitchenPrintJobsWithFallback(
 ): KitchenPrintJob[] {
   const jobs = resolveKitchenPrintJobs(items, settings).filter((j) => kitchenPrintJobHasTarget(j));
   if (jobs.length || !items.length) return jobs;
+  // Drinks-only (or any fully excluded) ticket must not fall back onto the kitchen printer.
+  if (kitchenRoutingIsSelective(settings, enabledKitchenPrinterProfiles(settings))) return [];
 
   const fallback = resolveKitchenPrinterTarget(settings, opts);
   if (fallback && kitchenPrintJobHasTarget(fallback)) {
@@ -4531,9 +4580,9 @@ export function kitchenPrintJobKey(job: Pick<KitchenPrintJob, 'printerName' | 'p
 
 /** Kitchen print job has a configured Windows name or COM port to resolve at print time. */
 export function kitchenPrintJobHasTarget(
-  job: Pick<KitchenPrintJob, 'printerName' | 'portName'>
+  job: Pick<KitchenPrintJob, 'printerName' | 'portName' | 'useBridgeDefault'>
 ): boolean {
-  return !!(job.printerName || '').trim() || !!(job.portName || '').trim();
+  return !!(job.printerName || '').trim() || !!(job.portName || '').trim() || job.useBridgeDefault === true;
 }
 
 function primaryDedicatedKitchenPrinterId(
@@ -4556,18 +4605,11 @@ function appendUnroutedKitchenItems(
   const unrouted = items.filter((item) => !assigned.has(kitchenItemIdentity(item)));
   if (!unrouted.length) return jobs;
 
+  // Only a real "print all categories" printer may receive lines that no station claimed.
+  // Falling back to kitchenPrinters[0] put deselected drinks back on the kitchen ticket.
   const catchAllProfile =
-    kitchenPrinters.find(
-      (p) =>
-        !p.printReceipts &&
-        !(p.linkedCategoryIds || []).length &&
-        p.printAllProducts !== false
-    ) ||
-    kitchenPrinters.find(
-      (p) => !(p.linkedCategoryIds || []).length && p.printAllProducts !== false
-    ) ||
-    kitchenPrinters.find((p) => !p.printReceipts) ||
-    kitchenPrinters[0];
+    kitchenPrinters.find((p) => !p.printReceipts && !kitchenPrinterHasExplicitRouting(p)) ||
+    kitchenPrinters.find((p) => !kitchenPrinterHasExplicitRouting(p));
   if (!catchAllProfile) return jobs;
 
   const key = (catchAllProfile.name || catchAllProfile.portName || '').trim();
@@ -4623,16 +4665,19 @@ export function buildKitchenPrintJobs(
   for (const kp of kitchenPrinters) {
     const filtered = filterKitchenItems(items, kp, filterCtx);
     if (!filtered.length) continue;
+    const named = (kp.name || kp.portName || '').trim();
     jobs.push({
-      printerName: kp.name || kp.portName || '',
+      printerName: named,
       portName: kp.portName ?? null,
       matchHint: kp.matchHint ?? null,
       paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
       items: filtered,
+      useBridgeDefault: !named,
     });
   }
 
   if (!jobs.length) {
+    if (kitchenRoutingIsSelective(settings, kitchenPrinters)) return [];
     const fallback = resolveKitchenPrinterTarget(settings);
     if (fallback && kitchenPrintJobHasTarget(fallback)) {
       return [{ ...fallback, items }];

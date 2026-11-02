@@ -117,7 +117,18 @@ export async function printKioskGuestReceipt(ctx: KioskPrintContext): Promise<bo
     '',
     'Thank you!',
   ];
-  const res = await printViaAgent({ text: lines.join('\n'), jobKind: 'receipt' });
+  const text = lines.join('\n');
+  const init = new Uint8Array([0x1b, 0x40]);
+  const body = new TextEncoder().encode(`${text}\n\n\n`);
+  const cut = new Uint8Array([0x1d, 0x56, 0x00]);
+  const payload = new Uint8Array(init.length + body.length + cut.length);
+  payload.set(init, 0);
+  payload.set(body, init.length);
+  payload.set(cut, init.length + body.length);
+  const res = await printViaAgent({
+    dataBase64: uint8ToBase64(payload),
+    text,
+  });
   return res.ok;
 }
 

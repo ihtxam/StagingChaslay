@@ -12,6 +12,7 @@ import {
   nextTabForHiddenRetailSettings,
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
+  pickSettingsTabFallback,
   planSettingsSearchResultClick,
   resolveSettingsContentTab,
   scrollToSettingsSearchSection,
@@ -241,6 +242,25 @@ test('planSettingsSearchResultClick uses the clicked row tab, never forces pos',
     shouldSwitchTab: false,
   });
   assert.equal(planSettingsSearchResultClick(null, 'pos'), null);
+});
+
+test('pickSettingsTabFallback prefers business over extra-modules', () => {
+  assert.equal(
+    pickSettingsTabFallback([
+      { id: 'extra-modules' },
+      { id: 'about' },
+      { id: 'business' },
+    ]),
+    'business'
+  );
+  assert.equal(
+    pickSettingsTabFallback([{ id: 'extra-modules' }, { id: 'about' }]),
+    'about'
+  );
+  assert.equal(
+    pickSettingsTabFallback([{ id: 'pos' }, { id: 'extra-modules' }]),
+    'pos'
+  );
 });
 
 test('retail tables→pos redirect is skipped when search query is set', () => {

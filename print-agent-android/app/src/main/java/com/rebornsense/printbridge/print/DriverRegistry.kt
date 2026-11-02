@@ -45,7 +45,12 @@ class DriverRegistry(
         val others = listOf(sunmi, bluetooth, network).flatMap { driver ->
             runCatching { driver.discover(app) }.getOrElse { emptyList() }
         }
+        val hidden = runCatching { PrinterPreferences.hiddenPrinterIds(context) }.getOrDefault(emptySet())
+        // The Bridge screen hides removed printers. /printers and print must use that
+        // same list, or a deleted LAN host stays selectable in the merchant panel and
+        // can be chosen as the default so tickets never reach the USB printer.
         val found = disambiguateBluetoothPrinterNames(usbFound + others)
+            .filter { it.id !in hidden }
         val previousDefault = runCatching { PrinterPreferences.getDefaultPrinterId(context) }.getOrNull()
         val chosenDefault = StalePrinterSelection.chooseDefaultId(
             previousDefault,

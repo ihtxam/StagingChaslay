@@ -149,6 +149,22 @@ export function isSettingsSearchQueryActive(query?: string | null): boolean {
  * Retail merchants used to bounce tables → POS. That steal must not run while
  * search is open (clicking a non-POS hit then getting forced onto ?tab=pos).
  */
+/** When the current tab is hidden, never default to catalog/marketing tabs. */
+export function pickSettingsTabFallback(
+  visibleTabs: ReadonlyArray<{ id: SettingsTabId }>
+): SettingsTabId | null {
+  if (!visibleTabs.length) return null;
+  const business = visibleTabs.find((item) => item.id === 'business');
+  if (business) return business.id;
+  const core = visibleTabs.find(
+    (item) => item.id !== 'extra-modules' && item.id !== 'about'
+  );
+  if (core) return core.id;
+  const about = visibleTabs.find((item) => item.id === 'about');
+  if (about) return about.id;
+  return visibleTabs[0].id;
+}
+
 export function nextTabForHiddenRetailSettings(
   tab: SettingsTabId,
   ctx: {

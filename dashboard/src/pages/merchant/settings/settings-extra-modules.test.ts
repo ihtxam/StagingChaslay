@@ -23,6 +23,14 @@ test('listInactiveExtraModules omits kiosk when licensed', () => {
   assert.ok(!inactive.some((m) => m.id === 'kiosk'));
 });
 
+test('isLicensedSettingsAddonTab keeps core tabs visible while settings load', () => {
+  const ctx = { isRetailMerchant: false };
+  assert.equal(isLicensedSettingsAddonTab('business', null, ctx), true);
+  assert.equal(isLicensedSettingsAddonTab('taxes', null, ctx), true);
+  assert.equal(isLicensedSettingsAddonTab('fiscal', null, ctx), false);
+  assert.equal(isLicensedSettingsAddonTab('kiosk', null, ctx), false);
+});
+
 test('isLicensedSettingsAddonTab gates fiscal and como', () => {
   const ctx = { isRetailMerchant: false };
   assert.equal(isLicensedSettingsAddonTab('fiscal', { fiskalySettings: { enabled: false } }, ctx), false);

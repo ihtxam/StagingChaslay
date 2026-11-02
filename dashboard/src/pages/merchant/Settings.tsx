@@ -170,6 +170,7 @@ import {
   isSettingsSearchQueryActive,
   matchSettingsSearch,
   nextTabForHiddenRetailSettings,
+  pickSettingsTabFallback,
   normalizeSettingsSearchQuery,
   planSettingsSearchResultClick,
   resetSettingsClipperScroll,
@@ -1911,7 +1912,7 @@ export default function Settings() {
         }
         return merged;
       });
-      toast.success(successMessage);
+      if (successMessage) toast.success(successMessage);
     },
     [buildPosPrintSettingsPayload, t]
   );
@@ -2061,14 +2062,20 @@ export default function Settings() {
   const settingsOptionalTab = tab === 'users' || tab === 'delivery-map';
 
   useEffect(() => {
-    if (!visibleTabs.length) return;
+    if (!settings || !visibleTabs.length) return;
     if (isSettingsSearchQueryActive(settingsQuery) || isSettingsSearchQueryActive(normalizedQuery)) {
       return;
     }
-    if (!visibleTabs.some((item) => item.id === tab)) {
-      selectTab(visibleTabs[0].id);
+    const fromUrl = parseSettingsTabFromSearch(searchParams.toString());
+    if (!searchParams.get('tab') && fromUrl === 'business' && tab !== 'business') {
+      selectTab('business');
+      return;
     }
-  }, [selectTab, tab, visibleTabs, settingsQuery, normalizedQuery]);
+    if (!visibleTabs.some((item) => item.id === tab)) {
+      const fallback = pickSettingsTabFallback(visibleTabs);
+      if (fallback) selectTab(fallback);
+    }
+  }, [selectTab, tab, visibleTabs, settings, settingsQuery, normalizedQuery, searchParams]);
 
   if (hqSettingsBlocked) {
     return (
@@ -2225,7 +2232,7 @@ export default function Settings() {
 
   return (
     <div
-      className="mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col gap-3 sm:gap-4 overflow-hidden"
+      className="mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -2405,7 +2412,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 sm:p-5 [-webkit-overflow-scrolling:touch] lg:min-h-0"
+            className="min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-3 sm:p-4 [-webkit-overflow-scrolling:touch] lg:min-h-0"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary
@@ -5451,8 +5458,9 @@ export default function Settings() {
                     ? findPrinterHealCandidates(p.name, agentPrinters)
                     : [];
                   const useDropdown = printAgentOk && agentPrinters.length > 0;
+                  const savedPrinterName = String(p.name || '').trim();
                   const selectValue =
-                    savedNameMissing || !String(p.name || '').trim()
+                    savedNameMissing || !savedPrinterName
                       ? ''
                       : resolveAgentPrinterSelectValue(p.name, p.matchHint, agentPrintersForPick);
                   const conn = inferPrinterConnectionMeta(p.name, p.portName);
@@ -5516,20 +5524,37 @@ export default function Settings() {
                                 name: picked?.name || raw,
                                 portName: picked?.portName || null,
                                 matchHint:
-                                  picked?.connectionType === 'bluetooth' && picked?.address
+                                  picked?.id ||
+                                  (picked?.connectionType === 'bluetooth' && picked?.address
                                     ? picked.address
-                                    : picked?.connectionType === 'lan' && picked?.id
-                                      ? picked.id
-                                      : picked?.matchHint || picked?.driverName || p.matchHint || null,
+                                    : picked?.matchHint || picked?.driverName || null),
                               };
                             }
-                            setSettings({
+                            const nextSettings = {
                               ...settings,
                               posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            };
+                            setSettings(nextSettings);
+                            // Save the queue immediately. The page Save button is easy to
+                            // miss, and a later refresh used to write the old printer back.
+                            void persistPosPrintSettings(nextSettings, '').catch((error: unknown) => {
+                              const msg =
+                                error && typeof error === 'object' && 'response' in error
+                                  ? String(
+                                      (error as { response?: { data?: { error?: string } } }).response?.data
+                                        ?.error || ''
+                                    )
+                                  : '';
+                              toast.error(msg || t('failedSaveReceipt'));
                             });
                           }}
                         >
                           <option value="">{t('webPosDefaultPrinter')}</option>
+                          {savedPrinterName &&
+                          selectValue === savedPrinterName &&
+                          !agentPrintersForPick.some((ap) => agentPrinterOptionValue(ap) === selectValue) ? (
+                            <option value={savedPrinterName}>{savedPrinterName}</option>
+                          ) : null}
                           {agentPrintersForPick.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
                             const optionValue = agentPrinterOptionValue(ap);

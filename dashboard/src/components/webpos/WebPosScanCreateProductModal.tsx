@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { DEFAULT_CATALOG_VISIBILITY } from '@/lib/catalog-visibility';
@@ -41,19 +41,34 @@ export default function WebPosScanCreateProductModal({
     [categories]
   );
 
+  const formSessionRef = useRef<string | null>(null);
+
+  const resolveDefaultCategoryId = () =>
+    (defaultCategoryId && categoryOptions.some((c) => c.id === defaultCategoryId)
+      ? defaultCategoryId
+      : categoryOptions[0]?.id) || '';
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formSessionRef.current = null;
+      return;
+    }
+    // Parent passes a new categories array each render; only reset when the modal opens for a barcode.
+    if (formSessionRef.current === barcode) return;
+    formSessionRef.current = barcode;
     setName('');
     setSalePrice('');
     setBuyingPrice('');
     setStock('1');
     setExpiryDate('');
-    const fallback =
-      (defaultCategoryId && categoryOptions.some((c) => c.id === defaultCategoryId)
-        ? defaultCategoryId
-        : categoryOptions[0]?.id) || '';
-    setCategoryId(fallback);
+    setCategoryId(resolveDefaultCategoryId());
   }, [open, barcode, defaultCategoryId, categoryOptions]);
+
+  useEffect(() => {
+    if (!open || categoryId) return;
+    const fallback = resolveDefaultCategoryId();
+    if (fallback) setCategoryId(fallback);
+  }, [open, categoryId, defaultCategoryId, categoryOptions]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
