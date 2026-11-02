@@ -21,6 +21,7 @@ import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.domain.model.CategoryPrintSetting
 import com.chaslay.pos.domain.model.PrintTarget
@@ -178,6 +179,7 @@ data class SettingsUiState(
     val kioskFullscreenEnabled: Boolean = true,
     val posDisplayScale: Float = 1f,
     val posTextScale: Float = 1f,
+    val posMenuDesign: PosMenuDesign = PosMenuDesign.CLASSIC,
     val crashLogs: List<CrashLogEntry> = emptyList(),
     val selectedCrashLog: String? = null,
     val crashLogContent: String = "",
@@ -270,6 +272,7 @@ class SettingsViewModel @Inject constructor(
             val kioskFullscreen = sessionManager.kioskFullscreenEnabled.first()
             val displayScale = sessionManager.posDisplayScale.first()
             val textScale = sessionManager.posTextScale.first()
+            val menuDesign = sessionManager.posMenuDesign.first()
             val syncBusinessInfo = syncPreferences.isSyncBusinessInfoEnabled()
             val categories = productRepository.getAllCategories()
             val posSession = loadPosSessionDisplay(settings.businessName)
@@ -281,6 +284,7 @@ class SettingsViewModel @Inject constructor(
                     kioskFullscreenEnabled = kioskFullscreen,
                     posDisplayScale = displayScale,
                     posTextScale = textScale,
+                    posMenuDesign = menuDesign,
                     vatNumber = settings.vatNumber,
                     address = settings.address,
                     phone = settings.phone,
@@ -531,6 +535,11 @@ class SettingsViewModel @Inject constructor(
         val clamped = com.chaslay.pos.ui.theme.PosAppearanceLimits.clampText(scale)
         _uiState.update { it.copy(posTextScale = clamped) }
         viewModelScope.launch { sessionManager.setPosTextScale(clamped) }
+    }
+
+    fun updatePosMenuDesign(design: PosMenuDesign) {
+        _uiState.update { it.copy(posMenuDesign = design) }
+        viewModelScope.launch { sessionManager.setPosMenuDesign(design) }
     }
 
     fun refreshCrashLogs() {

@@ -177,6 +177,20 @@ enum class PosThemeMode(val displayName: String) {
     }
 }
 
+/** POS register catalog layout (Réglages → Apparence). */
+enum class PosMenuDesign {
+    CLASSIC,
+    MODERN_TOP,
+    MODERN_SIDE;
+
+    companion object {
+        fun fromName(name: String?): PosMenuDesign =
+            entries.find { it.name == name } ?: CLASSIC
+    }
+
+    val isModern: Boolean get() = this != CLASSIC
+}
+
 enum class HeldOrderStatus {
     HELD,
     SENT_TO_KITCHEN
@@ -276,6 +290,7 @@ data class CartItem(
     val originalUnitPrice: Double? = null,
     val lineDiscountPerUnit: Double = 0.0,
     val categoryId: Long? = null,
+    val imageUri: String? = null,
     val courseNumber: Int = 1,
     val sentToKitchen: Boolean = false,
     val splitCheck: Int = 1,

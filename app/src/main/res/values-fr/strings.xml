@@ -733,6 +733,13 @@
     <string name="theme_light">Caisse légère</string>
     <string name="theme_dark">Caisse sombre</string>
     <string name="theme_help">Le mode lumière utilise un fond blanc pour faciliter la lecture sur le registre.</string>
+    <string name="pos_menu_design_title">Disposition du menu</string>
+    <string name="pos_menu_design_help">Classique conserve la caisse colorée. Les dispositions modernes affichent les photos produits et les vignettes du panier.</string>
+    <string name="pos_menu_design_classic">Classique</string>
+    <string name="pos_menu_design_modern_top">Moderne — catégories en haut</string>
+    <string name="pos_menu_design_modern_side">Moderne — catégories sur le côté</string>
+    <string name="pos_catalog_search_hint">Rechercher un produit…</string>
+    <string name="pos_catalog_filters">Filtres</string>
     <string name="kiosk_fullscreen_title">Plein écran (mode kiosque)</string>
     <string name="kiosk_fullscreen_help">Masque la barre d\'état et la barre de navigation Android. Balayez depuis le bord pour les afficher brièvement.</string>
     <string name="crash_logs">Journaux des accidents</string>

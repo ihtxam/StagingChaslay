@@ -14,6 +14,7 @@ import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.domain.model.UserAccess
 import androidx.compose.foundation.layout.Column
@@ -1447,6 +1448,52 @@ fun SettingsScreen(
         }
         Text(
             stringResource(R.string.theme_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = ui.textSecondary,
+        )
+        Text(
+            stringResource(R.string.pos_menu_design_title),
+            fontWeight = FontWeight.Medium,
+            color = scheme.onSurface,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.posMenuDesign == PosMenuDesign.CLASSIC,
+                onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.CLASSIC) },
+                label = { Text(stringResource(R.string.pos_menu_design_classic)) },
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = scheme.primaryContainer,
+                    selectedLabelColor = scheme.onPrimaryContainer,
+                    containerColor = ui.surfaceMuted,
+                    labelColor = ui.textPrimary,
+                ),
+            )
+            FilterChip(
+                selected = state.posMenuDesign == PosMenuDesign.MODERN_TOP,
+                onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.MODERN_TOP) },
+                label = { Text(stringResource(R.string.pos_menu_design_modern_top)) },
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = scheme.primaryContainer,
+                    selectedLabelColor = scheme.onPrimaryContainer,
+                    containerColor = ui.surfaceMuted,
+                    labelColor = ui.textPrimary,
+                ),
+            )
+            FilterChip(
+                selected = state.posMenuDesign == PosMenuDesign.MODERN_SIDE,
+                onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.MODERN_SIDE) },
+                label = { Text(stringResource(R.string.pos_menu_design_modern_side)) },
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = scheme.primaryContainer,
+                    selectedLabelColor = scheme.onPrimaryContainer,
+                    containerColor = ui.surfaceMuted,
+                    labelColor = ui.textPrimary,
+                ),
+            )
+        }
+        Text(
+            stringResource(R.string.pos_menu_design_help),
             style = MaterialTheme.typography.bodySmall,
             color = ui.textSecondary,
         )

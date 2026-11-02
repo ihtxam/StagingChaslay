@@ -51,6 +51,7 @@ import com.chaslay.pos.domain.model.ProductCustomizeState
 import com.chaslay.pos.domain.model.SelectedModifier
 import com.chaslay.pos.domain.model.SelectedAddon
 import com.chaslay.pos.domain.model.ProductVariantModel
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.PosVirtualCategories
 import com.chaslay.pos.domain.model.ProductWithVariants
@@ -493,6 +494,9 @@ class PosViewModel @Inject constructor(
 
     val loggedInUserName: StateFlow<String?> = sessionManager.currentUserName
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val posMenuDesign: StateFlow<PosMenuDesign> = sessionManager.posMenuDesign
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosMenuDesign.CLASSIC)
 
     private var scaleWeighingSessionActive = false
 
@@ -1184,6 +1188,7 @@ class PosViewModel @Inject constructor(
             taxRate = resolveTaxRate(product.id, product.taxRate, serviceType),
             sku = product.sku,
             categoryId = product.categoryId,
+            imageUri = product.imageUri,
             isCombo = true,
             comboSelections = result.selections,
             modifiers = result.comboModifiers,
@@ -1662,6 +1667,7 @@ class PosViewModel @Inject constructor(
             taxRate = resolveTaxRate(product.id, product.taxRate, serviceType),
             sku = sku,
             categoryId = product.categoryId,
+            imageUri = product.imageUri,
             modifiers = modifiers,
             addons = addons,
             notes = userNotes,

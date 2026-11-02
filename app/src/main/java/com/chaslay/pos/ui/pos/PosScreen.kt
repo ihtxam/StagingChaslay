@@ -123,6 +123,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.ExpressPayPlacement
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.PosVirtualCategories
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
@@ -200,6 +201,8 @@ fun PosScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val loggedInUserName by viewModel.loggedInUserName.collectAsStateWithLifecycle()
+    val posMenuDesign by viewModel.posMenuDesign.collectAsStateWithLifecycle()
+    val isModernMenuDesign = posMenuDesign.isModern
     val activity = LocalContext.current as? Activity
     val context = LocalContext.current
 
@@ -327,7 +330,8 @@ fun PosScreen(
             redeemThresholdPoints = state.loyaltyProgram.redeemThreshold,
             onTogglePayWithPoints = viewModel::updateCheckoutPayWithPoints,
             onTogglePayWithGiftCard = viewModel::updateCheckoutPayWithGiftCard,
-            onGiftCardPay = viewModel::openGiftCardPayDialog
+            onGiftCardPay = viewModel::openGiftCardPayDialog,
+            posMenuDesign = posMenuDesign,
         )
         if (state.showOrderComplete) {
             state.completedTransaction?.let { transaction ->
@@ -496,7 +500,7 @@ fun PosScreen(
             pendingOnlineOrderCount = state.pendingOnlineOrderCount,
             shiftsEnabled = state.shiftsEnabled,
             onCashMovement = viewModel::showCashMovementDialog,
-            showProductFilters = mainTab == PosMainTab.REGISTER,
+            showProductFilters = mainTab == PosMainTab.REGISTER && !isModernMenuDesign,
             showProductImages = state.productGridShowImages,
             sortAlpha = state.productGridSortAlpha,
             sortBestseller = state.productGridSortBestseller,
@@ -512,11 +516,18 @@ fun PosScreen(
             onNavigate = onNavigate,
             onLogout = onLogout
         )
+        if (isModernMenuDesign && mainTab == PosMainTab.REGISTER) {
+            ModernPosIdentityBar(
+                businessName = state.settings.businessName,
+                loggedInUserName = loggedInUserName,
+            )
+        }
         Row(modifier = Modifier.weight(1f)) {
             val orderingItemsForRail = state.cart.items.filter { !it.sentToKitchen }
             CartActionSidebar(
                 businessName = state.settings.businessName,
                 loggedInUserName = loggedInUserName,
+                showStoreIdentityInRail = !isModernMenuDesign,
                 isRestaurantMode = isRestaurantMode,
                 ordersTabMode = mainTab == PosMainTab.ORDERS,
                 showRetailTakeaway = isRetailMode && retailTakeawayEnabled,
@@ -649,54 +660,101 @@ fun PosScreen(
                         canSendKitchen = orderingItemsForRail.isNotEmpty(),
                         tableCartFocusOrderedCourse = state.tableCartFocusOrderedCourse,
                         onTableCartFocusConsumed = viewModel::consumeTableCartFocusOrdered,
+                        showCartLineThumbnails = isModernMenuDesign,
                         modifier = Modifier
                             .width(304.dp)
                             .fillMaxHeight()
                     )
 
-                    VectronCategoryColumn(
-                        categories = state.displayCategories,
-                        selectedCategoryId = state.selectedCategoryId,
-                        onCategorySelected = viewModel::selectCategory,
-                        emptyCatalogHint = if (state.syncedCategoriesEmpty) {
-                            stringResource(R.string.pos_categories_sync_empty_hint)
-                        } else {
-                            null
-                        },
-                        modifier = Modifier
-                            .width(140.dp)
-                            .fillMaxHeight()
-                    )
+                    if (posMenuDesign == PosMenuDesign.CLASSIC) {
+                        VectronCategoryColumn(
+                            categories = state.displayCategories,
+                            selectedCategoryId = state.selectedCategoryId,
+                            onCategorySelected = viewModel::selectCategory,
+                            emptyCatalogHint = if (state.syncedCategoriesEmpty) {
+                                stringResource(R.string.pos_categories_sync_empty_hint)
+                            } else {
+                                null
+                            },
+                            modifier = Modifier
+                                .width(140.dp)
+                                .fillMaxHeight()
+                        )
 
-                    VectronProductGrid(
-                        products = state.products,
-                        categories = state.displayCategories,
-                        currencySymbol = state.currencySymbol,
-                        gridColumns = state.productGridColumns,
-                        showProductImages = state.productGridShowImages,
-                        paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
-                        cashEnabled = state.settings.cashEnabled,
-                        cardEnabled = state.settings.cardEnabled,
-                        terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
-                        expressEnabled = expressOnGrid,
-                        showScanButton = isRetailMode,
-                        isGiftCardCategory = state.isGiftCardCategory,
-                        membershipEnabled = state.giftCardsEnabled &&
-                            state.giftCardSettings?.membershipEnabled == true,
-                        highlightedProductId = state.lastClickedProductId,
-                        onProductClick = viewModel::onProductClick,
-                        onMiscClick = viewModel::addMiscItemQuick,
-                        onScanBarcode = { showBarcodeScanner = true },
-                        onCash = { viewModel.initiateCashPayment(activity) },
-                        onCard = { viewModel.initiateCardPayment(activity) },
-                        onTerminal = { viewModel.initiateTerminalPayment(activity) },
-                        onOpenCheckout = { viewModel.openCheckout() },
-                        onSellGiftCard = viewModel::showGiftCardOpsMenu,
-                        onSellMembership = viewModel::showMembershipSellDialog,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
+                        VectronProductGrid(
+                            products = state.products,
+                            categories = state.displayCategories,
+                            currencySymbol = state.currencySymbol,
+                            gridColumns = state.productGridColumns,
+                            showProductImages = state.productGridShowImages,
+                            paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
+                            cashEnabled = state.settings.cashEnabled,
+                            cardEnabled = state.settings.cardEnabled,
+                            terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
+                            expressEnabled = expressOnGrid,
+                            showScanButton = isRetailMode,
+                            isGiftCardCategory = state.isGiftCardCategory,
+                            membershipEnabled = state.giftCardsEnabled &&
+                                state.giftCardSettings?.membershipEnabled == true,
+                            highlightedProductId = state.lastClickedProductId,
+                            onProductClick = viewModel::onProductClick,
+                            onMiscClick = viewModel::addMiscItemQuick,
+                            onScanBarcode = { showBarcodeScanner = true },
+                            onCash = { viewModel.initiateCashPayment(activity) },
+                            onCard = { viewModel.initiateCardPayment(activity) },
+                            onTerminal = { viewModel.initiateTerminalPayment(activity) },
+                            onOpenCheckout = { viewModel.openCheckout() },
+                            onSellGiftCard = viewModel::showGiftCardOpsMenu,
+                            onSellMembership = viewModel::showMembershipSellDialog,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                    } else {
+                        ModernPosCatalogPane(
+                            design = posMenuDesign,
+                            categories = state.displayCategories,
+                            selectedCategoryId = state.selectedCategoryId,
+                            products = state.products,
+                            currencySymbol = state.currencySymbol,
+                            gridColumns = state.productGridColumns,
+                            sortAlpha = state.productGridSortAlpha,
+                            sortBestseller = state.productGridSortBestseller,
+                            showProductImagesPref = true,
+                            isGiftCardCategory = state.isGiftCardCategory,
+                            membershipEnabled = state.giftCardsEnabled &&
+                                state.giftCardSettings?.membershipEnabled == true,
+                            highlightedProductId = state.lastClickedProductId,
+                            showScanButton = isRetailMode,
+                            emptyCatalogHint = if (state.syncedCategoriesEmpty) {
+                                stringResource(R.string.pos_categories_sync_empty_hint)
+                            } else {
+                                null
+                            },
+                            paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
+                            cashEnabled = state.settings.cashEnabled,
+                            cardEnabled = state.settings.cardEnabled,
+                            terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
+                            expressEnabled = expressOnGrid,
+                            onCategorySelected = viewModel::selectCategory,
+                            onProductClick = viewModel::onProductClick,
+                            onMiscClick = viewModel::addMiscItemQuick,
+                            onScanBarcode = { showBarcodeScanner = true },
+                            onSellGiftCard = viewModel::showGiftCardOpsMenu,
+                            onSellMembership = viewModel::showMembershipSellDialog,
+                            onToggleShowImages = viewModel::toggleProductGridShowImages,
+                            onToggleSortAlpha = viewModel::toggleProductGridSortAlpha,
+                            onToggleSortBestseller = viewModel::toggleProductGridSortBestseller,
+                            onCycleGridColumns = viewModel::cycleProductGridColumns,
+                            onCash = { viewModel.initiateCashPayment(activity) },
+                            onCard = { viewModel.initiateCardPayment(activity) },
+                            onTerminal = { viewModel.initiateTerminalPayment(activity) },
+                            onOpenCheckout = { viewModel.openCheckout() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                    }
                 }
             }
                 PosMainTab.ORDERS -> {
@@ -1648,6 +1706,7 @@ private fun VectronOrderPanel(
     canSendKitchen: Boolean = false,
     tableCartFocusOrderedCourse: Int? = null,
     onTableCartFocusConsumed: () -> Unit = {},
+    showCartLineThumbnails: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isTableMode = tablesEnabled && activeTableName != null
@@ -1968,6 +2027,7 @@ private fun VectronOrderPanel(
                                     currencySymbol = currencySymbol,
                                     editable = !row.item.sentToKitchen,
                                     isSelected = row.item.id == selectedCartItemId,
+                                    showLineThumbnail = showCartLineThumbnails,
                                     onSelect = { onSelectItem(row.item.id) },
                                     onEdit = { onEditItem(row.item.id) },
                                     onDoubleTap = { onIncreaseItem(row.item.id) },
@@ -2261,6 +2321,7 @@ private fun CartCancelOrderDialog(
 private fun CartActionSidebar(
     businessName: String,
     loggedInUserName: String?,
+    showStoreIdentityInRail: Boolean = true,
     isRestaurantMode: Boolean,
     ordersTabMode: Boolean = false,
     showRetailTakeaway: Boolean = false,
@@ -2439,27 +2500,29 @@ private fun CartActionSidebar(
             )
         }
         }
-        HorizontalDivider(color = vc.textSecondary.copy(alpha = 0.25f))
-        Text(
-            businessName,
-            color = vc.textPrimary,
-            fontWeight = FontWeight.Bold,
-            fontSize = 9.sp,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth()
-        )
-        loggedInUserName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
+        if (showStoreIdentityInRail) {
+            HorizontalDivider(color = vc.textSecondary.copy(alpha = 0.25f))
             Text(
-                staffName,
-                color = vc.textSecondary,
+                businessName,
+                color = vc.textPrimary,
+                fontWeight = FontWeight.Bold,
                 fontSize = 9.sp,
                 textAlign = TextAlign.Center,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
             )
+            loggedInUserName?.trim()?.takeIf { it.isNotEmpty() }?.let { staffName ->
+                Text(
+                    staffName,
+                    color = vc.textSecondary,
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -2543,6 +2606,7 @@ private fun SwipeableCartRow(
     currencySymbol: String,
     editable: Boolean,
     isSelected: Boolean,
+    showLineThumbnail: Boolean = false,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onDoubleTap: () -> Unit,
@@ -2554,6 +2618,7 @@ private fun SwipeableCartRow(
             currencySymbol = currencySymbol,
             editable = false,
             isSelected = false,
+            showLineThumbnail = showLineThumbnail,
             onSelect = onSelect,
             onEdit = onEdit,
             onDoubleTap = onDoubleTap
@@ -2589,6 +2654,7 @@ private fun SwipeableCartRow(
             currencySymbol = currencySymbol,
             editable = true,
             isSelected = isSelected,
+            showLineThumbnail = showLineThumbnail,
             onSelect = onSelect,
             onEdit = onEdit,
             onDoubleTap = onDoubleTap
@@ -2630,6 +2696,7 @@ private fun VectronCartRow(
     currencySymbol: String,
     editable: Boolean,
     isSelected: Boolean,
+    showLineThumbnail: Boolean = false,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onDoubleTap: () -> Unit
@@ -2655,8 +2722,14 @@ private fun VectronCartRow(
                 )
             }
             .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
+        if (showLineThumbnail) {
+            ModernPosCartLineThumbnail(
+                imageUri = item.imageUri,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Text(
                 item.displayQtyLabel(),
@@ -2829,7 +2902,7 @@ private fun CartDockGrandTotalRow(
 }
 
 @Composable
-private fun CartExpressCheckoutRow(
+internal fun CartExpressCheckoutRow(
     paymentEnabled: Boolean,
     cashEnabled: Boolean,
     cardEnabled: Boolean,

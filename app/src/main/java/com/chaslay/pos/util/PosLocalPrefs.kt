@@ -33,6 +33,7 @@ private const val KEY_RETAIL_CASH_DIALOG_VALUE = "retail_cash_tender_dialog_valu
 private const val KEY_COURSE_SEND_MODE_USER_SET = "course_send_mode_user_set"
 private const val KEY_COURSE_SEND_MODE_VALUE = "course_send_mode_value"
 private const val KEY_AFTER_SALE_GO_TO_ORDERS = "after_sale_go_to_orders"
+private const val KEY_POS_MENU_DESIGN = "pos_menu_design"
 
 object PosLocalPrefs {
     private fun prefs(context: Context) =
@@ -219,6 +220,14 @@ object PosLocalPrefs {
     fun writeAfterSaleGoToOrders(context: Context, goToOrders: Boolean) {
         prefs(context).edit().putBoolean(KEY_AFTER_SALE_GO_TO_ORDERS, goToOrders).apply()
     }
+
+    fun savePosMenuDesign(context: Context, design: String) {
+        prefs(context).edit().putString(KEY_POS_MENU_DESIGN, design).apply()
+    }
+
+    fun readPosMenuDesign(context: Context): String =
+        prefs(context).getString(KEY_POS_MENU_DESIGN, com.chaslay.pos.domain.model.PosMenuDesign.CLASSIC.name)
+            ?: com.chaslay.pos.domain.model.PosMenuDesign.CLASSIC.name
 
     /** Locally edited catalog prices — preserved across MERGE menu sync until REPLACE. */
     fun saveLocalProductPrice(

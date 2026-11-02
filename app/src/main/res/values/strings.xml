@@ -882,6 +882,13 @@
     <string name="theme_light">Light caisse</string>
     <string name="theme_dark">Dark caisse</string>
     <string name="theme_help">Light mode uses a white background for easier reading on the register.</string>
+    <string name="pos_menu_design_title">Menu layout</string>
+    <string name="pos_menu_design_help">Classic keeps the color-coded register. Modern layouts show product photos and cart thumbnails.</string>
+    <string name="pos_menu_design_classic">Classic</string>
+    <string name="pos_menu_design_modern_top">Modern — categories on top</string>
+    <string name="pos_menu_design_modern_side">Modern — categories on side</string>
+    <string name="pos_catalog_search_hint">Search products…</string>
+    <string name="pos_catalog_filters">Filters</string>
     <string name="kiosk_fullscreen_title">Full screen (kiosk mode)</string>
     <string name="kiosk_fullscreen_help">Hides the Android status and navigation bars for a dedicated POS layout. Swipe from the edge to show them briefly.</string>
     <string name="crash_logs">Crash logs</string>

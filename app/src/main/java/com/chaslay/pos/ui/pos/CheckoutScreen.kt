@@ -65,6 +65,7 @@ import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.domain.model.PaymentMethod
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.applyCashRounding
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosDimens
@@ -142,8 +143,10 @@ fun CheckoutScreen(
     onScanBarcode: () -> Unit = {},
     onTogglePayWithPoints: (Boolean) -> Unit = {},
     onTogglePayWithGiftCard: (Boolean) -> Unit = {},
-    onGiftCardPay: () -> Unit = {}
+    onGiftCardPay: () -> Unit = {},
+    posMenuDesign: PosMenuDesign = PosMenuDesign.CLASSIC,
 ) {
+    val showCartThumbnails = posMenuDesign.isModern
     val equalSplitCount = if (isEqualSplit) splitBillCount ?: 1 else 1
     val totals = rememberCheckoutTotals(cart, checkoutState, equalSplitCount)
     val showSplitNav = splitBillIndex != null && splitBillCount != null && splitBillCount > 1
@@ -583,20 +586,31 @@ fun CheckoutScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            item.displayQtyLabel(),
-                            fontSize = 14.sp,
+                        Row(
                             modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = posUiColors().textPrimary
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (showCartThumbnails) {
+                                ModernPosCartLineThumbnail(
+                                    imageUri = item.imageUri,
+                                    modifier = Modifier.padding(end = 8.dp),
+                                )
+                            }
+                            Text(
+                                item.displayQtyLabel(),
+                                fontSize = 14.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                color = posUiColors().textPrimary,
+                            )
+                        }
                         Text(
                             formatMoney(item.lineSubtotal, currencySymbol),
                             fontSize = 14.sp,
-                            color = posUiColors().textPrimary
+                            color = posUiColors().textPrimary,
                         )
                     }
                 }
