@@ -456,6 +456,7 @@ import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategor
 import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
 import WebPosRetailCashPayModal from '@/components/webpos/WebPosRetailCashPayModal';
 import WebPosRetailSettingsDrawer from '@/components/webpos/WebPosRetailSettingsDrawer';
+import WebPosReceiptSettingsDrawer from '@/components/webpos/WebPosReceiptSettingsDrawer';
 import { productMatchesScan, looksLikeRetailBarcodeInput, tokenizedProductSearchMatch, sanitizeScanCode, stripScannerControlChars } from '@/lib/product-scan-codes';
 import {
   readDeviceRegisterProfileId,
@@ -1248,6 +1249,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [customAmountOpen, setCustomAmountOpen] = useState(false);
   const [scanCreateBarcode, setScanCreateBarcode] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [receiptDesignOpen, setReceiptDesignOpen] = useState(false);
   const [channelsSaving, setChannelsSaving] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
     const hasItems = (bootActive?.cart?.length || 0) > 0 || !!bootActive?.orderSent;
@@ -1887,6 +1889,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   useEffect(() => {
     writeShowPosToasts(checkoutSettings.showPosToasts === true);
   }, [checkoutSettings.showPosToasts]);
+  const expressPlacement =
+    checkoutSettings.expressPayPlacement === 'cart' ? 'cart' : 'product_grid';
+  const expressMasterEnabled = checkoutSettings.expressCheckoutEnabled !== false;
+  const expressOnProductGrid = expressMasterEnabled && expressPlacement !== 'cart';
+  const expressOnCart = expressMasterEnabled && expressPlacement === 'cart';
   const loyaltyProgram = useMemo(
     () =>
       normalizeLoyaltyProgram(
@@ -8072,7 +8079,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const runExpressPay = async (method: PosPaymentMethod) => {
-    if (method === 'cash' && isRetail) {
+    if (method === 'cash' && isRetail && checkoutSettings.retailCashTenderDialogEnabled !== false) {
       openRetailCashPay();
       return;
     }
@@ -11499,6 +11506,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onOpenCustomerDisplay={
               cdsToken && cdsEnabled ? () => openCustomerDisplay() : undefined
             }
+            onOpenReceiptDesign={
+              canShowBackOffice && !hardwareGearOnly
+                ? () => {
+                    setSettingsOpen(false);
+                    setReceiptDesignOpen(true);
+                  }
+                : undefined
+            }
             autoOpenCashDrawer={shouldAutoOpenCashDrawer(printSettings)}
             onAutoOpenCashDrawerChange={(enabled) => void persistAutoOpenCashDrawer(enabled)}
             onSendLogs={() => {
@@ -12030,7 +12045,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 onReleaseTable={releaseEmptyTable}
                 isRetail={isRetail}
                 retailPaymentBar={
-                  useRetailLayout && checkoutSettings.retailPaymentBar !== false
+                  useRetailLayout &&
+                  checkoutSettings.retailPaymentBar !== false &&
+                  (!expressMasterEnabled || expressOnCart)
                 }
                 onExpressCash={openRetailCashPay}
                 onExpressCard={() => void runExpressPay('card')}
@@ -12145,7 +12162,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                   checkoutSettings.retailQuickTiles.includes(p.id)
                 )}
                 onOpenSettings={() => setRetailTillSettingsOpen(true)}
-                expressCheckout={checkoutSettings.expressCheckoutEnabled !== false}
+                expressCheckout={expressOnProductGrid}
                 expressMethods={{
                   cash: enabledMethods.cash,
                   card: enabledMethods.card,
@@ -12246,7 +12263,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                     return next;
                   });
                 }}
-                expressCheckout={checkoutSettings.expressCheckoutEnabled !== false}
+                expressCheckout={expressOnProductGrid}
                 expressMethods={{
                   cash: enabledMethods.cash,
                   card: enabledMethods.card,
@@ -12330,9 +12347,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         )}
 
         {expressSuccessOpen && successInfo ? (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-6">
+          <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-y-auto bg-black/45 p-4 sm:items-center sm:p-6">
             <div
-              className={`w-full ${
+              className={`w-full max-h-[96vh] ${
                 isRetail || (successSplitParts?.length ?? 0) > 1 ? 'max-w-4xl' : 'max-w-xl'
               }`}
             >
@@ -12373,6 +12390,17 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
         onComplete={(tendered, changeDue) => void completeRetailCashPay(tendered, changeDue)}
       />
+      <WebPosReceiptSettingsDrawer
+        open={receiptDesignOpen}
+        onClose={() => setReceiptDesignOpen(false)}
+        merchant={merchant}
+        printSettings={printSettings}
+        onSaved={(next) => {
+          setPrintSettings(normalizeClientReceiptHeaderPrintSettings(next));
+          cacheMerchantAutoPrintSettings(next);
+        }}
+      />
+
       {useRetailLayout ? (
         <WebPosRetailSettingsDrawer
           open={retailTillSettingsOpen}

@@ -16,14 +16,17 @@ import com.chaslay.pos.domain.model.DashboardAuthResult
 import com.chaslay.pos.domain.model.AppLanguage
 import androidx.annotation.StringRes
 import com.chaslay.pos.R
+import com.chaslay.pos.domain.model.ExpressPayPlacement
 import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
+import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.domain.model.CategoryPrintSetting
 import com.chaslay.pos.domain.model.PrintTarget
 import com.chaslay.pos.domain.model.SupportedCurrency
 import com.chaslay.pos.printer.BluetoothPrinterService
+import com.chaslay.pos.printer.PrinterUserMessages
 import com.chaslay.pos.printer.DiscoveredPrinter
 import com.chaslay.pos.printer.UsbPrinterDevice
 import com.chaslay.pos.printer.UsbPrinterManager
@@ -110,6 +113,9 @@ data class SettingsUiState(
     val cardEnabled: Boolean = true,
     val terminalEnabled: Boolean = true,
     val expressEnabled: Boolean = true,
+    val expressPayPlacement: ExpressPayPlacement = ExpressPayPlacement.PRODUCT_GRID,
+    val afterSaleGoToOrders: Boolean = false,
+    val retailCashTenderDialogEnabled: Boolean = true,
     val giftCardsEnabled: Boolean = false,
     val paymentMethodsManagedByCloud: Boolean = false,
     val printerPrintReceipts: Boolean = true,
@@ -149,6 +155,9 @@ data class SettingsUiState(
     val newPresetName: String = "",
     val newPresetPercent: String = "",
     val savedPrinters: List<com.chaslay.pos.data.local.entity.PrinterConfigEntity> = emptyList(),
+    /** Live reachability keyed by [SettingsViewModel.printerReachabilityKey]. */
+    val printerReachability: Map<String, Boolean> = emptyMap(),
+    val isProbingPrinters: Boolean = false,
     val showAddPrinterDialog: Boolean = false,
     val editingPrinter: com.chaslay.pos.data.local.entity.PrinterConfigEntity? = null,
     val linkCategories: List<PrinterLinkCategory> = emptyList(),
@@ -167,12 +176,15 @@ data class SettingsUiState(
     val selectedSection: SettingsSection = SettingsSection.GENERAL,
     val posThemeMode: PosThemeMode = PosThemeMode.LIGHT,
     val kioskFullscreenEnabled: Boolean = true,
+    val posDisplayScale: Float = 1f,
+    val posTextScale: Float = 1f,
     val crashLogs: List<CrashLogEntry> = emptyList(),
     val selectedCrashLog: String? = null,
     val crashLogContent: String = "",
     val isPrinterBusy: Boolean = false,
     val posMode: PosMode = PosMode.RESTAURANT,
     val coursesEnabled: Boolean = false,
+    val courseSendMode: CourseSendMode = CourseSendMode.FIRE_PER_COURSE,
     val tablesEnabled: Boolean = true,
     val retailDineInEnabled: Boolean = false,
     val retailTakeawayEnabled: Boolean = false,
@@ -256,6 +268,8 @@ class SettingsViewModel @Inject constructor(
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(language.code))
             val themeMode = sessionManager.posThemeMode.first()
             val kioskFullscreen = sessionManager.kioskFullscreenEnabled.first()
+            val displayScale = sessionManager.posDisplayScale.first()
+            val textScale = sessionManager.posTextScale.first()
             val syncBusinessInfo = syncPreferences.isSyncBusinessInfoEnabled()
             val categories = productRepository.getAllCategories()
             val posSession = loadPosSessionDisplay(settings.businessName)
@@ -265,6 +279,8 @@ class SettingsViewModel @Inject constructor(
                     businessName = settings.businessName,
                     posThemeMode = themeMode,
                     kioskFullscreenEnabled = kioskFullscreen,
+                    posDisplayScale = displayScale,
+                    posTextScale = textScale,
                     vatNumber = settings.vatNumber,
                     address = settings.address,
                     phone = settings.phone,
@@ -291,6 +307,9 @@ class SettingsViewModel @Inject constructor(
                     cardEnabled = settings.cardEnabled,
                     terminalEnabled = settings.terminalEnabled,
                     expressEnabled = settings.expressEnabled,
+                    expressPayPlacement = ExpressPayPlacement.fromCheckoutValue(settings.expressPayPlacement),
+                    afterSaleGoToOrders = com.chaslay.pos.util.PosLocalPrefs.readAfterSaleGoToOrders(appContext),
+                    retailCashTenderDialogEnabled = settings.retailCashTenderDialogEnabled,
                     giftCardsEnabled = settings.giftCardsEnabled,
                     paymentMethodsManagedByCloud = settings.paymentMethodsManagedByCloud,
                     printerPrintReceipts = settings.printerPrintReceipts,
@@ -319,6 +338,7 @@ class SettingsViewModel @Inject constructor(
                     posMode = settings.posMode,
                     posModeManagedByCloud = cloudMerchant || settings.paymentMethodsManagedByCloud,
                     coursesEnabled = settings.coursesEnabled,
+                    courseSendMode = CourseSendMode.fromKey(settings.courseSendMode),
                     tablesEnabled = settings.tablesEnabled,
                     retailDineInEnabled = settings.retailDineInEnabled,
                     retailTakeawayEnabled = settings.retailTakeawayEnabled,
@@ -372,6 +392,10 @@ class SettingsViewModel @Inject constructor(
 
     fun selectSection(section: SettingsSection) {
         _uiState.update { it.copy(selectedSection = section, message = null) }
+        if (section == SettingsSection.PRINTERS) {
+            discoverUsbDevices()
+            refreshPrinterConnectionState()
+        }
         if (section == SettingsSection.SCALE) {
             refreshScaleConnectionState()
             usbPrinterManager.requestMonitoredScalePermissionFromSettings(_uiState.value.scaleUsbAddress) { granted ->
@@ -497,6 +521,18 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { sessionManager.setKioskFullscreenEnabled(enabled) }
     }
 
+    fun updatePosDisplayScale(scale: Float) {
+        val clamped = com.chaslay.pos.ui.theme.PosAppearanceLimits.clampDisplay(scale)
+        _uiState.update { it.copy(posDisplayScale = clamped) }
+        viewModelScope.launch { sessionManager.setPosDisplayScale(clamped) }
+    }
+
+    fun updatePosTextScale(scale: Float) {
+        val clamped = com.chaslay.pos.ui.theme.PosAppearanceLimits.clampText(scale)
+        _uiState.update { it.copy(posTextScale = clamped) }
+        viewModelScope.launch { sessionManager.setPosTextScale(clamped) }
+    }
+
     fun refreshCrashLogs() {
         _uiState.update {
             it.copy(crashLogs = crashLogger.listLogs())
@@ -534,6 +570,37 @@ class SettingsViewModel @Inject constructor(
                     .filter { it.connectionType == "USB" || UsbPrinterManager.isUsbAddress(it.address) }
                     .map { usbPrinterManager.normalizeStoredAddress(it.address) }
             )
+            if (_uiState.value.selectedSection == SettingsSection.PRINTERS) {
+                refreshPrinterConnectionState()
+            }
+        }
+    }
+
+    fun printerReachabilityKey(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity): String =
+        if (printer.connectionType == "USB") {
+            usbPrinterManager.normalizeStoredAddress(printer.address)
+        } else {
+            printer.address.trim()
+        }
+
+    fun refreshPrinterConnectionState() {
+        viewModelScope.launch {
+            val printers = _uiState.value.savedPrinters
+            if (printers.isEmpty()) {
+                _uiState.update { it.copy(printerReachability = emptyMap(), isProbingPrinters = false) }
+                return@launch
+            }
+            _uiState.update { it.copy(isProbingPrinters = true) }
+            usbPrinterManager.syncGrantedDevicesFromSystem()
+            val reachability = linkedMapOf<String, Boolean>()
+            for (printer in printers) {
+                val key = printerReachabilityKey(printer)
+                val reachable = withContext(Dispatchers.IO) {
+                    printerService.probePrinterReachable(printer.address, printer.connectionType)
+                }
+                reachability[key] = reachable
+            }
+            _uiState.update { it.copy(printerReachability = reachability, isProbingPrinters = false) }
         }
     }
 
@@ -652,7 +719,7 @@ class SettingsViewModel @Inject constructor(
                     isPrinterBusy = false,
                     message = result.fold(
                         onSuccess = { "Test print sent" },
-                        onFailure = { e -> e.message ?: "Test print failed" }
+                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, form.name) }
                     )
                 )
             }
@@ -690,6 +757,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
     fun updateCoursesEnabled(enabled: Boolean) = _uiState.update { it.copy(coursesEnabled = enabled) }
+    fun updateCourseSendMode(mode: CourseSendMode) = _uiState.update { it.copy(courseSendMode = mode) }
     fun updateTablesEnabled(enabled: Boolean) = _uiState.update { it.copy(tablesEnabled = enabled) }
     fun updateRetailDineInEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDineInEnabled = enabled) }
     fun updateRetailTakeawayEnabled(enabled: Boolean) = _uiState.update { it.copy(retailTakeawayEnabled = enabled) }
@@ -972,6 +1040,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
     fun updateReceiptTemplateName(value: String) = _uiState.update { it.copy(receiptTemplateName = value) }
+
+    fun previewReceiptText(): String =
+        printerService.buildSettingsPreviewReceiptText(buildSettingsFromState())
     /**
      * Take payment methods off panel control for this device, or hand them back.
      * The individual payment switches are disabled while the panel owns them, so
@@ -1040,6 +1111,15 @@ class SettingsViewModel @Inject constructor(
     }
     fun updateExpressEnabled(enabled: Boolean) = _uiState.update {
         it.copy(expressEnabled = enabled, paymentMethodsManagedByCloud = false)
+    }
+    fun updateExpressPayPlacement(placement: ExpressPayPlacement) = _uiState.update {
+        it.copy(expressPayPlacement = placement)
+    }
+    fun updateAfterSaleGoToOrders(goToOrders: Boolean) = _uiState.update {
+        it.copy(afterSaleGoToOrders = goToOrders)
+    }
+    fun updateRetailCashTenderDialogEnabled(enabled: Boolean) = _uiState.update {
+        it.copy(retailCashTenderDialogEnabled = enabled)
     }
     fun updateGiftCardsEnabled(enabled: Boolean) {
         _uiState.update {
@@ -1305,7 +1385,12 @@ class SettingsViewModel @Inject constructor(
                                 "Test print sent"
                             }
                         },
-                        onFailure = { e -> e.message ?: "Test print failed" }
+                        onFailure = {
+                            PrinterUserMessages.fromPrintFailure(
+                                appContext,
+                                settings.printerName ?: settings.printerMacAddress
+                            )
+                        }
                     )
                 )
             }
@@ -1324,7 +1409,7 @@ class SettingsViewModel @Inject constructor(
                     isPrinterBusy = false,
                     message = result.fold(
                         onSuccess = { "USB test print sent" },
-                        onFailure = { e -> e.message ?: "USB test print failed" }
+                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, normalized) }
                     )
                 )
             }
@@ -1362,10 +1447,11 @@ class SettingsViewModel @Inject constructor(
                     isPrinterBusy = false,
                     message = result.fold(
                         onSuccess = { "Test print sent to ${printer.name}" },
-                        onFailure = { e -> e.message ?: "Test print failed" }
+                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, printer.name) }
                     )
                 )
             }
+            refreshPrinterConnectionState()
         }
     }
 
@@ -1376,7 +1462,11 @@ class SettingsViewModel @Inject constructor(
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 printerService.routeEndOfDayReport(settings, report)
             }.onSuccess { _uiState.update { it.copy(message = "End of day report printed") } }
-                .onFailure { e -> _uiState.update { it.copy(message = e.message) } }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(message = PrinterUserMessages.fromPrintFailure(appContext))
+                    }
+                }
         }
     }
 
@@ -1404,6 +1494,27 @@ class SettingsViewModel @Inject constructor(
             }
             if (settings.retailDeliveryEnabled != previous.retailDeliveryEnabled) {
                 com.chaslay.pos.util.PosLocalPrefs.saveRetailDeliveryEnabled(appContext, settings.retailDeliveryEnabled)
+            }
+            if (settings.expressPayPlacement != previous.expressPayPlacement) {
+                com.chaslay.pos.util.PosLocalPrefs.saveExpressPayPlacement(appContext, settings.expressPayPlacement)
+            }
+            val afterSaleGoToOrders = _uiState.value.afterSaleGoToOrders
+            val previousAfterSaleGoToOrders =
+                com.chaslay.pos.util.PosLocalPrefs.readAfterSaleGoToOrders(appContext)
+            if (afterSaleGoToOrders != previousAfterSaleGoToOrders) {
+                com.chaslay.pos.util.PosLocalPrefs.writeAfterSaleGoToOrders(appContext, afterSaleGoToOrders)
+            }
+            if (settings.expressEnabled != previous.expressEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveExpressCheckoutEnabled(appContext, settings.expressEnabled)
+            }
+            if (settings.retailCashTenderDialogEnabled != previous.retailCashTenderDialogEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailCashTenderDialogEnabled(
+                    appContext,
+                    settings.retailCashTenderDialogEnabled
+                )
+            }
+            if (settings.courseSendMode != previous.courseSendMode) {
+                com.chaslay.pos.util.PosLocalPrefs.saveCourseSendMode(appContext, settings.courseSendMode)
             }
             settingsRepository.saveSettings(settings)
             currentSettings = settings
@@ -1457,6 +1568,8 @@ class SettingsViewModel @Inject constructor(
             cardEnabled = state.cardEnabled,
             terminalEnabled = state.terminalEnabled,
             expressEnabled = state.expressEnabled,
+            expressPayPlacement = ExpressPayPlacement.toCheckoutValue(state.expressPayPlacement),
+            retailCashTenderDialogEnabled = state.retailCashTenderDialogEnabled,
             giftCardsEnabled = state.giftCardsEnabled,
             // POS Settings wins when staff change toggles locally.
             paymentMethodsManagedByCloud = state.paymentMethodsManagedByCloud,
@@ -1489,6 +1602,7 @@ class SettingsViewModel @Inject constructor(
             receiptTemplateName = state.receiptTemplateName,
             posMode = state.posMode,
             coursesEnabled = state.coursesEnabled,
+            courseSendMode = state.courseSendMode.toStorageKey(),
             tablesEnabled = state.tablesEnabled,
             retailDineInEnabled = state.retailDineInEnabled,
             retailTakeawayEnabled = state.retailTakeawayEnabled,

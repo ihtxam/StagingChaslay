@@ -1,5 +1,10 @@
 package com.chaslay.pos.ui.pos
 
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
+import com.chaslay.pos.ui.theme.PosShapes
+import com.chaslay.pos.ui.theme.posUiColors
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,11 +24,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
@@ -66,14 +73,6 @@ import com.chaslay.pos.domain.model.hasSizeChoice
 import com.chaslay.pos.domain.model.SelectedAddon
 import com.chaslay.pos.domain.model.SelectedModifier
 import java.util.Locale
-
-private val CustomizeTeal = Color(0xFF0D9488)
-private val CustomizeTealPill = Color(0xFF00897B)
-private val CustomizeAccentSoft = Color(0xFFCCFBF1)
-private val CustomizeBorder = Color(0xFFE7E5E4)
-private val CustomizeText = Color(0xFF1C1917)
-private val CustomizeTextMuted = Color(0xFF78716C)
-private val CustomizePrimaryBlue = Color(0xFF2563EB)
 
 data class CustomizedProductResult(
     val variantName: String?,
@@ -240,6 +239,8 @@ fun ProductCustomizeDialog(
         )
     }
 
+    val ui = posUiColors()
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -248,44 +249,41 @@ fun ProductCustomizeDialog(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .fillMaxHeight(0.88f),
-            color = Color.White,
-            shape = RoundedCornerShape(16.dp)
+            color = ui.surface,
+            shape = PosShapes.Dialog,
+            shadowElevation = 8.dp,
+            tonalElevation = 0.dp,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.Top
+                        .background(ui.surfaceSubtle)
+                        .padding(horizontal = PosDimens.Space4, vertical = PosDimens.Space3),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             product.name,
-                            color = CustomizeText,
+                            color = ui.textPrimary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            fontSize = 18.sp
                         )
                         if (selectionSummary.isNotBlank()) {
                             Text(
                                 selectionSummary,
-                                color = CustomizeTextMuted,
-                                fontSize = 14.sp,
+                                color = ui.textSecondary,
+                                fontSize = 13.sp,
                                 maxLines = 2,
-                                modifier = Modifier.padding(top = 6.dp)
+                                modifier = Modifier.padding(top = 4.dp)
                             )
                         }
                     }
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .border(1.dp, CustomizeBorder, RoundedCornerShape(10.dp))
-                    ) {
+                    IconButton(onClick = onDismiss) {
                         Icon(
-                            Icons.Outlined.Delete,
+                            Icons.Default.Close,
                             contentDescription = stringResource(R.string.discard),
-                            tint = CustomizeTextMuted,
-                            modifier = Modifier.size(20.dp)
+                            tint = ui.textSecondary,
                         )
                     }
                 }
@@ -295,9 +293,9 @@ fun ProductCustomizeDialog(
                         .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (product.hasSizeChoice()) {
                             CustomizeGroupSection(
                                 groupLabel = stringResource(R.string.size),
@@ -310,7 +308,7 @@ fun ProductCustomizeDialog(
                                         label = variant.name,
                                         topLabel = formatExtraPriceLabel(delta, currencySymbol, includedLabel),
                                         selected = selected,
-                                        modifier = Modifier.width(112.dp),
+                                        modifier = Modifier.width(100.dp),
                                         onClick = {
                                             selectedVariant =
                                                 if (selectedVariant?.id == variant.id) null else variant
@@ -337,7 +335,7 @@ fun ProductCustomizeDialog(
                                                     includedLabel
                                                 ),
                                                 selected = qty > 0,
-                                                modifier = Modifier.width(112.dp),
+                                                modifier = Modifier.width(100.dp),
                                                 onClick = {
                                                     if (group.limitQuantity <= 1) {
                                                         applySingleAddonToggle(group, option.id, addonQty)
@@ -377,7 +375,7 @@ fun ProductCustomizeDialog(
                                                 label = option.name,
                                                 topLabel = includedLabel,
                                                 selected = selected,
-                                                modifier = Modifier.width(112.dp),
+                                                modifier = Modifier.width(100.dp),
                                                 onClick = {
                                                     if (group.isSingleSelect) {
                                                         toggleSingleModifier(group, option.id)
@@ -407,17 +405,18 @@ fun ProductCustomizeDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, CustomizeBorder)
+                        .background(ui.surfaceSubtle)
+                        .border(1.dp, ui.border)
                 ) {
                     errorMessage?.let { msg ->
                         Text(
                             msg,
-                            color = Color(0xFFB91C1C),
-                            fontSize = 13.sp,
+                            color = PosColors.Danger,
+                            fontSize = 12.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFFFEF2F2))
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .background(ui.dangerSubtle)
+                                .padding(horizontal = PosDimens.Space4, vertical = PosDimens.Space2)
                         )
                     }
 
@@ -431,8 +430,8 @@ fun ProductCustomizeDialog(
                             minLines = 2,
                             placeholder = { Text(stringResource(R.string.item_notes)) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CustomizeTeal,
-                                unfocusedBorderColor = CustomizeBorder,
+                                focusedBorderColor = PosColors.Primary,
+                                unfocusedBorderColor = ui.border,
                             )
                         )
                     }
@@ -447,26 +446,26 @@ fun ProductCustomizeDialog(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .border(1.dp, CustomizeBorder, RoundedCornerShape(12.dp))
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White)
+                                .border(1.dp, ui.border, PosShapes.Medium)
+                                .clip(PosShapes.Medium)
+                                .background(ui.surface)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(PosDimens.ControlHeightMd)
                                     .clickable(enabled = itemQty > 1) { if (itemQty > 1) itemQty-- },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     Icons.Default.Remove,
                                     contentDescription = null,
-                                    tint = if (itemQty > 1) CustomizeText else CustomizeBorder,
+                                    tint = if (itemQty > 1) ui.textPrimary else ui.border,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
                             Text(
                                 itemQty.toString(),
-                                color = CustomizeText,
+                                color = ui.textPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 modifier = Modifier.width(40.dp),
@@ -474,14 +473,14 @@ fun ProductCustomizeDialog(
                             )
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(PosDimens.ControlHeightMd)
                                     .clickable { itemQty++ },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     Icons.Default.Add,
                                     contentDescription = null,
-                                    tint = CustomizeText,
+                                    tint = ui.textPrimary,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -491,20 +490,20 @@ fun ProductCustomizeDialog(
                             onClick = { showNotes = !showNotes },
                             colors = ButtonDefaults.textButtonColors(
                                 contentColor = if (showNotes || userNotes.isNotBlank()) {
-                                    CustomizeTeal
+                                    PosColors.Primary
                                 } else {
-                                    CustomizeText
+                                    ui.textPrimary
                                 }
                             ),
                             modifier = Modifier
                                 .border(
                                     1.dp,
-                                    if (showNotes || userNotes.isNotBlank()) CustomizeTeal else CustomizeBorder,
-                                    RoundedCornerShape(12.dp)
+                                    if (showNotes || userNotes.isNotBlank()) PosColors.Primary else ui.border,
+                                    PosShapes.Medium
                                 )
                                 .background(
-                                    if (showNotes || userNotes.isNotBlank()) CustomizeAccentSoft else Color.White,
-                                    RoundedCornerShape(12.dp)
+                                    if (showNotes || userNotes.isNotBlank()) ui.primarySubtle else ui.surface,
+                                    PosShapes.Medium
                                 )
                         ) {
                             Icon(
@@ -526,37 +525,44 @@ fun ProductCustomizeDialog(
                         }
                     }
 
-                    Button(
-                        onClick = { confirmCustomize() },
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CustomizePrimaryBlue),
-                        shape = RoundedCornerShape(0.dp)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                     ) {
-                        Icon(
-                            Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (isEditing) {
-                                stringResource(
-                                    R.string.customize_save_with_total,
-                                    "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}"
-                                )
-                            } else {
-                                stringResource(
-                                    R.string.customize_add_with_total,
-                                    "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}"
-                                )
-                            },
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
+                        Button(
+                            onClick = { confirmCustomize() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(PosDimens.ControlHeightMd),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PosColors.Primary,
+                                contentColor = PosColors.TextOnPrimary,
+                            ),
+                            shape = PosShapes.Medium
+                        ) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (isEditing) {
+                                    stringResource(
+                                        R.string.customize_save_with_total,
+                                        "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}"
+                                    )
+                                } else {
+                                    stringResource(
+                                        R.string.customize_add_with_total,
+                                        "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}"
+                                    )
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp
+                            )
+                        }
                     }
                 }
             }
@@ -570,26 +576,36 @@ private fun CustomizeGroupSection(
     required: Boolean,
     content: @Composable () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val ui = posUiColors()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
-            modifier = Modifier
-                .background(CustomizeTealPill, RoundedCornerShape(999.dp))
-                .padding(horizontal = 12.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                groupLabel,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    groupLabel,
+                    color = ui.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                )
+                if (required) {
+                    Text(
+                        "*",
+                        color = PosColors.Danger,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
+                }
+            }
             if (required) {
                 Text(
-                    "*",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(start = 2.dp)
+                    stringResource(R.string.required),
+                    color = PosColors.Primary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }
@@ -597,7 +613,7 @@ private fun CustomizeGroupSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             content()
         }
@@ -612,36 +628,66 @@ private fun CustomizeOptionTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val border = if (selected) CustomizeTeal else CustomizeBorder
-    val bg = if (selected) CustomizeAccentSoft else Color.White
-    val topColor = if (selected) CustomizeTeal else CustomizeTextMuted
-    Column(
+    val ui = posUiColors()
+    Box(
         modifier = modifier
-            .heightIn(min = 88.dp)
-            .border(2.dp, border, RoundedCornerShape(12.dp))
-            .background(bg, RoundedCornerShape(12.dp))
+            .heightIn(min = 64.dp)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) PosColors.Primary else ui.border,
+                shape = PosShapes.Small,
+            )
+            .background(
+                if (selected) ui.surfaceSelected else ui.surface,
+                PosShapes.Small,
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = 6.dp, vertical = 5.dp),
     ) {
-        Text(
-            topLabel,
-            color = topColor,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            label,
-            color = CustomizeText,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            modifier = Modifier.padding(top = 6.dp)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.Center)
+                .padding(end = if (selected) 14.dp else 0.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                topLabel,
+                color = if (selected) PosColors.Primary else ui.textMuted,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                label,
+                color = ui.textPrimary,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                lineHeight = 14.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(PosColors.Primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = PosColors.TextOnPrimary,
+                    modifier = Modifier.size(11.dp),
+                )
+            }
+        }
     }
 }
 
@@ -801,19 +847,20 @@ internal fun ProductExtraGroupsInlineEditor(
     }
     if (extraGroups.isEmpty()) return
 
+    val ui = posUiColors()
     val includedLabel = stringResource(R.string.included)
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color.White,
-        shape = RoundedCornerShape(12.dp),
+        color = ui.surface,
+        shape = PosShapes.Card,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, CustomizeBorder)
+        border = BorderStroke(1.dp, ui.border)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(PosDimens.Space3),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             extraGroups.forEach { unified ->
                 when (unified) {
@@ -833,7 +880,7 @@ internal fun ProductExtraGroupsInlineEditor(
                                         includedLabel
                                     ),
                                     selected = qty > 0,
-                                    modifier = Modifier.width(112.dp),
+                                    modifier = Modifier.width(100.dp),
                                     onClick = {
                                         if (group.limitQuantity <= 1) {
                                             applySingleAddonToggle(group, option.id, addonQty)
@@ -873,7 +920,7 @@ internal fun ProductExtraGroupsInlineEditor(
                                     label = option.name,
                                     topLabel = includedLabel,
                                     selected = selected,
-                                    modifier = Modifier.width(112.dp),
+                                    modifier = Modifier.width(100.dp),
                                     onClick = {
                                         if (group.isSingleSelect) {
                                             applySingleModifierToggle(

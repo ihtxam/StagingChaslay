@@ -17,6 +17,7 @@
     <string name="cart_empty">Warenkorb ist leer</string>
     <string name="subtotal">Teilsumme</string>
     <string name="tax">Steuern</string>
+    <string name="cart_vat_at_rate">MwSt. (%1$s%%)</string>
     <string name="tax_included_in_total">Enthaltene MwSt.</string>
     <string name="settings_section_general">Allgemein</string>
     <string name="settings_section_vat_tables">MwSt. &amp; Tische</string>
@@ -221,7 +222,9 @@
     <string name="invoice_offline_queued">Rechnung offline gespeichert. PDF wird online erzeugt.</string>
     <string name="pos_register">Kasse</string>
     <string name="pos_orders">Bestellungen</string>
+    <string name="after_sale_destination">Ziel nach Verkauf</string>
     <string name="after_sale_destination_cd">Ziel nach Verkauf</string>
+    <string name="after_sale_destination_hint">Bildschirm nach Abschluss der Bestellung und Schließen des Belegs.</string>
     <string name="after_sale_register">Nach Verkauf: Kasse</string>
     <string name="after_sale_orders">Nach Verkauf: Bestellungen</string>
     <string name="product_grid_images">Img</string>

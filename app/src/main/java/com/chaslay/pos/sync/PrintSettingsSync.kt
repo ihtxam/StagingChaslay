@@ -18,6 +18,7 @@ fun BusinessSettingsEntity.mergePosPrintSettings(
     } else {
         print.autoPrintReceipt
     }
+    val template = print.receiptTemplateName.trim().ifBlank { "Default" }
     return copy(
         adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly,
         receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr,
@@ -26,6 +27,12 @@ fun BusinessSettingsEntity.mergePosPrintSettings(
         waiterTillBellEnabled = print.waiterTillBellEnabled,
         kitchenPrintRetryEnabled = print.kitchenPrintRetryEnabled,
         kitchenPrintRetryAttempts = print.kitchenPrintRetryAttempts.coerceIn(1, 20),
-        kitchenPrintRetryIntervalSec = print.kitchenPrintRetryIntervalSec.coerceIn(2, 60)
+        kitchenPrintRetryIntervalSec = print.kitchenPrintRetryIntervalSec.coerceIn(2, 60),
+        receiptTemplateName = template,
+        receiptHeader = print.receiptHeader,
+        receiptFooter = print.receiptFooter.ifBlank { receiptFooter },
+        receiptShowVatTable = print.receiptShowVatTable,
+        receiptShowStaffLine = print.receiptShowStaffLine,
+        receiptShowQrCode = print.receiptShowQrCode
     )
 }

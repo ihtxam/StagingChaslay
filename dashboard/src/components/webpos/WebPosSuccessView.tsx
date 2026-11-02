@@ -288,19 +288,71 @@ export default function WebPosSuccessView({
     </>
   );
 
+  const footerActions = (
+    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-stone-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+        >
+          {t('webPosBack')}
+        </button>
+      ) : null}
+      {!isSplit && onPrint ? (
+        <button
+          type="button"
+          onClick={onPrint}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 hover:bg-stone-50"
+        >
+          <Printer size={16} />
+          {t('webPosPrint')}
+        </button>
+      ) : null}
+      {onOpenDrawer ? (
+        <button
+          type="button"
+          onClick={onOpenDrawer}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 hover:bg-stone-50"
+        >
+          <Vault size={16} />
+          {t('webPosOpenDrawer')}
+        </button>
+      ) : null}
+      {onSendReceipt ? (
+        <button
+          type="button"
+          onClick={onSendReceipt}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-800 hover:bg-stone-50"
+        >
+          <Send size={16} />
+          {t('webPosSendReceipt')}
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={onContinue}
+        className="webpos-accent-btn inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold"
+      >
+        {t('webPosContinue')}
+        <ArrowRight size={18} strokeWidth={2.25} />
+      </button>
+    </div>
+  );
+
   if (showTwoColumn || isSplit) {
     return (
       <div
-        className={`flex min-h-0 flex-1 flex-col bg-white ${
+        className={`flex max-h-[min(92vh,880px)] min-h-0 flex-col overflow-hidden bg-white ${
           compact
             ? 'rounded-3xl border border-stone-200 shadow-2xl'
             : ''
         }`}
       >
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
           <div
-            className={`flex flex-col border-b border-stone-100 px-6 py-8 md:border-b-0 md:border-r ${
-              isSplit ? 'min-h-0 overflow-y-auto' : 'items-center justify-center text-center'
+            className={`flex min-h-0 flex-col border-b border-stone-100 px-6 py-6 md:border-b-0 md:border-r ${
+              isSplit ? 'overflow-y-auto' : 'items-center justify-center text-center'
             }`}
           >
             {isSplit ? (
@@ -313,27 +365,22 @@ export default function WebPosSuccessView({
             )}
           </div>
 
-          <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
+          <div className="flex min-h-0 flex-col overflow-y-auto px-6 py-6 text-center">
             {isSplit ? (
               <>
-                <CheckCircle2 size={compact ? 72 : 64} className="text-emerald-500" strokeWidth={1.5} />
+                <CheckCircle2 size={compact ? 64 : 56} className="mx-auto text-emerald-500" strokeWidth={1.5} />
                 <div className="mt-4">{amountSummary}</div>
-                <div className={`flex flex-wrap items-center justify-center ${compact ? 'mt-6 gap-3' : 'mt-8 gap-4'}`}>
-                  {actionButtons}
-                </div>
               </>
             ) : (
               <>
                 {receiptUrl ? (
                   <ReceiptQr url={receiptUrl} label={t('webPosDigitalReceipt')} compact={compact} />
                 ) : null}
-                <div className={`flex flex-wrap items-center justify-center ${compact ? 'mt-6 gap-3' : 'mt-8 gap-4'}`}>
-                  {actionButtons}
-                </div>
               </>
             )}
           </div>
         </div>
+        {footerActions}
       </div>
     );
   }

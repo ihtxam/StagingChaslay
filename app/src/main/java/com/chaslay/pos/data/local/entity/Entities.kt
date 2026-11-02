@@ -244,6 +244,10 @@ data class BusinessSettingsEntity(
     val terminalEnabled: Boolean = true,
     /** Quick one-tap cash sale (Xpress button). Synced from merchant panel. */
     val expressEnabled: Boolean = true,
+    /** cart | product_grid — express pay buttons under cart or product grid only. */
+    val expressPayPlacement: String = "product_grid",
+    /** Retail: show CashPaymentDialog (amount tendered) vs checkout keypad only. */
+    val retailCashTenderDialogEnabled: Boolean = true,
     /** When true, payment method toggles are controlled by the merchant panel sync. */
     val paymentMethodsManagedByCloud: Boolean = false,
     /** Gift card sell/reload/pay — synced from merchant panel; can be overridden locally. */

@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.reports
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -7,8 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import com.chaslay.pos.ui.theme.PosColors
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,37 +96,25 @@ fun EndOfDayReportScreen(
         formatPeriod(report.periodStart, report.periodEnd)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        EndOfDayHeader(onPrint = onPrint)
-        EodPrintOptionsRow(
+    Column(modifier = modifier.fillMaxSize().background(posUiColors().canvas)) {
+        EndOfDayHeader(
+            onPrint = onPrint,
             includeProductsOnPrint = includeProductsOnPrint,
             onIncludeProductsOnPrintChange = onIncludeProductsOnPrintChange,
             includeStaffBreakdownOnPrint = includeStaffBreakdownOnPrint,
             onIncludeStaffBreakdownOnPrintChange = onIncludeStaffBreakdownOnPrintChange,
             showStaffBreakdownToggle = showStaffBreakdownToggle,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
         )
-        EodDateSelector(
+        EodDateAndStaffFilterRow(
             preset = eodDayPreset,
             customDayStartMs = eodCustomDayStartMs,
             onPresetSelected = onEodDayPresetSelected,
             onCustomDaySelected = onEodCustomDaySelected,
+            staffOptions = staffOptions,
+            selectedStaffId = selectedStaffId,
+            onStaffSelected = onStaffSelected,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
         )
-        if (staffOptions.isNotEmpty()) {
-            Text(
-                stringResource(R.string.eod_staff_picker_hint),
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),
-                fontSize = 11.sp,
-                color = ReportDashColors.TextSecondary,
-            )
-            EodStaffSelector(
-                options = staffOptions,
-                selectedStaffId = selectedStaffId,
-                onSelected = onStaffSelected,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-            )
-        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
@@ -135,7 +124,7 @@ fun EndOfDayReportScreen(
                 item {
                     Text(
                         periodLabel,
-                        color = ReportDashColors.TextSecondary,
+                        color = reportDashColors().TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -149,7 +138,7 @@ fun EndOfDayReportScreen(
                 ReportBreakdownCard(
                     title = "Payment Methods",
                     icon = Icons.Outlined.CreditCard,
-                    accent = ReportDashColors.Info,
+                    accent = reportDashColors().Info,
                     rows = paymentRows,
                     sym = currencySymbol,
                 )
@@ -158,7 +147,7 @@ fun EndOfDayReportScreen(
                 ReportBreakdownCard(
                     title = "Order Types",
                     icon = Icons.Outlined.PointOfSale,
-                    accent = ReportDashColors.Success,
+                    accent = reportDashColors().Success,
                     rows = orderTypeRows,
                     sym = currencySymbol,
                 )
@@ -177,7 +166,7 @@ fun EndOfDayReportScreen(
                 item {
                     Text(
                         stringResource(R.string.products_sold),
-                        color = ReportDashColors.TextPrimary,
+                        color = reportDashColors().TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier.padding(top = 4.dp),
@@ -186,7 +175,7 @@ fun EndOfDayReportScreen(
                 item {
                     Text(
                         "${stringResource(R.string.total_products_sold)}: ${topProducts.sumOf { it.qty }}",
-                        color = ReportDashColors.TextSecondary,
+                        color = reportDashColors().TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -200,7 +189,7 @@ fun EndOfDayReportScreen(
                     ReportStaffEodBreakdownCard(
                         title = stringResource(R.string.eod_staff_breakdown_title),
                         icon = Icons.Outlined.PointOfSale,
-                        accent = ReportDashColors.Accent,
+                        accent = reportDashColors().Accent,
                         rows = report.staffBreakdown,
                         sym = currencySymbol,
                     )
@@ -225,36 +214,6 @@ fun EndOfDayReportScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun EodPrintOptionsRow(
-    includeProductsOnPrint: Boolean,
-    onIncludeProductsOnPrintChange: (Boolean) -> Unit,
-    includeStaffBreakdownOnPrint: Boolean,
-    onIncludeStaffBreakdownOnPrintChange: (Boolean) -> Unit,
-    showStaffBreakdownToggle: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    FlowRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        EodPrintSwitch(
-            checked = includeProductsOnPrint,
-            onCheckedChange = onIncludeProductsOnPrintChange,
-            label = stringResource(R.string.eod_include_products_on_print),
-        )
-        if (showStaffBreakdownToggle) {
-            EodPrintSwitch(
-                checked = includeStaffBreakdownOnPrint,
-                onCheckedChange = onIncludeStaffBreakdownOnPrintChange,
-                label = stringResource(R.string.eod_include_staff_on_print),
-            )
-        }
-    }
-}
-
 @Composable
 private fun EodPrintSwitch(
     checked: Boolean,
@@ -269,7 +228,7 @@ private fun EodPrintSwitch(
         Text(
             label,
             fontSize = 13.sp,
-            color = ReportDashColors.TextPrimary,
+            color = reportDashColors().TextPrimary,
             modifier = Modifier.padding(start = 4.dp),
         )
     }
@@ -277,11 +236,14 @@ private fun EodPrintSwitch(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EodDateSelector(
+private fun EodDateAndStaffFilterRow(
     preset: EodDayPreset,
     customDayStartMs: Long,
     onPresetSelected: (EodDayPreset) -> Unit,
     onCustomDaySelected: (Long) -> Unit,
+    staffOptions: List<EodStaffOption>,
+    selectedStaffId: Long?,
+    onStaffSelected: (Long?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var datePickerOpen by remember { mutableStateOf(false) }
@@ -294,6 +256,7 @@ private fun EodDateSelector(
             .fillMaxWidth()
             .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         listOf(
             EodDayPreset.TODAY to stringResource(R.string.today),
@@ -309,6 +272,20 @@ private fun EodDateSelector(
             stringResource(R.string.eod_pick_date)
         }
         EodChip(label = pickLabel, selected = customSelected) { datePickerOpen = true }
+        if (staffOptions.isNotEmpty()) {
+            Spacer(Modifier.width(4.dp))
+            staffOptions.forEach { option ->
+                val selected = option.userId == selectedStaffId
+                EodChip(
+                    label = if (option.userId == null) {
+                        stringResource(R.string.eod_company_wide)
+                    } else {
+                        option.name
+                    },
+                    selected = selected,
+                ) { onStaffSelected(option.userId) }
+            }
+        }
     }
     if (datePickerOpen) {
         val initialMs = when {
@@ -347,10 +324,10 @@ private fun EodChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) ReportDashColors.Accent else ReportDashColors.SurfaceDeeper)
+            .background(if (selected) reportDashColors().Accent else reportDashColors().SurfaceDeeper)
             .border(
                 1.dp,
-                if (selected) ReportDashColors.Accent else ReportDashColors.HairlineLight,
+                if (selected) reportDashColors().Accent else reportDashColors().HairlineLight,
                 RoundedCornerShape(10.dp),
             )
             .clickable(onClick = onClick)
@@ -358,7 +335,7 @@ private fun EodChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             label,
-            color = if (selected) ReportDashColors.OnAccent else ReportDashColors.TextPrimary,
+            color = if (selected) reportDashColors().OnAccent else reportDashColors().TextPrimary,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
         )
@@ -366,79 +343,62 @@ private fun EodChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EodStaffSelector(
-    options: List<EodStaffOption>,
-    selectedStaffId: Long?,
-    onSelected: (Long?) -> Unit,
-    modifier: Modifier = Modifier,
+private fun EndOfDayHeader(
+    onPrint: () -> Unit,
+    includeProductsOnPrint: Boolean,
+    onIncludeProductsOnPrintChange: (Boolean) -> Unit,
+    includeStaffBreakdownOnPrint: Boolean,
+    onIncludeStaffBreakdownOnPrintChange: (Boolean) -> Unit,
+    showStaffBreakdownToggle: Boolean,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { option ->
-            val selected = option.userId == selectedStaffId
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (selected) ReportDashColors.Accent else ReportDashColors.SurfaceDeeper)
-                    .border(
-                        1.dp,
-                        if (selected) ReportDashColors.Accent else ReportDashColors.HairlineLight,
-                        RoundedCornerShape(10.dp),
-                    )
-                    .clickable { onSelected(option.userId) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    if (option.userId == null) {
-                        stringResource(R.string.eod_company_wide)
-                    } else {
-                        option.name
-                    },
-                    color = if (selected) ReportDashColors.OnAccent else ReportDashColors.TextPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EndOfDayHeader(onPrint: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             stringResource(R.string.end_of_day),
-            color = ReportDashColors.TextPrimary,
+            color = reportDashColors().TextPrimary,
             fontSize = 22.sp,
             fontWeight = FontWeight.ExtraBold,
             modifier = Modifier.weight(1f),
         )
         Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(ReportDashColors.Accent)
-                .clickable(onClick = onPrint)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
+            modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Outlined.Print, contentDescription = null, tint = ReportDashColors.OnAccent, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.size(6.dp))
-            Text(
-                stringResource(R.string.print_end_of_day).uppercase(Locale.getDefault()),
-                color = ReportDashColors.OnAccent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 0.3.sp,
+            EodPrintSwitch(
+                checked = includeProductsOnPrint,
+                onCheckedChange = onIncludeProductsOnPrintChange,
+                label = stringResource(R.string.eod_include_products_on_print),
             )
+            if (showStaffBreakdownToggle) {
+                EodPrintSwitch(
+                    checked = includeStaffBreakdownOnPrint,
+                    onCheckedChange = onIncludeStaffBreakdownOnPrintChange,
+                    label = stringResource(R.string.eod_include_staff_on_print),
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(reportDashColors().Accent)
+                    .clickable(onClick = onPrint)
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Print, contentDescription = null, tint = reportDashColors().OnAccent, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.size(6.dp))
+                Text(
+                    stringResource(R.string.print_end_of_day).uppercase(Locale.getDefault()),
+                    color = reportDashColors().OnAccent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.3.sp,
+                )
+            }
         }
     }
 }
@@ -450,28 +410,28 @@ private fun EndOfDayKpiGrid(report: EndOfDayReport, sym: String) {
             ReportKpiCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.AttachMoney,
-                accent = ReportDashColors.Success,
+                accent = reportDashColors().Success,
                 label = "BRUT TOTAL",
                 value = reportMoney(sym, report.brutTotal),
             )
             ReportKpiCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.Receipt,
-                accent = ReportDashColors.Info,
+                accent = reportDashColors().Info,
                 label = "ORDERS",
                 value = report.salesCount.toString(),
             )
             ReportKpiCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.LocalOffer,
-                accent = ReportDashColors.Info,
+                accent = reportDashColors().Info,
                 label = "TVA",
                 value = reportMoney(sym, report.taxTotal),
             )
             ReportKpiCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.AttachMoney,
-                accent = ReportDashColors.Accent,
+                accent = reportDashColors().Accent,
                 label = "NET",
                 value = reportMoney(sym, report.netTotal),
             )
@@ -480,7 +440,7 @@ private fun EndOfDayKpiGrid(report: EndOfDayReport, sym: String) {
             ReportKpiCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.CardGiftcard,
-                accent = ReportDashColors.Warning,
+                accent = reportDashColors().Warning,
                 label = "TIPS",
                 value = reportMoney(sym, report.tipsTotal),
                 muted = report.tipsTotal == 0.0,
@@ -488,7 +448,7 @@ private fun EndOfDayKpiGrid(report: EndOfDayReport, sym: String) {
             ReportKpiCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.Undo,
-                accent = ReportDashColors.Danger,
+                accent = reportDashColors().Danger,
                 label = "REFUNDS",
                 value = reportMoney(sym, report.refundTotal),
                 muted = report.refundTotal == 0.0,
@@ -496,7 +456,7 @@ private fun EndOfDayKpiGrid(report: EndOfDayReport, sym: String) {
             ReportKpiCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.AttachMoney,
-                accent = ReportDashColors.Success,
+                accent = reportDashColors().Success,
                 label = "REVENUE",
                 value = reportMoney(sym, report.revenue),
             )
@@ -504,7 +464,7 @@ private fun EndOfDayKpiGrid(report: EndOfDayReport, sym: String) {
                 ReportKpiCard(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Outlined.TrendingUp,
-                    accent = ReportDashColors.Accent,
+                    accent = reportDashColors().Accent,
                     label = "GRAND TOTAL",
                     value = reportMoney(sym, report.grandTotal),
                 )
@@ -513,7 +473,7 @@ private fun EndOfDayKpiGrid(report: EndOfDayReport, sym: String) {
                     ReportKpiCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.PointOfSale,
-                        accent = ReportDashColors.Warning,
+                        accent = reportDashColors().Warning,
                         label = stringResource(R.string.covers_served).uppercase(Locale.getDefault()),
                         value = covers.toString(),
                     )
@@ -525,7 +485,7 @@ private fun EndOfDayKpiGrid(report: EndOfDayReport, sym: String) {
                 ReportKpiCard(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Outlined.PointOfSale,
-                    accent = ReportDashColors.Warning,
+                    accent = reportDashColors().Warning,
                     label = stringResource(R.string.covers_served).uppercase(Locale.getDefault()),
                     value = report.coversServed.toString(),
                 )
@@ -546,37 +506,37 @@ private fun RefundsCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(ReportDashColors.SurfaceDeeper)
-            .border(1.dp, ReportDashColors.HairlineLight, RoundedCornerShape(14.dp))
+            .background(reportDashColors().SurfaceDeeper)
+            .border(1.dp, reportDashColors().HairlineLight, RoundedCornerShape(14.dp))
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Undo, contentDescription = null, tint = ReportDashColors.Danger, modifier = Modifier.size(18.dp))
+            Icon(Icons.Outlined.Undo, contentDescription = null, tint = reportDashColors().Danger, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
             Text(
                 stringResource(R.string.report_refunds),
-                color = ReportDashColors.TextPrimary,
+                color = reportDashColors().TextPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold
             )
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.refunds_total), color = ReportDashColors.TextSecondary, fontSize = 11.sp)
+                Text(stringResource(R.string.refunds_total), color = reportDashColors().TextSecondary, fontSize = 11.sp)
                 Text(
                     reportMoney(sym, refundTotal),
-                    color = ReportDashColors.Danger,
+                    color = reportDashColors().Danger,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = ReportMonoFont,
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(stringResource(R.string.refunds_count), color = ReportDashColors.TextSecondary, fontSize = 11.sp)
+                Text(stringResource(R.string.refunds_count), color = reportDashColors().TextSecondary, fontSize = 11.sp)
                 Text(
                     refundCount.toString(),
-                    color = ReportDashColors.TextPrimary,
+                    color = reportDashColors().TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = ReportMonoFont,

@@ -281,7 +281,10 @@ data class SyncCheckoutDto(
     /** fire_per_course | send_all_once */
     val courseSendMode: String? = null,
     /** Show Cash/Card/Terminal quick-pay buttons under products. */
-    val expressCheckoutEnabled: Boolean = true
+    val expressCheckoutEnabled: Boolean = true,
+    /** cart | product_grid */
+    val expressPayPlacement: String? = null,
+    val retailCashTenderDialogEnabled: Boolean = true
 )
 
 data class SyncScaleDto(
@@ -298,7 +301,14 @@ data class SyncPrintDto(
     @SerializedName("waiter_till_bell_enabled") val waiterTillBellEnabled: Boolean = true,
     @SerializedName("kitchen_print_retry_enabled") val kitchenPrintRetryEnabled: Boolean = true,
     @SerializedName("kitchen_print_retry_attempts") val kitchenPrintRetryAttempts: Int = 5,
-    @SerializedName("kitchen_print_retry_interval_sec") val kitchenPrintRetryIntervalSec: Int = 5
+    @SerializedName("kitchen_print_retry_interval_sec") val kitchenPrintRetryIntervalSec: Int = 5,
+    /** Panel receipt template id; only "Default" today. */
+    @SerializedName("receipt_template_name") val receiptTemplateName: String = "Default",
+    @SerializedName("receipt_header") val receiptHeader: String = "",
+    @SerializedName("receipt_footer") val receiptFooter: String = "",
+    @SerializedName("receipt_show_vat_table") val receiptShowVatTable: Boolean = true,
+    @SerializedName("receipt_show_staff_line") val receiptShowStaffLine: Boolean = true,
+    @SerializedName("receipt_show_qr_code") val receiptShowQrCode: Boolean = true
 )
 
 data class PaymentConfigResponse(

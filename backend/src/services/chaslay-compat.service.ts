@@ -611,7 +611,9 @@ export class ChaslayCompatService {
       !!merchant.adyenApiKey &&
       !!merchant.adyenMerchantAccount;
 
-    const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
+    const { normalizePosPrintSettings, receiptHeaderHtmlToPlain } = await import(
+      "@/lib/pos-print-settings"
+    );
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
@@ -676,11 +678,21 @@ export class ChaslayCompatService {
       print: {
         adyen_receipt_digital_only: posPrintSettings.adyenReceiptDigitalOnly === true,
         receipt_delivery_directions_qr: posPrintSettings.receiptDeliveryDirectionsQr !== false,
+        auto_print_receipt: posPrintSettings.autoPrintReceipt !== false,
         auto_print_kitchen: posPrintSettings.autoPrintKitchen !== false,
         waiter_till_bell_enabled: posPrintSettings.waiterTillBellEnabled !== false,
         kitchen_print_retry_enabled: posPrintSettings.kitchenPrintRetryEnabled !== false,
         kitchen_print_retry_attempts: posPrintSettings.kitchenPrintRetryAttempts ?? 5,
         kitchen_print_retry_interval_sec: posPrintSettings.kitchenPrintRetryIntervalSec ?? 5,
+        receipt_template_name: posPrintSettings.receiptTemplateName ?? "Default",
+        receipt_header: receiptHeaderHtmlToPlain(posPrintSettings.receiptHeader ?? "").slice(
+          0,
+          2000
+        ),
+        receipt_footer: String(posPrintSettings.receiptFooter ?? "").slice(0, 2000),
+        receipt_show_vat_table: posPrintSettings.receiptShowVatTable !== false,
+        receipt_show_staff_line: posPrintSettings.receiptShowStaffLine !== false,
+        receipt_show_qr_code: posPrintSettings.receiptShowQrCode !== false,
       },
     };
   }

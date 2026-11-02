@@ -41,9 +41,10 @@ import com.chaslay.pos.ui.navigation.ChaslayNavHost
 import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
 import com.chaslay.pos.ui.scanner.ScaleWedgeHub
 import com.chaslay.pos.ui.theme.ChaslayPosTheme
+import com.chaslay.pos.ui.theme.ProvidePosAppearanceScale
 import com.chaslay.pos.ui.theme.ProvideVectronTheme
-import com.chaslay.pos.ui.theme.ChaslayBrand
-import com.chaslay.pos.ui.theme.rebornLoginBackground
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.posCanvasBackground
 import com.chaslay.pos.ui.ImmersiveMode
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -119,12 +120,18 @@ class MainActivity : AppCompatActivity() {
             val userAccess by sessionManager.currentUserAccess.collectAsStateWithLifecycle(initialValue = null)
             val themeMode by sessionManager.posThemeMode.collectAsStateWithLifecycle(initialValue = PosThemeMode.LIGHT)
             val kioskMode by sessionManager.kioskFullscreenEnabled.collectAsStateWithLifecycle(initialValue = true)
+            val posDisplayScale by sessionManager.posDisplayScale.collectAsStateWithLifecycle(initialValue = 1f)
+            val posTextScale by sessionManager.posTextScale.collectAsStateWithLifecycle(initialValue = 1f)
             val licenseState by licenseRepository.uiState.collectAsStateWithLifecycle(
                 initialValue = com.chaslay.pos.domain.model.LicenseUiState()
             )
             val darkTheme = themeMode == PosThemeMode.DARK
 
             ChaslayPosTheme(darkTheme = darkTheme) {
+                ProvidePosAppearanceScale(
+                    displayScale = posDisplayScale,
+                    textScale = posTextScale,
+                ) {
                 ProvideVectronTheme(darkTheme = darkTheme) {
                     // When kiosk mode hides system bars, skip extra bottom padding.
                     val rootModifier = if (kioskMode) {
@@ -138,10 +145,10 @@ class MainActivity : AppCompatActivity() {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .rebornLoginBackground(),
+                                        .posCanvasBackground(),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    CircularProgressIndicator(color = ChaslayBrand.WarmWhite)
+                                    CircularProgressIndicator(color = PosColors.Primary)
                                 }
                             }
                             LicenseGateState.NEEDS_ACTIVATION, LicenseGateState.EXPIRED -> {
@@ -160,6 +167,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
+                }
                 }
             }
         }

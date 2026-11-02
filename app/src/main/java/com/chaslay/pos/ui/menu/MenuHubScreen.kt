@@ -32,11 +32,14 @@ import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.ui.catalog.CatalogScreen
+import com.chaslay.pos.ui.theme.posUiColors
+import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.vectronColors
 @Composable
 fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = vectronColors()
+    val ui = posUiColors()
 
     state.message?.let { msg ->
         AlertDialog(
@@ -50,22 +53,31 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
         )
     }
 
-    Row(modifier = Modifier.fillMaxSize()) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ui.canvas)
+    ) {
         Column(
             modifier = Modifier
                 .width(180.dp)
                 .fillMaxHeight()
-                .background(colors.panelLight)
+                .background(ui.surface)
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(stringResource(R.string.menu_settings), fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
+            Text(
+                stringResource(R.string.menu_settings),
+                fontWeight = FontWeight.Bold,
+                color = ui.textPrimary,
+                modifier = Modifier.padding(8.dp),
+            )
             MenuSection.entries.forEach { section ->
                 val selected = state.section == section
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(if (selected) Color(0xFF00897B) else Color.Transparent)
+                        .background(if (selected) PosColors.Primary else Color.Transparent)
                         .clickable { viewModel.setSection(section) }
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {

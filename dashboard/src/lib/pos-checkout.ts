@@ -14,6 +14,8 @@ export type ActionButtonSize = 'sm' | 'md' | 'lg';
 export type RetailTileSize = 'sm' | 'md' | 'lg';
 export type RetailProductSortMode = 'most_sold' | 'alphabetical' | 'catalog_order';
 
+export type ExpressPayPlacement = 'cart' | 'product_grid';
+
 export type PosCheckoutSettings = {
   tipsEnabled: boolean;
   /** Adyen terminal AskGratuity (tip screen on card terminal). */
@@ -58,6 +60,8 @@ export type PosCheckoutSettings = {
   actionButtonSize: ActionButtonSize;
   /** Show quick Cash/Card/Terminal bar under products on WebPOS / Android register. */
   expressCheckoutEnabled: boolean;
+  expressPayPlacement: ExpressPayPlacement;
+  retailCashTenderDialogEnabled: boolean;
   /** Show POS toast notifications. Off by default. */
   showPosToasts: boolean;
   /** Retail register: three-column layout (categories | products | cart). */
@@ -111,6 +115,8 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   requireCustomerForDelivery: true,
   actionButtonSize: 'md',
   expressCheckoutEnabled: true,
+  expressPayPlacement: 'product_grid',
+  retailCashTenderDialogEnabled: true,
   showPosToasts: false,
   retailLayoutEnabled: true,
   retailScannerFirst: true,
@@ -187,6 +193,8 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         ? src.actionButtonSize
         : DEFAULT_POS_CHECKOUT.actionButtonSize,
     expressCheckoutEnabled: resolveExpressCheckoutEnabled(src),
+    expressPayPlacement: src.expressPayPlacement === 'cart' ? 'cart' : 'product_grid',
+    retailCashTenderDialogEnabled: src.retailCashTenderDialogEnabled !== false,
     showPosToasts: src.showPosToasts === true,
     retailLayoutEnabled:
       src.retailLayoutEnabled === undefined ? posMode === 'retail' : src.retailLayoutEnabled !== false,

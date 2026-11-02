@@ -24,6 +24,14 @@ private const val KEY_RETAIL_TAKEAWAY_USER_SET = "retail_takeaway_user_set"
 private const val KEY_RETAIL_TAKEAWAY_VALUE = "retail_takeaway_value"
 private const val KEY_RETAIL_DELIVERY_USER_SET = "retail_delivery_user_set"
 private const val KEY_RETAIL_DELIVERY_VALUE = "retail_delivery_value"
+private const val KEY_EXPRESS_PLACEMENT_USER_SET = "express_pay_placement_user_set"
+private const val KEY_EXPRESS_PLACEMENT_VALUE = "express_pay_placement_value"
+private const val KEY_EXPRESS_ENABLED_USER_SET = "express_checkout_enabled_user_set"
+private const val KEY_EXPRESS_ENABLED_VALUE = "express_checkout_enabled_value"
+private const val KEY_RETAIL_CASH_DIALOG_USER_SET = "retail_cash_tender_dialog_user_set"
+private const val KEY_RETAIL_CASH_DIALOG_VALUE = "retail_cash_tender_dialog_value"
+private const val KEY_COURSE_SEND_MODE_USER_SET = "course_send_mode_user_set"
+private const val KEY_COURSE_SEND_MODE_VALUE = "course_send_mode_value"
 private const val KEY_AFTER_SALE_GO_TO_ORDERS = "after_sale_go_to_orders"
 
 object PosLocalPrefs {
@@ -124,6 +132,70 @@ object PosLocalPrefs {
         val p = prefs(context)
         if (!p.getBoolean(KEY_RETAIL_DELIVERY_USER_SET, false)) return current
         return p.getBoolean(KEY_RETAIL_DELIVERY_VALUE, current)
+    }
+
+    fun saveExpressPayPlacement(context: Context, placement: String) {
+        prefs(context).edit()
+            .putBoolean(KEY_EXPRESS_PLACEMENT_USER_SET, true)
+            .putString(KEY_EXPRESS_PLACEMENT_VALUE, placement)
+            .apply()
+    }
+
+    fun hasUserSetExpressPayPlacement(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EXPRESS_PLACEMENT_USER_SET, false)
+
+    fun applyExpressPayPlacementIfUserSet(context: Context, current: String): String {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_EXPRESS_PLACEMENT_USER_SET, false)) return current
+        return p.getString(KEY_EXPRESS_PLACEMENT_VALUE, current) ?: current
+    }
+
+    fun saveExpressCheckoutEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_EXPRESS_ENABLED_USER_SET, true)
+            .putBoolean(KEY_EXPRESS_ENABLED_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetExpressCheckoutEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EXPRESS_ENABLED_USER_SET, false)
+
+    fun applyExpressCheckoutEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_EXPRESS_ENABLED_USER_SET, false)) return current
+        return p.getBoolean(KEY_EXPRESS_ENABLED_VALUE, current)
+    }
+
+    fun saveRetailCashTenderDialogEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_RETAIL_CASH_DIALOG_USER_SET, true)
+            .putBoolean(KEY_RETAIL_CASH_DIALOG_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetRetailCashTenderDialogEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_RETAIL_CASH_DIALOG_USER_SET, false)
+
+    fun applyRetailCashTenderDialogEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_RETAIL_CASH_DIALOG_USER_SET, false)) return current
+        return p.getBoolean(KEY_RETAIL_CASH_DIALOG_VALUE, current)
+    }
+
+    fun saveCourseSendMode(context: Context, mode: String) {
+        prefs(context).edit()
+            .putBoolean(KEY_COURSE_SEND_MODE_USER_SET, true)
+            .putString(KEY_COURSE_SEND_MODE_VALUE, mode)
+            .apply()
+    }
+
+    fun hasUserSetCourseSendMode(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_COURSE_SEND_MODE_USER_SET, false)
+
+    fun applyCourseSendModeIfUserSet(context: Context, current: String): String {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_COURSE_SEND_MODE_USER_SET, false)) return current
+        return p.getString(KEY_COURSE_SEND_MODE_VALUE, current) ?: current
     }
 
     fun readEodIncludeProductsSold(context: Context): Boolean =

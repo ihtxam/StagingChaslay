@@ -36,9 +36,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import javax.inject.Inject
@@ -56,7 +60,8 @@ class BluetoothPrinterService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val usbPrinterManager: UsbPrinterManager,
     private val printerConfigDao: com.chaslay.pos.data.local.dao.PrinterConfigDao,
-    private val receiptQrGenerator: ReceiptQrGenerator
+    private val receiptQrGenerator: ReceiptQrGenerator,
+    private val printerReachabilityCache: PrinterReachabilityCache,
 ) {
     private val kitchenQtyLine = Regex("^\\d+x\\s+", RegexOption.IGNORE_CASE)
     private val kitchenDiscountNote = Regex("""^\d+(\.\d+)?% off$|(?i)^adjusted from """)
@@ -158,6 +163,52 @@ class BluetoothPrinterService @Inject constructor(
     }
 
     fun currentLocalIpv4(): String? = localIpAddress()
+
+    /** Probes whether a saved printer is reachable right now (USB attached, TCP, or BT socket). */
+    suspend fun probePrinterReachable(address: String, connectionType: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val trimmed = address.trim()
+            if (trimmed.isBlank()) return@withContext false
+            if (isSimulated(trimmed)) return@withContext true
+            val type = connectionType.trim().uppercase(Locale.US)
+            val reachable = runCatching {
+                when {
+                    type == "USB" || isUsbAddress(trimmed) -> {
+                        val normalized = usbPrinterManager.normalizeStoredAddress(trimmed)
+                        when {
+                            usbPrinterManager.resolveDevice(normalized) == null -> false
+                            !usbPrinterManager.hasPermission(normalized) -> false
+                            else -> usbPrinterManager.sendBytes(normalized, ESC_INIT, bulkTimeoutMs = 3_000).isSuccess
+                        }
+                    }
+                    type == "WIFI" || isNetworkAddress(trimmed) -> {
+                        val (host, port) = parseHostPort(trimmed)
+                        canReachNetworkPrinter(host, port, timeoutMs = 2500)
+                    }
+                    else -> {
+                        val adapter = bluetoothAdapter() ?: return@runCatching false
+                        if (!adapter.isEnabled) return@runCatching false
+                        val bonded = adapter.bondedDevices.orEmpty()
+                            .any { it.address.equals(trimmed, ignoreCase = true) }
+                        if (!bonded) return@runCatching false
+                        val device = adapter.getRemoteDevice(trimmed)
+                        val socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+                        try {
+                            connectBluetoothWithTimeout(socket, BT_CONNECT_TIMEOUT_MS)
+                            true
+                        } finally {
+                            runCatching { socket.close() }
+                        }
+                    }
+                }
+            }.getOrDefault(false)
+            if (reachable) {
+                printerReachabilityCache.markReachable(trimmed)
+            } else {
+                printerReachabilityCache.markUnreachable(trimmed)
+            }
+            reachable
+        }
 
     /** Opens a short connection to verify the printer is reachable (Bluetooth / Wi-Fi / USB). */
     suspend fun warmupConnection(address: String, connectionType: String) = withContext(Dispatchers.IO) {
@@ -391,9 +442,10 @@ class BluetoothPrinterService @Inject constructor(
         categories: List<CategoryEntity> = emptyList(),
         products: List<ProductEntity> = emptyList(),
         meta: KitchenPrintMeta = KitchenPrintMeta(),
-        paperWidthMm: Int = 80
+        paperWidthMm: Int = 80,
+        allowRetailKitchen: Boolean = false
     ): Result<Unit> {
-        if (settings.posMode != PosMode.RESTAURANT) return Result.success(Unit)
+        if (!allowRetailKitchen && !legacyKitchenPrintAllowed(settings)) return Result.success(Unit)
         if (items.isEmpty() && !isFollowUp) return Result.success(Unit)
         val lineWidth = lineWidthFor(paperWidthMm)
         val kitchenItems = items.filter {
@@ -452,10 +504,10 @@ class BluetoothPrinterService @Inject constructor(
         categories: List<CategoryEntity> = emptyList(),
         meta: KitchenPrintMeta = KitchenPrintMeta()
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        if (settings.posMode != PosMode.RESTAURANT) return@withContext Result.success(Unit)
         if (items.isEmpty() && !isFollowUp) return@withContext Result.success(Unit)
         val kitchenPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printKitchenTickets && it.address.isNotBlank() }
+        if (!kitchenPrintConfigured(settings, kitchenPrinters)) return@withContext Result.success(Unit)
         if (kitchenPrinters.isEmpty()) {
             return@withContext printKitchenTicket(
                 settings, tableName, serviceType, round, items, isFollowUp, message, categories, products, meta,
@@ -474,8 +526,29 @@ class BluetoothPrinterService @Inject constructor(
             last = sendBytes(printer.address, settings, payload, "Kitchen ${printer.name}")
             printedAny = true
         }
-        if (printedAny) last else Result.success(Unit)
+        if (printedAny) {
+            last
+        } else {
+            printKitchenTicket(
+                settings, tableName, serviceType, round, items, isFollowUp, message, categories, products, meta,
+                defaultKitchenPaperWidthMm(),
+                allowRetailKitchen = true
+            )
+        }
     }
+
+    /** Restaurant mode always; retail / food-truck when a kitchen printer is configured. */
+    private fun kitchenPrintConfigured(
+        settings: BusinessSettingsEntity,
+        kitchenPrinters: List<PrinterConfigEntity>
+    ): Boolean {
+        if (settings.posMode == PosMode.RESTAURANT) return true
+        if (kitchenPrinters.isNotEmpty()) return true
+        return legacyKitchenPrintAllowed(settings)
+    }
+
+    private fun legacyKitchenPrintAllowed(settings: BusinessSettingsEntity): Boolean =
+        !settings.kitchenPrinterMacAddress.isNullOrBlank()
 
     suspend fun routeGiftCardSaleReceipt(
         settings: BusinessSettingsEntity,
@@ -2210,22 +2283,61 @@ class BluetoothPrinterService @Inject constructor(
             Log.i(TAG, "$label (simulated):\n${EscPosEncoder.decodeForLog(payload)}")
             return Result.success(Unit)
         }
-        if (isUsbAddress(mac)) {
-            return usbPrinterManager.sendBytes(mac, payload)
+        if (!printerReachabilityCache.shouldAttemptPrint(mac)) {
+            Log.i(TAG, "$label skipped — printer unreachable (cached): $mac")
+            return Result.failure(IOException("Printer unreachable"))
         }
-        if (isNetworkAddress(mac)) {
-            return sendBytesOverNetwork(mac, payload)
+        val result: Result<Unit> = runCatching {
+            when {
+                isUsbAddress(mac) -> {
+                    val normalized = usbPrinterManager.normalizeStoredAddress(mac)
+                    if (usbPrinterManager.resolveDevice(normalized) == null) {
+                        error("USB printer not connected")
+                    }
+                    usbPrinterManager.sendBytes(normalized, payload).getOrThrow()
+                }
+                isNetworkAddress(mac) -> sendBytesOverNetwork(mac, payload).getOrThrow()
+                else -> sendBytesOverBluetooth(mac, payload)
+            }
         }
-        return runCatching {
-            val adapter = bluetoothAdapter() ?: error("Bluetooth not available")
-            val device = adapter.getRemoteDevice(mac)
-            val socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-            socket.connect()
+        if (result.isSuccess) {
+            printerReachabilityCache.markReachable(mac)
+        } else {
+            printerReachabilityCache.markUnreachable(mac)
+        }
+        return result
+    }
+
+    private fun sendBytesOverBluetooth(mac: String, payload: ByteArray) {
+        val adapter = bluetoothAdapter() ?: error("Bluetooth not available")
+        val device = adapter.getRemoteDevice(mac)
+        val socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+        try {
+            connectBluetoothWithTimeout(socket, BT_CONNECT_TIMEOUT_MS)
             val output = socket.getOutputStream()
             transmitPayload(output, payload)
             output.flush()
             Thread.sleep(150)
-            socket.close()
+        } finally {
+            runCatching { socket.close() }
+        }
+    }
+
+    private fun connectBluetoothWithTimeout(
+        socket: android.bluetooth.BluetoothSocket,
+        timeoutMs: Long
+    ) {
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val future = executor.submit { socket.connect() }
+            future.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+            runCatching { socket.close() }
+            throw IOException("Bluetooth connect timed out", e)
+        } catch (e: Exception) {
+            throw IOException(e.message ?: "Bluetooth connect failed", e)
+        } finally {
+            executor.shutdownNow()
         }
     }
 
@@ -2510,10 +2622,64 @@ class BluetoothPrinterService @Inject constructor(
     private fun formatMoney(amount: Double, symbol: String): String =
         formatMoneyAmount(amount, symbol)
 
+    /** Plain-text sample receipt for settings preview (same layout as printed cart receipts). */
+    fun buildSettingsPreviewReceiptText(settings: BusinessSettingsEntity): String {
+        val lineWidth = LINE_WIDTH_80
+        val labels = receiptLabels(settings)
+        val sep = "=".repeat(lineWidth.coerceAtMost(32))
+        val sb = StringBuilder()
+        appendReceiptStoreBlock(sb, settings, lineWidth)
+        sb.appendLine(center(sep, lineWidth))
+        sb.appendLine(leftRight("${labels.orderNumber} #1032", "", lineWidth))
+        sb.appendLine(
+            leftRight(
+                SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date()),
+                "",
+                lineWidth
+            )
+        )
+        if (settings.receiptShowStaffLine) {
+            sb.appendLine(leftRight("${labels.staff}: Admin", "", lineWidth))
+        }
+        sb.appendLine(center(sep, lineWidth))
+        sb.appendLine(leftRight("Burger classique", formatMoney(12.0, settings.currencySymbol), lineWidth))
+        sb.appendLine(leftRight("Frites maison", formatMoney(4.5, settings.currencySymbol), lineWidth))
+        sb.appendLine(leftRight("Eau plate", formatMoney(2.0, settings.currencySymbol), lineWidth))
+        appendReceiptTotal(sb, labels.total, 20.07, settings.currencySymbol, lineWidth)
+        if (settings.receiptShowVatTable) {
+            appendReceiptVatSection(
+                sb,
+                listOf(
+                    VatBreakdownRow(
+                        label = "6%",
+                        rate = 6.0,
+                        net = 0.98,
+                        tva = 0.06,
+                        brut = 1.04
+                    ),
+                    VatBreakdownRow(
+                        label = "21%",
+                        rate = 21.0,
+                        net = 0.44,
+                        tva = 0.09,
+                        brut = 0.53
+                    )
+                ),
+                labels,
+                lineWidth,
+                settings.vatIncludedInPrice
+            )
+        }
+        val footer = settings.receiptFooter.trim().ifBlank { "Merci / Thank you!" }
+        sb.appendLine(center(footer, lineWidth))
+        return sb.toString()
+    }
+
     companion object {
         const val SIMULATED_ADDRESS = "simulated"
         val SIMULATED_PRINTER = DiscoveredPrinter("Simulated (test)", SIMULATED_ADDRESS)
         private const val TAG = "PrinterService"
+        private const val BT_CONNECT_TIMEOUT_MS = 8_000L
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
         /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80. */

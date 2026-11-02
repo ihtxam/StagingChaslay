@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.auth
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -59,7 +60,11 @@ import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH
 import com.chaslay.pos.domain.model.STAFF_PIN_QUICK_LOGIN_LENGTH
 import com.chaslay.pos.ui.theme.ChaslayBrand
-import com.chaslay.pos.ui.theme.rebornLoginBackground
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
+import com.chaslay.pos.ui.theme.PosShapes
+import com.chaslay.pos.ui.theme.posBrandHeroBackground
+import com.chaslay.pos.ui.theme.posCanvasBackground
 import kotlinx.coroutines.delay
 
 private const val PIN_MIN_LENGTH = STAFF_PIN_MIN_LENGTH
@@ -160,7 +165,7 @@ fun LoginScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .rebornLoginBackground()
+            .posCanvasBackground()
             .imePadding()
     ) {
         val isWide = maxWidth >= WIDE_LAYOUT_BREAKPOINT
@@ -176,7 +181,7 @@ fun LoginScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .rebornLoginBackground()
+                        .posCanvasBackground()
                         .imePadding()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 48.dp, vertical = 40.dp),
@@ -246,7 +251,7 @@ fun LoginScreen(
 @Composable
 private fun BrandHero(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier.rebornLoginBackground(),
+        modifier = modifier.posBrandHeroBackground(),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -286,20 +291,24 @@ private fun CompactHero() {
         Image(
             painter = painterResource(R.drawable.reborn_logo_white),
             contentDescription = stringResource(R.string.app_name),
-            modifier = Modifier.height(72.dp),
+            modifier = Modifier
+                .height(72.dp)
+                .clip(RoundedCornerShape(PosDimens.Space3))
+                .background(PosColors.Primary)
+                .padding(PosDimens.Space3),
             contentScale = ContentScale.Fit
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.app_name),
-            color = ChaslayBrand.WarmWhite,
+            color = posUiColors().textPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = 24.sp
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.login_enter_pin_to_continue),
-            color = ChaslayBrand.WarmWhite.copy(alpha = 0.8f),
+            color = posUiColors().textSecondary,
             fontSize = 12.sp,
             textAlign = TextAlign.Center
         )
@@ -328,15 +337,16 @@ private fun AuthCardContent(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(ChaslayBrand.WarmWhite)
+            .clip(PosShapes.ExtraLarge)
+            .background(posUiColors().surface)
+            .border(1.dp, posUiColors().border, PosShapes.ExtraLarge)
             .padding(horizontal = 22.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (!showEmail) {
             Text(
                 text = stringResource(R.string.enter_pin),
-                color = ChaslayBrand.Gray900,
+                color = posUiColors().textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 18.sp
             )
@@ -367,18 +377,18 @@ private fun AuthCardContent(
                 QuickAction(
                     label = stringResource(R.string.biometric_login),
                     onClick = onBiometric,
-                    icon = { Icon(Icons.Filled.Fingerprint, contentDescription = null, tint = ChaslayBrand.Burgundy) }
+                    icon = { Icon(Icons.Filled.Fingerprint, contentDescription = null, tint = PosColors.Primary) }
                 )
                 QuickAction(
                     label = stringResource(R.string.email_login),
                     onClick = onShowEmail,
-                    icon = { Icon(Icons.Filled.Email, contentDescription = null, tint = ChaslayBrand.Burgundy) }
+                    icon = { Icon(Icons.Filled.Email, contentDescription = null, tint = PosColors.Primary) }
                 )
             }
         } else {
             Text(
                 text = stringResource(R.string.email_login),
-                color = ChaslayBrand.Gray900,
+                color = posUiColors().textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 20.sp
             )
@@ -405,13 +415,13 @@ private fun AuthCardContent(
             Button(
                 onClick = onEmailSubmit,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = ChaslayBrand.Burgundy,
-                    contentColor = ChaslayBrand.White
+                    containerColor = PosColors.Primary,
+                    contentColor = PosColors.TextOnPrimary
                 ),
-                shape = RoundedCornerShape(16.dp),
+                shape = PosShapes.Large,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(PosDimens.ControlHeightLg)
             ) {
                 Text(
                     stringResource(R.string.login),
@@ -434,7 +444,7 @@ private fun AuthCardContent(
             ) {
                 Text(
                     stringResource(R.string.pin_login),
-                    color = ChaslayBrand.Burgundy,
+                    color = PosColors.Primary,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -456,7 +466,7 @@ private fun QuickAction(
             icon()
             Text(
                 text = label,
-                color = ChaslayBrand.Burgundy,
+                color = PosColors.Primary,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
             )
@@ -481,7 +491,7 @@ private fun PinSetupScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .rebornLoginBackground()
+            .posCanvasBackground()
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -489,14 +499,15 @@ private fun PinSetupScreen(
             modifier = Modifier
                 .widthIn(max = 420.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(ChaslayBrand.WarmWhite)
+                .clip(PosShapes.ExtraLarge)
+                .background(posUiColors().surface)
+                .border(1.dp, posUiColors().border, PosShapes.ExtraLarge)
                 .padding(horizontal = 28.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = stringResource(R.string.setup_pin_title),
-                color = ChaslayBrand.Gray900,
+                color = posUiColors().textPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 textAlign = TextAlign.Center
@@ -534,7 +545,7 @@ private fun PinSetupScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
             TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.setup_pin_skip), color = ChaslayBrand.Burgundy, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.setup_pin_skip), color = PosColors.Primary, fontWeight = FontWeight.SemiBold)
             }
             TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.cancel), color = ChaslayBrand.Gray600)
@@ -545,11 +556,11 @@ private fun PinSetupScreen(
 
 @Composable
 private fun lightFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = ChaslayBrand.Gray900,
-    unfocusedTextColor = ChaslayBrand.Gray900,
-    focusedBorderColor = ChaslayBrand.Burgundy,
-    unfocusedBorderColor = ChaslayBrand.Gray400,
-    cursorColor = ChaslayBrand.Burgundy,
+    focusedTextColor = posUiColors().textPrimary,
+    unfocusedTextColor = posUiColors().textPrimary,
+    focusedBorderColor = PosColors.Primary,
+    unfocusedBorderColor = posUiColors().borderStrong,
+    cursorColor = PosColors.Primary,
     focusedContainerColor = Color.Transparent,
     unfocusedContainerColor = Color.Transparent
 )

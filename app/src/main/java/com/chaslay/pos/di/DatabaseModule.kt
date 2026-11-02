@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.chaslay.pos.data.local.AppDatabase
 import com.chaslay.pos.data.local.MIGRATION_50_51
+import com.chaslay.pos.data.local.MIGRATION_51_52
 import com.chaslay.pos.data.local.DatabaseCallback
 import com.chaslay.pos.data.local.dao.BusinessSettingsDao
 import com.chaslay.pos.data.local.dao.CategoryDao
@@ -40,7 +41,7 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "food_truck_pos.db")
             .addCallback(DatabaseCallback(context))
-            .addMigrations(MIGRATION_50_51)
+            .addMigrations(MIGRATION_50_51, MIGRATION_51_52)
             .fallbackToDestructiveMigration()
             .build()
 

@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.auth
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,14 +8,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material3.Icon
@@ -31,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.STAFF_PIN_QUICK_LOGIN_LENGTH
-import com.chaslay.pos.ui.theme.ChaslayBrand
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
+import com.chaslay.pos.ui.theme.PosShapes
 
 @Composable
 fun PinDotsDisplay(
@@ -51,10 +52,10 @@ fun PinDotsDisplay(
                     .padding(horizontal = 6.dp)
                     .size(if (filled) 16.dp else 13.dp)
                     .clip(CircleShape)
-                    .background(if (filled) ChaslayBrand.Burgundy else ChaslayBrand.Gray200)
+                    .background(if (filled) PosColors.Primary else posUiColors().surfaceMuted)
                     .border(
                         width = 1.dp,
-                        color = if (filled) ChaslayBrand.Burgundy else ChaslayBrand.Gray400,
+                        color = if (filled) PosColors.Primary else posUiColors().borderStrong,
                         shape = CircleShape
                     )
             )
@@ -66,9 +67,8 @@ private enum class KeyVariant { Digit, Muted, Primary }
 
 private val KeypadRowSpacing = 10.dp
 private val KeypadKeySpacing = 10.dp
-private val KeyMinHeight = 50.dp
-private val KeyCornerRadius = 12.dp
-private val EnterKeyHeight = 48.dp
+private val KeyMinHeight = PosDimens.ControlHeightMd
+private val EnterKeyHeight = PosDimens.ControlHeightMd
 
 @Composable
 fun PinLoginKeypad(
@@ -148,23 +148,23 @@ private fun PinKey(
     onClick: () -> Unit
 ) {
     val bg = when {
-        !enabled -> ChaslayBrand.Gray200
-        variant == KeyVariant.Primary -> ChaslayBrand.Burgundy
-        variant == KeyVariant.Muted -> ChaslayBrand.Gray100
-        else -> ChaslayBrand.Gray100
+        !enabled -> posUiColors().surfaceMuted
+        variant == KeyVariant.Primary -> PosColors.Primary
+        variant == KeyVariant.Muted -> posUiColors().surfaceSubtle
+        else -> posUiColors().surfaceSubtle
     }
     val contentColor = when {
-        !enabled -> ChaslayBrand.Gray400
-        variant == KeyVariant.Primary -> ChaslayBrand.White
-        variant == KeyVariant.Muted -> ChaslayBrand.Gray800
-        else -> ChaslayBrand.Gray900
+        !enabled -> posUiColors().textMuted
+        variant == KeyVariant.Primary -> PosColors.TextOnPrimary
+        variant == KeyVariant.Muted -> posUiColors().textSecondary
+        else -> posUiColors().textPrimary
     }
     val borderColor = when {
-        !enabled -> ChaslayBrand.Gray200
-        variant == KeyVariant.Primary -> ChaslayBrand.Burgundy
-        else -> ChaslayBrand.Gray200
+        !enabled -> posUiColors().border
+        variant == KeyVariant.Primary -> PosColors.Primary
+        else -> posUiColors().border
     }
-    val shape = RoundedCornerShape(KeyCornerRadius)
+    val shape = PosShapes.Large
     val heightMod = if (fillHeight) {
         modifier
     } else {

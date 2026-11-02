@@ -1372,7 +1372,6 @@ export default function WebPosOrdersPanel({
     setStatusFilter('completed');
     setPurgePaymentFilter('cash');
     setChannelFilter('all');
-    setDatePreset((preset) => (preset === 'today' ? 'last_week' : preset));
     setSelectedPurgeIds(new Set());
     setSelectedOrder(null);
     setSelectedHeld(null);

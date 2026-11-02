@@ -77,6 +77,11 @@ export type PosPrintSettings = {
    * When set, printed and digital receipts show an EUR equivalent under the total.
    */
   receiptChfToEurRate?: number | null;
+  /**
+   * Receipt layout template id (panel + WebPOS + Android).
+   * Only `"Default"` is supported today; stored so future templates stay in sync.
+   */
+  receiptTemplateName?: string;
   /** Override logo; empty/null falls back to shopLogoUrl */
   receiptLogoUrl?: string | null;
   /** Printed logo width in pixels (48–200, default 200). */
@@ -181,6 +186,8 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   adyenReceiptDigitalOnly: false,
   paperWidthMm: 80,
   receiptLanguage: "panel",
+  receiptChfToEurRate: null,
+  receiptTemplateName: "Default",
   receiptLogoUrl: null,
   receiptLogoWidthPx: 200,
     autoPrintReceipt: true,
@@ -282,7 +289,8 @@ function decodeReceiptHeaderEntities(text: string): string {
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
-function receiptHeaderHtmlToPlain(text: string): string {
+/** Plain text for Android sync / thermal print (strips simple HTML from panel header). */
+export function receiptHeaderHtmlToPlain(text: string): string {
   const raw = String(text ?? "").trim();
   if (!raw) return "";
   if (!/<[a-z]/i.test(raw)) return decodeReceiptHeaderEntities(raw);
@@ -312,6 +320,16 @@ export function parseReceiptHeaderLines(
     .filter(Boolean)
     .slice(0, 24)
     .map((line) => line.slice(0, 200));
+}
+
+export const RECEIPT_TEMPLATE_NAMES = ["Default"] as const;
+export type ReceiptTemplateName = (typeof RECEIPT_TEMPLATE_NAMES)[number];
+
+export function normalizeReceiptTemplateName(raw: unknown): ReceiptTemplateName {
+  const name = String(raw ?? "Default").trim().slice(0, 64);
+  return (RECEIPT_TEMPLATE_NAMES as readonly string[]).includes(name)
+    ? (name as ReceiptTemplateName)
+    : "Default";
 }
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
@@ -478,6 +496,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     paperWidthMm: paper,
     receiptLanguage,
     receiptChfToEurRate: parseReceiptChfToEurRate(src.receiptChfToEurRate),
+    receiptTemplateName: normalizeReceiptTemplateName(src.receiptTemplateName),
     receiptLogoUrl:
       src.receiptLogoUrl === null || src.receiptLogoUrl === undefined
         ? null

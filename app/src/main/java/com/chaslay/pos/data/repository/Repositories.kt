@@ -1107,6 +1107,16 @@ class TransactionRepository @Inject constructor(
         deleteOrdersByIds(collectOrderDeleteIds(transactionId))
     }
 
+    /** Permanently removes each order (and split siblings) from local history. Returns rows removed. */
+    suspend fun deleteOrdersPermanently(transactionIds: Collection<String>): Int {
+        val idsToDelete = linkedSetOf<String>()
+        transactionIds.forEach { id ->
+            idsToDelete.addAll(collectOrderDeleteIds(id))
+        }
+        deleteOrdersByIds(idsToDelete)
+        return idsToDelete.size
+    }
+
     suspend fun countOrdersInRange(startMs: Long, endMs: Long): Int =
         transactionDao.getAllInRange(startMs, endMs).size
 
@@ -1348,6 +1358,22 @@ class SettingsRepository @Inject constructor(
             retailDeliveryEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailDeliveryEnabledIfUserSet(
                 appContext,
                 settings.retailDeliveryEnabled
+            ),
+            expressPayPlacement = com.chaslay.pos.util.PosLocalPrefs.applyExpressPayPlacementIfUserSet(
+                appContext,
+                settings.expressPayPlacement
+            ),
+            expressEnabled = com.chaslay.pos.util.PosLocalPrefs.applyExpressCheckoutEnabledIfUserSet(
+                appContext,
+                settings.expressEnabled
+            ),
+            retailCashTenderDialogEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailCashTenderDialogEnabledIfUserSet(
+                appContext,
+                settings.retailCashTenderDialogEnabled
+            ),
+            courseSendMode = com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(
+                appContext,
+                settings.courseSendMode
             )
         )
     }
@@ -1400,6 +1426,29 @@ class SettingsRepository @Inject constructor(
         } else {
             settings.retailDeliveryEnabled
         }
+        val expressPlacement = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetExpressPayPlacement(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyExpressPayPlacementIfUserSet(appContext, settings.expressPayPlacement)
+        } else {
+            settings.expressPayPlacement
+        }
+        val expressCheckout = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetExpressCheckoutEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyExpressCheckoutEnabledIfUserSet(appContext, settings.expressEnabled)
+        } else {
+            settings.expressEnabled
+        }
+        val retailCashDialog = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailCashTenderDialogEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailCashTenderDialogEnabledIfUserSet(
+                appContext,
+                settings.retailCashTenderDialogEnabled
+            )
+        } else {
+            settings.retailCashTenderDialogEnabled
+        }
+        val courseSend = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetCourseSendMode(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(appContext, settings.courseSendMode)
+        } else {
+            settings.courseSendMode
+        }
         settingsDao.upsert(
             settings.copy(
                 id = 1,
@@ -1410,7 +1459,11 @@ class SettingsRepository @Inject constructor(
                 scaleUsbAddress = scaleUsb?.trim()?.takeIf { it.isNotEmpty() },
                 retailDineInEnabled = retailDineIn,
                 retailTakeawayEnabled = retailTakeaway,
-                retailDeliveryEnabled = retailDelivery
+                retailDeliveryEnabled = retailDelivery,
+                expressPayPlacement = expressPlacement,
+                expressEnabled = expressCheckout,
+                retailCashTenderDialogEnabled = retailCashDialog,
+                courseSendMode = courseSend
             )
         )
     }
@@ -1768,6 +1821,7 @@ class CartManager @Inject constructor(
         val included = vatIncludedInPrice ?: _cart.value.vatIncludedInPrice
         val afterDiscount = vatAfterDiscount ?: _cart.value.vatAfterDiscount
         val maxCourse = items.maxOfOrNull { it.courseNumber } ?: 1
+        val resolvedActiveCourse = (items.maxOfOrNull { it.courseNumber } ?: activeCourse).coerceAtLeast(1)
         _cart.value = CartSummary(
             items = items.map { it.copy(vatIncludedInPrice = included) },
             discountPercent = discountPercent,
@@ -1777,7 +1831,7 @@ class CartManager @Inject constructor(
             tableOrderId = orderId,
             tableName = tableName,
             guestCount = guestCount,
-            activeCourse = activeCourse,
+            activeCourse = resolvedActiveCourse,
             courseCount = maxOf(courseCount, maxCourse),
             vatIncludedInPrice = included,
             vatAfterDiscount = afterDiscount

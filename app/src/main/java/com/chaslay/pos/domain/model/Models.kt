@@ -37,6 +37,11 @@ enum class CourseSendMode {
         fun fromKey(key: String?): CourseSendMode =
             if (key == "send_all_once") SEND_ALL_ONCE else FIRE_PER_COURSE
     }
+
+    fun toStorageKey(): String = when (this) {
+        SEND_ALL_ONCE -> "send_all_once"
+        FIRE_PER_COURSE -> "fire_per_course"
+    }
 }
 
 enum class PaymentStatus {
@@ -109,6 +114,25 @@ enum class PosMode(val displayName: String) {
             "retail" -> RETAIL
             "restaurant" -> RESTAURANT
             else -> null
+        }
+    }
+}
+
+/** Where express Cash/Card/Terminal buttons appear on the register (not both). */
+enum class ExpressPayPlacement {
+    CART,
+    PRODUCT_GRID;
+
+    companion object {
+        fun fromCheckoutValue(value: String?): ExpressPayPlacement =
+            when (value?.trim()?.lowercase()) {
+                "cart" -> CART
+                else -> PRODUCT_GRID
+            }
+
+        fun toCheckoutValue(placement: ExpressPayPlacement): String = when (placement) {
+            CART -> "cart"
+            PRODUCT_GRID -> "product_grid"
         }
     }
 }
@@ -187,6 +211,15 @@ fun resolveVatRate(productTaxRate: Double, serviceType: ServiceType, settings: c
         ServiceType.DINE_IN -> settings.dineInVatRate
         ServiceType.TAKEAWAY -> settings.takeawayVatRate
     }
+}
+
+fun giftCardVatRateForService(
+    serviceType: ServiceType,
+    dineInVatRate: Double,
+    takeawayVatRate: Double
+): Double = when (serviceType) {
+    ServiceType.DINE_IN -> dineInVatRate
+    else -> takeawayVatRate
 }
 
 fun computeLineTax(lineSubtotal: Double, taxRate: Double, vatIncludedInPrice: Boolean): Double {

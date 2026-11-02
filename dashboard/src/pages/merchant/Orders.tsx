@@ -673,7 +673,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     setChannelFilter('all');
     setTypeFilter('all');
     setStaffFilter('all');
-    setDatePreset((preset) => (preset === 'today' ? 'last_week' : preset));
     setSelectedPurgeIds(new Set());
     setSelected(null);
     toast.success(t('gandolaPurgeMode'), { duration: 4000 });

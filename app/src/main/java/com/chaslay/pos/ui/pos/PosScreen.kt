@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.pos
+import com.chaslay.pos.ui.theme.posUiColors
 
 import android.app.Activity
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -19,7 +20,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -83,6 +86,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,6 +122,7 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.DiscountPreset
+import com.chaslay.pos.domain.model.ExpressPayPlacement
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.PosVirtualCategories
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
@@ -130,7 +135,15 @@ import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.TableStatus
 import com.chaslay.pos.domain.model.TableWithOrderInfo
 import com.chaslay.pos.domain.model.UserAccess
+import com.chaslay.pos.ui.components.ExpandableOrdersSearch
 import com.chaslay.pos.ui.ongoing.OngoingOrdersScreen
+import com.chaslay.pos.ui.ongoing.OngoingOrdersViewModel
+import com.chaslay.pos.ui.ongoing.OrdersChannelFilter
+import com.chaslay.pos.ui.ongoing.OrdersPaymentFilter
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Send
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Search
 import com.chaslay.pos.ui.orderhistory.OrderHistoryScreen
 import com.chaslay.pos.ui.navigation.AppRoute
 import com.chaslay.pos.receipt.ReceiptQrGenerator
@@ -163,7 +176,13 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Restaurant
 import com.chaslay.pos.domain.model.applyCashRounding
+import com.chaslay.pos.domain.model.giftCardVatRateForService
+import com.chaslay.pos.domain.model.VatBreakdownRow
+import com.chaslay.pos.printer.vatBreakdownRows
 import com.chaslay.pos.ui.theme.VectronColors
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
+import com.chaslay.pos.ui.theme.PosShapes
 import com.chaslay.pos.ui.theme.vectronColors
 import com.chaslay.pos.ui.theme.categoryColor
 import com.chaslay.pos.ui.tableplan.GuestCountDialog
@@ -204,6 +223,9 @@ fun PosScreen(
     val retailDineInEnabled = state.settings.retailDineInEnabled
     val retailTakeawayEnabled = state.settings.retailTakeawayEnabled
     val retailDeliveryEnabled = state.settings.retailDeliveryEnabled
+    val expressPlacement = ExpressPayPlacement.fromCheckoutValue(state.settings.expressPayPlacement)
+    val expressOnCart = state.settings.expressEnabled && expressPlacement == ExpressPayPlacement.CART
+    val expressOnGrid = state.settings.expressEnabled && expressPlacement == ExpressPayPlacement.PRODUCT_GRID
     val isTableServiceEnabled = tablesEnabled && (isRestaurantMode || isRetailMode)
     val showRetailOrderTypeMenu = isRetailMode &&
         (retailDineInEnabled || retailDeliveryEnabled)
@@ -483,8 +505,6 @@ fun PosScreen(
             onToggleSortAlpha = viewModel::toggleProductGridSortAlpha,
             onToggleSortBestseller = viewModel::toggleProductGridSortBestseller,
             onCycleGridColumns = viewModel::cycleProductGridColumns,
-            afterSaleGoToOrders = state.afterSaleGoToOrders,
-            onAfterSaleGoToOrdersChange = viewModel::setAfterSaleGoToOrders,
             onTabSelected = { tab ->
                 mainTab = tab
             },
@@ -498,6 +518,7 @@ fun PosScreen(
                 businessName = state.settings.businessName,
                 loggedInUserName = loggedInUserName,
                 isRestaurantMode = isRestaurantMode,
+                ordersTabMode = mainTab == PosMainTab.ORDERS,
                 showRetailTakeaway = isRetailMode && retailTakeawayEnabled,
                 showRetailDelivery = isRetailMode && retailDeliveryEnabled,
                 isTableMode = isTableServiceEnabled && state.activeTableName != null,
@@ -558,6 +579,8 @@ fun PosScreen(
                         VectronOrderPanel(
                         cart = state.cart,
                         currencySymbol = state.currencySymbol,
+                        dineInVatRate = state.settings.dineInVatRate,
+                        takeawayVatRate = state.settings.takeawayVatRate,
                         roundingStep = state.settings.roundingStep.takeIf { it > 0.0 } ?: 0.05,
                         activeTableName = state.activeTableName,
                         keypadBuffer = state.keypadBuffer,
@@ -615,7 +638,17 @@ fun PosScreen(
                         onSendToKitchen = viewModel::sendCurrentOrderToKitchen,
                         onSetTab = viewModel::showPickupOrderDialog,
                         onPayment = { viewModel.openCheckout() },
+                        paymentEnabled = state.cart.isEmpty.not() && !state.isProcessingPayment,
+                        cashEnabled = state.settings.cashEnabled,
+                        cardEnabled = state.settings.cardEnabled,
+                        terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
+                        expressEnabled = expressOnCart,
+                        onCash = { viewModel.initiateCashPayment(activity) },
+                        onCard = { viewModel.initiateCardPayment(activity) },
+                        onTerminal = { viewModel.initiateTerminalPayment(activity) },
                         canSendKitchen = orderingItemsForRail.isNotEmpty(),
+                        tableCartFocusOrderedCourse = state.tableCartFocusOrderedCourse,
+                        onTableCartFocusConsumed = viewModel::consumeTableCartFocusOrdered,
                         modifier = Modifier
                             .width(304.dp)
                             .fillMaxHeight()
@@ -645,7 +678,7 @@ fun PosScreen(
                         cashEnabled = state.settings.cashEnabled,
                         cardEnabled = state.settings.cardEnabled,
                         terminalEnabled = state.settings.isAdyenTerminalCheckoutEnabled(),
-                        expressEnabled = state.settings.expressEnabled,
+                        expressEnabled = expressOnGrid,
                         showScanButton = isRetailMode,
                         isGiftCardCategory = state.isGiftCardCategory,
                         membershipEnabled = state.giftCardsEnabled &&
@@ -1074,8 +1107,6 @@ private fun OdooPosNavBar(
     onToggleSortAlpha: () -> Unit = {},
     onToggleSortBestseller: () -> Unit = {},
     onCycleGridColumns: () -> Unit = {},
-    afterSaleGoToOrders: Boolean = false,
-    onAfterSaleGoToOrdersChange: (Boolean) -> Unit = {},
     onTabSelected: (PosMainTab) -> Unit,
     userAccess: UserAccess,
     onNavigate: (String) -> Unit,
@@ -1086,7 +1117,8 @@ private fun OdooPosNavBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(vc.header)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .border(1.dp, posUiColors().border)
+            .padding(horizontal = PosDimens.Space2, vertical = PosDimens.Space2),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1148,10 +1180,6 @@ private fun OdooPosNavBar(
                     )
                 }
             }
-            AfterSaleDestinationMenu(
-                goToOrders = afterSaleGoToOrders,
-                onGoToOrdersChange = onAfterSaleGoToOrdersChange
-            )
             if (userAccess.canAccessSettings() || userAccess.canManageProducts() || userAccess.canAccessReports()) {
                 IconButton(onClick = { onNavigate(AppRoute.Admin.route) }) {
                     Icon(
@@ -1180,19 +1208,20 @@ private fun PosBottomTabChip(
     badgeCount: Int = 0,
     onClick: () -> Unit
 ) {
-    val bg = if (selected) Color(0xFF714B67) else Color(0xFF455A64).copy(alpha = 0.45f)
+    val bg = if (selected) PosColors.Primary else posUiColors().surfaceMuted
+    val content = if (selected) PosColors.TextOnPrimary else posUiColors().textPrimary
     Box {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
+                .clip(PosShapes.Medium)
                 .background(bg)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = PosDimens.Space3, vertical = PosDimens.Space2),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(20.dp))
-            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Icon(icon, contentDescription = label, tint = content, modifier = Modifier.size(20.dp))
+            Text(label, color = content, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         }
         if (badgeCount > 0) {
             Box(
@@ -1200,7 +1229,7 @@ private fun PosBottomTabChip(
                     .align(Alignment.TopEnd)
                     .offset(x = 4.dp, y = (-4).dp)
                     .size(18.dp)
-                    .background(Color(0xFF7C3AED), CircleShape),
+                    .background(PosColors.Danger, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -1210,71 +1239,6 @@ private fun PosBottomTabChip(
                     fontWeight = FontWeight.Bold
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun AfterSaleDestinationMenu(
-    goToOrders: Boolean,
-    onGoToOrdersChange: (Boolean) -> Unit
-) {
-    val vc = vectronColors()
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(
-            onClick = { expanded = true },
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = stringResource(R.string.after_sale_destination_cd),
-                tint = if (goToOrders) Color(0xFF22C55E) else vc.textPrimary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(R.string.after_sale_register) +
-                            if (!goToOrders) " ✓" else ""
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onGoToOrdersChange(false)
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.PointOfSale,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(R.string.after_sale_orders) +
-                            if (goToOrders) " ✓" else ""
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onGoToOrdersChange(true)
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.ReceiptLong,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
         }
     }
 }
@@ -1572,12 +1536,18 @@ private enum class TableCartTab {
 }
 
 private sealed interface CartRowModel {
-    data class CourseHeader(val number: Int, val isActive: Boolean) : CartRowModel
+    data class CourseHeader(val number: Int, val isActive: Boolean, val isFired: Boolean) : CartRowModel
     data class Line(val item: CartItem) : CartRowModel
+}
+
+private fun courseIsFired(allItems: List<CartItem>, course: Int): Boolean {
+    val inCourse = allItems.filter { it.courseNumber == course }
+    return inCourse.isNotEmpty() && inCourse.all { it.sentToKitchen }
 }
 
 private fun buildCartRows(
     items: List<CartItem>,
+    allItemsForCourseState: List<CartItem>,
     isTableMode: Boolean,
     activeCourse: Int,
     courseCount: Int = 1
@@ -1588,16 +1558,23 @@ private fun buildCartRows(
         1,
         courseCount.coerceAtLeast(1),
         activeCourse.coerceAtLeast(1),
-        grouped.keys.maxOrNull() ?: 1
+        grouped.keys.maxOrNull() ?: 1,
+        allItemsForCourseState.maxOfOrNull { it.courseNumber } ?: 1
     )
     if (items.isEmpty() && maxCourse <= 1 && activeCourse <= 1) return emptyList()
     return (1..maxCourse).flatMap { course ->
         val courseItems = grouped[course].orEmpty()
-        if (courseItems.isEmpty() && course != activeCourse) {
+        val hasAnyInCourse = allItemsForCourseState.any { it.courseNumber == course }
+        if (courseItems.isEmpty() && !hasAnyInCourse && course != activeCourse) {
             emptyList()
         } else {
-            listOf(CartRowModel.CourseHeader(course, course == activeCourse)) +
-                courseItems.map { CartRowModel.Line(it) }
+            listOf(
+                CartRowModel.CourseHeader(
+                    number = course,
+                    isActive = course == activeCourse,
+                    isFired = courseIsFired(allItemsForCourseState, course)
+                )
+            ) + courseItems.map { CartRowModel.Line(it) }
         }
     }
 }
@@ -1607,6 +1584,8 @@ private fun buildCartRows(
 private fun VectronOrderPanel(
     cart: com.chaslay.pos.domain.model.CartSummary,
     currencySymbol: String,
+    dineInVatRate: Double,
+    takeawayVatRate: Double,
     roundingStep: Double,
     activeTableName: String?,
     keypadBuffer: String,
@@ -1658,12 +1637,32 @@ private fun VectronOrderPanel(
     onSendToKitchen: () -> Unit = {},
     onSetTab: () -> Unit = {},
     onPayment: () -> Unit = {},
+    paymentEnabled: Boolean = false,
+    cashEnabled: Boolean = true,
+    cardEnabled: Boolean = true,
+    terminalEnabled: Boolean = false,
+    expressEnabled: Boolean = false,
+    onCash: () -> Unit = {},
+    onCard: () -> Unit = {},
+    onTerminal: () -> Unit = {},
     canSendKitchen: Boolean = false,
+    tableCartFocusOrderedCourse: Int? = null,
+    onTableCartFocusConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isTableMode = tablesEnabled && activeTableName != null
     val showCourses = isTableMode && coursesEnabled
     val displayTotal = applyCashRounding(cart.displayTotal, roundingStep)
+    val giftCardRate = giftCardVatRateForService(cart.serviceType, dineInVatRate, takeawayVatRate)
+    val vatRows = remember(cart, giftCardRate) { cart.vatBreakdownRows(giftCardRate) }
+    val cartDiscount = remember(cart) {
+        when {
+            cart.splitByItems && cart.splitCount > 1 ->
+                cart.copy(items = cart.visibleItems).discountValue
+            cart.splitCount > 1 -> cart.discountValue / cart.splitCount
+            else -> cart.discountValue
+        }
+    }
     val orderingItems = cart.items.filter { !it.sentToKitchen }
     val orderedItems = cart.items.filter { it.sentToKitchen }
     val showCartTabs = isRestaurantMode && tablesEnabled && orderedItems.isNotEmpty()
@@ -1673,18 +1672,44 @@ private fun VectronOrderPanel(
         )
     }
     var prevOrderingCount by remember(activeTableName, showCartTabs) { mutableStateOf(orderingItems.size) }
+    var pendingScrollCourse by remember(activeTableName) { mutableStateOf<Int?>(null) }
     LaunchedEffect(orderingItems.size) {
         if (showCartTabs && orderingItems.size > prevOrderingCount) {
             cartTab = TableCartTab.ORDERING
         }
         prevOrderingCount = orderingItems.size
     }
+    LaunchedEffect(tableCartFocusOrderedCourse) {
+        val course = tableCartFocusOrderedCourse ?: return@LaunchedEffect
+        if (showCartTabs) {
+            cartTab = TableCartTab.ORDERED
+        }
+        pendingScrollCourse = course
+        onTableCartFocusConsumed()
+    }
     val displayItems = when {
         showCartTabs && cartTab == TableCartTab.ORDERED -> orderedItems
         showCartTabs -> orderingItems
         else -> cart.items
     }
-    val cartRows = buildCartRows(displayItems, showCourses, cart.activeCourse, cart.courseCount)
+    val cartListState = rememberLazyListState()
+    val cartScrollScope = rememberCoroutineScope()
+    val cartRows = buildCartRows(
+        items = displayItems,
+        allItemsForCourseState = cart.items,
+        isTableMode = showCourses,
+        activeCourse = cart.activeCourse,
+        courseCount = cart.courseCount
+    )
+    LaunchedEffect(pendingScrollCourse, cartTab, cartRows.size) {
+        val course = pendingScrollCourse ?: return@LaunchedEffect
+        if (showCartTabs && cartTab != TableCartTab.ORDERED) return@LaunchedEffect
+        val index = cartRows.indexOfFirst { it is CartRowModel.CourseHeader && it.number == course }
+        if (index >= 0) {
+            cartScrollScope.launch { cartListState.animateScrollToItem(index) }
+            pendingScrollCourse = null
+        }
+    }
     val unsentCourses = orderingItems.map { it.courseNumber }.distinct().sorted()
     val keypadHint = when (keypadMode) {
         KeypadMode.QTY -> stringResource(R.string.keypad_hint_qty)
@@ -1825,21 +1850,44 @@ private fun VectronOrderPanel(
             }
         }
 
-        if (showCourses && cartTab != TableCartTab.ORDERED) {
+        if (showCourses && cartRows.any { it is CartRowModel.CourseHeader }) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 36.dp)
+                    .heightIn(max = 32.dp)
                     .horizontalScroll(rememberScrollState())
                     .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 (1..cart.courseCount).forEach { course ->
+                    val fired = courseIsFired(cart.items, course)
                     FilterChip(
                         selected = cart.activeCourse == course,
-                        onClick = { onSetActiveCourse(course) },
+                        onClick = {
+                            onSetActiveCourse(course)
+                            val index = cartRows.indexOfFirst {
+                                it is CartRowModel.CourseHeader && it.number == course
+                            }
+                            if (index >= 0) {
+                                cartScrollScope.launch {
+                                    cartListState.animateScrollToItem(index)
+                                }
+                            }
+                        },
                         label = {
-                            Text(stringResource(R.string.course_n, course), fontSize = 10.sp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                if (fired) {
+                                    Icon(
+                                        Icons.Default.Send,
+                                        contentDescription = stringResource(R.string.sent_to_kitchen),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                                Text(stringResource(R.string.course_n, course), fontSize = 10.sp)
+                            }
                         }
                     )
                 }
@@ -1871,6 +1919,7 @@ private fun VectronOrderPanel(
                 }
             } else {
                 LazyColumn(
+                    state = cartListState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(6.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1895,6 +1944,16 @@ private fun VectronOrderPanel(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
+                                    if (row.isFired) {
+                                        Icon(
+                                            Icons.Default.Send,
+                                            contentDescription = stringResource(R.string.sent_to_kitchen),
+                                            tint = if (row.isActive) Color.White else Color(0xFF2E7D32),
+                                            modifier = Modifier
+                                                .size(14.dp)
+                                                .padding(end = 4.dp)
+                                        )
+                                    }
                                     Text(
                                         ">> ${stringResource(R.string.course_n, row.number)} <<",
                                         color = if (row.isActive) Color.White else Color(0xFF666666),
@@ -1922,8 +1981,31 @@ private fun VectronOrderPanel(
         }
 
         if (cart.items.isNotEmpty()) {
+            CartTotalBar(
+                vatRows = vatRows,
+                discountValue = cartDiscount,
+                total = displayTotal,
+                currencySymbol = currencySymbol
+            )
+            if (expressEnabled) {
+                CartExpressCheckoutRow(
+                    paymentEnabled = paymentEnabled,
+                    cashEnabled = cashEnabled,
+                    cardEnabled = cardEnabled,
+                    terminalEnabled = terminalEnabled,
+                    expressEnabled = true,
+                    showCheckoutArrow = false,
+                    compact = true,
+                    onCash = onCash,
+                    onCard = onCard,
+                    onTerminal = onTerminal,
+                    onOpenCheckout = onPayment
+                )
+            }
             if (selectedCartItemId != null) {
                 VectronKeypad(
+                    vatRows = vatRows,
+                    discountValue = cartDiscount,
                     total = displayTotal,
                     buffer = keypadBuffer,
                     currencySymbol = currencySymbol,
@@ -1931,6 +2013,7 @@ private fun VectronOrderPanel(
                     hint = keypadHint,
                     keypadMode = keypadMode,
                     expanded = keypadExpanded,
+                    showTotals = false,
                     onModeChange = onKeypadModeChange,
                     onExpandedChange = onKeypadExpandedChange,
                     onInput = onKeypadInput,
@@ -1938,12 +2021,6 @@ private fun VectronOrderPanel(
                     onClear = onKeypadClear,
                     onClearAll = onKeypadClearAll,
                     onEnter = onKeypadEnter
-                )
-            } else {
-                CartTotalBar(
-                    total = displayTotal,
-                    currencySymbol = currencySymbol,
-                    activeTableName = activeTableName
                 )
             }
         }
@@ -2185,6 +2262,7 @@ private fun CartActionSidebar(
     businessName: String,
     loggedInUserName: String?,
     isRestaurantMode: Boolean,
+    ordersTabMode: Boolean = false,
     showRetailTakeaway: Boolean = false,
     showRetailDelivery: Boolean = false,
     isTableMode: Boolean,
@@ -2213,7 +2291,7 @@ private fun CartActionSidebar(
         modifier = Modifier
             .width(96.dp)
             .fillMaxHeight()
-            .background(vc.sidebar, RoundedCornerShape(6.dp))
+            .background(posUiColors().surfaceSubtle, RoundedCornerShape(6.dp))
             .padding(vertical = 8.dp, horizontal = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -2221,6 +2299,7 @@ private fun CartActionSidebar(
         Column(
             modifier = Modifier
                 .weight(1f)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -2245,10 +2324,10 @@ private fun CartActionSidebar(
                 onClick = onDelivery
             )
         }
-        if (isRestaurantMode || showRetailTakeaway || showRetailDelivery) {
+        if (!ordersTabMode && (isRestaurantMode || showRetailTakeaway || showRetailDelivery)) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = vc.textSecondary.copy(alpha = 0.3f))
         }
-        if (isRestaurantMode && hasUnsentItems && !coursesEnabled && !isTableMode) {
+        if (!ordersTabMode && isRestaurantMode && hasUnsentItems && !coursesEnabled && !isTableMode) {
             CartSidebarButton(
                 label = stringResource(R.string.send_to_kitchen),
                 shortLabel = "Send",
@@ -2264,7 +2343,7 @@ private fun CartActionSidebar(
             color = Color(0xFF7D6608),
             onClick = onHold
         )
-        if (isRestaurantMode && coursesEnabled) {
+        if (!ordersTabMode && isRestaurantMode && coursesEnabled) {
             CartSidebarButton(
                 label = stringResource(R.string.add_course),
                 shortLabel = "C+",
@@ -2277,6 +2356,10 @@ private fun CartActionSidebar(
                 coursesBulkSent &&
                 activeCourse > 1 &&
                 activeCourseHasUnsentItems
+            val showRefireCourseButton = isTableMode &&
+                coursesBulkSent &&
+                activeCourseHasItems &&
+                !activeCourseHasUnsentItems
             when {
                 showFireCourseButton -> {
                     CartSidebarButton(
@@ -2287,11 +2370,21 @@ private fun CartActionSidebar(
                         onClick = onSendActiveCourse
                     )
                 }
+                showRefireCourseButton -> {
+                    CartSidebarButton(
+                        label = stringResource(R.string.fire_course_n, activeCourse),
+                        shortLabel = "Send",
+                        icon = Icons.Default.Send,
+                        color = VectronColors.CashGreen,
+                        onClick = onSendActiveCourse
+                    )
+                }
                 hasUnsentItems -> {
-                    val sendLabel = if (courseSendMode == CourseSendMode.SEND_ALL_ONCE) {
-                        stringResource(R.string.send_all_courses)
-                    } else {
-                        stringResource(R.string.send_to_kitchen)
+                    val sendLabel = when {
+                        coursesBulkSent -> stringResource(R.string.fire_course_n, activeCourse)
+                        courseSendMode == CourseSendMode.SEND_ALL_ONCE ->
+                            stringResource(R.string.send_all_courses)
+                        else -> stringResource(R.string.send_to_kitchen)
                     }
                     CartSidebarButton(
                         label = sendLabel,
@@ -2310,7 +2403,7 @@ private fun CartActionSidebar(
                     onClick = onKitchenMessage
                 )
             }
-        } else if (isRestaurantMode && isTableMode) {
+        } else if (!ordersTabMode && isRestaurantMode && isTableMode) {
             if (hasUnsentItems) {
                 CartSidebarButton(
                     label = stringResource(R.string.send_to_kitchen),
@@ -2327,7 +2420,7 @@ private fun CartActionSidebar(
                 onClick = onKitchenMessage
             )
         }
-        if (canReleaseEmptyTable) {
+        if (!ordersTabMode && canReleaseEmptyTable) {
             CartSidebarButton(
                 label = stringResource(R.string.close_table),
                 shortLabel = "Close",
@@ -2611,37 +2704,257 @@ private fun VectronCartRow(
 
 @Composable
 private fun CartTotalBar(
+    vatRows: List<VatBreakdownRow>,
+    discountValue: Double,
+    total: Double,
+    currencySymbol: String
+) {
+    CartDockTotalsSection(
+        vatRows = vatRows,
+        discountValue = discountValue,
+        total = total,
+        currencySymbol = currencySymbol,
+        modifier = Modifier.padding(top = 4.dp)
+    )
+}
+
+@Composable
+private fun CartDockTotalsSection(
+    vatRows: List<VatBreakdownRow>,
+    discountValue: Double,
     total: Double,
     currencySymbol: String,
-    activeTableName: String?
+    modifier: Modifier = Modifier,
+    expandable: Boolean = false,
+    expanded: Boolean = true,
+    onExpandedChange: (Boolean) -> Unit = {}
 ) {
-    val vc = vectronColors()
     Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        if (discountValue > 0.005) {
+            CartDockSummaryLine(
+                label = stringResource(R.string.discount),
+                amount = "-${formatMoney(discountValue, currencySymbol)}",
+                amountColor = Color(0xFFE67E22)
+            )
+        }
+        vatRows.forEach { row ->
+            val rateLabel = row.label.removeSuffix("%")
+            CartDockSummaryLine(
+                label = stringResource(R.string.cart_vat_at_rate, rateLabel),
+                amount = formatMoney(row.tva, currencySymbol)
+            )
+        }
+        CartDockGrandTotalRow(
+            total = total,
+            currencySymbol = currencySymbol,
+            expandable = expandable,
+            expanded = expanded,
+            onExpandedChange = onExpandedChange
+        )
+    }
+}
+
+@Composable
+private fun CartDockSummaryLine(
+    label: String,
+    amount: String,
+    amountColor: Color = Color.Unspecified
+) {
+    val ui = posUiColors()
+    val resolvedAmountColor = if (amountColor == Color.Unspecified) ui.textSecondary else amountColor
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .padding(horizontal = 10.dp, vertical = 1.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(vc.totalBar, RoundedCornerShape(4.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(stringResource(R.string.total), color = VectronColors.TextSecondary, fontSize = 13.sp)
+        Text(label, color = ui.textSecondary, fontSize = 12.sp)
+        Text(amount, color = resolvedAmountColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun CartDockGrandTotalRow(
+    total: Double,
+    currencySymbol: String,
+    expandable: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PosColors.Primary, RoundedCornerShape(4.dp))
+            .then(
+                if (expandable) {
+                    Modifier.clickable { onExpandedChange(!expanded) }
+                } else {
+                    Modifier
+                }
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            stringResource(R.string.total),
+            color = PosColors.TextOnPrimary.copy(alpha = 0.9f),
+            fontSize = 13.sp
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 text = formatMoney(total, currencySymbol),
-                color = VectronColors.TextPrimary,
+                color = PosColors.TextOnPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp
             )
+            if (expandable) {
+                Icon(
+                    if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                    contentDescription = if (expanded) {
+                        stringResource(R.string.keypad_collapse)
+                    } else {
+                        stringResource(R.string.keypad_expand)
+                    },
+                    tint = PosColors.TextOnPrimary.copy(alpha = 0.9f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartExpressCheckoutRow(
+    paymentEnabled: Boolean,
+    cashEnabled: Boolean,
+    cardEnabled: Boolean,
+    terminalEnabled: Boolean,
+    expressEnabled: Boolean,
+    showCheckoutArrow: Boolean = true,
+    compact: Boolean = false,
+    onCash: () -> Unit,
+    onCard: () -> Unit,
+    onTerminal: () -> Unit,
+    onOpenCheckout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val showExpressPay = expressEnabled && (cashEnabled || cardEnabled || terminalEnabled)
+    if (!showExpressPay && !showCheckoutArrow) return
+    val buttonHeight = if (compact) 52.dp else 64.dp
+    val labelSize = if (compact) 16.sp else 20.sp
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(posUiColors().surface)
+            .padding(top = 4.dp, start = 0.dp, end = 0.dp, bottom = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (showExpressPay && cashEnabled) {
+            Button(
+                onClick = onCash,
+                enabled = paymentEnabled,
+                modifier = Modifier.weight(1f).height(buttonHeight),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PosColors.Success,
+                    contentColor = PosColors.TextOnPrimary,
+                    disabledContainerColor = posUiColors().surfaceMuted,
+                    disabledContentColor = posUiColors().textMuted
+                ),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                Text(
+                    stringResource(R.string.cash),
+                    color = PosColors.TextOnPrimary,
+                    fontSize = labelSize,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+        if (showExpressPay && cardEnabled) {
+            Button(
+                onClick = onCard,
+                enabled = paymentEnabled,
+                modifier = Modifier.weight(1f).height(buttonHeight),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PosColors.Info,
+                    contentColor = PosColors.TextOnPrimary,
+                    disabledContainerColor = posUiColors().surfaceMuted,
+                    disabledContentColor = posUiColors().textMuted
+                ),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                Text(
+                    stringResource(R.string.card),
+                    color = PosColors.TextOnPrimary,
+                    fontSize = labelSize,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+        if (showExpressPay && terminalEnabled) {
+            Button(
+                onClick = onTerminal,
+                enabled = paymentEnabled,
+                modifier = Modifier.weight(1f).height(buttonHeight),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF8B5CF6),
+                    contentColor = PosColors.TextOnPrimary,
+                    disabledContainerColor = posUiColors().surfaceMuted,
+                    disabledContentColor = posUiColors().textMuted
+                ),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                Text(
+                    stringResource(R.string.terminal),
+                    color = PosColors.TextOnPrimary,
+                    fontSize = if (compact) 14.sp else 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+        if (showCheckoutArrow) {
+            Button(
+                onClick = onOpenCheckout,
+                enabled = paymentEnabled,
+                modifier = Modifier
+                    .then(if (showExpressPay) Modifier.width(if (compact) 52.dp else 64.dp) else Modifier.weight(1f))
+                    .height(buttonHeight),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PosColors.Primary,
+                    contentColor = PosColors.TextOnPrimary,
+                    disabledContainerColor = posUiColors().surfaceMuted,
+                    disabledContentColor = posUiColors().textMuted
+                ),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = stringResource(R.string.open_checkout),
+                    tint = PosColors.TextOnPrimary,
+                    modifier = Modifier.size(if (compact) 28.dp else 36.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun VectronKeypad(
+    vatRows: List<VatBreakdownRow>,
+    discountValue: Double,
     total: Double,
     buffer: String,
     currencySymbol: String,
@@ -2649,6 +2962,7 @@ private fun VectronKeypad(
     hint: String,
     keypadMode: KeypadMode,
     expanded: Boolean,
+    showTotals: Boolean = true,
     onModeChange: (KeypadMode) -> Unit,
     onExpandedChange: (Boolean) -> Unit,
     onInput: (String) -> Unit,
@@ -2657,7 +2971,6 @@ private fun VectronKeypad(
     onClearAll: () -> Unit,
     onEnter: () -> Unit
 ) {
-    val vc = vectronColors()
     val bufferPrefix = when (keypadMode) {
         KeypadMode.QTY -> ""
         KeypadMode.PERCENT -> ""
@@ -2673,22 +2986,31 @@ private fun VectronKeypad(
             .padding(top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(vc.totalBar, RoundedCornerShape(4.dp))
-                .clickable { onExpandedChange(!expanded) }
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(stringResource(R.string.total), color = VectronColors.TextSecondary, fontSize = 13.sp)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (showTotals) {
+            CartDockTotalsSection(
+                vatRows = vatRows,
+                discountValue = discountValue,
+                total = total,
+                currencySymbol = currencySymbol,
+                expandable = true,
+                expanded = expanded,
+                onExpandedChange = onExpandedChange
+            )
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(posUiColors().surfaceSubtle, RoundedCornerShape(4.dp))
+                    .clickable { onExpandedChange(!expanded) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = formatMoney(total, currencySymbol),
-                    color = VectronColors.TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+                    stringResource(if (expanded) R.string.keypad_collapse else R.string.keypad_expand),
+                    color = posUiColors().textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Icon(
                     if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
@@ -2697,26 +3019,28 @@ private fun VectronKeypad(
                     } else {
                         stringResource(R.string.keypad_expand)
                     },
-                    tint = VectronColors.TextSecondary,
+                    tint = posUiColors().textSecondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            KeypadMode.entries.forEach { mode ->
-                val label = when (mode) {
-                    KeypadMode.QTY -> stringResource(R.string.keypad_mode_qty)
-                    KeypadMode.PERCENT -> stringResource(R.string.keypad_mode_percent)
-                    KeypadMode.PRICE -> stringResource(R.string.keypad_mode_price)
+        if (expanded) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                KeypadMode.entries.forEach { mode ->
+                    val label = when (mode) {
+                        KeypadMode.QTY -> stringResource(R.string.keypad_mode_qty)
+                        KeypadMode.PERCENT -> stringResource(R.string.keypad_mode_percent)
+                        KeypadMode.PRICE -> stringResource(R.string.keypad_mode_price)
+                    }
+                    KeypadKey(
+                        label = label,
+                        modifier = Modifier.weight(1f),
+                        compact = true,
+                        highlight = keypadMode == mode,
+                        onClick = { onModeChange(mode) }
+                    )
                 }
-                KeypadKey(
-                    label = label,
-                    modifier = Modifier.weight(1f),
-                    compact = true,
-                    highlight = keypadMode == mode,
-                    onClick = { onModeChange(mode) }
-                )
             }
         }
 
@@ -2992,107 +3316,18 @@ private fun VectronProductGrid(
         }
         }
 
-        val showExpressPay = expressEnabled && (cashEnabled || cardEnabled || terminalEnabled)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(VectronColors.Header)
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (showExpressPay && cashEnabled) {
-                Button(
-                    onClick = onCash,
-                    enabled = paymentEnabled,
-                    modifier = Modifier.weight(1f).height(64.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = VectronColors.CashGreen,
-                        contentColor = Color.White,
-                        disabledContainerColor = VectronColors.KeypadButton,
-                        disabledContentColor = Color.White
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.cash),
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
-            }
-            if (showExpressPay && cardEnabled) {
-                Button(
-                    onClick = onCard,
-                    enabled = paymentEnabled,
-                    modifier = Modifier.weight(1f).height(64.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = VectronColors.CardBlue,
-                        contentColor = Color.White,
-                        disabledContainerColor = VectronColors.KeypadButton,
-                        disabledContentColor = Color.White
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.card),
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
-            }
-            if (showExpressPay && terminalEnabled) {
-                Button(
-                    onClick = onTerminal,
-                    enabled = paymentEnabled,
-                    modifier = Modifier.weight(1f).height(64.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF8B5CF6),
-                        contentColor = Color.White,
-                        disabledContainerColor = VectronColors.KeypadButton,
-                        disabledContentColor = Color.White
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.terminal),
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
-            }
-            Button(
-                onClick = onOpenCheckout,
-                enabled = paymentEnabled,
-                modifier = Modifier
-                    .then(if (showExpressPay) Modifier.width(64.dp) else Modifier.weight(1f))
-                    .height(64.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (showExpressPay) VectronColors.Header else VectronColors.CashGreen,
-                    contentColor = Color.White,
-                    disabledContainerColor = VectronColors.KeypadButton,
-                    disabledContentColor = Color.White
-                ),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = stringResource(R.string.open_checkout),
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-        }
+        CartExpressCheckoutRow(
+            paymentEnabled = paymentEnabled,
+            cashEnabled = cashEnabled,
+            cardEnabled = cardEnabled,
+            terminalEnabled = terminalEnabled,
+            expressEnabled = expressEnabled,
+            onCash = onCash,
+            onCard = onCard,
+            onTerminal = onTerminal,
+            onOpenCheckout = onOpenCheckout,
+            modifier = Modifier.background(posUiColors().surfaceSubtle).padding(8.dp)
+        )
     }
 }
 
@@ -3735,35 +3970,211 @@ private fun PosOrdersTabContent(
     onResumeOrder: () -> Unit
 ) {
     var subTab by remember { mutableIntStateOf(0) }
-    Column(modifier = modifier.fillMaxSize()) {
+    var reservationFilter by remember { mutableStateOf(false) }
+    var secondaryFilter by remember { mutableStateOf(OrdersSecondaryFilter.ALL) }
+    val ongoingVm: OngoingOrdersViewModel = hiltViewModel()
+    val ongoingState by ongoingVm.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(subTab) {
+        if (subTab == 0) ongoingVm.refresh()
+    }
+
+    fun applySecondaryFilter(filter: OrdersSecondaryFilter) {
+        secondaryFilter = filter
+        reservationFilter = filter == OrdersSecondaryFilter.RESERVATION
+        when (filter) {
+            OrdersSecondaryFilter.ALL -> {
+                ongoingVm.setChannelFilter(OrdersChannelFilter.ALL)
+                ongoingVm.setPaymentFilter(OrdersPaymentFilter.ALL)
+            }
+            OrdersSecondaryFilter.TAKEAWAY -> {
+                ongoingVm.setChannelFilter(OrdersChannelFilter.TAKEAWAY)
+                ongoingVm.setPaymentFilter(OrdersPaymentFilter.ALL)
+            }
+            OrdersSecondaryFilter.DELIVERY -> {
+                ongoingVm.setChannelFilter(OrdersChannelFilter.DELIVERY)
+                ongoingVm.setPaymentFilter(OrdersPaymentFilter.ALL)
+            }
+            OrdersSecondaryFilter.RESERVATION -> {
+                ongoingVm.setChannelFilter(OrdersChannelFilter.ALL)
+                ongoingVm.setPaymentFilter(OrdersPaymentFilter.ALL)
+            }
+            OrdersSecondaryFilter.UNPAID -> {
+                ongoingVm.setChannelFilter(OrdersChannelFilter.ALL)
+                ongoingVm.setPaymentFilter(OrdersPaymentFilter.UNPAID)
+            }
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(posUiColors().canvas)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFFEBEBEB))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = PosDimens.PagePaddingCompact, vertical = PosDimens.Space2),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(PosDimens.Space2)
         ) {
-            FilterChip(
-                selected = subTab == 0,
-                onClick = { subTab = 0 },
-                label = { Text(stringResource(R.string.ongoing_orders)) }
-            )
-            FilterChip(
-                selected = subTab == 1,
-                onClick = { subTab = 1 },
-                label = { Text(stringResource(R.string.programmed_orders)) }
-            )
-            FilterChip(
-                selected = subTab == 2,
-                onClick = { subTab = 2 },
-                label = { Text(stringResource(R.string.order_history)) }
-            )
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(PosDimens.Space2),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val activeCount = ongoingState.orders.size
+                PosOrdersPrimaryChip(
+                    label = stringResource(R.string.orders_filter_active),
+                    count = activeCount,
+                    selected = subTab == 0,
+                    onClick = { subTab = 0 }
+                )
+                PosOrdersPrimaryChip(
+                    label = stringResource(R.string.programmed_orders),
+                    selected = subTab == 1,
+                    onClick = { subTab = 1 }
+                )
+                PosOrdersPrimaryChip(
+                    label = stringResource(R.string.order_history),
+                    selected = subTab == 2,
+                    onClick = { subTab = 2 }
+                )
+                if (subTab == 0) {
+                    PosOrdersSecondaryChip(
+                        label = stringResource(R.string.orders_tab_all),
+                        count = activeCount,
+                        selected = secondaryFilter == OrdersSecondaryFilter.ALL,
+                        onClick = { applySecondaryFilter(OrdersSecondaryFilter.ALL) }
+                    )
+                    PosOrdersSecondaryChip(
+                        label = stringResource(R.string.pickup),
+                        count = ongoingState.orders.count {
+                            matchesOrdersChannel(it, OrdersChannelFilter.TAKEAWAY)
+                        },
+                        selected = secondaryFilter == OrdersSecondaryFilter.TAKEAWAY,
+                        onClick = { applySecondaryFilter(OrdersSecondaryFilter.TAKEAWAY) }
+                    )
+                    PosOrdersSecondaryChip(
+                        label = stringResource(R.string.delivery),
+                        count = ongoingState.orders.count {
+                            matchesOrdersChannel(it, OrdersChannelFilter.DELIVERY)
+                        },
+                        selected = secondaryFilter == OrdersSecondaryFilter.DELIVERY,
+                        onClick = { applySecondaryFilter(OrdersSecondaryFilter.DELIVERY) }
+                    )
+                    PosOrdersSecondaryChip(
+                        label = stringResource(R.string.orders_tab_reservation),
+                        count = ongoingState.orders.count { it.pickupTimeMs != null },
+                        selected = secondaryFilter == OrdersSecondaryFilter.RESERVATION,
+                        onClick = { applySecondaryFilter(OrdersSecondaryFilter.RESERVATION) }
+                    )
+                    PosOrdersSecondaryChip(
+                        label = stringResource(R.string.orders_filter_unpaid),
+                        count = ongoingState.orders.count {
+                            OngoingOrdersViewModel.isUnpaid(it)
+                        },
+                        selected = secondaryFilter == OrdersSecondaryFilter.UNPAID,
+                        onClick = { applySecondaryFilter(OrdersSecondaryFilter.UNPAID) }
+                    )
+                }
+            }
+            if (subTab == 0) {
+                ExpandableOrdersSearch(
+                    query = ongoingState.searchQuery,
+                    onQueryChange = ongoingVm::setSearchQuery,
+                    placeholderRes = R.string.orders_search_orders_hint,
+                    expandedMinWidth = 180.dp,
+                    expandedMaxWidth = 280.dp
+                )
+                IconButton(onClick = ongoingVm::refresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
+                }
+            }
         }
         when (subTab) {
-            0 -> OngoingOrdersScreen(onBack = onResumeOrder, embedded = true)
+            0 -> OngoingOrdersScreen(
+                onBack = onResumeOrder,
+                embedded = true,
+                embeddedInPosTab = true,
+                reservationOnly = reservationFilter
+            )
             1 -> com.chaslay.pos.ui.programmed.ProgrammedOrdersScreen(onBack = onResumeOrder, embedded = true)
             2 -> OrderHistoryScreen(onBack = {}, embedded = true)
         }
+    }
+}
+
+private enum class OrdersSecondaryFilter { ALL, TAKEAWAY, DELIVERY, RESERVATION, UNPAID }
+
+private fun matchesOrdersChannel(
+    card: com.chaslay.pos.domain.model.OngoingOrderCard,
+    filter: OrdersChannelFilter
+): Boolean = when (filter) {
+    OrdersChannelFilter.ALL -> true
+    OrdersChannelFilter.DINE_IN ->
+        card.fulfillmentType == FulfillmentType.DINE_IN || card.serviceType == ServiceType.DINE_IN
+    OrdersChannelFilter.TAKEAWAY ->
+        card.fulfillmentType == FulfillmentType.PICKUP ||
+            (card.fulfillmentType == FulfillmentType.WALK_IN && card.serviceType != ServiceType.DINE_IN)
+    OrdersChannelFilter.DELIVERY -> card.fulfillmentType == FulfillmentType.DELIVERY
+}
+
+@Composable
+private fun PosOrdersPrimaryChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    count: Int? = null
+) {
+    val text = if (count != null) "$label ($count)" else label
+    Surface(
+        onClick = onClick,
+        shape = PosShapes.Pill,
+        color = if (selected) PosColors.Primary else posUiColors().surface,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) PosColors.Primary else posUiColors().border
+        )
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            color = if (selected) PosColors.TextOnPrimary else posUiColors().textPrimary,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+private fun PosOrdersSecondaryChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    count: Int? = null
+) {
+    val ui = posUiColors()
+    val text = if (count != null) "$label ($count)" else label
+    val selectedBg = MaterialTheme.colorScheme.onSurface
+    Surface(
+        onClick = onClick,
+        shape = PosShapes.Pill,
+        color = if (selected) selectedBg else ui.surfaceMuted,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) selectedBg else ui.border
+        )
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            color = if (selected) MaterialTheme.colorScheme.surface else ui.textSecondary,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }
 
@@ -3790,15 +4201,16 @@ private fun TakeoutScheduleDialog(
     val openLabel = formatTime24h(openHour, openMinute)
     val closeLabel = formatTime24h(closeHour, closeMinute)
     val dateFormat = remember { SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()) }
+    val ui = posUiColors()
     val takeoutChipColors = FilterChipDefaults.filterChipColors(
-        containerColor = Color(0xFFE8E8E8),
-        labelColor = Color(0xFF333333),
-        selectedContainerColor = Color(0xFF111111),
-        selectedLabelColor = Color.White
+        containerColor = ui.surfaceMuted,
+        labelColor = ui.textPrimary,
+        selectedContainerColor = MaterialTheme.colorScheme.primary,
+        selectedLabelColor = PosColors.TextOnPrimary
     )
     val takeoutButtonColors = ButtonDefaults.buttonColors(
-        containerColor = Color(0xFF111111),
-        contentColor = Color.White
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = PosColors.TextOnPrimary
     )
 
     Dialog(
@@ -3810,7 +4222,7 @@ private fun TakeoutScheduleDialog(
                 .fillMaxWidth(0.96f)
                 .fillMaxHeight(0.94f),
             shape = RoundedCornerShape(12.dp),
-            color = Color.White
+            color = ui.surface
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
@@ -3824,16 +4236,16 @@ private fun TakeoutScheduleDialog(
                         title,
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp,
-                        color = Color(0xFF111111)
+                        color = ui.textPrimary
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel), tint = Color(0xFF111111))
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel), tint = ui.textPrimary)
                     }
                 }
                 Text(
                     stringResource(R.string.open_hours_display, openLabel, closeLabel),
                     modifier = Modifier.padding(horizontal = 16.dp),
-                    color = Color(0xFF666666),
+                    color = ui.textSecondary,
                     fontSize = 13.sp
                 )
                 if (showAsapOption) {

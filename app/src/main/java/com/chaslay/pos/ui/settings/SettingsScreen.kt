@@ -1,14 +1,18 @@
 package com.chaslay.pos.ui.settings
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import com.chaslay.pos.domain.model.ExpressPayPlacement
 import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
+import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.domain.model.UserAccess
@@ -21,6 +25,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -36,7 +42,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -91,7 +96,10 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
 import com.chaslay.pos.ui.license.LicenseSettingsSection
 import com.chaslay.pos.ui.tableplan.TablePlanDesignerContent
-import com.chaslay.pos.ui.theme.vectronColors
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
+import androidx.compose.foundation.BorderStroke
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -99,7 +107,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val colors = vectronColors()
+    val ui = posUiColors()
+    val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     var currencyExpanded by remember { mutableStateOf(false) }
     var languageExpanded by remember { mutableStateOf(false) }
@@ -135,26 +144,33 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(state.selectedSection) {
+        if (state.selectedSection == SettingsSection.PRINTERS) {
+            viewModel.refreshPrinterConnectionState()
+        }
+    }
+
     val showTablesDesigner =
         state.selectedSection == SettingsSection.TABLES && state.posMode == PosMode.RESTAURANT
 
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
+            .background(ui.canvas)
     ) {
         Column(
             modifier = Modifier
                 .width(200.dp)
                 .fillMaxHeight()
-                .background(colors.panelLight)
+                .background(posUiColors().surface)
+                .border(1.dp, posUiColors().border)
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 stringResource(R.string.nav_settings),
                 fontWeight = FontWeight.Bold,
-                color = colors.textPrimary,
+                color = ui.textPrimary,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
             )
             SettingsSection.entries.filter { section ->
@@ -168,8 +184,13 @@ fun SettingsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (selected) Color(0xFF00897B) else Color.Transparent)
+                        .clip(PosShapes.Medium)
+                        .background(if (selected) posUiColors().primarySubtle else Color.Transparent)
+                        .border(
+                            width = if (selected) 1.dp else 0.dp,
+                            color = if (selected) posUiColors().primaryBorder else Color.Transparent,
+                            shape = PosShapes.Medium,
+                        )
                         .clickable { viewModel.selectSection(section) }
                         .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
@@ -186,14 +207,18 @@ fun SettingsScreen(
                             Icon(
                                 icon,
                                 contentDescription = null,
-                                tint = if (selected) Color.White else colors.textPrimary,
+                                tint = if (selected) PosColors.Primary else ui.textPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
                         Text(
                             stringResource(section.titleRes),
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selected) Color.White else colors.textPrimary,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                ui.textPrimary
+                            },
                             fontSize = 13.sp
                         )
                     }
@@ -216,13 +241,13 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                         Text(
                             stringResource(R.string.track_covers_seating_plan),
-                            color = colors.textPrimary,
+                            color = ui.textPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             stringResource(R.string.track_covers_help),
-                            color = colors.textSecondary,
+                            color = ui.textSecondary,
                             fontSize = 11.sp
                         )
                     }
@@ -302,21 +327,21 @@ fun SettingsScreen(
                         Text(
                             stringResource(R.string.settings_signed_in_cloud_staff),
                             style = MaterialTheme.typography.bodySmall,
-                            color = colors.textSecondary
+                            color = ui.textSecondary
                         )
                     }
                     !session.merchantLinked -> {
                         Text(
                             stringResource(R.string.settings_signed_in_offline_hint),
                             style = MaterialTheme.typography.bodySmall,
-                            color = colors.textSecondary
+                            color = ui.textSecondary
                         )
                     }
                     session.dashboardSignedIn && session.staffEmail == null -> {
                         Text(
                             stringResource(R.string.settings_signed_in_panel_session),
                             style = MaterialTheme.typography.bodySmall,
-                            color = colors.textSecondary
+                            color = ui.textSecondary
                         )
                     }
                 }
@@ -358,7 +383,7 @@ fun SettingsScreen(
         }
 
         SettingsSectionCard(title = stringResource(R.string.pos_mode), icon = Icons.Outlined.Settings) {
-        Text(stringResource(R.string.pos_mode_help), style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+        Text(stringResource(R.string.pos_mode_help), style = MaterialTheme.typography.bodySmall, color = ui.textSecondary)
         if (state.posModeManagedByCloud) {
             Text(
                 when (state.posMode) {
@@ -366,12 +391,12 @@ fun SettingsScreen(
                     PosMode.RESTAURANT -> stringResource(R.string.pos_mode_restaurant)
                 },
                 style = MaterialTheme.typography.titleMedium,
-                color = colors.textPrimary
+                color = ui.textPrimary
             )
             Text(
                 stringResource(R.string.pos_mode_cloud_synced),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = ui.textSecondary
             )
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -402,8 +427,39 @@ fun SettingsScreen(
             Text(
                 stringResource(R.string.enable_courses_help),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = ui.textSecondary
             )
+            if (state.coursesEnabled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.course_send_mode),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = ui.textPrimary
+                )
+                Text(
+                    stringResource(R.string.course_send_mode_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ui.textSecondary
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CourseSendMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = state.courseSendMode == mode,
+                            onClick = { viewModel.updateCourseSendMode(mode) },
+                            label = {
+                                Text(
+                                    when (mode) {
+                                        CourseSendMode.FIRE_PER_COURSE ->
+                                            stringResource(R.string.course_send_mode_fire_per_course)
+                                        CourseSendMode.SEND_ALL_ONCE ->
+                                            stringResource(R.string.course_send_mode_send_all_once)
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
+            }
         } else {
             Spacer(modifier = Modifier.height(8.dp))
             SettingSwitch(
@@ -414,7 +470,7 @@ fun SettingsScreen(
             Text(
                 stringResource(R.string.pos_retail_dine_in_hint),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = ui.textSecondary
             )
             SettingSwitch(
                 stringResource(R.string.pos_retail_takeaway),
@@ -442,7 +498,7 @@ fun SettingsScreen(
                 }
             ),
             style = MaterialTheme.typography.bodySmall,
-            color = colors.textSecondary
+            color = ui.textSecondary
         )
         Spacer(modifier = Modifier.height(8.dp))
         SettingSwitch(
@@ -453,12 +509,12 @@ fun SettingsScreen(
         Text(
             stringResource(R.string.pos_require_table_dine_in_hint),
             style = MaterialTheme.typography.bodySmall,
-            color = colors.textSecondary
+            color = ui.textSecondary
         )
         }
 
         SettingsSectionCard(title = stringResource(R.string.business_hours), icon = Icons.Outlined.Schedule) {
-        Text(stringResource(R.string.business_hours_help), style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+        Text(stringResource(R.string.business_hours_help), style = MaterialTheme.typography.bodySmall, color = ui.textSecondary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = state.openHour,
@@ -615,24 +671,78 @@ fun SettingsScreen(
             stringResource(R.string.payment_settings),
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
-            color = colors.textPrimary
+            color = ui.textPrimary
         )
         // Cash / Card / Terminal first — always editable on the POS device.
         Text(
             stringResource(R.string.payment_methods),
             fontWeight = FontWeight.SemiBold,
-            color = colors.textPrimary
+            color = ui.textPrimary
         )
         SettingSwitch(stringResource(R.string.payment_cash), state.cashEnabled, viewModel::updateCashEnabled)
         SettingSwitch(stringResource(R.string.payment_card), state.cardEnabled, viewModel::updateCardEnabled)
         SettingSwitch(stringResource(R.string.payment_terminal), state.terminalEnabled, viewModel::updateTerminalEnabled)
         SettingSwitch(stringResource(R.string.payment_express), state.expressEnabled, viewModel::updateExpressEnabled)
+        Text(
+            stringResource(R.string.express_pay_placement),
+            fontWeight = FontWeight.SemiBold,
+            color = ui.textPrimary
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.expressPayPlacement == ExpressPayPlacement.PRODUCT_GRID,
+                onClick = { viewModel.updateExpressPayPlacement(ExpressPayPlacement.PRODUCT_GRID) },
+                label = { Text(stringResource(R.string.express_pay_placement_grid)) }
+            )
+            FilterChip(
+                selected = state.expressPayPlacement == ExpressPayPlacement.CART,
+                onClick = { viewModel.updateExpressPayPlacement(ExpressPayPlacement.CART) },
+                label = { Text(stringResource(R.string.express_pay_placement_cart)) }
+            )
+        }
+        Text(
+            stringResource(R.string.express_pay_placement_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = ui.textSecondary
+        )
+        Text(
+            stringResource(R.string.after_sale_destination),
+            fontWeight = FontWeight.SemiBold,
+            color = ui.textPrimary
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !state.afterSaleGoToOrders,
+                onClick = { viewModel.updateAfterSaleGoToOrders(false) },
+                label = { Text(stringResource(R.string.pos_register)) }
+            )
+            FilterChip(
+                selected = state.afterSaleGoToOrders,
+                onClick = { viewModel.updateAfterSaleGoToOrders(true) },
+                label = { Text(stringResource(R.string.pos_orders)) }
+            )
+        }
+        Text(
+            stringResource(R.string.after_sale_destination_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = ui.textSecondary
+        )
+        SettingSwitch(
+            stringResource(R.string.retail_cash_tender_dialog),
+            state.retailCashTenderDialogEnabled,
+            viewModel::updateRetailCashTenderDialogEnabled
+        )
+        Text(
+            stringResource(R.string.retail_cash_tender_dialog_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = ui.textSecondary
+        )
         SettingSwitch(stringResource(R.string.payment_gift_cards), state.giftCardsEnabled, viewModel::updateGiftCardsEnabled)
         if (state.paymentMethodsManagedByCloud) {
             Text(
                 stringResource(R.string.payment_methods_managed_by_panel),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = ui.textSecondary
             )
         }
         SettingSwitch(
@@ -643,10 +753,10 @@ fun SettingsScreen(
         Text(
             stringResource(R.string.payment_methods_manage_locally_hint),
             style = MaterialTheme.typography.bodySmall,
-            color = colors.textSecondary
+            color = ui.textSecondary
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(stringResource(R.string.default_rounding), color = colors.textPrimary)
+        Text(stringResource(R.string.default_rounding), color = ui.textPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("0" to "None", "0.05" to "0.05", "0.10" to "0.10", "0.50" to "0.50", "1.00" to "1.00").forEach { (value, label) ->
                 FilterChip(
@@ -667,14 +777,14 @@ fun SettingsScreen(
             Text(
                 stringResource(R.string.tap_to_pay_managed_by_panel),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = ui.textSecondary
             )
         }
         if (state.tapToPayEnabled) {
             Text(
                 stringResource(R.string.tap_to_pay_help),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = ui.textSecondary
             )
             LaunchedEffect(state.tapToPayEnabled) { viewModel.refreshTapToPayReadiness() }
 
@@ -698,8 +808,8 @@ fun SettingsScreen(
             Text(
                 statusText,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (readiness == TapToPayReadiness.READY) colors.textPrimary
-                else colors.textSecondary
+                color = if (readiness == TapToPayReadiness.READY) ui.textPrimary
+                else ui.textSecondary
             )
             // Unavailable devices keep the button visible but disabled, so staff can
             // read why tap payments will not work instead of guessing at checkout.
@@ -725,7 +835,7 @@ fun SettingsScreen(
             Text(
                 stringResource(R.string.adyen_setup_help),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = ui.textSecondary
             )
             OutlinedTextField(
                 value = state.adyenApiKey,
@@ -759,7 +869,7 @@ fun SettingsScreen(
                 viewModel::updateAdyenLiveEnvironment
             )
             if (state.adyenLiveEnvironment) {
-                Text(stringResource(R.string.adyen_live_region), fontSize = 12.sp, color = colors.textSecondary)
+                Text(stringResource(R.string.adyen_live_region), fontSize = 12.sp, color = ui.textSecondary)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("EU", "US", "AU", "APSE").forEach { region ->
                         FilterChip(
@@ -789,21 +899,22 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.PRINTERS) {
-        Text(stringResource(R.string.printers), fontWeight = FontWeight.Bold, fontSize = 22.sp)
-        Text(
-            stringResource(R.string.printers_page_help),
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF166534),
-            fontWeight = FontWeight.SemiBold
+        SettingsPageHeader(
+            title = stringResource(R.string.printers),
+            subtitle = stringResource(R.string.printers_page_help)
         )
-        Text(stringResource(R.string.printers_help), style = MaterialTheme.typography.bodySmall)
-        Text(
-            stringResource(R.string.app_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
-            fontSize = 11.sp,
-            color = Color.Gray
-        )
-        Button(onClick = viewModel::showAddPrinterDialog, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.add_printer))
+        Text(stringResource(R.string.printers_help), style = MaterialTheme.typography.bodySmall, color = posUiColors().textSecondary)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Button(
+                onClick = viewModel::showAddPrinterDialog,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = PosColors.Primary,
+                    contentColor = PosColors.TextOnPrimary
+                ),
+                shape = PosShapes.Large,
+            ) {
+                Text(stringResource(R.string.add_printer))
+            }
         }
 
         val selectedAddress = state.selectedPrinter?.address
@@ -813,123 +924,78 @@ fun SettingsScreen(
             ?: state.savedPrinters.firstOrNull()
         val otherPrinters = state.savedPrinters.filter { it.id != connectedPrinter?.id }
 
-        connectedPrinter?.let { printer ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFECFDF5)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(Color(0xFF16A34A))
-                        )
-                        Text(
-                            stringResource(R.string.printer_connected),
-                            color = Color(0xFF166534),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Text(printer.name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF14532D))
-                    Text(
-                        "${printer.connectionType} · ${viewModel.displayPrinterAddress(printer)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF166534)
-                    )
-                    Text(stringResource(R.string.printer_selected_help), fontSize = 12.sp, color = Color(0xFF166534))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Button(
-                            onClick = { viewModel.testSavedPrinter(printer) },
-                            enabled = !state.isPrinterBusy,
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
-                        ) {
-                            Text(stringResource(R.string.test_print), fontSize = 12.sp)
-                        }
-                        OutlinedButton(onClick = { viewModel.editPrinter(printer) }) {
-                            Text(stringResource(R.string.edit), fontSize = 12.sp)
-                        }
-                        TextButton(onClick = { viewModel.deleteSavedPrinter(printer.id) }) {
-                            Text(stringResource(R.string.delete))
-                        }
-                    }
-                }
+        @Composable
+        fun printerStatusUi(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity): Pair<String, Color> {
+            if (!printer.isEnabled) {
+                return stringResource(R.string.printer_attention) to PosColors.Warning
+            }
+            val reachable = state.printerReachability[viewModel.printerReachabilityKey(printer)] == true
+            return if (reachable) {
+                stringResource(R.string.printer_connected) to PosColors.Success
+            } else {
+                stringResource(R.string.printer_disconnected) to PosColors.Warning
             }
         }
 
-        if (otherPrinters.isNotEmpty()) {
-            Text(stringResource(R.string.saved_printers), fontWeight = FontWeight.SemiBold)
+        connectedPrinter?.let { printer ->
+            val (statusLabel, statusColor) = printerStatusUi(printer)
+            SettingsPrinterRow(
+                name = printer.name,
+                connectionLine = "${printer.connectionType} · ${viewModel.displayPrinterAddress(printer)}",
+                statusLabel = statusLabel,
+                statusColor = statusColor,
+                assignmentLabels = printerAssignmentLabels(printer),
+                isPrimary = true,
+                testEnabled = !state.isPrinterBusy,
+                onTest = { viewModel.testSavedPrinter(printer) },
+                onEdit = { viewModel.editPrinter(printer) },
+                onDelete = { viewModel.deleteSavedPrinter(printer.id) },
+                modifier = Modifier.padding(vertical = 6.dp)
+            )
         }
+
         otherPrinters.forEach { printer ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(printer.name, fontWeight = FontWeight.Bold)
-                    Text(
-                        "${printer.connectionType} · ${viewModel.displayPrinterAddress(printer)}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                        buildList {
-                            if (printer.printOrderReceipts) add("Receipts")
-                            if (printer.printKitchenTickets) add(stringResource(R.string.printer_cap_kitchen))
-                            if (printer.printEndOfDayReports) add("Reports")
-                            if (printer.openCashDrawer) add("Drawer")
-                        }.joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    if (printer.printKitchenTickets) {
-                        val linkedCount = printer.linkedProductIds.split(",").count { it.isNotBlank() }
-                        Text(
-                            if (printer.printAllProducts) "Prints: all products" else "Prints: $linkedCount linked product(s)",
-                            fontSize = 11.sp,
-                            color = Color(0xFF2E7D32)
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Button(
-                            onClick = { viewModel.testSavedPrinter(printer) },
-                            enabled = !state.isPrinterBusy
-                        ) {
-                            Text(stringResource(R.string.test_print), fontSize = 12.sp)
-                        }
-                        OutlinedButton(onClick = { viewModel.editPrinter(printer) }) {
-                            Text(stringResource(R.string.edit), fontSize = 12.sp)
-                        }
-                        TextButton(onClick = { viewModel.deleteSavedPrinter(printer.id) }) {
-                            Text(stringResource(R.string.delete))
-                        }
-                    }
-                }
-            }
+            val (statusLabel, statusColor) = printerStatusUi(printer)
+            SettingsPrinterRow(
+                name = printer.name,
+                connectionLine = "${printer.connectionType} · ${viewModel.displayPrinterAddress(printer)}",
+                statusLabel = statusLabel,
+                statusColor = statusColor,
+                assignmentLabels = printerAssignmentLabels(printer),
+                isPrimary = false,
+                testEnabled = !state.isPrinterBusy,
+                onTest = { viewModel.testSavedPrinter(printer) },
+                onEdit = { viewModel.editPrinter(printer) },
+                onDelete = { viewModel.deleteSavedPrinter(printer.id) },
+                modifier = Modifier.padding(vertical = 6.dp)
+            )
         }
 
         if (state.usbDevices.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
-            Text(stringResource(R.string.usb_printer), fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.usb_printer_help), fontSize = 12.sp)
+            Text(stringResource(R.string.usb_printer), fontWeight = FontWeight.SemiBold, color = posUiColors().textPrimary)
+            Text(stringResource(R.string.usb_printer_help), fontSize = 12.sp, color = posUiColors().textSecondary)
         }
         state.usbDevices.forEach { device ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = posUiColors().surface),
+                shape = PosShapes.Large,
+                border = BorderStroke(1.dp, posUiColors().border),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(device.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(device.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = posUiColors().textPrimary)
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Button(onClick = { viewModel.requestUsbPermission(device.stableAddress) }) {
+                        Button(
+                            onClick = { viewModel.requestUsbPermission(device.stableAddress) },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
+                            shape = PosShapes.Medium,
+                        ) {
                             Text(
                                 if (device.hasPermission) stringResource(R.string.usb_printer_allowed) else stringResource(R.string.usb_printer_permission),
                                 fontSize = 11.sp
@@ -937,7 +1003,9 @@ fun SettingsScreen(
                         }
                         Button(
                             onClick = { viewModel.testUsbPrint(device.stableAddress) },
-                            enabled = !state.isPrinterBusy && device.hasPermission
+                            enabled = !state.isPrinterBusy && device.hasPermission,
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = PosColors.Teal600),
+                            shape = PosShapes.Medium,
                         ) {
                             Text(stringResource(R.string.test_print), fontSize = 11.sp)
                         }
@@ -948,32 +1016,37 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.SCALE) {
-        Text(stringResource(R.string.scale_section), fontWeight = FontWeight.Bold, fontSize = 22.sp)
-        Text(
-            stringResource(R.string.scale_page_help),
-            fontSize = 14.sp,
-            color = Color(0xFF1D4ED8),
-            fontWeight = FontWeight.SemiBold
+        SettingsPageHeader(
+            title = stringResource(R.string.scale_section),
+            subtitle = stringResource(R.string.scale_page_help)
         )
-        Text(stringResource(R.string.scale_help), fontSize = 12.sp, color = Color.Gray)
+        Text(stringResource(R.string.scale_help), fontSize = 12.sp, color = posUiColors().textSecondary)
         Text(
             stringResource(R.string.app_version_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
             fontSize = 11.sp,
-            color = Color.Gray
+            color = posUiColors().textMuted
         )
         SettingSwitch(stringResource(R.string.scale_enabled), state.scaleEnabled, viewModel::updateScaleEnabled)
         state.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { selectedAddress ->
             val connected = state.scaleUsbDeviceAttached && state.scaleUsbHasPermission
             val needsPermission = state.scaleUsbDeviceAttached && !state.scaleUsbHasPermission
             val cardBg = when {
-                connected -> Color(0xFFECFDF5)
-                needsPermission -> Color(0xFFFFF7ED)
-                else -> Color(0xFFF3F4F6)
+                connected -> posUiColors().successSubtle
+                needsPermission -> posUiColors().warningSubtle
+                else -> posUiColors().surfaceMuted
             }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = cardBg),
-                shape = RoundedCornerShape(16.dp)
+                shape = PosShapes.Large,
+                border = BorderStroke(
+                    1.dp,
+                    when {
+                        connected -> PosColors.Success.copy(alpha = 0.35f)
+                        needsPermission -> PosColors.Warning.copy(alpha = 0.35f)
+                        else -> posUiColors().border
+                    }
+                ),
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
@@ -986,9 +1059,9 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(50))
                                 .background(
                                     when {
-                                        connected -> Color(0xFF16A34A)
-                                        needsPermission -> Color(0xFFEA580C)
-                                        else -> Color(0xFF9CA3AF)
+                                        connected -> PosColors.Success
+                                        needsPermission -> PosColors.Warning
+                                        else -> posUiColors().textMuted
                                     }
                                 )
                         )
@@ -999,9 +1072,9 @@ fun SettingsScreen(
                                 else -> stringResource(R.string.scale_not_found)
                             },
                             color = when {
-                                connected -> Color(0xFF166534)
-                                needsPermission -> Color(0xFF9A3412)
-                                else -> Color(0xFF4B5563)
+                                connected -> PosColors.Teal700
+                                needsPermission -> PosColors.Warning
+                                else -> posUiColors().textSecondary
                             },
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -1011,20 +1084,12 @@ fun SettingsScreen(
                         viewModel.displayScaleUsbAddress(selectedAddress),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
-                        color = when {
-                            connected -> Color(0xFF14532D)
-                            needsPermission -> Color(0xFF7C2D12)
-                            else -> Color(0xFF374151)
-                        }
+                        color = posUiColors().textPrimary
                     )
                     Text(
                         selectedAddress,
                         style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            connected -> Color(0xFF166534)
-                            needsPermission -> Color(0xFF9A3412)
-                            else -> Color(0xFF6B7280)
-                        }
+                        color = posUiColors().textSecondary
                     )
                     Text(
                         when {
@@ -1033,11 +1098,7 @@ fun SettingsScreen(
                             else -> stringResource(R.string.scale_replug_hint)
                         },
                         fontSize = 12.sp,
-                        color = when {
-                            connected -> Color(0xFF166534)
-                            needsPermission -> Color(0xFF9A3412)
-                            else -> Color(0xFF6B7280)
-                        }
+                        color = posUiColors().textSecondary
                     )
                 }
             }
@@ -1054,11 +1115,11 @@ fun SettingsScreen(
             }
         }
         state.scaleTestReading?.let { reading ->
-            Text(reading, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF16A085))
+            Text(reading, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PosColors.Primary)
         }
         val otherScaleDevices = state.scaleDevices.filter { it.stableAddress != state.scaleUsbAddress }
         if (otherScaleDevices.isNotEmpty()) {
-            Text(stringResource(R.string.scale_select_usb), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text(stringResource(R.string.scale_select_usb), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = posUiColors().textPrimary)
         }
         otherScaleDevices.forEach { device ->
             val isSelected = device.stableAddress == state.scaleUsbAddress
@@ -1069,14 +1130,19 @@ fun SettingsScreen(
                     .clickable { viewModel.selectScaleDeviceAndSave(device.stableAddress) },
                 colors = CardDefaults.cardColors(
                     containerColor = if (isSelected) {
-                        Color(0xFFECFDF5)
+                        posUiColors().primarySubtle
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant
+                        posUiColors().surface
                     }
-                )
+                ),
+                shape = PosShapes.Large,
+                border = BorderStroke(
+                    1.dp,
+                    if (isSelected) posUiColors().primaryBorder else posUiColors().border
+                ),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(device.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(device.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = posUiColors().textPrimary)
                     Text(
                         when {
                             isSelected -> stringResource(R.string.scale_selected)
@@ -1085,9 +1151,9 @@ fun SettingsScreen(
                         },
                         fontSize = 11.sp,
                         color = when {
-                            isSelected -> Color(0xFF047857)
-                            device.hasPermission -> Color(0xFF6B7280)
-                            else -> Color(0xFF2563EB)
+                            isSelected -> PosColors.Teal700
+                            device.hasPermission -> posUiColors().textSecondary
+                            else -> PosColors.Primary
                         },
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -1097,6 +1163,16 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.RECEIPTS) {
+        val receiptPreviewText = remember(
+            state.receiptHeader,
+            state.receiptFooter,
+            state.receiptShowVatTable,
+            state.receiptShowStaffLine,
+            state.businessName,
+            state.logoUri,
+        ) {
+            viewModel.previewReceiptText()
+        }
         val logoPicker = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
         ) { uri -> uri?.let(viewModel::importLogo) }
@@ -1189,6 +1265,10 @@ fun SettingsScreen(
             Checkbox(checked = state.adyenReceiptDigitalOnly, onCheckedChange = viewModel::updateAdyenReceiptDigitalOnly)
             Text("Adyen card receipt: digital only (QR)")
         }
+        ReceiptThermalPreview(
+            previewText = receiptPreviewText,
+            modifier = Modifier.padding(top = 12.dp),
+        )
         if (state.posMode == PosMode.RESTAURANT) {
             Text(stringResource(R.string.kitchen_text_size), fontWeight = FontWeight.SemiBold)
             Text(stringResource(R.string.kitchen_item_text_size), style = MaterialTheme.typography.bodySmall)
@@ -1335,30 +1415,90 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.APPEARANCE) {
-        Text(stringResource(R.string.appearance_settings), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(
+            stringResource(R.string.appearance_settings),
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            color = scheme.onSurface,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = state.posThemeMode == PosThemeMode.LIGHT,
                 onClick = { viewModel.updatePosThemeMode(PosThemeMode.LIGHT) },
-                label = { Text(stringResource(R.string.theme_light)) }
+                label = { Text(stringResource(R.string.theme_light)) },
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = scheme.primaryContainer,
+                    selectedLabelColor = scheme.onPrimaryContainer,
+                    containerColor = ui.surfaceMuted,
+                    labelColor = ui.textPrimary,
+                ),
             )
             FilterChip(
                 selected = state.posThemeMode == PosThemeMode.DARK,
                 onClick = { viewModel.updatePosThemeMode(PosThemeMode.DARK) },
-                label = { Text(stringResource(R.string.theme_dark)) }
+                label = { Text(stringResource(R.string.theme_dark)) },
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = scheme.primaryContainer,
+                    selectedLabelColor = scheme.onPrimaryContainer,
+                    containerColor = ui.surfaceMuted,
+                    labelColor = ui.textPrimary,
+                ),
             )
         }
-        Text(stringResource(R.string.theme_help), style = MaterialTheme.typography.bodySmall)
+        Text(
+            stringResource(R.string.theme_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = ui.textSecondary,
+        )
+        AppearanceScaleRow(
+            title = stringResource(R.string.pos_display_scale_title),
+            hint = stringResource(R.string.pos_display_scale_hint),
+            valueLabel = "${(state.posDisplayScale * 100).toInt()}%",
+            onDecrease = {
+                viewModel.updatePosDisplayScale(
+                    state.posDisplayScale - com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_STEP
+                )
+            },
+            onIncrease = {
+                viewModel.updatePosDisplayScale(
+                    state.posDisplayScale + com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_STEP
+                )
+            },
+            decreaseEnabled = state.posDisplayScale > com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_MIN + 0.001f,
+            increaseEnabled = state.posDisplayScale < com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_MAX - 0.001f,
+        )
+        AppearanceScaleRow(
+            title = stringResource(R.string.pos_text_scale_title),
+            hint = stringResource(R.string.pos_text_scale_hint),
+            valueLabel = "${(state.posTextScale * 100).toInt()}%",
+            onDecrease = {
+                viewModel.updatePosTextScale(
+                    state.posTextScale - com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_STEP
+                )
+            },
+            onIncrease = {
+                viewModel.updatePosTextScale(
+                    state.posTextScale + com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_STEP
+                )
+            },
+            decreaseEnabled = state.posTextScale > com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_MIN + 0.001f,
+            increaseEnabled = state.posTextScale < com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_MAX - 0.001f,
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.kiosk_fullscreen_title), fontWeight = FontWeight.Medium)
+                Text(
+                    stringResource(R.string.kiosk_fullscreen_title),
+                    fontWeight = FontWeight.Medium,
+                    color = scheme.onSurface,
+                )
                 Text(
                     stringResource(R.string.kiosk_fullscreen_help),
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ui.textSecondary,
                 )
             }
             Switch(
@@ -1379,7 +1519,7 @@ fun SettingsScreen(
                 Text(
                     stringResource(R.string.app_version),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = colors.textSecondary
+                    color = ui.textSecondary
                 )
                 Text(
                     stringResource(
@@ -1389,7 +1529,7 @@ fun SettingsScreen(
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = colors.textPrimary
+                    color = ui.textPrimary
                 )
             }
         }
@@ -1411,7 +1551,8 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00897B)
+                    containerColor = PosColors.Primary,
+                    contentColor = PosColors.TextOnPrimary,
                 )
             ) {
                 Text(stringResource(R.string.save), fontWeight = FontWeight.SemiBold)
@@ -1520,7 +1661,10 @@ private fun SettingSwitch(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, color = if (enabled) LocalContentColor.current else Color.Gray)
+        Text(
+            label,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else posUiColors().textMuted,
+        )
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
@@ -1587,6 +1731,59 @@ private fun CategoryPrintRow(
                         expanded = false
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun printerAssignmentLabels(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity): List<String> =
+    buildList {
+        if (printer.printOrderReceipts) add(stringResource(R.string.receipt))
+        if (printer.printKitchenTickets) add(stringResource(R.string.printer_cap_kitchen))
+        if (printer.printEndOfDayReports) add(stringResource(R.string.reports))
+        if (printer.openCashDrawer) add(stringResource(R.string.cash_drawer))
+    }
+
+@Composable
+private fun AppearanceScaleRow(
+    title: String,
+    hint: String,
+    valueLabel: String,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+    decreaseEnabled: Boolean,
+    increaseEnabled: Boolean,
+) {
+    val ui = posUiColors()
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Medium, color = scheme.onSurface)
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = ui.textSecondary)
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(onClick = onDecrease, enabled = decreaseEnabled) {
+                Text("−", fontWeight = FontWeight.Bold)
+            }
+            Text(
+                valueLabel,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                modifier = Modifier.widthIn(min = 48.dp),
+                textAlign = TextAlign.Center,
+            )
+            OutlinedButton(onClick = onIncrease, enabled = increaseEnabled) {
+                Text("+", fontWeight = FontWeight.Bold)
             }
         }
     }

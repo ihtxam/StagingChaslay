@@ -19,6 +19,7 @@ import {
   Vault,
   ArrowDownUp,
   Nfc,
+  ScrollText,
 } from 'lucide-react';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
 import { useFullscreenActive } from '@/hooks/useFullscreenActive';
@@ -620,6 +621,7 @@ export function WebPosSettingsDropdown({
   onDineInEnabledChange,
   onSendLogs,
   onOpenCustomerDisplay,
+  onOpenReceiptDesign,
   autoOpenCashDrawer = true,
   onAutoOpenCashDrawerChange,
   terminalEnabled = false,
@@ -685,6 +687,8 @@ export function WebPosSettingsDropdown({
   onDineInEnabledChange?: (enabled: boolean) => void;
   onSendLogs?: () => void;
   onOpenCustomerDisplay?: () => void;
+  /** Merchant receipt logo/header/footer designer (panel-synced). */
+  onOpenReceiptDesign?: () => void;
   autoOpenCashDrawer?: boolean;
   onAutoOpenCashDrawerChange?: (enabled: boolean) => void;
   terminalEnabled?: boolean;
@@ -850,6 +854,16 @@ export function WebPosSettingsDropdown({
           >
             <Monitor size={14} />
             {t('cdsOpenDisplay')}
+          </button>
+        ) : null}
+        {onOpenReceiptDesign ? (
+          <button
+            type="button"
+            className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50/80 px-2 py-2 text-[11px] font-semibold text-teal-900 hover:bg-teal-100"
+            onClick={onOpenReceiptDesign}
+          >
+            <ScrollText size={14} />
+            {t('webPosReceiptDesign')}
           </button>
         ) : null}
       </div>

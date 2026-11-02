@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.pos
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,14 +21,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,6 +65,9 @@ import com.chaslay.pos.domain.model.ProductCustomizeState
 import com.chaslay.pos.domain.model.ProductWithVariants
 import com.chaslay.pos.domain.model.SelectedAddon
 import com.chaslay.pos.domain.model.SelectedModifier
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
+import com.chaslay.pos.ui.theme.PosDimens
 import java.util.Locale
 import java.util.UUID
 
@@ -169,28 +176,30 @@ fun ComboPickDialog(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .fillMaxHeight(0.88f),
-            color = Color(0xFF1E1E1E),
-            shape = RoundedCornerShape(12.dp)
+            color = posUiColors().surface,
+            shape = PosShapes.Dialog,
+            shadowElevation = 8.dp,
+            tonalElevation = 0.dp,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF2A2A2A))
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .background(posUiColors().surfaceSubtle)
+                        .padding(horizontal = PosDimens.Space4, vertical = PosDimens.Space3),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(product.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(product.name, color = posUiColors().textPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text(
                             stringResource(R.string.combo_deal_price, currencySymbol, product.price),
-                            color = Color(0xFF4CAF50),
+                            color = PosColors.Success,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFE57373))
+                        Icon(Icons.Default.Close, contentDescription = null, tint = posUiColors().textSecondary)
                     }
                 }
 
@@ -210,7 +219,7 @@ fun ComboPickDialog(
                         if (combo.slots.isEmpty()) {
                             Text(
                                 stringResource(R.string.combo_choices_unavailable),
-                                color = Color(0xFFFFCC80),
+                                color = PosColors.Warning,
                                 fontSize = 14.sp
                             )
                         }
@@ -253,7 +262,8 @@ fun ComboPickDialog(
                         modifier = Modifier
                             .width(132.dp)
                             .fillMaxHeight()
-                            .background(Color(0xFF252525))
+                            .background(posUiColors().surfaceSubtle)
+                            .border(1.dp, posUiColors().border)
                             .padding(horizontal = 10.dp, vertical = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -261,11 +271,11 @@ fun ComboPickDialog(
                             onClick = { showNotes = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF80CBC4), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = PosColors.Primary, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text(
                                 if (userNotes.isBlank()) stringResource(R.string.add_notes) else stringResource(R.string.edit_notes),
-                                color = Color(0xFF80CBC4),
+                                color = PosColors.Primary,
                                 fontSize = 12.sp,
                                 maxLines = 1
                             )
@@ -273,35 +283,35 @@ fun ComboPickDialog(
                         Spacer(modifier = Modifier.weight(1f))
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF00897B))
+                                .size(PosDimens.ControlHeightMd)
+                                .clip(PosShapes.Large)
+                                .background(PosColors.Primary)
                                 .clickable { itemQty++ },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                            Icon(Icons.Default.Add, contentDescription = null, tint = PosColors.TextOnPrimary, modifier = Modifier.size(28.dp))
                         }
                         Text(
                             itemQty.toString(),
-                            color = Color.White,
+                            color = posUiColors().textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 28.sp,
                             modifier = Modifier.padding(vertical = 10.dp)
                         )
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF424242))
+                                .size(PosDimens.ControlHeightMd)
+                                .clip(PosShapes.Large)
+                                .background(posUiColors().surfaceMuted)
                                 .clickable { if (itemQty > 1) itemQty-- },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                            Icon(Icons.Default.Remove, contentDescription = null, tint = posUiColors().textPrimary, modifier = Modifier.size(28.dp))
                         }
                         Spacer(modifier = Modifier.weight(1f))
                         Text(
                             "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}",
-                            color = Color.White,
+                            color = posUiColors().textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             textAlign = TextAlign.Center
@@ -312,12 +322,12 @@ fun ComboPickDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF2A2A2A))
+                        .background(posUiColors().surfaceSubtle)
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     errorMessage?.let { msg ->
-                        Text(msg, color = Color(0xFFE57373), fontSize = 12.sp)
+                        Text(msg, color = PosColors.Danger, fontSize = 12.sp)
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -326,18 +336,30 @@ fun ComboPickDialog(
                     ) {
                         Text(
                             stringResource(R.string.total_items, itemQty),
-                            color = Color.Gray,
+                            color = posUiColors().textSecondary,
                             fontSize = 13.sp
                         )
                         Text(
                             "$currencySymbol ${"%.2f".format(Locale.getDefault(), lineTotal)}",
-                            color = Color.White,
+                            color = posUiColors().textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 22.sp
                         )
                     }
-                    Button(
-                        onClick = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            shape = PosShapes.Medium,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
+                        ) {
+                            Text(stringResource(R.string.cancel), color = posUiColors().textPrimary)
+                        }
+                        Button(
+                            onClick = {
                             val snapshot = combo.slots.associate { slot ->
                                 slot.id to picks[slot.id].orEmpty().toList()
                             }
@@ -382,20 +404,22 @@ fun ComboPickDialog(
                         },
                         enabled = allValid,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
+                            .weight(1f)
+                            .height(PosDimens.ControlHeightMd),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF00897B),
-                            disabledContainerColor = Color(0xFF424242)
+                            containerColor = PosColors.Primary,
+                            contentColor = PosColors.TextOnPrimary,
+                            disabledContainerColor = posUiColors().surfaceMuted,
+                            disabledContentColor = posUiColors().textMuted,
                         ),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = PosShapes.Medium
                     ) {
                         Text(
-                            stringResource(R.string.combo_add_to_order).uppercase(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
+                            stringResource(R.string.combo_add_to_order),
+                            fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp
                         )
+                    }
                     }
                 }
             }
@@ -468,17 +492,17 @@ private fun ComboSlotSection(
     onDecrement: (ComboSlotOptionModel) -> Unit
 ) {
     val selectedCount = picks.sumOf { it.qty }
-    val tileHeight = if (showProductImages) 108.dp else 84.dp
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val tileHeight = if (showProductImages) 92.dp else 64.dp
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(slot.name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(slot.name, color = posUiColors().textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             Text(
                 comboSlotHeader(slot, selectedCount),
-                color = if (selectedCount >= slot.minPick) Color(0xFF80CBC4) else Color.Gray,
+                color = if (selectedCount >= slot.minPick) PosColors.Primary else posUiColors().textMuted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -486,15 +510,15 @@ private fun ComboSlotSection(
         if (slot.options.isEmpty()) {
             Text(
                 stringResource(R.string.combo_slot_empty),
-                color = Color(0xFFFFCC80),
+                color = PosColors.Warning,
                 fontSize = 13.sp
             )
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 slot.options.chunked(3).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         row.forEach { option ->
                             val qty = picks
@@ -530,7 +554,7 @@ private fun ComboSlotSection(
                     val extras = pick.modifiers.map { it.name } + pick.extras.map { it.name }
                     Text(
                         "${pick.productName}${if (pick.qty > 1) " ×${pick.qty}" else ""}: ${extras.joinToString(", ")}",
-                        color = Color(0xFFB0B0B0),
+                        color = posUiColors().textSecondary,
                         fontSize = 12.sp
                     )
                 }
@@ -561,51 +585,62 @@ private fun ComboOptionTile(
             .height(tileHeight)
             .border(
                 width = if (selected) 2.dp else 1.dp,
-                color = if (selected) Color(0xFF00897B) else Color(0xFF555555),
-                shape = RoundedCornerShape(8.dp)
+                color = if (selected) PosColors.Primary else posUiColors().border,
+                shape = PosShapes.Small
             )
             .background(
-                if (selected) Color(0xFF1B3A38) else Color(0xFF333333),
-                RoundedCornerShape(8.dp)
+                if (selected) posUiColors().surfaceSelected else posUiColors().surface,
+                PosShapes.Small
             )
             .clickable(onClick = onToggle)
-            .padding(8.dp)
+            .padding(horizontal = 6.dp, vertical = 5.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = if (selected) 14.dp else 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.Center
         ) {
             if (showProductImages && !imageUri.isNullOrBlank()) {
                 coil.compose.AsyncImage(
                     model = imageUri,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(28.dp)
                         .clip(RoundedCornerShape(4.dp)),
                     contentScale = ContentScale.Crop
                 )
+                Spacer(Modifier.height(4.dp))
             }
             Text(
                 optionName,
-                color = Color.White,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                fontSize = 13.sp,
+                color = posUiColors().textPrimary,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 12.sp,
+                lineHeight = 14.sp,
                 maxLines = 2,
                 textAlign = TextAlign.Center
             )
             when {
-                extraPrice > 0 -> Text(
-                    "+$currencySymbol ${"%.2f".format(Locale.getDefault(), extraPrice)}",
-                    color = Color(0xFFFFB74D),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                customizeHint -> Text(
-                    stringResource(R.string.combo_customize_item),
-                    color = Color(0xFF80CBC4),
-                    fontSize = 10.sp
-                )
+                extraPrice > 0 -> {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "+$currencySymbol ${"%.2f".format(Locale.getDefault(), extraPrice)}",
+                        color = PosColors.Warning,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                customizeHint -> {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        stringResource(R.string.combo_customize_item),
+                        color = PosColors.Primary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
             if (showQty && selected) {
                 Row(
@@ -615,24 +650,41 @@ private fun ComboOptionTile(
                 ) {
                     IconButton(
                         onClick = onDecrement,
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
-                        Icon(Icons.Default.Remove, contentDescription = null, tint = Color.White)
+                        Icon(Icons.Default.Remove, contentDescription = null, tint = posUiColors().textPrimary, modifier = Modifier.size(16.dp))
                     }
                     Text(
                         qty.toString(),
-                        color = Color.White,
+                        color = posUiColors().textPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp)
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 2.dp)
                     )
                     IconButton(
                         onClick = onIncrement,
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                        Icon(Icons.Default.Add, contentDescription = null, tint = posUiColors().textPrimary, modifier = Modifier.size(16.dp))
                     }
                 }
+            }
+        }
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(PosColors.Primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = PosColors.TextOnPrimary,
+                    modifier = Modifier.size(11.dp)
+                )
             }
         }
     }

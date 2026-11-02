@@ -3,6 +3,7 @@ package com.chaslay.pos.sync
 import android.content.Context
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.data.remote.dto.SyncCheckoutDto
+import com.chaslay.pos.domain.model.ExpressPayPlacement
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.util.PosLocalPrefs
 
@@ -51,6 +52,33 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
     } else {
         checkout.retailDeliveryEnabled
     }
+    val expressPlacement = if (context != null && PosLocalPrefs.hasUserSetExpressPayPlacement(context)) {
+        PosLocalPrefs.applyExpressPayPlacementIfUserSet(context, expressPayPlacement)
+    } else {
+        ExpressPayPlacement.toCheckoutValue(
+            ExpressPayPlacement.fromCheckoutValue(checkout.expressPayPlacement)
+        )
+    }
+    val expressCheckout = if (context != null && PosLocalPrefs.hasUserSetExpressCheckoutEnabled(context)) {
+        PosLocalPrefs.applyExpressCheckoutEnabledIfUserSet(context, expressEnabled)
+    } else {
+        checkout.expressCheckoutEnabled
+    }
+    val retailCashDialog = if (context != null && PosLocalPrefs.hasUserSetRetailCashTenderDialogEnabled(context)) {
+        PosLocalPrefs.applyRetailCashTenderDialogEnabledIfUserSet(context, retailCashTenderDialogEnabled)
+    } else {
+        checkout.retailCashTenderDialogEnabled
+    }
+    val syncedCourseSendMode = if (checkout.courseSendMode == "send_all_once") {
+        "send_all_once"
+    } else {
+        "fire_per_course"
+    }
+    val courseSend = if (context != null && PosLocalPrefs.hasUserSetCourseSendMode(context)) {
+        PosLocalPrefs.applyCourseSendModeIfUserSet(context, courseSendMode)
+    } else {
+        syncedCourseSendMode
+    }
     return copy(
         tipsEnabled = checkout.tipsEnabled,
         terminalAskGratuityEnabled = checkout.terminalAskGratuityEnabled,
@@ -70,13 +98,11 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
         retailTakeawayEnabled = retailTakeaway,
         retailDeliveryEnabled = retailDelivery,
         requireTableForDineIn = requireTable,
-        courseSendMode = if (checkout.courseSendMode == "send_all_once") {
-            "send_all_once"
-        } else {
-            "fire_per_course"
-        },
+        courseSendMode = courseSend,
         // Single panel toggle for Cash/Card/Terminal buttons under products.
-        expressEnabled = checkout.expressCheckoutEnabled
+        expressEnabled = expressCheckout,
+        expressPayPlacement = expressPlacement,
+        retailCashTenderDialogEnabled = retailCashDialog
     )
 }
 

@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.pos
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,12 +66,12 @@ import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.applyCashRounding
-import com.chaslay.pos.ui.theme.VectronColors
-import com.chaslay.pos.ui.theme.vectronColors
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
+import com.chaslay.pos.ui.theme.PosShapes
 import java.util.Locale
-import kotlin.math.ceil
 
-private val CheckoutTeal = Color(0xFF0D9488)
+private val CheckoutTeal = PosColors.Primary
 
 data class CheckoutState(
     val method: PaymentMethod? = PaymentMethod.CASH,
@@ -145,7 +146,6 @@ fun CheckoutScreen(
 ) {
     val equalSplitCount = if (isEqualSplit) splitBillCount ?: 1 else 1
     val totals = rememberCheckoutTotals(cart, checkoutState, equalSplitCount)
-    val vc = vectronColors()
     val showSplitNav = splitBillIndex != null && splitBillCount != null && splitBillCount > 1
     var showTipDialog by remember { mutableStateOf(false) }
     var showDiscountDialog by remember { mutableStateOf(false) }
@@ -264,15 +264,16 @@ fun CheckoutScreen(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(vc.background)
+            .background(posUiColors().canvas)
     ) {
         Column(
             modifier = Modifier
-                .width(360.dp)
+                .width(300.dp)
                 .fillMaxHeight()
-                .background(vc.panelDark)
+                .background(posUiColors().surface)
+                .border(1.dp, posUiColors().border)
                 .clickableWithoutRipple { onDeselectMethod() }
-                .padding(12.dp)
+                .padding(PosDimens.PagePaddingCompact)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -280,7 +281,7 @@ fun CheckoutScreen(
                 stringResource(R.string.checkout_title),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = vc.textPrimary
+                color = posUiColors().textPrimary
             )
 
             if (cashEnabled) {
@@ -288,7 +289,6 @@ fun CheckoutScreen(
                     title = stringResource(R.string.cash),
                     icon = Icons.Default.AttachMoney,
                     selected = checkoutState.method == PaymentMethod.CASH,
-                    accent = Color(0xFF22C55E),
                     onClick = { onSelectMethod(PaymentMethod.CASH) }
                 )
             }
@@ -297,7 +297,6 @@ fun CheckoutScreen(
                     title = stringResource(R.string.card),
                     icon = Icons.Default.CreditCard,
                     selected = checkoutState.method == PaymentMethod.CARD,
-                    accent = Color(0xFF3B82F6),
                     onClick = { selectCardOrSplit() }
                 )
             }
@@ -306,7 +305,6 @@ fun CheckoutScreen(
                     title = stringResource(R.string.tap_to_pay_method),
                     icon = Icons.Default.Contactless,
                     selected = checkoutState.method == PaymentMethod.TAP_TO_PAY,
-                    accent = Color(0xFF6366F1),
                     enabled = tapToPayReady,
                     subtitle = tapToPayStatus?.takeIf { !tapToPayReady },
                     onClick = {
@@ -326,7 +324,6 @@ fun CheckoutScreen(
                     title = stringResource(R.string.adyen_terminal),
                     icon = Icons.Default.PointOfSale,
                     selected = checkoutState.method == PaymentMethod.ADYEN_TERMINAL,
-                    accent = Color(0xFF8B5CF6),
                     onClick = {
                         if (cashApplied > 0.001 && remaining > 0.001) {
                             onApplyCardRemainder(remaining)
@@ -347,7 +344,6 @@ fun CheckoutScreen(
                     title = stringResource(R.string.pay_later),
                     icon = Icons.Default.Schedule,
                     selected = checkoutState.method == PaymentMethod.PAY_LATER,
-                    accent = Color(0xFFF59E0B),
                     onClick = {
                         tenderBuffer = ""
                         onTenderAmount(0.0)
@@ -359,7 +355,6 @@ fun CheckoutScreen(
                     title = stringResource(R.string.invoice),
                     icon = Icons.Default.Description,
                     selected = checkoutState.method == PaymentMethod.INVOICE,
-                    accent = Color(0xFF0EA5E9),
                     onClick = {
                         tenderBuffer = ""
                         onTenderAmount(0.0)
@@ -373,7 +368,6 @@ fun CheckoutScreen(
                     title = stringResource(R.string.gift_card_pay),
                     icon = Icons.Default.Redeem,
                     selected = checkoutState.payWithGiftCard && checkoutState.giftCardRedeemAmount > 0.001,
-                    accent = CheckoutTeal,
                     onClick = onGiftCardPay,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -444,165 +438,146 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-
-            if (quickCashEnabled) {
-                Text(
-                    stringResource(R.string.checkout_quick_cash),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = vc.textSecondary
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    buildQuickCashAmounts(totals.roundedTotal, quickCashDenominations).forEach { amount ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFF4F4F5))
-                                .border(1.dp, Color(0xFFD4D4D8), RoundedCornerShape(12.dp))
-                                .clickable { applyTender(amount) }
-                                .padding(horizontal = 12.dp, vertical = 10.dp)
-                        ) {
-                            Text(
-                                formatMoney(amount, currencySymbol),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (cashEnabled) {
-                CheckoutTenderKeypad(
-                    buffer = tenderBuffer,
-                    currencySymbol = currencySymbol,
-                    onKey = ::appendTenderKey,
-                    onClear = {
-                        tenderBuffer = ""
-                        onTenderAmount(0.0)
-                    },
-                    onEnter = {
-                        val amount = tenderBuffer.toDoubleOrNull() ?: 0.0
-                        if (amount > 0) applyTender(amount) else onSelectMethod(PaymentMethod.CASH)
-                    }
-                )
-            }
         }
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .padding(PosDimens.PagePaddingCompact)
                 .clickableWithoutRipple { onDeselectMethod() }
-                .padding(16.dp)
         ) {
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .clip(PosShapes.ExtraLarge)
+                    .background(posUiColors().surface)
+                    .border(1.dp, posUiColors().border, PosShapes.ExtraLarge)
+                    .padding(PosDimens.PagePaddingCompact)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    stringResource(R.string.checkout_amount_due),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = vc.textSecondary,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    formatMoney(totals.roundedTotal, currencySymbol),
-                    fontWeight = FontWeight.Light,
-                    fontSize = 56.sp,
-                    color = vc.textPrimary
-                )
-                if (checkoutOrderRef.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        if (checkoutOrderRef.isNotEmpty()) {
+                            Text(
+                                checkoutOrderRef,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = posUiColors().textPrimary
+                            )
+                        }
+                        Text(
+                            stringResource(R.string.total_items, cart.items.size),
+                            fontSize = 12.sp,
+                            color = posUiColors().textSecondary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(PosShapes.Large)
+                        .background(posUiColors().surfaceSubtle)
+                        .padding(vertical = 16.dp, horizontal = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        checkoutOrderRef,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = vc.textPrimary
+                        stringResource(R.string.checkout_amount_due),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = posUiColors().textSecondary,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        formatMoney(totals.roundedTotal, currencySymbol),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 44.sp,
+                        color = posUiColors().textPrimary
                     )
                 }
+
                 if (cashApplied > 0.001) {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         stringResource(R.string.checkout_cash_applied, formatMoney(cashApplied, currencySymbol)),
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF15803D)
+                        color = PosColors.Success
                     )
                 }
                 if (cardApplied > 0.001) {
                     Text(
                         stringResource(R.string.checkout_card_applied, formatMoney(cardApplied, currencySymbol)),
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF2563EB)
+                        color = PosColors.Info
                     )
                 }
                 if (remaining > 0.001) {
                     Text(
                         stringResource(R.string.checkout_remaining, formatMoney(remaining, currencySymbol)),
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFB45309)
-                    )
-                }
-                if (changeDue > 0.001) {
-                    Text(
-                        stringResource(R.string.checkout_change_due, formatMoney(changeDue, currencySymbol)),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF15803D)
+                        color = PosColors.Warning
                     )
                 }
 
                 if (showSplitNav) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(PosShapes.Card)
+                            .background(posUiColors().surfaceSubtle)
+                            .border(1.dp, posUiColors().border, PosShapes.Card)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedButton(
                             onClick = onPrevSplitBill,
                             enabled = splitBillIndex!! > 1,
-                            shape = RoundedCornerShape(20.dp)
+                            shape = PosShapes.Medium,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
                         ) {
-                            Text(stringResource(R.string.prev_bill), color = vc.textPrimary, fontSize = 12.sp)
+                            Text(stringResource(R.string.prev_bill), color = posUiColors().textPrimary, fontSize = 12.sp)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 stringResource(R.string.bill_x_of_y, splitBillIndex, splitBillCount!!),
                                 fontWeight = FontWeight.Bold,
-                                color = vc.textPrimary,
+                                color = PosColors.Primary,
                                 fontSize = 16.sp
                             )
                             if (isEqualSplit && equalSplitPaidCount > 0) {
                                 Text(
                                     stringResource(R.string.bills_paid_count, equalSplitPaidCount, splitBillCount),
                                     fontSize = 11.sp,
-                                    color = vc.textSecondary
+                                    color = posUiColors().textSecondary
                                 )
                             }
                         }
                         OutlinedButton(
                             onClick = onNextSplitBill,
                             enabled = splitBillIndex < splitBillCount,
-                            shape = RoundedCornerShape(20.dp)
+                            shape = PosShapes.Medium,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
                         ) {
-                            Text(stringResource(R.string.next_bill), color = vc.textPrimary, fontSize = 12.sp)
+                            Text(stringResource(R.string.next_bill), color = posUiColors().textPrimary, fontSize = 12.sp)
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    stringResource(R.string.total_items, cart.items.size),
-                    fontSize = 12.sp,
-                    color = vc.textSecondary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
                 cart.items.forEach { item ->
                     Row(
                         modifier = Modifier
@@ -615,9 +590,14 @@ fun CheckoutScreen(
                             fontSize = 14.sp,
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            color = posUiColors().textPrimary
                         )
-                        Text(formatMoney(item.lineSubtotal, currencySymbol), fontSize = 14.sp)
+                        Text(
+                            formatMoney(item.lineSubtotal, currencySymbol),
+                            fontSize = 14.sp,
+                            color = posUiColors().textPrimary
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
@@ -656,6 +636,93 @@ fun CheckoutScreen(
                     )
                 }
             }
+        }
+
+        Column(
+            modifier = Modifier
+                .width(320.dp)
+                .fillMaxHeight()
+                .background(posUiColors().surface)
+                .border(1.dp, posUiColors().border)
+                .clickableWithoutRipple { onDeselectMethod() }
+                .padding(PosDimens.PagePaddingCompact)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (cashEnabled) {
+                Text(
+                    stringResource(R.string.checkout_amount_received),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = posUiColors().textSecondary
+                )
+            }
+
+            if (quickCashEnabled && cashEnabled) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    buildQuickCashAmounts(totals.roundedTotal, quickCashDenominations).forEach { amount ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 44.dp)
+                                .clip(PosShapes.Card)
+                                .background(posUiColors().surfaceSubtle)
+                                .border(1.dp, posUiColors().border, PosShapes.Card)
+                                .clickable { applyTender(amount) }
+                                .padding(horizontal = 4.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                formatQuickCashAmount(amount, currencySymbol),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = posUiColors().textPrimary,
+                                maxLines = 2,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (cashEnabled) {
+                CheckoutTenderKeypad(
+                    buffer = tenderBuffer,
+                    currencySymbol = currencySymbol,
+                    onKey = ::appendTenderKey,
+                    onClear = {
+                        tenderBuffer = ""
+                        onTenderAmount(0.0)
+                    },
+                    onEnter = {
+                        val amount = tenderBuffer.toDoubleOrNull() ?: 0.0
+                        if (amount > 0) applyTender(amount) else onSelectMethod(PaymentMethod.CASH)
+                    }
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(PosShapes.Large)
+                    .background(posUiColors().warningSubtle)
+                    .border(1.dp, PosColors.Warning.copy(alpha = 0.35f), PosShapes.Large)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    stringResource(R.string.checkout_change_due_label),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PosColors.Warning
+                )
+                Text(
+                    formatMoney(changeDue, currencySymbol),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PosColors.Warning
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -664,21 +731,27 @@ fun CheckoutScreen(
             ) {
                 OutlinedButton(
                     onClick = onBack,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.height(56.dp)
+                    shape = PosShapes.Large,
+                    modifier = Modifier.height(52.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp), tint = posUiColors().textPrimary)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(stringResource(R.string.checkout_back), color = vc.textPrimary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.checkout_back), color = posUiColors().textPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
                 Button(
                     onClick = onComplete,
                     enabled = canComplete,
                     modifier = Modifier
                         .weight(1f)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
+                        .height(52.dp),
+                    shape = PosShapes.Large,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PosColors.Primary,
+                        contentColor = PosColors.TextOnPrimary,
+                        disabledContainerColor = posUiColors().surfaceMuted,
+                        disabledContentColor = posUiColors().textMuted,
+                    )
                 ) {
                     val label = if (changeDue > 0.001) {
                         stringResource(
@@ -688,7 +761,7 @@ fun CheckoutScreen(
                     } else {
                         stringResource(R.string.checkout_complete)
                     }
-                    Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                    Text(label, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -700,33 +773,34 @@ private fun CheckoutMethodButton(
     title: String,
     icon: ImageVector,
     selected: Boolean,
-    accent: Color,
     onClick: () -> Unit,
     enabled: Boolean = true,
     subtitle: String? = null,
     modifier: Modifier = Modifier
 ) {
-    // A disabled tender stays visible and states why: a cashier who cannot find
-    // the button learns nothing, whereas a greyed button with a reason sends them
-    // to Settings instead of to the customer with an unexplained failure.
     val border = when {
-        !enabled -> Color(0xFFE4E4E7)
-        selected -> accent
-        else -> Color(0xFFD4D4D8)
+        !enabled -> posUiColors().border
+        selected -> CheckoutTeal
+        else -> posUiColors().border
     }
     val bg = when {
-        !enabled -> Color(0xFFF4F4F5)
-        selected -> accent.copy(alpha = 0.10f)
-        else -> Color(0xFFF8FAFC)
+        !enabled -> posUiColors().surfaceMuted
+        selected -> posUiColors().primarySubtle
+        else -> posUiColors().surface
+    }
+    val iconTint = when {
+        !enabled -> posUiColors().textMuted
+        selected -> CheckoutTeal
+        else -> posUiColors().textSecondary
     }
     val contentAlpha = if (enabled) 1f else 0.45f
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(PosShapes.Card)
             .background(bg)
-            .border(1.5.dp, border, RoundedCornerShape(12.dp))
+            .border(1.5.dp, border, PosShapes.Card)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -735,7 +809,7 @@ private fun CheckoutMethodButton(
         Icon(
             icon,
             contentDescription = null,
-            tint = accent.copy(alpha = contentAlpha),
+            tint = iconTint.copy(alpha = contentAlpha),
             modifier = Modifier.size(22.dp)
         )
         Column {
@@ -743,10 +817,10 @@ private fun CheckoutMethodButton(
                 title,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp,
-                color = Color(0xFF18181B).copy(alpha = contentAlpha)
+                color = posUiColors().textPrimary.copy(alpha = contentAlpha)
             )
             subtitle?.let {
-                Text(it, fontSize = 12.sp, color = Color(0xFF71717A))
+                Text(it, fontSize = 12.sp, color = posUiColors().textMuted)
             }
         }
     }
@@ -763,9 +837,9 @@ private fun CheckoutActionChip(
     Row(
         modifier = modifier
             .height(52.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) CheckoutTeal.copy(alpha = 0.12f) else Color(0xFFF8FAFC))
-            .border(1.5.dp, if (selected) CheckoutTeal else Color(0xFFD4D4D8), RoundedCornerShape(12.dp))
+            .clip(PosShapes.Card)
+            .background(if (selected) CheckoutTeal.copy(alpha = 0.12f) else posUiColors().surface)
+            .border(1.5.dp, if (selected) CheckoutTeal else posUiColors().border, PosShapes.Card)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.Center,
@@ -774,7 +848,7 @@ private fun CheckoutActionChip(
         Icon(
             icon,
             contentDescription = label,
-            tint = if (selected) CheckoutTeal else Color(0xFF64748B),
+            tint = if (selected) CheckoutTeal else posUiColors().textSecondary,
             modifier = Modifier.size(18.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -784,7 +858,7 @@ private fun CheckoutActionChip(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = if (selected) CheckoutTeal else Color(0xFF334155)
+            color = if (selected) CheckoutTeal else posUiColors().textPrimary
         )
     }
 }
@@ -794,13 +868,13 @@ private fun CheckoutIconChip(icon: ImageVector, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(52.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFF8FAFC))
-            .border(1.5.dp, Color(0xFFD4D4D8), RoundedCornerShape(12.dp))
+            .clip(PosShapes.Card)
+            .background(posUiColors().surface)
+            .border(1.5.dp, posUiColors().border, PosShapes.Card)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = posUiColors().textSecondary, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -816,8 +890,8 @@ private fun CheckoutTenderKeypad(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.5.dp, Color(0xFF9CA3AF), RoundedCornerShape(12.dp))
-                .background(Color.White, RoundedCornerShape(12.dp))
+                .border(1.5.dp, posUiColors().borderStrong, PosShapes.Card)
+                .background(posUiColors().surface, PosShapes.Card)
                 .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Text(
@@ -825,7 +899,8 @@ private fun CheckoutTenderKeypad(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.End,
                 fontWeight = FontWeight.Bold,
-                fontSize = 24.sp
+                fontSize = 24.sp,
+                color = posUiColors().textPrimary
             )
         }
         listOf(
@@ -869,23 +944,23 @@ private fun CheckoutKey(
 ) {
     val bg = when (tone) {
         KeyTone.Enter -> CheckoutTeal
-        KeyTone.Clear -> Color(0xFFFEE2E2)
-        KeyTone.Normal -> Color(0xFFF4F4F5)
+        KeyTone.Clear -> posUiColors().dangerSubtle
+        KeyTone.Normal -> posUiColors().surfaceSubtle
     }
     val fg = when (tone) {
-        KeyTone.Enter -> Color.White
-        KeyTone.Clear -> Color(0xFFB91C1C)
-        KeyTone.Normal -> Color(0xFF18181B)
+        KeyTone.Enter -> PosColors.TextOnPrimary
+        KeyTone.Clear -> PosColors.Danger
+        KeyTone.Normal -> posUiColors().textPrimary
     }
     Box(
         modifier = modifier
             .height(56.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(PosShapes.Card)
             .background(bg)
             .border(
                 1.dp,
-                if (tone == KeyTone.Normal) Color(0xFFD4D4D8) else bg,
-                RoundedCornerShape(12.dp)
+                if (tone == KeyTone.Normal) posUiColors().border else bg,
+                PosShapes.Card
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -902,8 +977,8 @@ private fun SummaryLine(label: String, value: String) {
             .padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, fontSize = 13.sp, color = Color.Gray)
-        Text(value, fontSize = 13.sp)
+        Text(label, fontSize = 13.sp, color = posUiColors().textSecondary)
+        Text(value, fontSize = 13.sp, color = posUiColors().textPrimary)
     }
 }
 
@@ -939,15 +1014,18 @@ private fun rememberCheckoutTotals(
 }
 
 private fun buildQuickCashAmounts(total: Double, denominations: List<Double>): List<Double> {
-    val exact = if (total > 0) listOf(total) else emptyList()
-    val dens = denominations.filter { it >= total && it > 0 }.sorted()
-    val rounded5 = if (total <= 0) 0.0 else ceil(total / 0.05) * 0.05
-    val extras = listOf(rounded5).filter { it > total }
-    return (exact + dens + extras).distinct().filter { it > 0 }.take(6)
+    return listOf(10.0, 20.0, 30.0, 40.0, 50.0)
 }
 
 private fun formatMoney(amount: Double, symbol: String): String =
     String.format(Locale.getDefault(), "%s %.2f", symbol, amount)
+
+private fun formatQuickCashAmount(amount: Double, symbol: String): String =
+    if (amount == kotlin.math.floor(amount)) {
+        String.format(Locale.getDefault(), "%d %s", amount.toInt(), symbol)
+    } else {
+        formatMoney(amount, symbol)
+    }
 
 private fun formatTenderBuffer(amount: Double): String =
     if (amount == kotlin.math.floor(amount)) {

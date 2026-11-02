@@ -60,6 +60,7 @@ data class OrderHistoryUiState(
     val pendingDeleteOrder: TransactionEntity? = null,
     val isAdminUser: Boolean = false,
     val deleteModeUnlocked: Boolean = false,
+    val selectedPurgeOrderIds: Set<String> = emptySet(),
     val message: String? = null
 )
 
@@ -128,17 +129,53 @@ class OrderHistoryViewModel @Inject constructor(
         }
     }
 
-    /** Hidden admin gesture: tap the # column header 5 times quickly. */
+    /** Hidden admin gesture: tap the # column header 5 times quickly to enter or exit purge mode. */
     fun onAdminUnlockTap() {
-        if (!_uiState.value.isAdminUser || _uiState.value.deleteModeUnlocked) return
+        if (!_uiState.value.isAdminUser) return
         val now = System.currentTimeMillis()
         if (now - lastUnlockTapMs > 2500L) unlockTapCount = 0
         lastUnlockTapMs = now
         unlockTapCount++
         if (unlockTapCount >= 5) {
             unlockTapCount = 0
-            _uiState.value = _uiState.value.copy(deleteModeUnlocked = true)
+            if (_uiState.value.deleteModeUnlocked) {
+                exitDeleteMode()
+            } else {
+                _uiState.value = _uiState.value.copy(deleteModeUnlocked = true)
+            }
         }
+    }
+
+    fun exitDeleteMode() {
+        _uiState.value = _uiState.value.copy(
+            deleteModeUnlocked = false,
+            selectedPurgeOrderIds = emptySet(),
+            showBulkDeleteDialog = false,
+            bulkDeleteCount = 0,
+            pendingDeleteOrder = null,
+            showDeleteDialog = false
+        )
+    }
+
+    fun togglePurgeSelection(order: TransactionEntity) {
+        if (!_uiState.value.deleteModeUnlocked || !OrderHistoryPurge.isGandolaPurgeEligible(order)) return
+        val id = order.id
+        val next = _uiState.value.selectedPurgeOrderIds.toMutableSet()
+        if (id in next) next.remove(id) else next.add(id)
+        _uiState.value = _uiState.value.copy(selectedPurgeOrderIds = next)
+    }
+
+    fun selectAllPurgeEligibleOnPage() {
+        if (!_uiState.value.deleteModeUnlocked) return
+        val eligible = _uiState.value.orders
+            .filter { OrderHistoryPurge.isGandolaPurgeEligible(it) }
+            .map { it.id }
+            .toSet()
+        _uiState.value = _uiState.value.copy(selectedPurgeOrderIds = eligible)
+    }
+
+    fun clearPurgeSelection() {
+        _uiState.value = _uiState.value.copy(selectedPurgeOrderIds = emptySet())
     }
 
     fun refresh() {
@@ -537,22 +574,21 @@ class OrderHistoryViewModel @Inject constructor(
 
     fun requestDeleteOrder(order: TransactionEntity) {
         if (!_uiState.value.isAdminUser || !_uiState.value.deleteModeUnlocked) return
+        if (!OrderHistoryPurge.isGandolaPurgeEligible(order)) return
         _uiState.value = _uiState.value.copy(
             pendingDeleteOrder = order,
             showDeleteDialog = true
         )
     }
 
-    fun requestBulkDelete() {
+    fun requestDeleteSelectedPurge() {
         if (!_uiState.value.isAdminUser || !_uiState.value.deleteModeUnlocked) return
-        viewModelScope.launch {
-            val (start, end) = dateBounds(_uiState.value.dateFilter)
-            val count = transactionRepository.countOrdersInRange(start, end)
-            _uiState.value = _uiState.value.copy(
-                showBulkDeleteDialog = true,
-                bulkDeleteCount = count
-            )
-        }
+        val count = _uiState.value.selectedPurgeOrderIds.size
+        if (count == 0) return
+        _uiState.value = _uiState.value.copy(
+            showBulkDeleteDialog = true,
+            bulkDeleteCount = count
+        )
     }
 
     fun dismissBulkDeleteDialog() {
@@ -564,11 +600,12 @@ class OrderHistoryViewModel @Inject constructor(
 
     fun confirmBulkDelete() {
         viewModelScope.launch {
-            val (start, end) = dateBounds(_uiState.value.dateFilter)
-            val deleted = transactionRepository.deleteOrdersInRange(start, end)
+            val ids = _uiState.value.selectedPurgeOrderIds.toList()
+            val deleted = transactionRepository.deleteOrdersPermanently(ids)
             _uiState.value = _uiState.value.copy(
                 showBulkDeleteDialog = false,
                 bulkDeleteCount = 0,
+                selectedPurgeOrderIds = emptySet(),
                 selectedOrder = null,
                 selectedItems = emptyList(),
                 splitOrders = emptyList(),

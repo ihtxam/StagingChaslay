@@ -5,8 +5,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.chaslay.pos.ui.theme.PosAppearanceLimits
 import com.chaslay.pos.domain.model.AppLanguage
 import com.chaslay.pos.domain.model.PosPermission
 import com.chaslay.pos.domain.model.PosThemeMode
@@ -35,6 +37,8 @@ class SessionManager @Inject constructor(
     private val languageKey = stringPreferencesKey("app_language")
     private val themeModeKey = stringPreferencesKey("pos_theme_mode")
     private val kioskModeKey = booleanPreferencesKey("kiosk_fullscreen_mode")
+    private val posDisplayScaleKey = floatPreferencesKey("pos_display_scale")
+    private val posTextScaleKey = floatPreferencesKey("pos_text_scale")
 
     val currentUserId: Flow<Long?> = context.sessionDataStore.data.map { prefs ->
         prefs[userIdKey]
@@ -67,6 +71,14 @@ class SessionManager @Inject constructor(
 
     val kioskFullscreenEnabled: Flow<Boolean> = context.sessionDataStore.data.map { prefs ->
         prefs[kioskModeKey] ?: true
+    }
+
+    val posDisplayScale: Flow<Float> = context.sessionDataStore.data.map { prefs ->
+        PosAppearanceLimits.clampDisplay(prefs[posDisplayScaleKey] ?: 1f)
+    }
+
+    val posTextScale: Flow<Float> = context.sessionDataStore.data.map { prefs ->
+        PosAppearanceLimits.clampText(prefs[posTextScaleKey] ?: 1f)
     }
 
     suspend fun saveSession(userId: Long, userName: String, access: UserAccess) {
@@ -126,6 +138,18 @@ class SessionManager @Inject constructor(
     suspend fun setKioskFullscreenEnabled(enabled: Boolean) {
         context.sessionDataStore.edit { prefs ->
             prefs[kioskModeKey] = enabled
+        }
+    }
+
+    suspend fun setPosDisplayScale(scale: Float) {
+        context.sessionDataStore.edit { prefs ->
+            prefs[posDisplayScaleKey] = PosAppearanceLimits.clampDisplay(scale)
+        }
+    }
+
+    suspend fun setPosTextScale(scale: Float) {
+        context.sessionDataStore.edit { prefs ->
+            prefs[posTextScaleKey] = PosAppearanceLimits.clampText(scale)
         }
     }
 }

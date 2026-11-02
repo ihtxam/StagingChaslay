@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.reports
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +46,8 @@ import com.chaslay.pos.ui.reports.ProfitMarginRow
 import com.chaslay.pos.ui.reports.ProfitBreakdown
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.formatMoneyAmount
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
 import java.util.Locale
 
 @Composable
@@ -53,8 +56,12 @@ fun ReportsScreen(viewModel: ReportsViewModel = hiltViewModel()) {
     val currency by viewModel.currencySymbol.collectAsStateWithLifecycle()
     var tab by remember { mutableIntStateOf(0) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab) {
+    Column(modifier = Modifier.fillMaxSize().background(posUiColors().canvas)) {
+        TabRow(
+            selectedTabIndex = tab,
+            containerColor = posUiColors().surface,
+            contentColor = PosColors.Primary,
+        ) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.end_of_day)) })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.sales_report)) })
             Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(stringResource(R.string.product_sales)) })
@@ -135,32 +142,35 @@ private fun SalesReportTab(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            KpiCard(stringResource(R.string.gross_sales), formatMoney(state.salesReport.grossSales, currency), Color(0xFF27AE60), Modifier.weight(1f))
-            KpiCard(stringResource(R.string.net_sales), formatMoney(state.salesReport.netSales, currency), Color(0xFF16A085), Modifier.weight(1f))
+            KpiCard(stringResource(R.string.gross_sales), formatMoney(state.salesReport.grossSales, currency), PosColors.Success, Modifier.weight(1f))
+            KpiCard(stringResource(R.string.net_sales), formatMoney(state.salesReport.netSales, currency), PosColors.Primary, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            KpiCard(stringResource(R.string.average_ticket), formatMoney(state.salesReport.averageTicket, currency), Color(0xFF3498DB), Modifier.weight(1f))
-            KpiCard(stringResource(R.string.transactions), state.salesReport.orderCount.toString(), Color(0xFF8E44AD), Modifier.weight(1f))
+            KpiCard(stringResource(R.string.average_ticket), formatMoney(state.salesReport.averageTicket, currency), PosColors.Info, Modifier.weight(1f))
+            KpiCard(stringResource(R.string.transactions), state.salesReport.orderCount.toString(), PosColors.Teal700, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            KpiCard(stringResource(R.string.cancelled_orders), "${state.salesReport.cancelledCount} · ${formatMoney(state.salesReport.cancelledTotal, currency)}", Color(0xFFE74C3C), Modifier.weight(1f))
-            KpiCard(stringResource(R.string.total_tips), formatMoney(state.salesReport.totalTips, currency), Color(0xFFE67E22), Modifier.weight(1f))
+            KpiCard(stringResource(R.string.cancelled_orders), "${state.salesReport.cancelledCount} · ${formatMoney(state.salesReport.cancelledTotal, currency)}", PosColors.Danger, Modifier.weight(1f))
+            KpiCard(stringResource(R.string.total_tips), formatMoney(state.salesReport.totalTips, currency), PosColors.Warning, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            KpiCard(stringResource(R.string.tax), formatMoney(state.salesReport.taxTotal, currency), Color(0xFF9B59B6), Modifier.weight(1f))
+            KpiCard(stringResource(R.string.tax), formatMoney(state.salesReport.taxTotal, currency), PosColors.Teal600, Modifier.weight(1f))
             Spacer(Modifier.weight(1f))
         }
 
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = posUiColors().surface),
+            shape = PosShapes.Card,
+        ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     stringResource(R.string.report_payment_distribution).uppercase(),
                     fontSize = 11.sp,
-                    color = Color.Gray,
+                    color = posUiColors().textMuted,
                     fontWeight = FontWeight.Bold
                 )
-                PaymentBar(stringResource(R.string.cash), state.salesReport.cashTotal, state.salesReport.grossSales, Color(0xFFE67E22), currency)
-                PaymentBar(stringResource(R.string.card), state.salesReport.cardTotal, state.salesReport.grossSales, Color(0xFF27AE60), currency)
+                PaymentBar(stringResource(R.string.cash), state.salesReport.cashTotal, state.salesReport.grossSales, PosColors.Warning, currency)
+                PaymentBar(stringResource(R.string.card), state.salesReport.cardTotal, state.salesReport.grossSales, PosColors.Success, currency)
                 ReportRow(stringResource(R.string.tax), formatMoney(state.salesReport.taxTotal, currency))
                 ReportRow(
                     stringResource(R.string.dine_in_vat_rate),
@@ -177,18 +187,22 @@ private fun SalesReportTab(
 
 @Composable
 private fun KpiCard(title: String, value: String, accent: Color, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = posUiColors().surface),
+        shape = PosShapes.Card,
+    ) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .height(40.dp)
                     .padding(end = 10.dp)
                     .fillMaxWidth(0.02f)
-                    .background(accent, RoundedCornerShape(2.dp))
+                    .background(accent, PosShapes.Small)
             )
             Column {
-                Text(title, fontSize = 11.sp, color = Color.Gray)
-                Text(value, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text(title, fontSize = 11.sp, color = posUiColors().textSecondary)
+                Text(value, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = posUiColors().textPrimary)
             }
         }
     }
@@ -285,7 +299,7 @@ private fun ProfitMarginTab(
                 else R.string.reports_profit_cloud_source_local_fallback
             ),
             fontSize = 12.sp,
-            color = Color.Gray
+            color = posUiColors().textMuted
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -308,7 +322,7 @@ private fun ProfitMarginTab(
                 KpiCard(
                     stringResource(R.string.reports_profit_net_merchandise),
                     formatMoney(profit.netMerchandise, currency),
-                    Color(0xFF3498DB),
+                    PosColors.Info,
                     Modifier.fillMaxWidth()
                 )
                 profit.revenueChangePct?.let { pct ->
@@ -323,7 +337,7 @@ private fun ProfitMarginTab(
             KpiCard(
                 stringResource(R.string.reports_profit_cogs),
                 formatMoney(profit.cogs, currency),
-                Color(0xFFE67E22),
+                PosColors.Warning,
                 Modifier.weight(1f)
             )
         }
@@ -332,7 +346,7 @@ private fun ProfitMarginTab(
                 KpiCard(
                     stringResource(R.string.reports_profit_gross),
                     formatMoney(profit.grossProfit, currency),
-                    Color(0xFF27AE60),
+                    PosColors.Success,
                     Modifier.fillMaxWidth()
                 )
                 profit.profitChangePct?.let { pct ->
@@ -349,7 +363,7 @@ private fun ProfitMarginTab(
                 profit.marginPercent.takeIf { profit.netMerchandise > 0.0005 }?.let {
                     "${"%.1f".format(Locale.US, it)}%"
                 } ?: "—",
-                Color(0xFF16A085),
+                PosColors.Primary,
                 Modifier.weight(1f)
             )
         }
@@ -357,7 +371,7 @@ private fun ProfitMarginTab(
             Text(
                 stringResource(R.string.reports_profit_missing_cost_hint, profit.linesMissingCost),
                 fontSize = 12.sp,
-                color = Color(0xFF92400E)
+                color = PosColors.Warning
             )
         }
 
@@ -376,7 +390,10 @@ private fun ProfitMarginTab(
             }
         }
 
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = posUiColors().surface),
+            shape = PosShapes.Card,
+        ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -384,14 +401,14 @@ private fun ProfitMarginTab(
                         modifier = Modifier.weight(1.4f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray
+                        color = posUiColors().textMuted
                     )
                     Text(
                         stringResource(R.string.reports_profit_col_qty),
                         modifier = Modifier.weight(0.6f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
+                        color = posUiColors().textMuted,
                         textAlign = TextAlign.End
                     )
                     Text(
@@ -399,7 +416,7 @@ private fun ProfitMarginTab(
                         modifier = Modifier.weight(1f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
+                        color = posUiColors().textMuted,
                         textAlign = TextAlign.End
                     )
                     Text(
@@ -407,7 +424,7 @@ private fun ProfitMarginTab(
                         modifier = Modifier.weight(1f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
+                        color = posUiColors().textMuted,
                         textAlign = TextAlign.End
                     )
                     Text(
@@ -415,7 +432,7 @@ private fun ProfitMarginTab(
                         modifier = Modifier.weight(1f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
+                        color = posUiColors().textMuted,
                         textAlign = TextAlign.End
                     )
                     Text(
@@ -423,7 +440,7 @@ private fun ProfitMarginTab(
                         modifier = Modifier.weight(0.55f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
+                        color = posUiColors().textMuted,
                         textAlign = TextAlign.End
                     )
                     Text(
@@ -431,13 +448,13 @@ private fun ProfitMarginTab(
                         modifier = Modifier.weight(0.65f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
+                        color = posUiColors().textMuted,
                         textAlign = TextAlign.End
                     )
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = posUiColors().border)
                 if (rows.isEmpty()) {
-                    Text(stringResource(R.string.reports_profit_empty), color = Color.Gray, fontSize = 13.sp)
+                    Text(stringResource(R.string.reports_profit_empty), color = posUiColors().textMuted, fontSize = 13.sp)
                 } else {
                     rows.take(80).forEach { row ->
                         ProfitMarginRowLine(row, currency, uncategorized)
@@ -507,8 +524,8 @@ private fun formatChangePct(value: Double?): String {
 
 @Composable
 private fun changePctColor(value: Double?): Color {
-    if (value == null || value.isNaN()) return Color.Gray
-    return if (value >= 0) Color(0xFF047857) else Color(0xFFB91C1C)
+    if (value == null || value.isNaN()) return posUiColors().textMuted
+    return if (value >= 0) PosColors.Success else PosColors.Danger
 }
 
 private fun formatQty(qty: Double): String =

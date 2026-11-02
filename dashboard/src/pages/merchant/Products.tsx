@@ -50,6 +50,7 @@ import { DragHandle, SortableContainer, SortableRow } from '@/components/Sortabl
 import { BarcodePreview } from '@/components/BarcodePreview';
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
 import BuyingPricesModal from '@/components/products/BuyingPricesModal';
+import ProductEditFullPage from '@/components/products/ProductEditFullPage';
 import ProductImportProgressModal from '@/components/ProductImportProgressModal';
 import { importCatalogWithProgress, type CatalogImportProgress } from '@/lib/catalog-import-stream';
 import { bulkDeleteByIds } from '@/lib/bulk-delete';
@@ -418,6 +419,8 @@ export default function Products() {
   const [allModifierGroups, setAllModifierGroups] = useState<ModifierGroupSummary[]>([]);
   const [modifierPickerOpen, setModifierPickerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [variationsPanelOpen, setVariationsPanelOpen] = useState(false);
+  const [merchantTakeawayTaxRate, setMerchantTakeawayTaxRate] = useState('2.6');
   const [reordering, setReordering] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const imageFileRef = useRef<HTMLInputElement>(null);
@@ -584,6 +587,10 @@ export default function Products() {
         setCateringLicensed(isCateringLicensed(s));
         setCatalogScopeMode(s?.catalogScopeMode === 'shared' ? 'shared' : 'per_location');
         setStoreName(s?.name || '');
+        const takeaway = s?.taxTakeawayRate;
+        if (takeaway != null && String(takeaway).trim() !== '') {
+          setMerchantTakeawayTaxRate(String(takeaway));
+        }
         const ps = s?.posPrintSettings || {};
         setLabelOpts((prev) => ({
           ...prev,
@@ -779,6 +786,8 @@ export default function Products() {
 
   const openEdit = async (product: Product) => {
     setEditingId(product.id);
+    setMoreOpen(false);
+    setVariationsPanelOpen(false);
     setModalOpen(true);
     try {
       const res = await api.get(`/merchant/products/${product.id}`);
@@ -906,9 +915,12 @@ export default function Products() {
     setForm(emptyForm());
     setModifierPickerOpen(false);
     setMoreOpen(false);
+    setVariationsPanelOpen(false);
     setRecipeLines([]);
     setRecipeYield('1');
   };
+
+  const editFullPage = modalOpen && !!editingId && !form.isCombo;
 
   useLockPageScroll(modalOpen, productEditorScrollRef);
 
@@ -1424,6 +1436,580 @@ export default function Products() {
     void action();
   };
 
+  const editVariationCount = form.specifications.filter((s) => s.name.trim()).length;
+  const editMoreOptionsCount =
+    form.modifierGroupIds.length +
+    (form.sku.trim() ? 1 : 0) +
+    (form.barcode.trim() ? 1 : 0) +
+    (form.description.trim() ? 1 : 0) +
+    (form.brand.trim() ? 1 : 0);
+  const editPreviewInStock = !form.specifications.some((s) => s.saleStatus === 'out_of_stock');
+  const editTaxRateDisplay = form.isTaxable ? merchantTakeawayTaxRate : '0';
+  const editListPrice = form.specifications.find((s) => s.isDefault)?.price ?? form.price;
+
+  const addVariationRow = () => {
+    setVariationsPanelOpen(true);
+    setForm({
+      ...form,
+      specifications: [
+        ...form.specifications,
+        {
+          id: `size-${Date.now()}`,
+          name: '',
+          price: form.price,
+          saleStatus: 'in_stock' as const,
+          isDefault: false,
+        },
+      ],
+    });
+  };
+
+  const syncEditListPrice = (raw: string) => {
+    const price = normalizeMoneyInput(raw);
+    if (moneyDigitCount(price) > MAX_MONEY_DIGITS) return;
+    setForm({
+      ...form,
+      price,
+      specifications: form.specifications.map((s, i) =>
+        i === 0 || s.isDefault ? { ...s, price } : s
+      ),
+    });
+  };
+
+  const onEditTaxRateChange = (raw: string) => {
+    const normalized = normalizeMoneyInput(raw);
+    if (moneyDigitCount(normalized) > MAX_MONEY_DIGITS) return;
+    const num = parseMoney(normalized);
+    setForm({ ...form, isTaxable: num > 0 });
+  };
+
+  const renderMoreEditor = (opts?: { hideBuyingPrice?: boolean }) => (
+                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
+                  {!opts?.hideBuyingPrice ? (
+                  <Field label={t('productBuyingPrice')}>
+                    <div className="flex max-w-xs min-w-0 items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
+                      <input
+                        className="field-input money-input min-w-0 flex-1 border-0 !shadow-none focus:!ring-0"
+                        type="text"
+                        inputMode="decimal"
+                        value={form.cost}
+                        onChange={(e) => {
+                          const cost = normalizeMoneyInput(e.target.value);
+                          if (moneyDigitCount(cost) > MAX_MONEY_DIGITS) return;
+                          setForm({ ...form, cost });
+                        }}
+                        placeholder="0.00"
+                      />
+                      <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
+                        CHF
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs muted">{t('productBuyingPriceHint')}</p>
+                  </Field>
+                  ) : null}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Field label={t('productCode')}>
+                      <input
+                        className="field-input"
+                        placeholder={t('skuPlaceholder')}
+                        value={form.sku}
+                        maxLength={SKU_MAX_LEN}
+                        onChange={(e) =>
+                          setForm({ ...form, sku: e.target.value.slice(0, SKU_MAX_LEN) })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault();
+                        }}
+                      />
+                      <p className="mt-1 text-xs muted">
+                        {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
+                      </p>
+                    </Field>
+                    {showBarcodeTools ? (
+                    <Field label={t('barcode')}>
+                      <input
+                        className={`field-input ${BARCODE_FIELD_INPUT_CLASS}`}
+                        placeholder={t('barcodePlaceholder')}
+                        value={form.barcode}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onInput={(e) =>
+                          setForm({
+                            ...form,
+                            barcode: sanitizeBarcodeDigits(e.currentTarget.value),
+                          })
+                        }
+                        onChange={(e) =>
+                          setForm({ ...form, barcode: sanitizeBarcodeDigits(e.target.value) })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.preventDefault();
+                        }}
+                      />
+                      {form.barcode ? (
+                        <BarcodePreview
+                          value={form.barcode}
+                          height={36}
+                          width={160}
+                          displayValue
+                          className="mt-2 flex justify-center"
+                        />
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {editingId && !form.barcode.trim() && (
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() => void generateMissing([editingId])}
+                          >
+                            {t('barcodeGenerateMissing')}
+                          </button>
+                        )}
+                        {form.barcode.trim() && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() => setForm({ ...form, barcode: '' })}
+                            >
+                              {t('clear')}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() =>
+                                openPrintFor([
+                                  {
+                                    id: editingId || 'draft',
+                                    name: form.name,
+                                    barcode: form.barcode,
+                                    price: form.price,
+                                    sku: form.sku,
+                                  },
+                                ])
+                              }
+                            >
+                              {t('barcodePrintLabels')}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </Field>
+                    ) : null}
+                    <Field label={t('productBrand')}>
+                      <input
+                        className="field-input"
+                        placeholder={t('productBrandPlaceholder')}
+                        value={form.brand}
+                        maxLength={255}
+                        onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                      />
+                    </Field>
+                    {showBarcodeTools ? (
+                    <Field label={t('productExtraBarcodes')}>
+                      <input
+                        className={`field-input ${BARCODE_FIELD_INPUT_CLASS}`}
+                        placeholder={t('productExtraBarcodesPlaceholder')}
+                        value={form.extraBarcodes}
+                        onInput={(e) =>
+                          setForm({
+                            ...form,
+                            extraBarcodes: stripScannerControlChars(e.currentTarget.value),
+                          })
+                        }
+                        onChange={(e) =>
+                          setForm({ ...form, extraBarcodes: stripScannerControlChars(e.target.value) })
+                        }
+                      />
+                      <p className="mt-1 text-xs muted">{t('productExtraBarcodesHint')}</p>
+                    </Field>
+                    ) : null}
+                    {inventoryOn ? (
+                      <div className="md:col-span-2">
+                        <ProductInventoryExpiryPanel
+                          productName={form.name}
+                          barcode={form.barcode}
+                          extraBarcodes={form.extraBarcodes}
+                          invItems={invItems}
+                          onItemsChanged={refreshInvItems}
+                        />
+                      </div>
+                    ) : null}
+                    <Field label={t('stock')}>
+                      <input
+                        className="field-input"
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={form.stock}
+                        onChange={(e) =>
+                          setForm({ ...form, stock: clampNonNegativeInt(e.target.value, MAX_STOCK_DIGITS) })
+                        }
+                      />
+                    </Field>
+                    {showWeighedTools && form.soldByWeight && !form.isCombo ? (
+                      <Field label={t('webPosWeightUnit')}>
+                        <select
+                          className="field-input"
+                          value={form.weightUnit}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              weightUnit: e.target.value as FormState['weightUnit'],
+                            })
+                          }
+                        >
+                          <option value="kg">kg</option>
+                          <option value="g">g</option>
+                          <option value="lb">lb</option>
+                        </select>
+                        <p className="mt-1 text-xs muted">{t('webPosWeighedPriceHint')}</p>
+                      </Field>
+                    ) : null}
+                  </div>
+
+                  <Field label={t('freeWithPoints')}>
+                    <input
+                      className="field-input"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder={t('freeWithPointsPlaceholder')}
+                      value={form.loyaltyRewardPoints}
+                      onChange={(e) => {
+                        setForm({ ...form, loyaltyRewardPoints: sanitizeFreePointsInput(e.target.value) });
+                      }}
+                    />
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      {t('freeWithPointsHint').replace('{max}', MAX_POINTS.toLocaleString('en-US'))}
+                    </p>
+                    {form.loyaltyRewardPoints &&
+                    parseFreePoints(form.loyaltyRewardPoints) === 'out_of_range' ? (
+                      <p className="mt-1 text-xs font-medium text-rose-600">
+                        {t('freeWithPointsRangeError').replace(
+                          '{max}',
+                          MAX_POINTS.toLocaleString('en-US')
+                        )}
+                      </p>
+                    ) : null}
+                  </Field>
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('productReceiptSection')}</h3>
+                      <p className="text-[11px] muted mt-0.5">{t('productReceiptSectionHint')}</p>
+                    </div>
+                    <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2.5">
+                      <span className="text-sm font-medium">{t('productIsTaxable')}</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={form.isTaxable}
+                        onChange={(e) => setForm({ ...form, isTaxable: e.target.checked })}
+                      />
+                    </label>
+                    <p className="text-[11px] muted">{t('productIsTaxableHint')}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('productDietaryLabels')}</h3>
+                      <p className="text-[11px] muted mt-0.5">{t('productDietaryLabelsHint')}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {DIETARY_TAGS.map((tag) => {
+                        const checked = form.dietaryTags.includes(tag.id);
+                        return (
+                          <label
+                            key={tag.id}
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setForm((prev) => ({
+                                  ...prev,
+                                  dietaryTags: e.target.checked
+                                    ? [...prev.dietaryTags, tag.id]
+                                    : prev.dietaryTags.filter((id) => id !== tag.id),
+                                }));
+                              }}
+                            />
+                            <span
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold"
+                              style={{ borderColor: tag.color, color: tag.color }}
+                            >
+                              {tag.badge}
+                            </span>
+                            {t(tag.labelKey)}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <ChannelVisibilityEditor
+                    value={form.visibility}
+                    onChange={(visibility) => setForm({ ...form, visibility })}
+                  />
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t('shopSimilarProducts')}</h3>
+                      <p className="text-[11px] muted mt-0.5">{t('shopSimilarProductsHint')}</p>
+                    </div>
+                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-[var(--border)] p-2">
+                      {products
+                        .filter((p) => p.id !== editingId)
+                        .slice(0, 80)
+                        .map((p) => {
+                          const checked = form.similarProductIds.includes(p.id);
+                          return (
+                            <label
+                              key={p.id}
+                              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-[var(--bg-muted)]"
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    similarProductIds: e.target.checked
+                                      ? [...prev.similarProductIds, p.id].slice(0, 12)
+                                      : prev.similarProductIds.filter((id) => id !== p.id),
+                                  }));
+                                }}
+                              />
+                              <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
+                            </label>
+                          );
+                        })}
+                      {!products.filter((p) => p.id !== editingId).length ? (
+                        <p className="text-xs muted px-1 py-2">{t('noProducts')}</p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">
+                      {t('buttonColor')}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {BUTTON_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setForm({ ...form, buttonColor: color })}
+                          className={`h-6 w-6 rounded-full border ${
+                            form.buttonColor === color ? 'border-[var(--text)] ring-1 ring-[var(--text)]' : 'border-[var(--border)]'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
+                      <input
+                        className="field-input w-24"
+                        value={form.buttonColor}
+                        onChange={(e) => setForm({ ...form, buttonColor: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold">
+                          {form.isCombo ? t('comboExtrasOptional') : t('modifiersAddons')}
+                        </h3>
+                        <p className="text-[11px] muted mt-0.5">
+                          {form.isCombo ? t('comboExtrasHint') : t('modifiersHint')}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setModifierPickerOpen(true)}
+                        className="btn-primary !py-1 !text-xs"
+                      >
+                        <Plus size={14} /> {t('addShort')}
+                      </button>
+                    </div>
+                    <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
+                      {linkedModifierGroups.length === 0 && (
+                        <p className="px-3 py-4 text-center text-xs muted">
+                          {t('noModifiersLinked')}
+                        </p>
+                      )}
+                      <SortableContainer
+                        as="div"
+                        items={linkedModifierGroups}
+                        onReorder={(next) =>
+                          setForm({
+                            ...form,
+                            modifierGroupIds: next.map((g) => g.id),
+                          })
+                        }
+                      >
+                        {linkedModifierGroups.map((g) => (
+                          <SortableRow
+                            key={g.id}
+                            id={g.id}
+                            as="div"
+                            className="flex items-center justify-between gap-2 px-3 py-2 bg-[var(--bg-elevated)]"
+                          >
+                            {({ attributes, listeners }) => (
+                              <>
+                                <DragHandle attributes={attributes} listeners={listeners} />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate">{g.title}</p>
+                                  <p className="text-[11px] muted truncate">
+                                    {(g.options || []).map((o) => o.name).join(' · ') ||
+                                      t('noOptions')}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)]"
+                                  onClick={() =>
+                                    setForm({
+                                      ...form,
+                                      modifierGroupIds: form.modifierGroupIds.filter(
+                                        (id) => id !== g.id
+                                      ),
+                                    })
+                                  }
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </SortableRow>
+                        ))}
+                      </SortableContainer>
+                    </div>
+                  </div>
+                </div>
+  );
+  const renderSizesEditor = () => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold">{t('sizes')}</h3>
+          <p className="text-[11px] muted">{t('sizesHint')}</p>
+        </div>
+        <button
+          type="button"
+          className="btn-primary !py-1 !text-xs"
+          onClick={() => addVariationRow()}
+        >
+          <Plus size={14} /> {t('addSizeShort')}
+        </button>
+      </div>
+      <div className="space-y-2">
+        {form.specifications.map((spec, idx) => (
+          <div
+            key={spec.id || idx}
+            className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(8.5rem,9.5rem)_7rem_auto_auto] gap-1.5 items-center"
+          >
+            <input
+              className="field-input"
+              placeholder={t('sizeName')}
+              value={spec.name}
+              onChange={(e) => {
+                const next = [...form.specifications];
+                next[idx] = { ...next[idx], name: e.target.value };
+                setForm({ ...form, specifications: next });
+              }}
+            />
+            <div className="flex min-w-0 items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
+              <input
+                className="field-input money-input min-w-0 flex-1 border-0 !shadow-none focus:!ring-0"
+                type="text"
+                inputMode="decimal"
+                value={spec.price}
+                onChange={(e) => {
+                  const normalized = normalizeMoneyInput(e.target.value);
+                  if (moneyDigitCount(normalized) > MAX_MONEY_DIGITS) return;
+                  const next = [...form.specifications];
+                  next[idx] = { ...next[idx], price: normalized };
+                  setForm({ ...form, specifications: next, price: normalized });
+                }}
+              />
+              <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
+                {form.soldByWeight ? 'CHF/kg' : 'CHF'}
+              </span>
+            </div>
+            <select
+              className="field-input"
+              value={spec.saleStatus}
+              onChange={(e) => {
+                const next = [...form.specifications];
+                next[idx] = {
+                  ...next[idx],
+                  saleStatus: e.target.value as SpecRow['saleStatus'],
+                };
+                setForm({ ...form, specifications: next });
+              }}
+            >
+              <option value="in_stock">{t('inStock')}</option>
+              <option value="out_of_stock">{t('outOfStock')}</option>
+            </select>
+            <label className="inline-flex items-center gap-1 text-[11px] muted">
+              <input
+                type="radio"
+                name="defaultSpec"
+                checked={spec.isDefault}
+                onChange={() =>
+                  setForm({
+                    ...form,
+                    specifications: form.specifications.map((s, i) => ({
+                      ...s,
+                      isDefault: i === idx,
+                    })),
+                    price: spec.price,
+                  })
+                }
+              />
+              {t('default')}
+            </label>
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)] justify-self-start sm:justify-self-auto"
+              onClick={() => {
+                const remaining = form.specifications.filter((_, i) => i !== idx);
+                if (!remaining.length) {
+                  setForm({
+                    ...form,
+                    specifications: form.isOpenPrice
+                      ? []
+                      : [
+                          {
+                            id: `size-${Date.now()}`,
+                            name: '',
+                            price: form.price,
+                            saleStatus: 'in_stock',
+                            isDefault: true,
+                          },
+                        ],
+                  });
+                  return;
+                }
+                if (!remaining.some((s) => s.isDefault)) {
+                  remaining[0] = { ...remaining[0], isDefault: true };
+                }
+                setForm({ ...form, specifications: remaining });
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 muted text-sm">
@@ -1432,7 +2018,182 @@ export default function Products() {
     );
   }
 
+  const renderRecipeEditor = () =>
+    inventoryOn ? (
+      <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
+        <p className="text-sm font-semibold">{t('invRecipeTab')}</p>
+        <p className="text-xs muted">{t('invRecipeHint')}</p>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium">{t('invRecipeYield')}</span>
+          <input
+            className="field-input"
+            type="number"
+            min={0.0001}
+            step="any"
+            value={recipeYield}
+            onChange={(e) => setRecipeYield(e.target.value)}
+          />
+          <span className="text-[11px] muted">{t('invRecipeYieldHint')}</span>
+        </label>
+        {recipeLines.map((line, idx) => (
+          <div key={`${line.itemId}-${idx}`} className="grid grid-cols-[1fr_90px_auto] gap-2">
+            <select
+              className="field-input"
+              value={line.itemId}
+              onChange={(e) => {
+                const next = [...recipeLines];
+                const found = invItems.find((i) => i.id === e.target.value);
+                next[idx] = {
+                  ...line,
+                  itemId: e.target.value,
+                  unit: found?.unit,
+                  name: found?.name,
+                };
+                setRecipeLines(next);
+              }}
+            >
+              <option value="">{t('invSelectItem')}</option>
+              {invItems.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name} ({i.unit})
+                </option>
+              ))}
+            </select>
+            <input
+              className="field-input"
+              type="number"
+              min={0}
+              step="any"
+              value={line.qty}
+              onChange={(e) => {
+                const next = [...recipeLines];
+                next[idx] = { ...line, qty: e.target.value };
+                setRecipeLines(next);
+              }}
+            />
+            <button
+              type="button"
+              className="rounded-md p-2 text-red-600"
+              onClick={() => setRecipeLines(recipeLines.filter((_, i) => i !== idx))}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="btn-secondary text-xs"
+          onClick={() => {
+            setRecipeLines([...recipeLines, { itemId: '', qty: '' }]);
+          }}
+        >
+          <Plus size={12} /> {t('invAddIngredient')}
+        </button>
+      </div>
+    ) : null;
+
   return (
+    <>
+      {editFullPage ? (
+        <ProductEditFullPage
+          formId={PRODUCT_EDITOR_FORM_ID}
+          scrollRef={productEditorScrollRef}
+          onSubmit={onSubmit}
+          onBack={closeModal}
+          saving={saving}
+          t={t}
+          cancelLabel={t('cancel')}
+          saveLabel={t('save')}
+          productName={form.name}
+          onNameChange={(name) => setForm({ ...form, name })}
+          categoryLabel={categoryName(form.categoryId)}
+          imageUrl={form.imageUrl}
+          inStock={editPreviewInStock}
+          categories={editorCategories}
+          categoryId={form.categoryId}
+          onCategoryChange={(categoryId) => setForm({ ...form, categoryId })}
+          price={editListPrice}
+          onPriceChange={syncEditListPrice}
+          taxRateDisplay={editTaxRateDisplay}
+          onTaxRateChange={onEditTaxRateChange}
+          cost={form.cost}
+          onCostChange={(raw) => {
+            const cost = normalizeMoneyInput(raw);
+            if (moneyDigitCount(cost) > MAX_MONEY_DIGITS) return;
+            setForm({ ...form, cost });
+          }}
+          isOpenPrice={form.isOpenPrice}
+          onOpenPriceChange={(enabled) => {
+            if (enabled) setProductType('open_price');
+            else setProductType('standard');
+          }}
+          soldByWeight={form.soldByWeight}
+          onSoldByWeightChange={(enabled) => {
+            if (enabled) setProductType('weighed');
+            else setProductType('standard');
+          }}
+          showWeighedTools={showWeighedTools}
+          isCombo={form.isCombo}
+          variationCount={editVariationCount}
+          moreOptionsCount={editMoreOptionsCount}
+          variationsExpanded={variationsPanelOpen}
+          onToggleVariations={() => setVariationsPanelOpen((o) => !o)}
+          onAddVariation={addVariationRow}
+          moreExpanded={moreOpen}
+          onToggleMore={() => setMoreOpen((o) => !o)}
+          onConfigureMore={() => setMoreOpen(true)}
+          onUploadPhoto={() => imageFileRef.current?.click()}
+          branchPicker={
+            <>
+              {showCatalogBranchPicker ? (
+                <Field label={`${t('catalogBelongsToBranch')} *`}>
+                  <select
+                    className="field-input"
+                    value={form.ownerLocationId}
+                    required
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        ownerLocationId: e.target.value,
+                        categoryId:
+                          form.categoryId &&
+                          editorCategories.some((c) => c.id === form.categoryId)
+                            ? form.categoryId
+                            : '',
+                      })
+                    }
+                  >
+                    <option value="">{t('catalogSelectBranch')}</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t('catalogBelongsToBranchHint')}
+                  </p>
+                </Field>
+              ) : null}
+              {!showCatalogBranchPicker &&
+              catalogScopeMode === 'per_location' &&
+              defaultOwnerLocationId &&
+              locations.length > 1 ? (
+                <p className="text-xs text-[var(--text-muted)] rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2">
+                  {t('catalogAddingToBranch').replace(
+                    '{name}',
+                    locations.find((l) => l.id === defaultOwnerLocationId)?.name || ''
+                  )}
+                </p>
+              ) : null}
+            </>
+          }
+          variationsPanel={renderSizesEditor()}
+          morePanel={moreOpen ? renderMoreEditor({ hideBuyingPrice: true }) : null}
+          formExtension={renderRecipeEditor()}
+        />
+      ) : null}
+      {!editFullPage ? (
     <div className="space-y-3">
       <HqPendingCatalogBanner />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -2009,8 +2770,10 @@ export default function Products() {
           </div>
         ) : null}
       </section>
+    </div>
+      ) : null}
 
-      {modalOpen && typeof document !== 'undefined'
+      {modalOpen && !editFullPage && typeof document !== 'undefined'
         ? createPortal(
         <div
           className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center overflow-hidden bg-black/50 p-0 sm:p-3 touch-none"
@@ -2562,138 +3325,11 @@ export default function Products() {
                 </div>
               )}
 
-              {!form.isCombo && (
-              <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold">{t('sizes')}</h3>
-                    <p className="text-[11px] muted">{t('sizesHint')}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-primary !py-1 !text-xs"
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        specifications: [
-                          ...form.specifications,
-                          {
-                            id: `size-${Date.now()}`,
-                            name: '',
-                            price: form.price,
-                            saleStatus: 'in_stock',
-                            isDefault: false,
-                          },
-                        ],
-                      })
-                    }
-                  >
-                    <Plus size={14} /> {t('addSizeShort')}
-                  </button>
+              {!form.isCombo ? (
+                <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
+                  {renderSizesEditor()}
                 </div>
-                <div className="space-y-2">
-                  {form.specifications.map((spec, idx) => (
-                    <div
-                      key={spec.id || idx}
-                      className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(8.5rem,9.5rem)_7rem_auto_auto] gap-1.5 items-center"
-                    >
-                      <input
-                        className="field-input"
-                        placeholder={t('sizeName')}
-                        value={spec.name}
-                        onChange={(e) => {
-                          const next = [...form.specifications];
-                          next[idx] = { ...next[idx], name: e.target.value };
-                          setForm({ ...form, specifications: next });
-                        }}
-                      />
-                      <div className="flex min-w-0 items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
-                        <input
-                          className="field-input money-input min-w-0 flex-1 border-0 !shadow-none focus:!ring-0"
-                          type="text"
-                          inputMode="decimal"
-                          value={spec.price}
-                          onChange={(e) => {
-                            const normalized = normalizeMoneyInput(e.target.value);
-                            if (moneyDigitCount(normalized) > MAX_MONEY_DIGITS) return;
-                            const next = [...form.specifications];
-                            next[idx] = { ...next[idx], price: normalized };
-                            setForm({ ...form, specifications: next, price: normalized });
-                          }}
-                        />
-                        <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
-                          {form.soldByWeight ? 'CHF/kg' : 'CHF'}
-                        </span>
-                      </div>
-                      <select
-                        className="field-input"
-                        value={spec.saleStatus}
-                        onChange={(e) => {
-                          const next = [...form.specifications];
-                          next[idx] = {
-                            ...next[idx],
-                            saleStatus: e.target.value as SpecRow['saleStatus'],
-                          };
-                          setForm({ ...form, specifications: next });
-                        }}
-                      >
-                        <option value="in_stock">{t('inStock')}</option>
-                        <option value="out_of_stock">{t('outOfStock')}</option>
-                      </select>
-                      <label className="inline-flex items-center gap-1 text-[11px] muted">
-                        <input
-                          type="radio"
-                          name="defaultSpec"
-                          checked={spec.isDefault}
-                          onChange={() =>
-                            setForm({
-                              ...form,
-                              specifications: form.specifications.map((s, i) => ({
-                                ...s,
-                                isDefault: i === idx,
-                              })),
-                              price: spec.price,
-                            })
-                          }
-                        />
-                        {t('default')}
-                      </label>
-                      <button
-                        type="button"
-                        className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)] justify-self-start sm:justify-self-auto"
-                        onClick={() => {
-                          const remaining = form.specifications.filter((_, i) => i !== idx);
-                          if (!remaining.length) {
-                            // Allow removing the last size row (esp. open-price); keep a blank default for standard.
-                            setForm({
-                              ...form,
-                              specifications: form.isOpenPrice
-                                ? []
-                                : [
-                                    {
-                                      id: `size-${Date.now()}`,
-                                      name: '',
-                                      price: form.price,
-                                      saleStatus: 'in_stock',
-                                      isDefault: true,
-                                    },
-                                  ],
-                            });
-                            return;
-                          }
-                          if (!remaining.some((s) => s.isDefault)) {
-                            remaining[0] = { ...remaining[0], isDefault: true };
-                          }
-                          setForm({ ...form, specifications: remaining });
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              )}
+              ) : null}
 
               <button
                 type="button"
@@ -2710,413 +3346,7 @@ export default function Products() {
                 {moreOpen ? <ChevronUp size={18} className="shrink-0 muted" /> : <ChevronDown size={18} className="shrink-0 muted" />}
               </button>
 
-              {moreOpen && (
-                <div className="space-y-3 rounded-md border border-[var(--border)] p-3">
-                  <Field label={t('productBuyingPrice')}>
-                    <div className="flex max-w-xs min-w-0 items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
-                      <input
-                        className="field-input money-input min-w-0 flex-1 border-0 !shadow-none focus:!ring-0"
-                        type="text"
-                        inputMode="decimal"
-                        value={form.cost}
-                        onChange={(e) => {
-                          const cost = normalizeMoneyInput(e.target.value);
-                          if (moneyDigitCount(cost) > MAX_MONEY_DIGITS) return;
-                          setForm({ ...form, cost });
-                        }}
-                        placeholder="0.00"
-                      />
-                      <span className="inline-flex shrink-0 items-center border-l border-[var(--border)] bg-[var(--bg-muted)] px-2 text-[10px] font-semibold muted">
-                        CHF
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs muted">{t('productBuyingPriceHint')}</p>
-                  </Field>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Field label={t('productCode')}>
-                      <input
-                        className="field-input"
-                        placeholder={t('skuPlaceholder')}
-                        value={form.sku}
-                        maxLength={SKU_MAX_LEN}
-                        onChange={(e) =>
-                          setForm({ ...form, sku: e.target.value.slice(0, SKU_MAX_LEN) })
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.preventDefault();
-                        }}
-                      />
-                      <p className="mt-1 text-xs muted">
-                        {t('maxCharacters').replace('{n}', String(SKU_MAX_LEN))}
-                      </p>
-                    </Field>
-                    {showBarcodeTools ? (
-                    <Field label={t('barcode')}>
-                      <input
-                        className={`field-input ${BARCODE_FIELD_INPUT_CLASS}`}
-                        placeholder={t('barcodePlaceholder')}
-                        value={form.barcode}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        onInput={(e) =>
-                          setForm({
-                            ...form,
-                            barcode: sanitizeBarcodeDigits(e.currentTarget.value),
-                          })
-                        }
-                        onChange={(e) =>
-                          setForm({ ...form, barcode: sanitizeBarcodeDigits(e.target.value) })
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.preventDefault();
-                        }}
-                      />
-                      {form.barcode ? (
-                        <BarcodePreview
-                          value={form.barcode}
-                          height={36}
-                          width={160}
-                          displayValue
-                          className="mt-2 flex justify-center"
-                        />
-                      ) : null}
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {editingId && !form.barcode.trim() && (
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() => void generateMissing([editingId])}
-                          >
-                            {t('barcodeGenerateMissing')}
-                          </button>
-                        )}
-                        {form.barcode.trim() && (
-                          <>
-                            <button
-                              type="button"
-                              className="btn-secondary text-xs"
-                              onClick={() => setForm({ ...form, barcode: '' })}
-                            >
-                              {t('clear')}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-secondary text-xs"
-                              onClick={() =>
-                                openPrintFor([
-                                  {
-                                    id: editingId || 'draft',
-                                    name: form.name,
-                                    barcode: form.barcode,
-                                    price: form.price,
-                                    sku: form.sku,
-                                  },
-                                ])
-                              }
-                            >
-                              {t('barcodePrintLabels')}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </Field>
-                    ) : null}
-                    <Field label={t('productBrand')}>
-                      <input
-                        className="field-input"
-                        placeholder={t('productBrandPlaceholder')}
-                        value={form.brand}
-                        maxLength={255}
-                        onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                      />
-                    </Field>
-                    {showBarcodeTools ? (
-                    <Field label={t('productExtraBarcodes')}>
-                      <input
-                        className={`field-input ${BARCODE_FIELD_INPUT_CLASS}`}
-                        placeholder={t('productExtraBarcodesPlaceholder')}
-                        value={form.extraBarcodes}
-                        onInput={(e) =>
-                          setForm({
-                            ...form,
-                            extraBarcodes: stripScannerControlChars(e.currentTarget.value),
-                          })
-                        }
-                        onChange={(e) =>
-                          setForm({ ...form, extraBarcodes: stripScannerControlChars(e.target.value) })
-                        }
-                      />
-                      <p className="mt-1 text-xs muted">{t('productExtraBarcodesHint')}</p>
-                    </Field>
-                    ) : null}
-                    {inventoryOn ? (
-                      <div className="md:col-span-2">
-                        <ProductInventoryExpiryPanel
-                          productName={form.name}
-                          barcode={form.barcode}
-                          extraBarcodes={form.extraBarcodes}
-                          invItems={invItems}
-                          onItemsChanged={refreshInvItems}
-                        />
-                      </div>
-                    ) : null}
-                    <Field label={t('stock')}>
-                      <input
-                        className="field-input"
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={form.stock}
-                        onChange={(e) =>
-                          setForm({ ...form, stock: clampNonNegativeInt(e.target.value, MAX_STOCK_DIGITS) })
-                        }
-                      />
-                    </Field>
-                    {showWeighedTools && form.soldByWeight && !form.isCombo ? (
-                      <Field label={t('webPosWeightUnit')}>
-                        <select
-                          className="field-input"
-                          value={form.weightUnit}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              weightUnit: e.target.value as FormState['weightUnit'],
-                            })
-                          }
-                        >
-                          <option value="kg">kg</option>
-                          <option value="g">g</option>
-                          <option value="lb">lb</option>
-                        </select>
-                        <p className="mt-1 text-xs muted">{t('webPosWeighedPriceHint')}</p>
-                      </Field>
-                    ) : null}
-                  </div>
-
-                  <Field label={t('freeWithPoints')}>
-                    <input
-                      className="field-input"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      placeholder={t('freeWithPointsPlaceholder')}
-                      value={form.loyaltyRewardPoints}
-                      onChange={(e) => {
-                        setForm({ ...form, loyaltyRewardPoints: sanitizeFreePointsInput(e.target.value) });
-                      }}
-                    />
-                    <p className="mt-1 text-xs text-[var(--text-muted)]">
-                      {t('freeWithPointsHint').replace('{max}', MAX_POINTS.toLocaleString('en-US'))}
-                    </p>
-                    {form.loyaltyRewardPoints &&
-                    parseFreePoints(form.loyaltyRewardPoints) === 'out_of_range' ? (
-                      <p className="mt-1 text-xs font-medium text-rose-600">
-                        {t('freeWithPointsRangeError').replace(
-                          '{max}',
-                          MAX_POINTS.toLocaleString('en-US')
-                        )}
-                      </p>
-                    ) : null}
-                  </Field>
-
-                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
-                    <div>
-                      <h3 className="text-sm font-semibold">{t('productReceiptSection')}</h3>
-                      <p className="text-[11px] muted mt-0.5">{t('productReceiptSectionHint')}</p>
-                    </div>
-                    <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2.5">
-                      <span className="text-sm font-medium">{t('productIsTaxable')}</span>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={form.isTaxable}
-                        onChange={(e) => setForm({ ...form, isTaxable: e.target.checked })}
-                      />
-                    </label>
-                    <p className="text-[11px] muted">{t('productIsTaxableHint')}</p>
-                  </div>
-
-                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
-                    <div>
-                      <h3 className="text-sm font-semibold">{t('productDietaryLabels')}</h3>
-                      <p className="text-[11px] muted mt-0.5">{t('productDietaryLabelsHint')}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      {DIETARY_TAGS.map((tag) => {
-                        const checked = form.dietaryTags.includes(tag.id);
-                        return (
-                          <label
-                            key={tag.id}
-                            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                setForm((prev) => ({
-                                  ...prev,
-                                  dietaryTags: e.target.checked
-                                    ? [...prev.dietaryTags, tag.id]
-                                    : prev.dietaryTags.filter((id) => id !== tag.id),
-                                }));
-                              }}
-                            />
-                            <span
-                              className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold"
-                              style={{ borderColor: tag.color, color: tag.color }}
-                            >
-                              {tag.badge}
-                            </span>
-                            {t(tag.labelKey)}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <ChannelVisibilityEditor
-                    value={form.visibility}
-                    onChange={(visibility) => setForm({ ...form, visibility })}
-                  />
-
-                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2">
-                    <div>
-                      <h3 className="text-sm font-semibold">{t('shopSimilarProducts')}</h3>
-                      <p className="text-[11px] muted mt-0.5">{t('shopSimilarProductsHint')}</p>
-                    </div>
-                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-[var(--border)] p-2">
-                      {products
-                        .filter((p) => p.id !== editingId)
-                        .slice(0, 80)
-                        .map((p) => {
-                          const checked = form.similarProductIds.includes(p.id);
-                          return (
-                            <label
-                              key={p.id}
-                              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-[var(--bg-muted)]"
-                            >
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={checked}
-                                onChange={(e) => {
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    similarProductIds: e.target.checked
-                                      ? [...prev.similarProductIds, p.id].slice(0, 12)
-                                      : prev.similarProductIds.filter((id) => id !== p.id),
-                                  }));
-                                }}
-                              />
-                              <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
-                            </label>
-                          );
-                        })}
-                      {!products.filter((p) => p.id !== editingId).length ? (
-                        <p className="text-xs muted px-1 py-2">{t('noProducts')}</p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide muted">
-                      {t('buttonColor')}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {BUTTON_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setForm({ ...form, buttonColor: color })}
-                          className={`h-6 w-6 rounded-full border ${
-                            form.buttonColor === color ? 'border-[var(--text)] ring-1 ring-[var(--text)]' : 'border-[var(--border)]'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          title={color}
-                        />
-                      ))}
-                      <input
-                        className="field-input w-24"
-                        value={form.buttonColor}
-                        onChange={(e) => setForm({ ...form, buttonColor: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border border-[var(--border)] p-3 space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <h3 className="text-sm font-semibold">
-                          {form.isCombo ? t('comboExtrasOptional') : t('modifiersAddons')}
-                        </h3>
-                        <p className="text-[11px] muted mt-0.5">
-                          {form.isCombo ? t('comboExtrasHint') : t('modifiersHint')}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setModifierPickerOpen(true)}
-                        className="btn-primary !py-1 !text-xs"
-                      >
-                        <Plus size={14} /> {t('addShort')}
-                      </button>
-                    </div>
-                    <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
-                      {linkedModifierGroups.length === 0 && (
-                        <p className="px-3 py-4 text-center text-xs muted">
-                          {t('noModifiersLinked')}
-                        </p>
-                      )}
-                      <SortableContainer
-                        as="div"
-                        items={linkedModifierGroups}
-                        onReorder={(next) =>
-                          setForm({
-                            ...form,
-                            modifierGroupIds: next.map((g) => g.id),
-                          })
-                        }
-                      >
-                        {linkedModifierGroups.map((g) => (
-                          <SortableRow
-                            key={g.id}
-                            id={g.id}
-                            as="div"
-                            className="flex items-center justify-between gap-2 px-3 py-2 bg-[var(--bg-elevated)]"
-                          >
-                            {({ attributes, listeners }) => (
-                              <>
-                                <DragHandle attributes={attributes} listeners={listeners} />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium truncate">{g.title}</p>
-                                  <p className="text-[11px] muted truncate">
-                                    {(g.options || []).map((o) => o.name).join(' · ') ||
-                                      t('noOptions')}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="rounded-md p-1.5 text-[var(--danger)] hover:bg-[var(--bg-muted)]"
-                                  onClick={() =>
-                                    setForm({
-                                      ...form,
-                                      modifierGroupIds: form.modifierGroupIds.filter(
-                                        (id) => id !== g.id
-                                      ),
-                                    })
-                                  }
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </>
-                            )}
-                          </SortableRow>
-                        ))}
-                      </SortableContainer>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {moreOpen ? renderMoreEditor({ hideBuyingPrice: editFullPage }) : null}
 
               {inventoryOn && (
                 <div className="space-y-2 rounded-md border border-[var(--border)] p-3">
@@ -3540,7 +3770,14 @@ export default function Products() {
           margin: 0;
         }
       `}</style>
-    </div>
+      <input
+        ref={imageFileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => void onUploadProductImage(e.target.files?.[0] || null)}
+      />
+    </>
   );
 }
 

@@ -83,13 +83,10 @@ import com.chaslay.pos.data.local.entity.ModifierGroupEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
 import com.chaslay.pos.ui.theme.categoryColor
+import com.chaslay.pos.ui.theme.posUiColors
+import com.chaslay.pos.ui.theme.PosColors
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-
-private val CatalogTeal = Color(0xFF0D9488)
-private val CatalogBorder = Color(0xFF9CA3AF)
-private val CatalogMuted = Color(0xFF6B7280)
-private val CatalogSurface = Color(0xFFF9FAFB)
 
 private fun digitsOnly(input: String) = input.filter { it.isDigit() }
 
@@ -111,12 +108,15 @@ fun CatalogScreen(viewModel: CatalogViewModel = hiltViewModel()) {
         }
     }
 
-    Scaffold { padding ->
+    val shellUi = posUiColors()
+    Scaffold(
+        containerColor = shellUi.canvas,
+    ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(CatalogTeal)
+                    .background(PosColors.Primary)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -192,6 +192,7 @@ private fun ProductCatalogPane(
     onReorderCategories: (Long, Long) -> Unit,
     onReorderProducts: (Long, Long, Long) -> Unit
 ) {
+    val ui = posUiColors()
     val filtered = products.filter { product ->
         val matchesCat = selectedCategoryId == null || product.categoryId == selectedCategoryId
         val matchesQuery = query.isBlank() || product.name.contains(query, ignoreCase = true)
@@ -224,20 +225,25 @@ private fun ProductCatalogPane(
             modifier = Modifier
                 .width(260.dp)
                 .fillMaxSize()
-                .background(Color(0xFFF3F4F6))
+                .background(ui.surfaceSubtle)
                 .padding(12.dp)
         ) {
-            Text(stringResource(R.string.categories), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                stringResource(R.string.categories),
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = ui.textPrimary,
+            )
             Button(
                 onClick = onAddCategory,
                 modifier = Modifier.padding(vertical = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = CatalogTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
                 shape = RoundedCornerShape(8.dp)
             ) { Text(stringResource(R.string.add_category), color = Color.White) }
             Text(
                 stringResource(R.string.drag_to_reorder),
                 fontSize = 11.sp,
-                color = CatalogMuted,
+                color = ui.textSecondary,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
             LazyColumn(
@@ -251,10 +257,10 @@ private fun ProductCatalogPane(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (allSelected) Color(0xFFCCFBF1) else Color.Transparent)
+                            .background(if (allSelected) ui.primarySubtle else Color.Transparent)
                             .clickable { onSelectCategory(null) }
                             .padding(10.dp),
-                        color = if (allSelected) CatalogTeal else Color(0xFF1F2937),
+                        color = if (allSelected) PosColors.Primary else ui.textPrimary,
                         fontWeight = if (allSelected) FontWeight.Bold else FontWeight.Normal
                     )
                 }
@@ -266,14 +272,14 @@ private fun ProductCatalogPane(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) Color(0xFFCCFBF1) else Color.Transparent)
+                                .background(if (selected) ui.primarySubtle else Color.Transparent)
                                 .padding(horizontal = 4.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 Icons.Default.DragHandle,
                                 contentDescription = stringResource(R.string.drag_to_reorder),
-                                tint = CatalogMuted,
+                                tint = ui.textSecondary,
                                 modifier = Modifier
                                     .size(28.dp)
                                     .then(with(reorderScope) { Modifier.draggableHandle() })
@@ -288,11 +294,11 @@ private fun ProductCatalogPane(
                                 Text(
                                     "${category.name} ($count)",
                                     modifier = Modifier.weight(1f),
-                                    color = if (selected) CatalogTeal else Color(0xFF1F2937),
+                                    color = if (selected) PosColors.Primary else ui.textPrimary,
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 IconButton(onClick = { onEditCategory(category) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.Edit, contentDescription = null, tint = CatalogMuted, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Edit, contentDescription = null, tint = ui.textSecondary, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -320,7 +326,7 @@ private fun ProductCatalogPane(
                 )
                 Button(
                     onClick = onAddProduct,
-                    colors = ButtonDefaults.buttonColors(containerColor = CatalogTeal),
+                    colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
                     shape = RoundedCornerShape(8.dp)
                 ) { Text(stringResource(R.string.add_new_product), color = Color.White) }
             }
@@ -328,7 +334,7 @@ private fun ProductCatalogPane(
                 Text(
                     stringResource(R.string.drag_to_reorder),
                     fontSize = 11.sp,
-                    color = CatalogMuted,
+                    color = ui.textSecondary,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                 )
             } else {
@@ -337,7 +343,7 @@ private fun ProductCatalogPane(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFF3F4F6), RoundedCornerShape(8.dp))
+                    .background(ui.surfaceSubtle, RoundedCornerShape(8.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 if (canReorderProducts) Spacer(modifier = Modifier.width(28.dp))
@@ -388,6 +394,7 @@ private fun ProductRow(
     onDelete: (Long) -> Unit,
     dragModifier: Modifier = Modifier
 ) {
+    val ui = posUiColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -399,12 +406,12 @@ private fun ProductRow(
             Icon(
                 Icons.Default.DragHandle,
                 contentDescription = stringResource(R.string.drag_to_reorder),
-                tint = CatalogMuted,
+                tint = ui.textSecondary,
                 modifier = dragModifier.size(28.dp)
             )
         }
-        Text(index.toString(), modifier = Modifier.width(36.dp), fontSize = 13.sp)
-        Text(product.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        Text(index.toString(), modifier = Modifier.width(36.dp), fontSize = 13.sp, color = ui.textSecondary)
+        Text(product.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = ui.textPrimary)
         Text(
             when {
                 product.isWeighed -> "${product.price}/kg"
@@ -414,7 +421,7 @@ private fun ProductRow(
             modifier = Modifier.width(90.dp),
             fontSize = 13.sp
         )
-        Text(stringResource(R.string.in_stock), modifier = Modifier.width(90.dp), fontSize = 12.sp, color = CatalogTeal)
+        Text(stringResource(R.string.in_stock), modifier = Modifier.width(90.dp), fontSize = 12.sp, color = PosColors.Primary)
         IconButton(onClick = { onDelete(product.id) }) {
             Icon(Icons.Default.Delete, contentDescription = null)
         }
@@ -430,6 +437,7 @@ private fun CatalogField(
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
+    val ui = posUiColors()
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -439,10 +447,10 @@ private fun CatalogField(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = CatalogTeal,
-            unfocusedBorderColor = CatalogBorder,
-            focusedLabelColor = CatalogTeal,
-            unfocusedLabelColor = Color(0xFF4B5563)
+            focusedBorderColor = PosColors.Primary,
+            unfocusedBorderColor = ui.border,
+            focusedLabelColor = PosColors.Primary,
+            unfocusedLabelColor = ui.textSecondary
         )
     )
 }
@@ -456,15 +464,16 @@ private fun CatalogToggleRow(
     modifier: Modifier = Modifier,
     accentWhenChecked: Boolean = false
 ) {
+    val ui = posUiColors()
     val borderColor = when {
-        accentWhenChecked && checked -> CatalogTeal
-        checked -> CatalogTeal.copy(alpha = 0.65f)
-        else -> CatalogBorder
+        accentWhenChecked && checked -> PosColors.Primary
+        checked -> PosColors.Primary.copy(alpha = 0.65f)
+        else -> ui.border
     }
     val background = when {
-        accentWhenChecked && checked -> Color(0xFFCCFBF1)
-        checked -> Color(0xFFF0FDFA)
-        else -> CatalogSurface
+        accentWhenChecked && checked -> ui.primarySubtle
+        checked -> ui.primarySubtle
+        else -> ui.surface
     }
     Surface(
         shape = RoundedCornerShape(8.dp),
@@ -484,10 +493,10 @@ private fun CatalogToggleRow(
                     label,
                     fontWeight = FontWeight.Medium,
                     fontSize = 13.sp,
-                    color = if (accentWhenChecked && checked) CatalogTeal else Color(0xFF1F2937)
+                    color = if (accentWhenChecked && checked) PosColors.Primary else ui.textPrimary
                 )
                 if (!help.isNullOrBlank()) {
-                    Text(help, fontSize = 10.sp, color = CatalogMuted)
+                    Text(help, fontSize = 10.sp, color = ui.textSecondary)
                 }
             }
             Switch(
@@ -506,6 +515,7 @@ private fun CategoryDialog(
     onDismiss: () -> Unit,
     onSave: (String, String, Int) -> Unit
 ) {
+    val ui = posUiColors()
     var name by remember(category) { mutableStateOf(category?.name ?: "") }
     var sortOrder by remember(category) { mutableStateOf((category?.sortOrder ?: 0).toString()) }
     var selectedColor by remember(category) { mutableStateOf(category?.colorHex ?: CategoryColorPresets.first().first) }
@@ -514,14 +524,15 @@ private fun CategoryDialog(
         Surface(
             modifier = Modifier.fillMaxWidth(0.5f),
             shape = RoundedCornerShape(16.dp),
-            color = Color.White,
+            color = ui.surface,
             shadowElevation = 8.dp
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     if (category == null) stringResource(R.string.add_category) else stringResource(R.string.edit_category),
                     fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
+                    color = ui.textPrimary,
                 )
                 CatalogField(value = name, onValueChange = { name = it }, label = stringResource(R.string.category))
                 CatalogField(
@@ -552,7 +563,7 @@ private fun CategoryDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { onSave(name, selectedColor, sortOrder.toIntOrNull() ?: 0) },
-                        colors = ButtonDefaults.buttonColors(containerColor = CatalogTeal)
+                        colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                     ) { Text(stringResource(R.string.save), color = Color.White) }
                 }
             }
@@ -575,6 +586,7 @@ private fun ProductDialog(
         String?, String?, Int?, Int?, Double?
     ) -> Unit
 ) {
+    val ui = posUiColors()
     var name by remember(product) { mutableStateOf(product?.name ?: "") }
     var barcode by remember(product) { mutableStateOf(digitsOnly(product?.barcode.orEmpty())) }
     var sku by remember(product) { mutableStateOf(product?.sku.orEmpty()) }
@@ -660,9 +672,9 @@ private fun ProductDialog(
                                     .fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = CatalogTeal,
-                                    unfocusedBorderColor = CatalogBorder,
-                                    focusedLabelColor = CatalogTeal
+                                    focusedBorderColor = PosColors.Primary,
+                                    unfocusedBorderColor = ui.border,
+                                    focusedLabelColor = PosColors.Primary
                                 )
                             )
                             ExposedDropdownMenu(
@@ -749,7 +761,7 @@ private fun ProductDialog(
                             Text(
                                 text = stringResource(R.string.product_buying_price_hint),
                                 fontSize = 11.sp,
-                                color = CatalogMuted
+                                color = ui.textSecondary
                             )
                         }
                     } else if (!isWeighed) {
@@ -764,8 +776,8 @@ private fun ProductDialog(
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, CatalogBorder),
-                        color = CatalogSurface,
+                        border = BorderStroke(1.dp, ui.border),
+                        color = ui.surface,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -776,7 +788,7 @@ private fun ProductDialog(
                             ) {
                                 Column {
                                     Text(stringResource(R.string.variations), fontWeight = FontWeight.SemiBold)
-                                    Text(stringResource(R.string.catalog_sizes_hint), fontSize = 11.sp, color = CatalogMuted)
+                                    Text(stringResource(R.string.catalog_sizes_hint), fontSize = 11.sp, color = ui.textSecondary)
                                 }
                                 TextButton(onClick = { variantNames.add(""); variantPrices.add("0") }) {
                                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -809,8 +821,8 @@ private fun ProductDialog(
                     Surface(
                         onClick = { moreOpen = !moreOpen },
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, CatalogBorder),
-                        color = CatalogSurface,
+                        border = BorderStroke(1.dp, ui.border),
+                        color = ui.surface,
                         modifier = Modifier
                             .fillMaxWidth()
                             .animateContentSize()
@@ -827,14 +839,14 @@ private fun ProductDialog(
                                         Text(
                                             stringResource(R.string.more_options_hint),
                                             fontSize = 11.sp,
-                                            color = CatalogMuted
+                                            color = ui.textSecondary
                                         )
                                     }
                                 }
                                 Icon(
                                     if (moreOpen) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                     contentDescription = null,
-                                    tint = CatalogMuted
+                                    tint = ui.textSecondary
                                 )
                             }
                             if (moreOpen) {
@@ -888,9 +900,9 @@ private fun ProductDialog(
                                                 shape = RoundedCornerShape(8.dp),
                                                 border = BorderStroke(
                                                     1.dp,
-                                                    if (group.id in selectedModifierIds) CatalogTeal else CatalogBorder
+                                                    if (group.id in selectedModifierIds) PosColors.Primary else ui.border
                                                 ),
-                                                color = if (group.id in selectedModifierIds) Color(0xFFCCFBF1) else Color.White,
+                                                color = if (group.id in selectedModifierIds) ui.primarySubtle else Color.White,
                                                 modifier = Modifier
                                                     .width(160.dp)
                                                     .clickable {
@@ -928,9 +940,9 @@ private fun ProductDialog(
                                                 shape = RoundedCornerShape(8.dp),
                                                 border = BorderStroke(
                                                     1.dp,
-                                                    if (group.id in selectedAddonIds) CatalogTeal else CatalogBorder
+                                                    if (group.id in selectedAddonIds) PosColors.Primary else ui.border
                                                 ),
-                                                color = if (group.id in selectedAddonIds) Color(0xFFCCFBF1) else Color.White,
+                                                color = if (group.id in selectedAddonIds) ui.primarySubtle else Color.White,
                                                 modifier = Modifier
                                                     .width(160.dp)
                                                     .clickable {
@@ -987,7 +999,7 @@ private fun ProductDialog(
                                 costPrice.toDoubleOrNull()
                             )
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = CatalogTeal)
+                        colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                     ) { Text(stringResource(R.string.save), color = Color.White) }
                 }
             }

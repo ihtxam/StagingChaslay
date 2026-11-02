@@ -1,6 +1,7 @@
 package com.chaslay.pos.printer
 
 import com.chaslay.pos.domain.model.CartItem
+import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.GiftCardProducts
 import com.chaslay.pos.domain.model.PaymentMethod
@@ -238,4 +239,36 @@ fun receiptDiscountFactor(
     if (discountAmount <= 0.0 || merchandiseBase <= 0.0) return 1.0
     if (!vatIncludedInPrice && !vatAfterDiscount) return 1.0
     return ((merchandiseBase - discountAmount) / merchandiseBase).coerceIn(0.0, 1.0)
+}
+
+/** Per-rate TVA rows for cart dock (matches receipt VAT buckets). */
+fun CartSummary.vatBreakdownRows(giftCardRate: Double): List<VatBreakdownRow> {
+    val itemsForVat = if (splitByItems && splitCount > 1) visibleItems else items
+    if (itemsForVat.isEmpty()) return emptyList()
+    val slice = if (itemsForVat === items) this else copy(items = itemsForVat)
+    val discountFactor = receiptDiscountFactor(
+        vatIncludedInPrice,
+        vatAfterDiscount,
+        slice.netSubtotal,
+        slice.discountValue
+    )
+    var rows = ReceiptVatCalculator.vatRowsFromCartItems(
+        itemsForVat,
+        discountFactor,
+        giftCardRate,
+        vatIncludedInPrice
+    )
+    if (!splitByItems && splitCount > 1) {
+        val scale = 1.0 / splitCount
+        rows = rows.map { row ->
+            VatBreakdownRow(
+                label = row.label,
+                rate = row.rate,
+                net = roundMoney(row.net * scale),
+                tva = roundMoney(row.tva * scale),
+                brut = roundMoney(row.brut * scale)
+            )
+        }
+    }
+    return rows.filter { row -> row.tva > 0.005 || row.rate > 0.0 }
 }

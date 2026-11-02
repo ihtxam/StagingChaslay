@@ -319,6 +319,8 @@ export type PosPrintSettingsClient = {
   receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
   /** Optional CHF→EUR rate (1 CHF = X EUR) for receipt EUR equivalent line. */
   receiptChfToEurRate?: number | null;
+  /** Receipt layout template (`Default` only for now). */
+  receiptTemplateName?: string;
   receiptLogoUrl?: string | null;
   /** Printed logo width in pixels (48–200, default 200). */
   receiptLogoWidthPx?: number;

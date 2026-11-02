@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.pos
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,21 +8,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -37,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,12 +49,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
-import com.chaslay.pos.ui.theme.VectronColors
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
 import java.util.Locale
-
-private val TotalBlue = Color(0xFF2563EB)
-private val EnteredGreen = Color(0xFF15803D)
-private val OwedRed = Color(0xFFDC2626)
 
 fun defaultCashDenominations(currencyCode: String): List<Double> {
     return when (currencyCode.uppercase(Locale.US)) {
@@ -59,7 +61,6 @@ fun defaultCashDenominations(currencyCode: String): List<Double> {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CashPaymentDialog(
     totalDue: Double,
@@ -70,20 +71,39 @@ fun CashPaymentDialog(
     onDismiss: () -> Unit,
     onConfirm: (enteredAmount: Double) -> Unit
 ) {
-    var enteredAmount by remember(totalDue) { mutableDoubleStateOf(0.0) }
+    var enteredAmount by remember { mutableDoubleStateOf(0.0) }
     var keypadBuffer by remember { mutableStateOf("") }
 
-    val remaining = (totalDue - enteredAmount).coerceAtLeast(0.0)
-    val change = (enteredAmount - totalDue).coerceAtLeast(0.0)
+    val pendingKeypadAmount = keypadPendingAmount(keypadBuffer)
+    val previewReceivedAmount = enteredAmount + pendingKeypadAmount
+    val remaining = (totalDue - previewReceivedAmount).coerceAtLeast(0.0)
+    val change = (previewReceivedAmount - totalDue).coerceAtLeast(0.0)
     val canConfirm = !isProcessing && enteredAmount + 0.001 >= totalDue
+    val swissTiles = remember(currencyCode) { swissDenomTiles(currencyCode) }
+    val moneyLocale = remember {
+        when (currencyCode.uppercase(Locale.US)) {
+            "CHF", "EUR" -> Locale.FRENCH
+            else -> Locale.getDefault()
+        }
+    }
+
+    fun addEnteredAmount(delta: Double) {
+        if (isProcessing || delta <= 0.001) return
+        enteredAmount += delta
+        if (enteredAmount + 0.001 >= totalDue) {
+            onConfirm(enteredAmount)
+        }
+    }
 
     fun onDenominationTap(value: Double) {
-        if (isProcessing) return
-        val newEntered = enteredAmount + value
-        enteredAmount = newEntered
-        if (newEntered + 0.001 >= totalDue) {
-            onConfirm(newEntered)
-        }
+        addEnteredAmount(value)
+    }
+
+    fun onKeypadAddAmount() {
+        val add = keypadBuffer.toDoubleOrNull() ?: 0.0
+        if (add <= 0.001) return
+        keypadBuffer = ""
+        addEnteredAmount(add)
     }
 
     Dialog(
@@ -96,87 +116,92 @@ fun CashPaymentDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.96f)
-                .widthIn(max = 1100.dp)
-                .padding(vertical = 16.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            tonalElevation = 8.dp,
-            color = Color(0xFFF8FAFC)
+                .widthIn(max = 1120.dp)
+                .padding(vertical = 12.dp),
+            shape = PosShapes.Dialog,
+            tonalElevation = 6.dp,
+            color = posUiColors().surface,
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(
-                    stringResource(R.string.cash_payment_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Outlined.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = PosColors.Primary,
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Text(
+                        stringResource(R.string.cash_payment_title),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    IconButton(onClick = onDismiss, enabled = !isProcessing) {
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.cancel))
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val stacked = maxWidth < 760.dp
+                    val stacked = maxWidth < 820.dp
                     if (stacked) {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             CashPaymentSummaryColumn(
                                 totalDue = totalDue,
-                                enteredAmount = enteredAmount,
+                                enteredAmount = previewReceivedAmount,
                                 remaining = remaining,
                                 change = change,
                                 currencySymbol = currencySymbol,
-                                keypadBuffer = keypadBuffer
+                                moneyLocale = moneyLocale,
                             )
                             CashPaymentDenominationsColumn(
+                                currencyCode = currencyCode,
                                 currencySymbol = currencySymbol,
                                 denominations = denominations,
-                                onTap = ::onDenominationTap
+                                swissTiles = swissTiles,
+                                onTap = ::onDenominationTap,
                             )
                             CashPaymentKeypadColumn(
                                 keypadBuffer = keypadBuffer,
                                 onKey = { key -> keypadBuffer = appendCashKeypad(keypadBuffer, key) },
                                 onClear = { keypadBuffer = "" },
-                                onAddAmount = {
-                                    val add = keypadBuffer.toDoubleOrNull() ?: 0.0
-                                    if (add > 0.001) {
-                                        enteredAmount += add
-                                        keypadBuffer = ""
-                                    }
-                                }
+                                onAddAmount = ::onKeypadAddAmount,
                             )
                         }
                     } else {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             CashPaymentSummaryColumn(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(0.95f),
                                 totalDue = totalDue,
-                                enteredAmount = enteredAmount,
+                                enteredAmount = previewReceivedAmount,
                                 remaining = remaining,
                                 change = change,
                                 currencySymbol = currencySymbol,
-                                keypadBuffer = keypadBuffer
+                                moneyLocale = moneyLocale,
                             )
                             CashPaymentDenominationsColumn(
-                                modifier = Modifier.weight(1.15f),
+                                modifier = Modifier.weight(1.35f),
+                                currencyCode = currencyCode,
                                 currencySymbol = currencySymbol,
                                 denominations = denominations,
-                                onTap = ::onDenominationTap
+                                swissTiles = swissTiles,
+                                onTap = ::onDenominationTap,
                             )
                             CashPaymentKeypadColumn(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(0.95f),
                                 keypadBuffer = keypadBuffer,
                                 onKey = { key -> keypadBuffer = appendCashKeypad(keypadBuffer, key) },
                                 onClear = { keypadBuffer = "" },
-                                onAddAmount = {
-                                    val add = keypadBuffer.toDoubleOrNull() ?: 0.0
-                                    if (add > 0.001) {
-                                        enteredAmount += add
-                                        keypadBuffer = ""
-                                    }
-                                }
+                                onAddAmount = ::onKeypadAddAmount,
                             )
                         }
                     }
@@ -185,12 +210,13 @@ fun CashPaymentDialog(
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
                         enabled = !isProcessing,
-                        modifier = Modifier.heightIn(min = 52.dp)
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        shape = PosShapes.Medium,
                     ) {
                         Text(stringResource(R.string.cancel), fontWeight = FontWeight.SemiBold)
                     }
@@ -198,14 +224,18 @@ fun CashPaymentDialog(
                         onClick = { onConfirm(enteredAmount) },
                         enabled = canConfirm,
                         modifier = Modifier
-                            .heightIn(min = 52.dp)
-                            .widthIn(min = 160.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = VectronColors.CashGreen)
+                            .heightIn(min = 48.dp)
+                            .widthIn(min = 140.dp),
+                        shape = PosShapes.Medium,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PosColors.Primary,
+                            disabledContainerColor = Color(0xFFD1D5DB),
+                        ),
                     ) {
                         Text(
                             stringResource(R.string.confirm),
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
                         )
                     }
                 }
@@ -221,131 +251,184 @@ private fun CashPaymentSummaryColumn(
     remaining: Double,
     change: Double,
     currencySymbol: String,
-    keypadBuffer: String,
-    modifier: Modifier = Modifier
+    moneyLocale: Locale,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFE4E4E7), RoundedCornerShape(16.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        CashAmountLine(
+        CashSummaryBlock(
             label = stringResource(R.string.cash_payment_total),
-            amount = formatCashMoney(totalDue, currencySymbol),
-            color = TotalBlue
+            amount = formatCashMoney(totalDue, currencySymbol, moneyLocale),
+            amountColor = posUiColors().textPrimary,
+            labelColor = posUiColors().textSecondary,
         )
-        CashAmountLine(
+        CashSummaryBlock(
             label = stringResource(R.string.cash_payment_entered),
-            amount = formatCashMoney(enteredAmount, currencySymbol),
-            color = EnteredGreen
+            amount = formatCashMoney(enteredAmount, currencySymbol, moneyLocale),
+            amountColor = PosColors.Primary,
+            labelColor = PosColors.Primary,
+            borderColor = posUiColors().primaryBorder,
+            backgroundColor = posUiColors().primarySubtle,
+            emphasizeAmount = true,
         )
-        if (change > 0.001) {
-            CashAmountLine(
-                label = stringResource(R.string.cash_payment_change),
-                amount = formatCashMoney(change, currencySymbol),
-                color = OwedRed
-            )
-        } else if (remaining > 0.001) {
-            CashAmountLine(
-                label = stringResource(R.string.cash_payment_still_to_pay),
-                amount = formatCashMoney(remaining, currencySymbol),
-                color = OwedRed
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.5.dp, Color(0xFF9CA3AF), RoundedCornerShape(12.dp))
-                .background(Color(0xFFF9FAFB), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 12.dp)
-        ) {
-            Text(
-                text = if (keypadBuffer.isEmpty()) {
-                    formatCashMoney(0.0, currencySymbol)
-                } else {
-                    "$currencySymbol $keypadBuffer"
-                },
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.End,
-                fontWeight = FontWeight.Bold,
-                fontSize = 28.sp
-            )
-        }
+        CashSummaryBlock(
+            label = stringResource(R.string.cash_payment_still_to_pay),
+            amount = formatCashMoney(remaining, currencySymbol, moneyLocale),
+            amountColor = PosColors.Danger,
+            labelColor = PosColors.Danger,
+        )
+        CashSummaryBlock(
+            label = stringResource(R.string.cash_payment_change),
+            amount = formatCashMoney(change, currencySymbol, moneyLocale),
+            amountColor = Color(0xFFB45309),
+            labelColor = Color(0xFFB45309),
+            backgroundColor = posUiColors().warningSubtle,
+        )
     }
 }
 
 @Composable
-private fun CashAmountLine(label: String, amount: String, color: Color) {
-    Column {
+private fun CashSummaryBlock(
+    label: String,
+    amount: String,
+    amountColor: Color,
+    labelColor: Color,
+    borderColor: Color = Color.Unspecified,
+    backgroundColor: Color = Color.Unspecified,
+    emphasizeAmount: Boolean = false,
+) {
+    val ui = posUiColors()
+    val resolvedBorder = if (borderColor == Color.Unspecified) ui.border else borderColor
+    val resolvedBackground = if (backgroundColor == Color.Unspecified) ui.surfaceSubtle else backgroundColor
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(PosShapes.Large)
+            .background(resolvedBackground)
+            .border(if (emphasizeAmount) 2.dp else 1.dp, resolvedBorder, PosShapes.Large)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
         Text(
             label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = color,
-            letterSpacing = 0.5.sp
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = labelColor,
         )
         Text(
             amount,
-            fontSize = 32.sp,
+            fontSize = if (emphasizeAmount) 32.sp else 28.sp,
             fontWeight = FontWeight.Bold,
-            color = color
+            color = amountColor,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
         )
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CashPaymentDenominationsColumn(
+    currencyCode: String,
     currencySymbol: String,
     denominations: List<Double>,
+    swissTiles: List<SwissDenomTile>?,
     onTap: (Double) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFE4E4E7), RoundedCornerShape(16.dp))
-            .padding(16.dp)
+            .clip(PosShapes.Large)
+            .background(posUiColors().surfaceSubtle)
+            .border(1.dp, posUiColors().border, PosShapes.Large)
+            .padding(14.dp),
     ) {
+        Text(
+            stringResource(R.string.cash_payment_bills_coins),
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            color = posUiColors().textPrimary,
+        )
         Text(
             stringResource(R.string.cash_payment_tap_denominations),
             fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF52525B),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            color = posUiColors().textSecondary,
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+        val rows = denominations.chunked(4)
+        rows.forEach { rowValues ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowValues.forEach { value ->
+                    val tile = chfDenomTileFor(value, currencyCode)
+                    CashDenomButton(
+                        value = value,
+                        currencySymbol = currencySymbol,
+                        swissTile = tile,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onTap(value) },
+                    )
+                }
+                repeat((4 - rowValues.size).coerceAtLeast(0)) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun CashDenomButton(
+    value: Double,
+    currencySymbol: String,
+    swissTile: SwissDenomTile?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(PosShapes.Medium)
+            .background(Color.White)
+            .border(1.dp, posUiColors().border, PosShapes.Medium)
+            .clickable(onClick = onClick)
+            .padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.35f)
+                .clip(PosShapes.Small),
+            contentAlignment = Alignment.Center,
         ) {
-            denominations.forEach { value ->
-                Box(
-                    modifier = Modifier
-                        .widthIn(min = 72.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFF4F4F5))
-                        .border(1.dp, Color(0xFFD4D4D8), RoundedCornerShape(10.dp))
-                        .clickable { onTap(value) }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+            when {
+                swissTile?.imageRes != null -> {
+                    SwissDenominationArt(tile = swissTile, modifier = Modifier.fillMaxSize())
+                }
+                swissTile != null -> {
                     Text(
-                        formatDenominationLabel(value),
+                        formatDenominationLabel(value, currencySymbol),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = Color(0xFF18181B)
+                        color = posUiColors().textSecondary,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
         }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            formatDenominationLabel(value, currencySymbol),
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            color = posUiColors().textPrimary,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -355,48 +438,59 @@ private fun CashPaymentKeypadColumn(
     onKey: (String) -> Unit,
     onClear: () -> Unit,
     onAddAmount: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier
+            .clip(PosShapes.Large)
+            .background(posUiColors().surfaceSubtle)
+            .border(1.dp, posUiColors().border, PosShapes.Large)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        Text(
+            stringResource(R.string.cash_payment_keypad_title),
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            color = posUiColors().textPrimary,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
         listOf(
-            listOf("7", "8", "9"),
+            listOf("1", "2", "3"),
             listOf("4", "5", "6"),
-            listOf("1", "2", "3")
+            listOf("7", "8", "9"),
         ).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 row.forEach { key ->
                     CashKey(
                         label = key,
                         modifier = Modifier.weight(1f),
-                        onClick = { onKey(key) }
+                        onClick = { onKey(key) },
                     )
                 }
             }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CashKey(
                 label = stringResource(R.string.cash_payment_ce),
                 modifier = Modifier.weight(1f),
                 tone = CashKeyTone.Clear,
-                onClick = onClear
+                onClick = onClear,
             )
             CashKey(label = "0", modifier = Modifier.weight(1f), onClick = { onKey("0") })
             CashKey(label = ".", modifier = Modifier.weight(1f), onClick = { onKey(".") })
         }
         CashKey(
-            label = stringResource(R.string.cash_payment_add_amount),
+            label = "+  ${stringResource(R.string.cash_payment_add_amount)}",
             modifier = Modifier.fillMaxWidth(),
             tone = CashKeyTone.Accent,
-            onClick = onAddAmount
+            onClick = onAddAmount,
         )
     }
 }
@@ -408,40 +502,47 @@ private fun CashKey(
     label: String,
     modifier: Modifier = Modifier,
     tone: CashKeyTone = CashKeyTone.Normal,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     val bg = when (tone) {
-        CashKeyTone.Accent -> VectronColors.CashGreen
+        CashKeyTone.Accent -> PosColors.Primary
         CashKeyTone.Clear -> Color(0xFFFEE2E2)
-        CashKeyTone.Normal -> Color(0xFFF4F4F5)
+        CashKeyTone.Normal -> Color.White
     }
     val fg = when (tone) {
         CashKeyTone.Accent -> Color.White
         CashKeyTone.Clear -> Color(0xFFB91C1C)
-        CashKeyTone.Normal -> Color(0xFF18181B)
+        CashKeyTone.Normal -> posUiColors().textPrimary
+    }
+    val border = when (tone) {
+        CashKeyTone.Accent -> PosColors.Primary
+        CashKeyTone.Clear -> Color(0xFFFECACA)
+        CashKeyTone.Normal -> posUiColors().border
     }
     Box(
         modifier = modifier
-            .heightIn(min = 52.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .heightIn(min = 48.dp)
+            .clip(PosShapes.Medium)
             .background(bg)
-            .border(
-                1.dp,
-                if (tone == CashKeyTone.Normal) Color(0xFFD4D4D8) else bg,
-                RoundedCornerShape(12.dp)
-            )
+            .border(1.dp, border, PosShapes.Medium)
             .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             fontWeight = FontWeight.Bold,
-            fontSize = if (tone == CashKeyTone.Accent) 14.sp else 18.sp,
+            fontSize = if (tone == CashKeyTone.Accent) 13.sp else 18.sp,
             color = fg,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            maxLines = 2,
         )
     }
+}
+
+private fun keypadPendingAmount(buffer: String): Double {
+    if (buffer.isBlank()) return 0.0
+    return buffer.toDoubleOrNull() ?: 0.0
 }
 
 private fun appendCashKeypad(buffer: String, key: String): String {
@@ -455,14 +556,16 @@ private fun appendCashKeypad(buffer: String, key: String): String {
     }.take(12)
 }
 
-private fun formatCashMoney(amount: Double, symbol: String): String =
-    String.format(Locale.getDefault(), "%s %.2f", symbol, amount)
+private fun formatCashMoney(amount: Double, symbol: String, locale: Locale): String {
+    val numeric = String.format(locale, "%,.2f", amount.coerceAtLeast(0.0))
+    return "$symbol $numeric"
+}
 
-private fun formatDenominationLabel(value: Double): String {
+private fun formatDenominationLabel(value: Double, symbol: String): String {
     val numeric = if (value == value.toLong().toDouble()) {
         value.toLong().toString()
     } else {
         String.format(Locale.US, "%.2f", value)
     }
-    return if (value >= 1.0) numeric else "$numeric"
+    return if (value >= 1.0) numeric else "$symbol $numeric"
 }

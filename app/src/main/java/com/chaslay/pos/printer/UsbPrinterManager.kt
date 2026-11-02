@@ -415,7 +415,11 @@ class UsbPrinterManager @Inject constructor(
             byteArrayOf(0x1D, 0x56, 0x00)
     }
 
-    fun sendBytes(address: String, payload: ByteArray): Result<Unit> = runCatching {
+    fun sendBytes(
+        address: String,
+        payload: ByteArray,
+        bulkTimeoutMs: Int = 15_000
+    ): Result<Unit> = runCatching {
         val manager = usbManager ?: error("USB not available")
         val device = resolveDevice(address) ?: error("USB printer not found — replug USB and re-select in Settings")
         if (!manager.hasPermission(device)) {
@@ -439,7 +443,7 @@ class UsbPrinterManager @Inject constructor(
                         lastError = IllegalStateException("Could not claim USB interface")
                         continue
                     }
-                    transferBulk(connection, endpoint, payload)
+                    transferBulk(connection, endpoint, payload, bulkTimeoutMs)
                     connection.releaseInterface(usbInterface)
                     return@runCatching
                 } catch (e: Exception) {
@@ -503,13 +507,14 @@ class UsbPrinterManager @Inject constructor(
     private fun transferBulk(
         connection: android.hardware.usb.UsbDeviceConnection,
         endpoint: UsbEndpoint,
-        payload: ByteArray
+        payload: ByteArray,
+        bulkTimeoutMs: Int = 15_000
     ) {
         val chunkSize = 512
         var offset = 0
         while (offset < payload.size) {
             val length = min(chunkSize, payload.size - offset)
-            val sent = connection.bulkTransfer(endpoint, payload, offset, length, 15_000)
+            val sent = connection.bulkTransfer(endpoint, payload, offset, length, bulkTimeoutMs)
             if (sent < 0) {
                 error("USB transfer failed (code $sent) — check cable and printer power")
             }

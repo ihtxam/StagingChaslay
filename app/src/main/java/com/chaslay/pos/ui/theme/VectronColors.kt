@@ -3,20 +3,26 @@ package com.chaslay.pos.ui.theme
 import androidx.compose.ui.graphics.Color
 
 object VectronColors {
-    val Background = Color(0xFF1B2A4A)
-    val PanelDark = Color(0xFF152038)
-    val PanelLight = Color(0xFF243656)
-    val Header = Color(0xFF0F1829)
-    val TextPrimary = Color(0xFFFFFFFF)
-    val TextSecondary = Color(0xFFB8C5D9)
-    val GridGap = Color(0xFF1B2A4A)
+    val PrimaryTeal = PosColors.Primary
+    val SuccessGreen = PosColors.Success
+
+    /** Primary actions (pay, confirm, add to order). */
+    val CashGreen = PosColors.Primary
+
+    val CardBlue = PosColors.Info
+
+    val Background = PosColors.Canvas
+    val PanelDark = PosColors.Surface
+    val PanelLight = PosColors.SurfaceSubtle
+    val Header = PosColors.Surface
+    val TextPrimary = PosColors.TextPrimary
+    val TextSecondary = PosColors.TextSecondary
+    val GridGap = PosColors.Border
     val DefaultProduct = Color(0xFF4A6FA5)
-    val KeypadButton = Color(0xFF2E4266)
-    val KeypadText = Color(0xFFFFFFFF)
-    val TotalBar = Color(0xFF0F1829)
-    val CashGreen = Color(0xFF3D8B5E)
-    val CardBlue = Color(0xFF2E6DB4)
-    val SelectedCategory = Color(0xFF3A5080)
+    val KeypadButton = PosColors.SurfaceMuted
+    val KeypadText = PosColors.TextPrimary
+    val TotalBar = PosColors.Primary
+    val SelectedCategory = PosColors.SurfaceSelected
 }
 
 fun categoryColor(hex: String): Color =

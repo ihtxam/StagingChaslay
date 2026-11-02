@@ -17,6 +17,7 @@
     <string name="cart_empty">Il carrello è vuoto</string>
     <string name="subtotal">Subtotale</string>
     <string name="tax">IVA</string>
+    <string name="cart_vat_at_rate">IVA (%1$s%%)</string>
     <string name="tax_included_in_total">IVA inclusa</string>
     <string name="settings_section_general">Generale</string>
     <string name="settings_section_vat_tables">IVA e tavoli</string>

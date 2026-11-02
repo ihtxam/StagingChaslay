@@ -32,6 +32,8 @@ import com.chaslay.pos.domain.model.UserAccess
 import com.chaslay.pos.ui.menu.MenuHubScreen
 import com.chaslay.pos.ui.reports.ReportsScreen
 import com.chaslay.pos.ui.settings.SettingsScreen
+import com.chaslay.pos.ui.theme.posUiColors
+import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.vectronColors
 
 private enum class AdminTabId {
@@ -48,6 +50,7 @@ fun AdminHubScreen(
     onBack: () -> Unit
 ) {
     val colors = vectronColors()
+    val ui = posUiColors()
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabIds = remember(userAccess) {
         buildList {
@@ -102,10 +105,10 @@ fun AdminHubScreen(
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AccentTeal,
-                        selectedLabelColor = Color.White,
-                        containerColor = colors.panelLight,
-                        labelColor = colors.textPrimary
+                        selectedContainerColor = PosColors.Primary,
+                        selectedLabelColor = PosColors.TextOnPrimary,
+                        containerColor = ui.surfaceMuted,
+                        labelColor = ui.textPrimary,
                     )
                 )
             }
