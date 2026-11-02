@@ -602,7 +602,7 @@ private fun CustomizeGroupSection(
             }
             if (required) {
                 Text(
-                    stringResource(R.string.required),
+                    stringResource(R.string.customize_required),
                     color = PosColors.Primary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
