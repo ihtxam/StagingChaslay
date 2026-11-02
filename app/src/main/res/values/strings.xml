@@ -900,6 +900,7 @@
     <string name="checkout_complete">Complete payment</string>
     <string name="checkout_complete_with_change">Complete · change %1$s</string>
     <string name="checkout_amount_due">Amount due</string>
+    <string name="checkout_eur_equivalent">≈ EUR %1$s</string>
     <string name="checkout_amount_received">Amount received</string>
     <string name="checkout_remaining">Remaining: %1$s</string>
     <string name="checkout_change_due">Change due: %1$s</string>

@@ -304,6 +304,8 @@ export type PosPrintSettingsClient = {
   kitchenHeaderTextScale?: 1 | 2 | 3;
   kitchenModifierTextScale?: 1 | 2 | 3;
   kitchenBoldText?: boolean;
+  /** Receipt body: 1 normal, 2 double-width, 3 double width+height. */
+  receiptBodyTextScale?: 1 | 2 | 3;
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
   receiptShowQrCode?: boolean;
@@ -2445,6 +2447,15 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     }
   }
 
+  const vatTotals = resolveOrderReceiptVat(tx);
+  r += thin + '\n';
+  r += centerLine(L.recapTitle, width) + '\n';
+  const recapSubtotal = roundMoney2(
+    tx.items?.length
+      ? tx.items.reduce((s, item) => s + roundMoney2(item.lineTotal), 0)
+      : tx.subtotal
+  );
+  r += padLine(`${L.subtotal}:`, `CHF ${recapSubtotal.toFixed(2)}`, width) + '\n';
   if (tx.discount > 0) {
     r += padLine(`${L.discount}:`, `-CHF ${tx.discount.toFixed(2)}`, width) + '\n';
   }
@@ -2459,6 +2470,11 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
         `${tx.rounding > 0 ? '+' : ''}CHF ${roundMoney2(tx.rounding).toFixed(2)}`,
         width
       ) + '\n';
+  }
+  if (tx.showVat !== false && vatTotals.taxAmount > 0.001 && vatTotals.taxRate > 0) {
+    const rateLabel = `${L.tva} (${vatTotals.taxRate}%)`;
+    const amounts = `${vatTotals.subtotal.toFixed(2)}  ${vatTotals.taxAmount.toFixed(2)}`;
+    r += padLine(rateLabel, amounts, width) + '\n';
   }
   r += sep + '\n';
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
@@ -2545,13 +2561,6 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     }
     const loyaltyBlock = formatLoyaltyReceiptLines(tx, L, width);
     if (loyaltyBlock) r += loyaltyBlock;
-  }
-  // VAT calculations below payment section (includes gift-card sell/reload lines)
-  const vatTotals = resolveOrderReceiptVat(tx);
-  const vatSection = formatVatSection({ ...tx, ...vatTotals }, L, width);
-  if (vatSection) {
-    r += thin + '\n';
-    r += vatSection + '\n';
   }
   const soldGiftBlock = formatSoldGiftCardsOnReceipt(tx.soldGiftCards, L, width);
   if (soldGiftBlock) {
@@ -3149,6 +3158,16 @@ function escKitchenSize(scale: 1 | 2 | 3): Uint8Array {
   // GS ! n - 0 normal, 0x01 double height, 0x11 double width+height
   const n = scale === 3 ? 0x11 : scale === 2 ? 0x01 : 0x00;
   return new Uint8Array([0x1d, 0x21, n]);
+}
+
+/** Receipt body scale — Grand uses double width (not height) for a balanced ratio. */
+function escReceiptBodySize(scale: 1 | 2 | 3): Uint8Array {
+  const n = scale === 3 ? 0x11 : scale === 2 ? 0x10 : 0x00;
+  return new Uint8Array([0x1b, 0x45, 0x00, 0x1d, 0x21, n]);
+}
+
+function escReceiptBodySizeReset(): Uint8Array {
+  return new Uint8Array([0x1b, 0x45, 0x00, 0x1d, 0x21, 0x00]);
 }
 
 function escBold(on: boolean): Uint8Array {
@@ -3987,7 +4006,8 @@ export function textToEscPos(
   deliveryQrRaster?: Uint8Array | null,
   prefixAfterLogo?: Uint8Array | null,
   postBodySections?: Uint8Array | null,
-  textEncoding: EscPosTextEncoding = 'cp850'
+  textEncoding: EscPosTextEncoding = 'cp850',
+  bodyTextScale: 1 | 2 | 3 = 1
 ): Uint8Array {
   const encode = (s: string) => escposTextEncode(s, textEncoding);
   const codepage = textEncoding === 'utf8' ? new Uint8Array() : ESC_CODEPAGE_CP850;
@@ -4003,7 +4023,8 @@ export function textToEscPos(
   if (prefixAfterLogo?.length) {
     parts.push(prefixAfterLogo);
   }
-  parts.push(ESC_POS_RESET_TEXT_ATTRS, alignLeft, body);
+  const bodyScale = bodyTextScale === 2 || bodyTextScale === 3 ? bodyTextScale : 1;
+  parts.push(ESC_POS_RESET_TEXT_ATTRS, alignLeft, escReceiptBodySize(bodyScale), body, escReceiptBodySizeReset());
   if (qrRaster?.length) {
     parts.push(alignCenter, qrRaster, alignLeft);
   }
@@ -4054,6 +4075,7 @@ export async function buildReceiptEscPos(
     soldGiftCards?: SoldGiftCardOnReceipt[];
     titleBodyGap?: boolean;
     textEncoding?: EscPosTextEncoding;
+    bodyTextScale?: 1 | 2 | 3;
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
@@ -4151,6 +4173,9 @@ export async function buildReceiptEscPos(
       )
     : headerEscPos;
 
+  const bodyScale =
+    opts.bodyTextScale === 2 || opts.bodyTextScale === 3 ? opts.bodyTextScale : 1;
+
   return textToEscPos(
     bodyText,
     qrRaster,
@@ -4160,7 +4185,8 @@ export async function buildReceiptEscPos(
     undefined,
     prefixHeader,
     giftCardEscPos,
-    textEncoding
+    textEncoding,
+    bodyScale
   );
 }
 

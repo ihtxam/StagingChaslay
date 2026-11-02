@@ -751,6 +751,7 @@
     <string name="checkout_complete">Finalisez le paiement</string>
     <string name="checkout_complete_with_change">Valider · monnaie %1$s</string>
     <string name="checkout_amount_due">Montant dû</string>
+    <string name="checkout_eur_equivalent">≈ EUR %1$s</string>
     <string name="checkout_remaining">Reste : %1$s</string>
     <string name="checkout_change_due">Monnaie : %1$s</string>
     <string name="checkout_entering">Saisie : %1$s</string>

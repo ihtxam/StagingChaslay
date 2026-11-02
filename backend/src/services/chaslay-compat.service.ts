@@ -693,6 +693,7 @@ export class ChaslayCompatService {
         receipt_show_vat_table: posPrintSettings.receiptShowVatTable !== false,
         receipt_show_staff_line: posPrintSettings.receiptShowStaffLine !== false,
         receipt_show_qr_code: posPrintSettings.receiptShowQrCode !== false,
+        receipt_body_text_scale: posPrintSettings.receiptBodyTextScale ?? 1,
       },
     };
   }

@@ -8,6 +8,7 @@ export type ReceiptLabels = {
   channel: string;
   table: string;
   subtotal: string;
+  recapTitle: string;
   discount: string;
   tax: string;
   rounding: string;
@@ -115,6 +116,7 @@ const EN: ReceiptLabels = {
   channel: 'Channel',
   table: 'Table',
   subtotal: 'Subtotal',
+  recapTitle: 'SUMMARY',
   discount: 'Discount',
   tax: 'Tax',
   rounding: 'Rounding',
@@ -213,6 +215,7 @@ const FR: ReceiptLabels = {
   channel: 'Canal',
   table: 'Table',
   subtotal: 'Sous-total',
+  recapTitle: 'RÉCAPITULATIF',
   discount: 'Remise',
   tax: 'TVA',
   rounding: 'Arrondi',
@@ -311,6 +314,7 @@ const DE: ReceiptLabels = {
   channel: 'Kanal',
   table: 'Tisch',
   subtotal: 'Zwischensumme',
+  recapTitle: 'ÜBERSICHT',
   discount: 'Rabatt',
   tax: 'MwSt.',
   rounding: 'Rundung',

@@ -1189,13 +1189,18 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
 
-        if (discountAmount > 0.0) {
-            sb.appendLine(leftRight(labels.discount, "-${formatMoney(discountAmount, settings.currencySymbol)}", lineWidth))
-        }
-
-        if (tipAmount > 0.0) {
-            sb.appendLine(leftRight(labels.tip, formatMoney(tipAmount, settings.currencySymbol), lineWidth))
-        }
+        appendReceiptRecapSection(
+            sb = sb,
+            labels = labels,
+            lineWidth = lineWidth,
+            currencySymbol = settings.currencySymbol,
+            subtotal = subtotal,
+            discountAmount = discountAmount,
+            discountPercent = 0.0,
+            tipAmount = tipAmount,
+            roundingAmount = 0.0,
+            vatRows = if (settings.receiptShowVatTable) vatRows else emptyList()
+        )
 
         appendReceiptTotal(sb, labels.total, total, settings.currencySymbol, lineWidth)
 
@@ -1218,8 +1223,7 @@ class BluetoothPrinterService @Inject constructor(
             }
         }
 
-        // VAT after payment — Net / Tax / Gross table plus tax-total (never print Net as tax).
-        if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
+        if (settings.receiptShowVatTable && vatRows.size > 1) {
             appendReceiptVatSection(sb, vatRows, labels, lineWidth, cart.vatIncludedInPrice)
         }
 
@@ -1321,29 +1325,22 @@ class BluetoothPrinterService @Inject constructor(
                 }
         }
 
-        if (orderDiscount > 0.0) {
-            val discountLabel = if (transaction.discountPercent > 0) {
-                labels.discountPercent.format(transaction.discountPercent.toInt())
-            } else {
-                labels.discount
-            }
-            sb.appendLine(leftRight(discountLabel, "-${formatMoney(orderDiscount, settings.currencySymbol)}", lineWidth))
+        val merchandiseSubtotal = items.sumOf { it.lineTotal } - items.sumOf { item ->
+            val qtyFactor = if (item.isWeighed) item.quantity / 1000.0 else item.quantity.toDouble()
+            item.lineDiscountPerUnit * qtyFactor
         }
-
-        if (transaction.tipAmount > 0.0) {
-            sb.appendLine(leftRight(labels.tip, formatMoney(transaction.tipAmount, settings.currencySymbol), lineWidth))
-        }
-
-        if (kotlin.math.abs(transaction.roundingAmount) >= 0.01) {
-            val sign = if (transaction.roundingAmount > 0) "+" else ""
-            sb.appendLine(
-                leftRight(
-                    labels.rounding,
-                    "$sign${formatMoney(transaction.roundingAmount, settings.currencySymbol)}",
-                    lineWidth
-                )
-            )
-        }
+        appendReceiptRecapSection(
+            sb = sb,
+            labels = labels,
+            lineWidth = lineWidth,
+            currencySymbol = settings.currencySymbol,
+            subtotal = merchandiseSubtotal,
+            discountAmount = orderDiscount,
+            discountPercent = transaction.discountPercent,
+            tipAmount = transaction.tipAmount,
+            roundingAmount = transaction.roundingAmount,
+            vatRows = if (settings.receiptShowVatTable) vatRows else emptyList()
+        )
 
         appendReceiptTotal(sb, labels.total, transaction.total, settings.currencySymbol, lineWidth)
 
@@ -1415,8 +1412,7 @@ class BluetoothPrinterService @Inject constructor(
 
         appendReceiptPaymentLines(sb, labels, transaction, settings.currencySymbol, lineWidth, netPaid)
 
-        // VAT after payment — compact Net / Tax / Gross table (guest receipt).
-        if (settings.receiptShowVatTable && vatRows.isNotEmpty()) {
+        if (settings.receiptShowVatTable && vatRows.size > 1) {
             appendReceiptVatSection(sb, vatRows, labels, lineWidth, settings.vatIncludedInPrice)
         }
 
@@ -1987,6 +1983,56 @@ class BluetoothPrinterService @Inject constructor(
         sb.append(escBold(false))
     }
 
+    private fun appendReceiptRecapSection(
+        sb: StringBuilder,
+        labels: ReceiptLabels,
+        lineWidth: Int,
+        currencySymbol: String,
+        subtotal: Double,
+        discountAmount: Double,
+        discountPercent: Double,
+        tipAmount: Double,
+        roundingAmount: Double,
+        vatRows: List<com.chaslay.pos.domain.model.VatBreakdownRow>
+    ) {
+        val sepThin = "-".repeat(lineWidth.coerceAtMost(32))
+        sb.appendLine(center(sepThin, lineWidth))
+        sb.append(escAlignLeft())
+        sb.append(escBold(false))
+        sb.append(escDoubleHeight(false))
+        sb.append(escDoubleSize(false))
+        sb.appendLine(center(labels.recapTitle, lineWidth))
+        sb.appendLine(leftRight(labels.subtotal, formatMoney(subtotal, currencySymbol), lineWidth))
+        if (discountAmount > 0.0) {
+            val discountLabel = if (discountPercent > 0) {
+                labels.discountPercent.format(discountPercent.toInt())
+            } else {
+                labels.discount
+            }
+            sb.appendLine(leftRight(discountLabel, "-${formatMoney(discountAmount, currencySymbol)}", lineWidth))
+        }
+        if (tipAmount > 0.0) {
+            sb.appendLine(leftRight(labels.tip, formatMoney(tipAmount, currencySymbol), lineWidth))
+        }
+        if (kotlin.math.abs(roundingAmount) >= 0.01) {
+            val sign = if (roundingAmount > 0) "+" else ""
+            sb.appendLine(
+                leftRight(
+                    labels.rounding,
+                    "$sign${formatMoney(roundingAmount, currencySymbol)}",
+                    lineWidth
+                )
+            )
+        }
+        vatRows.forEach { row ->
+            if (row.tva >= 0.01) {
+                val typeLabel = "${labels.vatTitle} (${ReceiptVatCalculator.formatRate(row.rate)}%)"
+                val amounts = "${twoDp(row.net)}  ${twoDp(row.tva)}"
+                sb.appendLine(leftRight(typeLabel, amounts, lineWidth))
+            }
+        }
+    }
+
     private fun appendReceiptVatSection(
         sb: StringBuilder,
         rows: List<com.chaslay.pos.domain.model.VatBreakdownRow>,
@@ -2181,7 +2227,10 @@ class BluetoothPrinterService @Inject constructor(
         receiptUrl: String? = null,
         @Suppress("UNUSED_PARAMETER") deliveryDirectionsUrl: String? = null
     ): ByteArray {
-        val body = EscPosEncoder.encode(text)
+        val scale = settings.receiptBodyTextScale.coerceIn(1, 3)
+        val bodyAttrs = EscPosEncoder.encode(escReceiptBodySize(scale))
+        val bodyReset = EscPosEncoder.encode(escReceiptBodySizeReset())
+        val body = bodyAttrs + EscPosEncoder.encode(text) + bodyReset
         val qrParts = mutableListOf<ByteArray>()
         if (settings.receiptShowQrCode && !receiptUrl.isNullOrBlank()) {
             qrParts.add(receiptQrRaster(receiptUrl, lineWidth))
@@ -2189,7 +2238,12 @@ class BluetoothPrinterService @Inject constructor(
         // Delivery directions QR removed — customer receipt shows digital receipt QR only.
         val qrBytes = qrParts.fold(byteArrayOf()) { acc, part -> acc + part }
         val cutFeed = if (qrBytes.isNotEmpty()) 2 else 4
-        return buildPrintPayload(body, settings, lineWidth, qrBytes, cutFeed)
+        val qrPrefixReset = if (qrBytes.isNotEmpty()) {
+            EscPosEncoder.encode(escReceiptBodySizeReset() + escAlignLeft())
+        } else {
+            byteArrayOf()
+        }
+        return buildPrintPayload(body, settings, lineWidth, qrPrefixReset + qrBytes, cutFeed)
     }
 
     private fun receiptQrRaster(url: String, lineWidth: Int): ByteArray {
@@ -2616,6 +2670,23 @@ class BluetoothPrinterService @Inject constructor(
     private fun escDoubleSize(on: Boolean): String =
         if (on) "\u001D\u0021\u0011" else "\u001D\u0021\u0000"
 
+    private fun escDoubleWidth(on: Boolean): String =
+        if (on) "\u001D\u0021\u0010" else "\u001D\u0021\u0000"
+
+    /** Receipt body: 1 normal, 2 double-width, 3 double width+height (balanced ratio). */
+    private fun escReceiptBodySize(scale: Int): String = buildString {
+        append(escAlignLeft())
+        append(escBold(false))
+        when (scale.coerceIn(1, 3)) {
+            3 -> append(escDoubleSize(true))
+            2 -> append(escDoubleWidth(true))
+            else -> append(escDoubleSize(false))
+        }
+    }
+
+    private fun escReceiptBodySizeReset(): String =
+        escBold(false) + escDoubleHeight(false) + escDoubleSize(false)
+
     private fun twoDp(value: Double): String =
         String.format(Locale.getDefault(), "%.2f", roundMoney(value))
 
@@ -2683,9 +2754,9 @@ class BluetoothPrinterService @Inject constructor(
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
         /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80. */
-        private const val RECEIPT_QR_RASTER_PX_80 = 50
+        private const val RECEIPT_QR_RASTER_PX_80 = 120
         /** Thermal digital-receipt QR on 58mm paper — matches WebPOS. */
-        private const val RECEIPT_QR_RASTER_PX_58 = 42
+        private const val RECEIPT_QR_RASTER_PX_58 = 100
         private const val LINE_WIDTH = LINE_WIDTH_80
         private val SPP_UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val ESC_INIT = byteArrayOf(0x1B, 0x40)

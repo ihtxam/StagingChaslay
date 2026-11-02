@@ -45,8 +45,9 @@ fun ReceiptThermalPreview(
             Text(
                 text = previewText.trimEnd(),
                 fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                lineHeight = 14.sp,
+                fontSize = 10.sp,
+                lineHeight = 13.sp,
+                letterSpacing = 0.2.sp,
                 color = posUiColors().textPrimary,
             )
         }

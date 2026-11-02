@@ -33,6 +33,7 @@ fun BusinessSettingsEntity.mergePosPrintSettings(
         receiptFooter = print.receiptFooter.ifBlank { receiptFooter },
         receiptShowVatTable = print.receiptShowVatTable,
         receiptShowStaffLine = print.receiptShowStaffLine,
-        receiptShowQrCode = print.receiptShowQrCode
+        receiptShowQrCode = print.receiptShowQrCode,
+        receiptBodyTextScale = print.receiptBodyTextScale.coerceIn(1, 3)
     )
 }

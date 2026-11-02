@@ -34,12 +34,30 @@ export function roundingAdjustment(rawTotal: number, step = 0.05): number {
   return roundMoney2(roundToStep(rawTotal, step) - rawTotal);
 }
 
-/** Quick-cash denomination buttons ≥ total (plus Exact). */
-export function quickCashOptions(total: number, denominations: number[]): number[] {
-  const t = roundMoney2(total);
-  const dens = [...new Set(denominations.map(Number).filter((n) => n > 0))].sort((a, b) => a - b);
-  const opts = dens.filter((d) => d >= t);
-  return opts;
+/** Swiss-friendly tender shortcuts ≥ amount due (e.g. 44.20 → 45, 50, 100, 200). */
+export function suggestQuickCashTenderAmounts(
+  amountDue: number,
+  currencyCode: string = 'CHF'
+): number[] {
+  const due = roundMoney2(amountDue);
+  if (due <= 0) return [];
+  const code = String(currencyCode || 'CHF').toUpperCase();
+  const notes =
+    code === 'CHF' || code === 'EUR'
+      ? [5, 10, 20, 50, 100, 200]
+      : [5, 10, 20, 50, 100];
+  const out = new Set<number>();
+  const hasFraction = Math.abs(due - Math.round(due)) > 0.001;
+  out.add(hasFraction ? Math.ceil(due) : due);
+  for (const note of notes) {
+    if (note + 1e-9 >= due) out.add(note);
+  }
+  return [...out].sort((a, b) => a - b).slice(0, 5);
+}
+
+/** @deprecated Prefer suggestQuickCashTenderAmounts(amountDue). */
+export function quickCashOptions(total: number, _denominations: number[]): number[] {
+  return suggestQuickCashTenderAmounts(total);
 }
 
 /** Split a 0.05-rounded total into N parts that each land on 0.05. */

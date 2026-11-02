@@ -3138,6 +3138,14 @@ const en: Dict = {
   quickCashEnabled: 'Enable quick cash',
   quickCashDenominations: 'Quick cash denominations',
   quickCashDenominationsHint: 'Comma-separated amounts, e.g. 10, 20, 50, 100',
+  checkoutEurDisplayEnabled: 'Show EUR total at checkout',
+  checkoutEurDisplayEnabledHint:
+    'When enabled, checkout shows an EUR equivalent under the CHF total (requires rate below). Syncs to Android POS.',
+  checkoutChfToEurRate: 'CHF → EUR rate (checkout)',
+  checkoutChfToEurRateHint: '1 CHF = X EUR. Example: 0.95. Used on POS checkout when EUR display is enabled.',
+  receiptBodyTextScale: 'Receipt body text size',
+  receiptBodyTextScaleHint:
+    'Normal = standard width. Large = double width. Extra large = double width and height (best ratio on thermal).',
   splitBillsEnabled: 'Enable split bills',
   tipsNotTaxable: 'Tips (not taxable)',
   salesReport: 'Sales report',
@@ -8435,6 +8443,14 @@ const fr: Dict = {
   quickCashEnabled: 'Activer espèces rapides',
   quickCashDenominations: 'Coupures espèces rapides',
   quickCashDenominationsHint: 'Montants séparés par des virgules, ex. 10, 20, 50, 100',
+  checkoutEurDisplayEnabled: 'Afficher le total EUR à la caisse',
+  checkoutEurDisplayEnabledHint:
+    'Affiche un équivalent EUR sous le total CHF (taux ci-dessous). Synchronisé avec l’app Android.',
+  checkoutChfToEurRate: 'Taux CHF → EUR (caisse)',
+  checkoutChfToEurRateHint: '1 CHF = X EUR. Ex. 0,95. Utilisé à la caisse si l’affichage EUR est activé.',
+  receiptBodyTextScale: 'Taille du texte du reçu',
+  receiptBodyTextScaleHint:
+    'Normale = largeur standard. Grand = double largeur. Très grand = double largeur et hauteur.',
   splitBillsEnabled: 'Activer le partage d\'addition',
   tipsNotTaxable: 'Pourboires (non taxables)',
   salesReport: 'Rapport des ventes',
@@ -13617,6 +13633,14 @@ const de: Dict = {
   quickCashEnabled: 'Schnell-Bar aktivieren',
   quickCashDenominations: 'Schnell-Bar Beträge',
   quickCashDenominationsHint: 'Kommagetrennte Beträge, z. B. 10, 20, 50, 100',
+  checkoutEurDisplayEnabled: 'EUR-Total an der Kasse anzeigen',
+  checkoutEurDisplayEnabledHint:
+    'Zeigt unter dem CHF-Total einen EUR-Gegenwert (Kurs unten). Wird mit Android POS synchronisiert.',
+  checkoutChfToEurRate: 'CHF → EUR Kurs (Kasse)',
+  checkoutChfToEurRateHint: '1 CHF = X EUR. Z. B. 0,95. Nur wenn EUR-Anzeige aktiv ist.',
+  receiptBodyTextScale: 'Beleg-Textgrösse',
+  receiptBodyTextScaleHint:
+    'Normal = Standardbreite. Gross = doppelte Breite. Extra gross = doppelte Breite und Höhe.',
   splitBillsEnabled: 'Rechnung teilen aktivieren',
   tipsNotTaxable: 'Trinkgeld (nicht steuerpflichtig)',
   salesReport: 'Verkaufsbericht',

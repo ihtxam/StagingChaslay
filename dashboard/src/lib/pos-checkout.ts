@@ -27,6 +27,9 @@ export type PosCheckoutSettings = {
   roundingStep: number;
   quickCashEnabled: boolean;
   quickCashDenominations: number[];
+  checkoutEurDisplayEnabled: boolean;
+  /** 1 CHF = X EUR when checkout EUR display is enabled. */
+  checkoutChfToEurRate: number | null;
   splitBillsEnabled: boolean;
   maxSplitParts: number;
   vatIncludedInPrice: boolean;
@@ -100,6 +103,8 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   roundingStep: 0.05,
   quickCashEnabled: true,
   quickCashDenominations: [10, 20, 50, 100],
+  checkoutEurDisplayEnabled: false,
+  checkoutChfToEurRate: null,
   splitBillsEnabled: true,
   maxSplitParts: 8,
   vatIncludedInPrice: false,
@@ -175,6 +180,12 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
     roundingStep,
     quickCashEnabled: src.quickCashEnabled !== false,
     quickCashDenominations: dens.length ? dens : DEFAULT_POS_CHECKOUT.quickCashDenominations,
+    checkoutEurDisplayEnabled: src.checkoutEurDisplayEnabled === true,
+    checkoutChfToEurRate: (() => {
+      const raw = Number(src.checkoutChfToEurRate);
+      if (!Number.isFinite(raw) || raw <= 0) return null;
+      return Math.min(2, Math.round(raw * 10000) / 10000);
+    })(),
     splitBillsEnabled: src.splitBillsEnabled !== false,
     maxSplitParts: Math.max(2, Math.min(20, Number(src.maxSplitParts) || 8)),
     vatIncludedInPrice: src.vatIncludedInPrice === true,

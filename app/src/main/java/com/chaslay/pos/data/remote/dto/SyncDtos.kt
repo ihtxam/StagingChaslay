@@ -284,7 +284,9 @@ data class SyncCheckoutDto(
     val expressCheckoutEnabled: Boolean = true,
     /** cart | product_grid */
     val expressPayPlacement: String? = null,
-    val retailCashTenderDialogEnabled: Boolean = true
+    val retailCashTenderDialogEnabled: Boolean = true,
+    val checkoutEurDisplayEnabled: Boolean = false,
+    val checkoutChfToEurRate: Double = 0.0
 )
 
 data class SyncScaleDto(
@@ -308,7 +310,8 @@ data class SyncPrintDto(
     @SerializedName("receipt_footer") val receiptFooter: String = "",
     @SerializedName("receipt_show_vat_table") val receiptShowVatTable: Boolean = true,
     @SerializedName("receipt_show_staff_line") val receiptShowStaffLine: Boolean = true,
-    @SerializedName("receipt_show_qr_code") val receiptShowQrCode: Boolean = true
+    @SerializedName("receipt_show_qr_code") val receiptShowQrCode: Boolean = true,
+    @SerializedName("receipt_body_text_scale") val receiptBodyTextScale: Int = 1
 )
 
 data class PaymentConfigResponse(

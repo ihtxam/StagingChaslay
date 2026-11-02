@@ -21,3 +21,17 @@ val MIGRATION_51_52 = object : Migration(51, 52) {
         )
     }
 }
+
+val MIGRATION_52_53 = object : Migration(52, 53) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE business_settings ADD COLUMN checkoutEurDisplayEnabled INTEGER NOT NULL DEFAULT 0"
+        )
+        db.execSQL(
+            "ALTER TABLE business_settings ADD COLUMN checkoutChfToEurRate REAL NOT NULL DEFAULT 0"
+        )
+        db.execSQL(
+            "ALTER TABLE business_settings ADD COLUMN receiptBodyTextScale INTEGER NOT NULL DEFAULT 1"
+        )
+    }
+}

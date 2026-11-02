@@ -102,7 +102,9 @@ fun BusinessSettingsEntity.mergePosCheckoutSettings(
         // Single panel toggle for Cash/Card/Terminal buttons under products.
         expressEnabled = expressCheckout,
         expressPayPlacement = expressPlacement,
-        retailCashTenderDialogEnabled = retailCashDialog
+        retailCashTenderDialogEnabled = retailCashDialog,
+        checkoutEurDisplayEnabled = checkout.checkoutEurDisplayEnabled,
+        checkoutChfToEurRate = checkout.checkoutChfToEurRate.coerceAtLeast(0.0)
     )
 }
 

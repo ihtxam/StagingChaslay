@@ -70,7 +70,9 @@ import com.chaslay.pos.domain.model.applyCashRounding
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosDimens
 import com.chaslay.pos.ui.theme.PosShapes
+import com.chaslay.pos.util.suggestQuickCashTenderAmounts
 import java.util.Locale
+import kotlin.math.round
 
 private val CheckoutTeal = PosColors.Primary
 
@@ -114,6 +116,9 @@ fun CheckoutScreen(
     discountsEnabled: Boolean = true,
     quickCashEnabled: Boolean = true,
     quickCashDenominations: List<Double> = listOf(10.0, 20.0, 50.0, 100.0),
+    checkoutEurDisplayEnabled: Boolean = false,
+    checkoutChfToEurRate: Double = 0.0,
+    currencyCode: String = "CHF",
     splitBillsEnabled: Boolean = true,
     splitBillIndex: Int? = null,
     splitBillCount: Int? = null,
@@ -506,6 +511,20 @@ fun CheckoutScreen(
                         fontSize = 44.sp,
                         color = posUiColors().textPrimary
                     )
+                    if (checkoutEurDisplayEnabled) {
+                        chfTotalToEur(totals.roundedTotal, checkoutChfToEurRate)?.let { eur ->
+                            Text(
+                                stringResource(
+                                    R.string.checkout_eur_equivalent,
+                                    String.format(Locale.FRENCH, "%,.2f", eur)
+                                ),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = posUiColors().textSecondary,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                    }
                 }
 
                 if (cashApplied > 0.001) {
@@ -674,7 +693,7 @@ fun CheckoutScreen(
 
             if (quickCashEnabled && cashEnabled) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    buildQuickCashAmounts(totals.roundedTotal, quickCashDenominations).forEach { amount ->
+                    buildQuickCashAmounts(totals.roundedTotal, currencyCode).forEach { amount ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -1027,8 +1046,13 @@ private fun rememberCheckoutTotals(
     return CheckoutTotals(netSubtotal, cart.itemDiscountTotal, cartDiscount, preTipTotal, roundedTotal, roundingAdj)
 }
 
-private fun buildQuickCashAmounts(total: Double, denominations: List<Double>): List<Double> {
-    return listOf(10.0, 20.0, 30.0, 40.0, 50.0)
+private fun buildQuickCashAmounts(total: Double, currencyCode: String): List<Double> =
+    suggestQuickCashTenderAmounts(total, currencyCode)
+
+private fun chfTotalToEur(chfTotal: Double, rate: Double): Double? {
+    if (rate <= 0.001 || chfTotal < 0) return null
+    val raw = chfTotal * rate
+    return round(raw * 20.0) / 20.0
 }
 
 private fun formatMoney(amount: Double, symbol: String): String =

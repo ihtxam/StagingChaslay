@@ -233,6 +233,11 @@ data class BusinessSettingsEntity(
     val quickCashEnabled: Boolean = true,
     /** Comma-separated quick-cash denominations, e.g. "10,20,50,100" */
     val quickCashDenominationsCsv: String = "10,20,50,100",
+    /** Show EUR equivalent on checkout when enabled and rate > 0 (1 CHF = X EUR). */
+    val checkoutEurDisplayEnabled: Boolean = false,
+    val checkoutChfToEurRate: Double = 0.0,
+    /** Receipt body ESC/POS scale: 1 normal, 2 wide, 3 wide+tall. */
+    val receiptBodyTextScale: Int = 1,
     val splitBillsEnabled: Boolean = true,
     val maxSplitParts: Int = 8,
     val openHour: Int = 10,

@@ -107,21 +107,21 @@ fun OrderCompleteDialog(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth(0.68f)
-                .fillMaxHeight(0.92f)
-                .padding(8.dp)
+                .heightIn(max = 620.dp)
+                .padding(vertical = 4.dp, horizontal = 8.dp)
         ) {
             Card(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 shape = PosShapes.Dialog,
                 colors = CardDefaults.cardColors(containerColor = posUiColors().surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(posUiColors().primarySubtle)
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Box(
@@ -156,10 +156,9 @@ fun OrderCompleteDialog(
                     val bodyScroll = rememberScrollState()
                     Row(
                         modifier = Modifier
-                            .weight(1f)
                             .fillMaxWidth()
                             .verticalScroll(bodyScroll)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Top
                     ) {

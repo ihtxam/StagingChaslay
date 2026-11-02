@@ -8298,6 +8298,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       soldGiftCards: opts.soldGiftCards,
       titleBodyGap: headerLines.length > 1,
       textEncoding,
+      bodyTextScale:
+        printSettings?.receiptBodyTextScale === 2 || printSettings?.receiptBodyTextScale === 3
+          ? printSettings.receiptBodyTextScale
+          : 1,
     });
     const dataBase64 = uint8ToBase64(escpos);
     lastReceiptEscPosBase64Ref.current = dataBase64;
@@ -8479,6 +8483,10 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         soldGiftCards: opts.soldGiftCards ?? lastSoldGiftCardsRef.current,
         titleBodyGap: headerLines.length > 1,
         textEncoding,
+        bodyTextScale:
+          printSettings?.receiptBodyTextScale === 2 || printSettings?.receiptBodyTextScale === 3
+            ? printSettings.receiptBodyTextScale
+            : 1,
       });
       dataBase64 = uint8ToBase64(escpos);
       if (opts.role === 'receipt') {

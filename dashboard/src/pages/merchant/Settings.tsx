@@ -3766,6 +3766,65 @@ export default function Settings() {
                     }}
                   />
                 </Field>
+                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={
+                      normalizePosCheckoutSettings(settings.posCheckoutSettings)
+                        .checkoutEurDisplayEnabled === true
+                    }
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posCheckoutSettings: {
+                          ...(settings.posCheckoutSettings || {}),
+                          checkoutEurDisplayEnabled: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('checkoutEurDisplayEnabled')}</span>
+                    <span className="mt-0.5 block text-xs muted">{t('checkoutEurDisplayEnabledHint')}</span>
+                  </span>
+                </label>
+                <Field label={t('checkoutChfToEurRate')} hint={t('checkoutChfToEurRateHint')}>
+                  <input
+                    type="number"
+                    className="input max-w-[12rem]"
+                    min={0}
+                    max={2}
+                    step={0.0001}
+                    placeholder="0.95"
+                    value={
+                      normalizePosCheckoutSettings(settings.posCheckoutSettings).checkoutChfToEurRate !=
+                      null
+                        ? String(
+                            normalizePosCheckoutSettings(settings.posCheckoutSettings).checkoutChfToEurRate
+                          )
+                        : ''
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      const nextRate =
+                        raw === ''
+                          ? null
+                          : (() => {
+                              const n = Number(raw);
+                              if (!Number.isFinite(n) || n <= 0) return null;
+                              return Math.min(2, Math.round(n * 10000) / 10000);
+                            })();
+                      setSettings({
+                        ...settings,
+                        posCheckoutSettings: {
+                          ...(settings.posCheckoutSettings || {}),
+                          checkoutChfToEurRate: nextRate,
+                        },
+                      });
+                    }}
+                  />
+                </Field>
               </Section>
 
               <Section
@@ -5085,6 +5144,25 @@ export default function Settings() {
                       })
                     }
                   />
+                </Field>
+                <Field label={t('receiptBodyTextScale')} hint={t('receiptBodyTextScaleHint')}>
+                  <select
+                    className="input max-w-xs"
+                    value={settings.posPrintSettings?.receiptBodyTextScale ?? 1}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptBodyTextScale: Number(e.target.value) as 1 | 2 | 3,
+                        },
+                      })
+                    }
+                  >
+                    <option value={1}>{t('kitchenScaleNormal')}</option>
+                    <option value={2}>{t('kitchenScaleLarge')}</option>
+                    <option value={3}>{t('kitchenScaleXLarge')}</option>
+                  </select>
                 </Field>
                 <Field label={t('kitchenItemTextScale')} hint={t('kitchenTextScaleHint')}>
                   <select

@@ -298,6 +298,9 @@ fun PosScreen(
             quickCashDenominations = state.settings.quickCashDenominationsCsv
                 .split(',')
                 .mapNotNull { it.trim().toDoubleOrNull() },
+            checkoutEurDisplayEnabled = state.settings.checkoutEurDisplayEnabled,
+            checkoutChfToEurRate = state.settings.checkoutChfToEurRate,
+            currencyCode = state.settings.defaultCurrency,
             splitBillsEnabled = state.settings.splitBillsEnabled,
             splitBillIndex = if (isSplitCheckout) state.cart.activeSplitCheck else null,
             splitBillCount = if (isSplitCheckout) state.cart.splitCount else null,

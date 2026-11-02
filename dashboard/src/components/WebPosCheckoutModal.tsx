@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import {
-  quickCashOptions,
   roundMoney2,
+  roundTo005,
   roundToStep,
   roundingAdjustment,
+  suggestQuickCashTenderAmounts,
 } from '@/lib/money';
 import type { PosCheckoutSettings } from '@/lib/pos-checkout';
 import WebPosTipKeypad from '@/components/WebPosTipKeypad';
@@ -92,10 +93,12 @@ export default function WebPosCheckoutModal({
     return { disc, preTip, total, roundingAmount, taxShare };
   }, [subtotal, taxAmount, discountPercent, tipAmount, settings.roundingStep, vatIncludedInPrice]);
 
-  const cashOpts = useMemo(
-    () => quickCashOptions(calc.total, settings.quickCashDenominations || []),
-    [calc.total, settings.quickCashDenominations]
-  );
+  const cashOpts = useMemo(() => suggestQuickCashTenderAmounts(calc.total), [calc.total]);
+
+  const eurTotal = useMemo(() => {
+    if (!settings.checkoutEurDisplayEnabled || !settings.checkoutChfToEurRate) return null;
+    return roundTo005(calc.total * settings.checkoutChfToEurRate);
+  }, [calc.total, settings.checkoutChfToEurRate, settings.checkoutEurDisplayEnabled]);
 
   if (!open) return null;
 
@@ -219,6 +222,12 @@ export default function WebPosCheckoutModal({
               <span>{t('total')}</span>
               <span>CHF {calc.total.toFixed(2)}</span>
             </div>
+            {eurTotal != null && (
+              <div className="flex justify-between text-sm muted pt-1">
+                <span>≈ EUR</span>
+                <span>EUR {eurTotal.toFixed(2)}</span>
+              </div>
+            )}
           </div>
 
           <div>
