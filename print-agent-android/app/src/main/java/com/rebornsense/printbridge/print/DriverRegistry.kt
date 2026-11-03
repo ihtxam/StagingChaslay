@@ -130,4 +130,20 @@ class DriverRegistry(
     fun releaseBluetoothConnection(address: String) {
         bluetooth.releaseConnection(address)
     }
+
+    /** After [refresh], probe the saved/default Bluetooth receipt printer (SPP open + close). */
+    fun warmupDefaultBluetoothPrinter(context: Context) {
+        val app = context.applicationContext
+        val preferredId = runCatching { PrinterPreferences.getDefaultPrinterId(app) }.getOrNull()
+        val endpoint = preferredId?.let { findById(it) }
+            ?: cached.firstOrNull { it.isDefault }
+            ?: cached.firstOrNull { it.driverKey == "bluetooth" }
+            ?: return
+        if (endpoint.driverKey != "bluetooth") return
+        val address = endpoint.meta["address"]?.trim().orEmpty().ifBlank {
+            endpoint.id.removePrefix("bt:").trim()
+        }
+        if (address.isBlank()) return
+        bluetooth.warmupConnection(app, address)
+    }
 }

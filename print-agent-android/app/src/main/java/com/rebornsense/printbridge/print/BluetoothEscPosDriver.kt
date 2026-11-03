@@ -6,6 +6,8 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.util.Log
+import com.rebornsense.printbridge.BridgePermissions
 import java.util.UUID
 
 class BluetoothEscPosDriver : PrinterDriver {
@@ -180,6 +182,40 @@ class BluetoothEscPosDriver : PrinterDriver {
         closeSocket(address.trim())
     }
 
+    /**
+     * Opens a short SPP connection then closes (RebornPOS [warmupConnection] parity).
+     * Does not keep a cached socket — first print still opens its own link.
+     */
+    @SuppressLint("MissingPermission")
+    fun warmupConnection(context: Context, address: String): Boolean {
+        if (!BridgePermissions.hasBluetoothPermissions(context)) {
+            Log.d(TAG, "Skipping BT warmup — permissions not granted")
+            return false
+        }
+        val trimmed = address.trim()
+        if (trimmed.isBlank()) return false
+        val adapter = bluetoothAdapter(context) ?: return false
+        if (!adapter.isEnabled) return false
+        return runCatching {
+            adapter.safeCancelDiscovery()
+            val device = adapter.bondedDevices.orEmpty()
+                .firstOrNull { it.address.equals(trimmed, ignoreCase = true) }
+                ?: run {
+                    Log.d(TAG, "Skipping BT warmup — $trimmed not paired")
+                    return false
+                }
+            val socket = openBluetoothSocket(device)
+            try {
+                Log.d(TAG, "BT warmup OK for $trimmed")
+                true
+            } finally {
+                runCatching { socket.close() }
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "Warmup failed for $trimmed: ${e.message}")
+        }.getOrDefault(false)
+    }
+
     @SuppressLint("MissingPermission")
     private fun openBluetoothSocket(device: BluetoothDevice): BluetoothSocket {
         val errors = mutableListOf<Throwable>()
@@ -215,6 +251,7 @@ class BluetoothEscPosDriver : PrinterDriver {
     }
 
     companion object {
+        private const val TAG = "BluetoothEscPosDriver"
         private const val SOCKET_KEEP_MS = 12_000L
         private const val BT_CHUNK_SIZE = 512
         private const val BT_CHUNK_DELAY_MS = 12L

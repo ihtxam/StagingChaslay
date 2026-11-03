@@ -49,6 +49,27 @@ Handoff notes for `print-agent-android` maintainers. Behavior matches **RebornPO
 4. Attach random USB barcode wedge — no Bridge notification.
 5. Print from WebPOS without Bridge UI — notification tap opens allow flow.
 
+## Bluetooth warmup (RebornPOS parity)
+
+Native POS runs `PrinterConnectionManager.warmupOnStartup()` on app create: for each enabled printer it opens a short Bluetooth SPP session and closes it so the first ticket is not paying cold-connect latency.
+
+Bridge mirrors this for the **default / saved Bluetooth receipt printer** (`PrinterPreferences.default_printer_id`, same routing as `/print`):
+
+| Trigger | Bridge behavior |
+|---------|-----------------|
+| `PrintBridgeService` discovery after start (~2s delay) | `registry.refresh()` then background thread → `DriverRegistry.warmupDefaultBluetoothPrinter` → `BluetoothEscPosDriver.warmupConnection` (open SPP, close; no cached socket) |
+| `ACTION_REFRESH_PRINTERS` | Same path via `discoverPrintersQuietly()` |
+| Missing `BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN` (API 31+) | Skipped with debug log; user must grant via Bridge UI first |
+| Default printer is USB / Sunmi / LAN | Warmup skipped (BT-only) |
+
+### Manual test (Bluetooth tablet)
+
+1. Pair a receipt printer, set it as default in Bridge, grant BT permissions.
+2. Force-stop Bridge, start service (boot autostart or open Bridge).
+3. `adb logcat -s PrintBridgeService BluetoothEscPosDriver` — expect `BT warmup OK for <MAC>` within a few seconds of discovery.
+4. Send first WebPOS receipt — should connect without the long first-print stall seen before warmup.
+5. Revoke BT permission — warmup log shows `Skipping BT warmup — permissions not granted`; first print may prompt or fail until permission restored.
+
 ## POS-only (not ported to Bridge)
 
 - In-app Settings scale picker UI (Bridge uses WebPOS config + `/scale/ports`).
