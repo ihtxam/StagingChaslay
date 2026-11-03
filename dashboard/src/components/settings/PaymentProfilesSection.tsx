@@ -101,6 +101,10 @@ export default function PaymentProfilesSection() {
     }
   };
 
+  if (!branchSwitcher) {
+    return null;
+  }
+
   if (branchSwitcher && isHqView) {
     return null;
   }

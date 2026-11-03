@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.orderhistory
+import com.chaslay.pos.ui.theme.posUiColors
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -26,10 +27,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,18 +74,11 @@ import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.RefundReasonLabels
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-private val ChaslayTeal = Color(0xFF0F766E)
-private val ChaslayTealLight = Color(0xFFCCFBF1)
-private val AccentGreen = Color(0xFF059669)
-private val RefundRed = Color(0xFFDC2626)
-private val TextPrimary = Color(0xFF111827)
-private val TextMuted = Color(0xFF6B7280)
-private val CardBg = Color.White
-private val PageBg = Color(0xFFF9FAFB)
 
 @Composable
 fun OrderDetailDialog(
@@ -109,6 +108,7 @@ fun OrderDetailDialog(
     val dateFmt = remember { SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()) }
     val refundTotal = order.refundAmount.coerceAtLeast(0.0)
     val netTotal = (order.total - refundTotal).coerceAtLeast(0.0)
+    var overflowOpen by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -118,14 +118,14 @@ fun OrderDetailDialog(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .widthIn(max = 720.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = CardBg
+            shape = PosShapes.Dialog,
+            color = posUiColors().surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
         ) {
             Column {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(ChaslayTeal)
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     Row(
@@ -133,37 +133,68 @@ fun OrderDetailDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                dateFmt.format(Date(order.createdAt)),
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 13.sp
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            ChannelBadge(order.serviceType)
-                        }
+                        Text(
+                            stringResource(
+                                R.string.order_detail_title,
+                                shortOrderId(order.transactionNumber, order.notes)
+                            ),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = posUiColors().textPrimary
+                        )
                         IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel), tint = Color.White)
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(R.string.cancel),
+                                tint = posUiColors().textSecondary
+                            )
                         }
                     }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(ChaslayTealLight)
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    StatusPillDetail(orderStatusLabel(order.paymentStatus), statusColor(order.paymentStatus))
-                    Text(
-                        "#${shortOrderId(order.transactionNumber)}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = TextPrimary
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = posUiColors().textMuted
+                            )
+                            Text(
+                                dateFmt.format(Date(order.createdAt)),
+                                fontSize = 12.sp,
+                                color = posUiColors().textSecondary
+                            )
+                        }
+                        ChannelBadgeInline(order.serviceType)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = posUiColors().textMuted
+                            )
+                            Text(order.userName, fontSize = 12.sp, color = posUiColors().textSecondary, maxLines = 1)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    StatusPillDetail(
+                        orderHistoryPaymentStatusDetailLabel(order.paymentStatus),
+                        statusColor(order.paymentStatus),
+                        showCheck = order.paymentStatus == PaymentStatus.COMPLETED
                     )
                 }
+
+                HorizontalDivider(color = posUiColors().border)
 
                 Row(
                     modifier = Modifier
@@ -177,7 +208,7 @@ fun OrderDetailDialog(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        SectionTitle(stringResource(R.string.order_detail_products))
+                        SectionTitle(stringResource(R.string.order_detail_articles_count, items.sumOf { it.quantity }))
                         if (isSplit) {
                             Text(
                                 stringResource(R.string.split_order_count, splitOrders.size),
@@ -217,7 +248,7 @@ fun OrderDetailDialog(
                             if (orderDiscount > 0) {
                                 BillLine(stringResource(R.string.discount), "-${formatMoney(orderDiscount, currencySymbol)}")
                             }
-                            HorizontalDivider(color = Color(0xFFE5E7EB))
+                            HorizontalDivider(color = posUiColors().border)
                             BillLine(
                                 stringResource(R.string.total),
                                 formatMoney(order.total, currencySymbol),
@@ -227,7 +258,7 @@ fun OrderDetailDialog(
                                 BillLine(
                                     stringResource(R.string.refunded_amount),
                                     "-${formatMoney(refundTotal, currencySymbol)}",
-                                    color = RefundRed
+                                    color = PosColors.Danger
                                 )
                                 BillLine(
                                     stringResource(R.string.net_paid),
@@ -238,7 +269,7 @@ fun OrderDetailDialog(
                                     Text(
                                         "${stringResource(R.string.refund_reason)}: $reason",
                                         fontSize = 12.sp,
-                                        color = RefundRed
+                                        color = PosColors.Danger
                                     )
                                 }
                             }
@@ -252,7 +283,7 @@ fun OrderDetailDialog(
 
                         Spacer(Modifier.height(8.dp))
                         SectionTitle(stringResource(R.string.order_detail_transaction))
-                        BillLine(stringResource(R.string.payment_method), paymentLabel(order.paymentMethod))
+                        BillLine(stringResource(R.string.payment_method), orderHistoryPaymentMethodDetailLabel(order.paymentMethod))
                         BillLine(stringResource(R.string.staff), order.userName)
                         if (hasCustomerCard || hasMerchantCard) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -275,12 +306,12 @@ fun OrderDetailDialog(
                     }
                 }
 
-                HorizontalDivider(color = Color(0xFFE5E7EB))
+                HorizontalDivider(color = posUiColors().border)
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(PageBg)
+                        .background(posUiColors().canvas)
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -289,14 +320,15 @@ fun OrderDetailDialog(
                         onClick = {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             cm.setPrimaryClip(ClipData.newPlainText("order_id", order.transactionNumber))
-                        }
+                        },
+                        shape = PosShapes.Medium
                     ) {
                         Icon(Icons.Default.ContentCopy, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.copy_order_id), fontSize = 12.sp)
                     }
                     if (isSplit) {
-                        OutlinedButton(onClick = onPrintAllSplits, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = onPrintAllSplits, modifier = Modifier.weight(1f), shape = PosShapes.Medium) {
                             Icon(Icons.Default.Print, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text(stringResource(R.string.print_receipt))
@@ -305,39 +337,66 @@ fun OrderDetailDialog(
                         Button(
                             onClick = onPrint,
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = ChaslayTeal)
+                            shape = PosShapes.Medium,
+                            colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                         ) {
                             Icon(Icons.Default.Print, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(stringResource(R.string.print_receipt))
                         }
                     }
-                    if (canRefund) {
-                        Button(
-                            onClick = onRefund,
-                            colors = ButtonDefaults.buttonColors(containerColor = RefundRed)
-                        ) {
-                            Text(stringResource(R.string.refund_order))
-                        }
-                    }
-                }
-
-                if (canCancel || canDelete) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 0.dp)
-                            .padding(bottom = 12.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        if (canCancel) {
-                            TextButton(onClick = onCancel) {
-                                Text(stringResource(R.string.cancel_order), color = TextMuted)
+                    if (canRefund || canCancel || canDelete) {
+                        Box {
+                            OutlinedButton(
+                                onClick = { overflowOpen = true },
+                                shape = PosShapes.Medium,
+                                modifier = Modifier.size(44.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = null, tint = posUiColors().textSecondary)
                             }
-                        }
-                        if (canDelete) {
-                            TextButton(onClick = onDelete) {
-                                Text(stringResource(R.string.delete_order_permanently), color = RefundRed)
+                            DropdownMenu(
+                                expanded = overflowOpen,
+                                onDismissRequest = { overflowOpen = false }
+                            ) {
+                                if (canRefund) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                stringResource(R.string.refund_order),
+                                                color = PosColors.Danger,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        },
+                                        onClick = {
+                                            overflowOpen = false
+                                            onRefund()
+                                        }
+                                    )
+                                }
+                                if (canCancel) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.cancel_order)) },
+                                        onClick = {
+                                            overflowOpen = false
+                                            onCancel()
+                                        }
+                                    )
+                                }
+                                if (canDelete) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                stringResource(R.string.delete_order_permanently),
+                                                color = PosColors.Danger
+                                            )
+                                        },
+                                        onClick = {
+                                            overflowOpen = false
+                                            onDelete()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -444,13 +503,13 @@ fun RefundWizardDialog(
                 .fillMaxWidth(0.47f)
                 .widthIn(max = 300.dp),
             shape = RoundedCornerShape(12.dp),
-            color = CardBg
+            color = posUiColors().surface
         ) {
             Column(modifier = Modifier.padding(0.dp)) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(ChaslayTeal)
+                        .background(PosColors.Primary)
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     Row(
@@ -478,13 +537,13 @@ fun RefundWizardDialog(
                     RefundWizardStep.AMOUNT -> {
                         TabRow(
                             selectedTabIndex = amountTab,
-                            containerColor = PageBg,
-                            contentColor = ChaslayTeal,
+                            containerColor = posUiColors().canvas,
+                            contentColor = PosColors.Primary,
                             indicator = { tabPositions ->
                                 if (amountTab < tabPositions.size) {
                                     TabRowDefaults.SecondaryIndicator(
                                         modifier = Modifier.tabIndicatorOffset(tabPositions[amountTab]),
-                                        color = ChaslayTeal
+                                        color = PosColors.Primary
                                     )
                                 }
                             }
@@ -517,7 +576,7 @@ fun RefundWizardDialog(
                                 RefundAmountTab.ENTIRE_BILL -> {
                                     Text(
                                         stringResource(R.string.refund_entire_bill_desc),
-                                        color = TextMuted,
+                                        color = posUiColors().textSecondary,
                                         fontSize = 13.sp
                                     )
                                     BillLine(stringResource(R.string.payment_method), paymentMethodLabel)
@@ -551,7 +610,7 @@ fun RefundWizardDialog(
                                                 Text(
                                                     formatMoney(item.lineTotal, currencySymbol),
                                                     fontSize = 12.sp,
-                                                    color = TextMuted
+                                                    color = posUiColors().textSecondary
                                                 )
                                             }
                                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -569,7 +628,7 @@ fun RefundWizardDialog(
                                 RefundAmountTab.CUSTOM_AMOUNT -> {
                                     Text(
                                         stringResource(R.string.refund_custom_amount_desc, formatMoney(maxAmount, currencySymbol)),
-                                        color = TextMuted,
+                                        color = posUiColors().textSecondary,
                                         fontSize = 13.sp
                                     )
                                     OutlinedTextField(
@@ -584,7 +643,7 @@ fun RefundWizardDialog(
                             }
 
                             Surface(
-                                color = ChaslayTealLight,
+                                color = posUiColors().primarySubtle,
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -598,7 +657,7 @@ fun RefundWizardDialog(
                                         formatMoney(previewAmount, currencySymbol),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 18.sp,
-                                        color = ChaslayTeal
+                                        color = PosColors.Primary
                                     )
                                 }
                             }
@@ -617,7 +676,7 @@ fun RefundWizardDialog(
                                 onClick = { step = RefundWizardStep.REASON },
                                 enabled = previewAmount > 0.001,
                                 modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = ChaslayTeal)
+                                colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                             ) {
                                 Text(stringResource(R.string.next))
                             }
@@ -644,10 +703,10 @@ fun RefundWizardDialog(
                                         if (id != "other") submitRefund()
                                     },
                                     shape = RoundedCornerShape(10.dp),
-                                    color = if (selected) ChaslayTealLight else PageBg,
+                                    color = if (selected) posUiColors().primarySubtle else posUiColors().canvas,
                                     border = androidx.compose.foundation.BorderStroke(
                                         1.dp,
-                                        if (selected) ChaslayTeal else Color(0xFFE5E7EB)
+                                        if (selected) PosColors.Primary else posUiColors().border
                                     ),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -655,7 +714,7 @@ fun RefundWizardDialog(
                                         label,
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selected) ChaslayTeal else TextPrimary
+                                        color = if (selected) PosColors.Primary else posUiColors().textPrimary
                                     )
                                 }
                             }
@@ -692,7 +751,7 @@ fun RefundWizardDialog(
                                     onClick = { submitRefund() },
                                     enabled = customReason.isNotBlank(),
                                     modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = ChaslayTeal)
+                                    colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                                 ) {
                                     Text(stringResource(R.string.confirm_refund))
                                 }
@@ -720,7 +779,7 @@ fun RefundWizardDialog(
                             Icon(
                                 Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = AccentGreen,
+                                tint = PosColors.Success,
                                 modifier = Modifier.size(56.dp)
                             )
                             Text(
@@ -732,7 +791,7 @@ fun RefundWizardDialog(
                                 formatMoney(completedRefundAmount, currencySymbol),
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = ChaslayTeal
+                                color = PosColors.Primary
                             )
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -750,7 +809,7 @@ fun RefundWizardDialog(
                                         onDismiss()
                                     },
                                     modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = ChaslayTeal)
+                                    colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                                 ) {
                                     Icon(Icons.Default.Print, null, Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
@@ -767,21 +826,23 @@ fun RefundWizardDialog(
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextMuted, letterSpacing = 0.5.sp)
+    Text(text, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = posUiColors().textSecondary, letterSpacing = 0.5.sp)
 }
 
 @Composable
-private fun BillLine(text: String, value: String, bold: Boolean = false, color: Color = TextPrimary) {
+private fun BillLine(text: String, value: String, bold: Boolean = false, color: Color = Color.Unspecified) {
+    val ui = posUiColors()
+    val valueColor = if (color == Color.Unspecified) ui.textPrimary else color
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text, fontSize = 13.sp, color = TextMuted)
+        Text(text, fontSize = 13.sp, color = ui.textSecondary)
         Text(
             value,
             fontSize = 13.sp,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-            color = color
+            color = valueColor
         )
     }
 }
@@ -790,29 +851,30 @@ private fun BillLine(text: String, value: String, bold: Boolean = false, color: 
 private fun ProductTimelineRow(item: TransactionItemEntity, currencySymbol: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(ChaslayTeal, RoundedCornerShape(4.dp))
-                .align(Alignment.Top)
-                .padding(top = 6.dp)
+        Text(
+            "${item.quantity}× ${item.productName}",
+            modifier = Modifier.weight(1f).padding(end = 8.dp),
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = posUiColors().textPrimary
         )
-        Column(modifier = Modifier.weight(1f)) {
+        Column(horizontalAlignment = Alignment.End) {
             Text(
-                "${item.quantity}× ${item.productName}",
-                fontWeight = FontWeight.SemiBold,
+                formatMoney(item.lineTotal, currencySymbol),
                 fontSize = 13.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                fontWeight = FontWeight.Medium,
+                color = posUiColors().textPrimary
             )
-            Text(formatMoney(item.lineTotal, currencySymbol), fontSize = 12.sp, color = TextMuted)
             if (item.refundedQuantity > 0) {
                 Text(
                     stringResource(R.string.refund_item_qty, item.refundedQuantity),
                     fontSize = 11.sp,
-                    color = RefundRed
+                    color = PosColors.Danger
                 )
             }
         }
@@ -828,7 +890,7 @@ private fun SplitBillCard(
     onPrint: () -> Unit
 ) {
     Surface(
-        color = PageBg,
+        color = posUiColors().canvas,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -858,11 +920,33 @@ private fun SplitBillCard(
 }
 
 @Composable
+private fun ChannelBadgeInline(serviceType: ServiceType?) {
+    val (label, color) = when (serviceType) {
+        ServiceType.DINE_IN -> stringResource(R.string.dine_in) to PosColors.Warning
+        ServiceType.TAKEAWAY -> stringResource(R.string.takeaway) to PosColors.Info
+        else -> stringResource(R.string.walk_in) to PosColors.Primary
+    }
+    Surface(
+        color = color.copy(alpha = 0.12f),
+        shape = RoundedCornerShape(6.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.35f))
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            color = color,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 private fun ChannelBadge(serviceType: ServiceType?) {
     val (label, color) = when (serviceType) {
-        ServiceType.DINE_IN -> stringResource(R.string.dine_in) to Color(0xFF92400E)
-        ServiceType.TAKEAWAY -> stringResource(R.string.takeaway) to Color(0xFF7C3AED)
-        else -> stringResource(R.string.walk_in) to Color(0xFF0891B2)
+        ServiceType.DINE_IN -> stringResource(R.string.dine_in) to PosColors.Warning
+        ServiceType.TAKEAWAY -> stringResource(R.string.takeaway) to PosColors.Info
+        else -> stringResource(R.string.walk_in) to PosColors.Primary
     }
     Surface(color = color.copy(alpha = 0.25f), shape = RoundedCornerShape(6.dp)) {
         Text(
@@ -876,30 +960,44 @@ private fun ChannelBadge(serviceType: ServiceType?) {
 }
 
 @Composable
-private fun StatusPillDetail(text: String, color: Color) {
-    Surface(color = color.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp)) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = color
+private fun StatusPillDetail(text: String, color: Color, showCheck: Boolean = false) {
+    Surface(
+        color = if (color == PosColors.Primary) posUiColors().primarySubtle else color.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (color == PosColors.Primary) posUiColors().primaryBorder else color.copy(alpha = 0.35f)
         )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (showCheck) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PosColors.Primary, modifier = Modifier.size(16.dp))
+            }
+            Text(
+                text,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (color == PosColors.Primary) PosColors.Primary else color
+            )
+        }
     }
 }
 
-private fun orderStatusLabel(status: PaymentStatus): String = when (status) {
-    PaymentStatus.COMPLETED -> "Completed"
-    PaymentStatus.REFUNDED -> "Refunded"
-    PaymentStatus.PARTIALLY_REFUNDED -> "Partially refunded"
-    PaymentStatus.CANCELLED -> "Cancelled"
-    else -> status.name.replace('_', ' ')
-}
-
-private fun shortOrderId(number: String): String =
-    com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(number).ifBlank {
-        number.removePrefix("TX-")
+private fun shortOrderId(number: String, notes: String? = null): String {
+    val meta = com.chaslay.pos.util.parseOrderMetaFromNotes(notes)
+    return com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(
+        orderNumber = number,
+        orderDisplay = meta.ticketDisplay,
+        tabNumber = meta.tabNumber
+    ).ifBlank {
+        com.chaslay.pos.util.OrderNumberFormat.formatOrderNumberDisplay(number)
+            .ifBlank { number.removePrefix("TX-") }
     }
+}
 
 private fun resolveOrderDiscount(order: TransactionEntity): Double {
     if (order.discountAmount > 0.0) return order.discountAmount
@@ -909,21 +1007,11 @@ private fun resolveOrderDiscount(order: TransactionEntity): Double {
     return 0.0
 }
 
-private fun paymentLabel(method: com.chaslay.pos.domain.model.PaymentMethod): String = when (method) {
-    com.chaslay.pos.domain.model.PaymentMethod.CASH -> "Cash"
-    com.chaslay.pos.domain.model.PaymentMethod.CARD -> "Card"
-    com.chaslay.pos.domain.model.PaymentMethod.ADYEN_TERMINAL -> "Terminal"
-    com.chaslay.pos.domain.model.PaymentMethod.TAP_TO_PAY -> "Tap"
-    com.chaslay.pos.domain.model.PaymentMethod.PAY_LATER -> "Pay Later"
-    com.chaslay.pos.domain.model.PaymentMethod.INVOICE -> "Invoice"
-    com.chaslay.pos.domain.model.PaymentMethod.GIFT_CARD -> "Gift card"
-}
-
 private fun statusColor(status: PaymentStatus): Color = when (status) {
-    PaymentStatus.COMPLETED -> AccentGreen
-    PaymentStatus.CANCELLED -> RefundRed
-    PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED -> Color(0xFFD97706)
-    else -> TextMuted
+    PaymentStatus.COMPLETED -> PosColors.Primary
+    PaymentStatus.CANCELLED -> PosColors.Danger
+    PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED -> PosColors.Warning
+    else -> PosColors.TextSecondary
 }
 
 private fun formatMoney(amount: Double, symbol: String): String =

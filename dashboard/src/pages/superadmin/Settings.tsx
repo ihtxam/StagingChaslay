@@ -4,6 +4,7 @@ import { Mail, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import MailcoDnsChecklist from '@/components/superadmin/MailcoDnsChecklist';
+import PlatformHtmlEditor from '@/components/admin/PlatformHtmlEditor';
 
 type AdyenHealthIssue = {
   field: string;
@@ -135,6 +136,22 @@ export default function Settings() {
     emailPrimary: 'mailco' as 'mailco' | 'brevo',
   });
   const [savingMailco, setSavingMailco] = useState(false);
+  const [esendex, setEsendex] = useState<{
+    user: string;
+    accountRef: string;
+    originator: string;
+    passwordMasked: string;
+    passwordSet: boolean;
+    configured: boolean;
+    usingEnvFallback?: boolean;
+  } | null>(null);
+  const [esendexForm, setEsendexForm] = useState({
+    user: '',
+    password: '',
+    accountRef: '',
+    originator: 'Reborn',
+  });
+  const [savingEsendex, setSavingEsendex] = useState(false);
   const [emailUsage, setEmailUsage] = useState<EmailUsageSummary | null>(null);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState('');
@@ -151,10 +168,27 @@ export default function Settings() {
     terms: string;
     cookies: string;
     origin: string;
+    privacyHtml: string;
+    termsHtml: string;
+    cookiesHtml: string;
+    urlOverrides: {
+      privacyUrl: string | null;
+      termsUrl: string | null;
+      cookiesUrl: string | null;
+    };
   };
   const [legal, setLegal] = useState<PlatformLegalSettings | null>(null);
-  const [legalForm, setLegalForm] = useState({ privacy: '', terms: '', cookies: '' });
+  const [legalForm, setLegalForm] = useState({
+    privacyUrl: '',
+    termsUrl: '',
+    cookiesUrl: '',
+    privacyHtml: '',
+    termsHtml: '',
+    cookiesHtml: '',
+  });
   const [savingLegal, setSavingLegal] = useState(false);
+  const [merchantAboutHtml, setMerchantAboutHtml] = useState('');
+  const [savingMerchantAbout, setSavingMerchantAbout] = useState(false);
 
   type DesktopBrandingSettings = {
     splashUrl: string;
@@ -177,12 +211,15 @@ export default function Settings() {
   const load = async () => {
     try {
       setLoading(true);
-      const [adyenRes, brevoRes, mailcoRes, legalRes, desktopRes] = await Promise.all([
+      const [adyenRes, brevoRes, mailcoRes, legalRes, desktopRes, aboutRes, esendexRes] =
+        await Promise.all([
         api.get('/superadmin/platform-settings/adyen'),
         api.get('/superadmin/platform-settings/brevo'),
         api.get('/superadmin/platform-settings/mailco'),
         api.get('/superadmin/platform-settings/legal'),
         api.get('/superadmin/platform-settings/desktop'),
+        api.get('/superadmin/platform-settings/merchant-about'),
+        api.get('/superadmin/platform-settings/esendex'),
       ]);
       const a = adyenRes.data.adyen as AdyenSettings;
       setAdyen(a);
@@ -210,12 +247,23 @@ export default function Settings() {
         templateSlug: m.templateSlug || 'platform-transactional',
         emailPrimary: m.emailPrimary === 'brevo' ? 'brevo' : 'mailco',
       });
+      const ex = esendexRes.data.esendex;
+      setEsendex(ex);
+      setEsendexForm({
+        user: ex?.user || '',
+        password: '',
+        accountRef: ex?.accountRef || '',
+        originator: ex?.originator || 'Reborn',
+      });
       const leg = legalRes.data.legal as PlatformLegalSettings;
       setLegal(leg);
       setLegalForm({
-        privacy: leg.privacy || '',
-        terms: leg.terms || '',
-        cookies: leg.cookies || '',
+        privacyUrl: leg.urlOverrides?.privacyUrl || '',
+        termsUrl: leg.urlOverrides?.termsUrl || '',
+        cookiesUrl: leg.urlOverrides?.cookiesUrl || '',
+        privacyHtml: leg.privacyHtml || '',
+        termsHtml: leg.termsHtml || '',
+        cookiesHtml: leg.cookiesHtml || '',
       });
       const desk = desktopRes.data.desktop as DesktopBrandingSettings;
       setDesktop(desk);
@@ -224,6 +272,7 @@ export default function Settings() {
         tagline: desk.tagline || 'Restaurant POS & online ordering',
         backgroundColor: desk.backgroundColor || '#17252b',
       });
+      setMerchantAboutHtml(String(aboutRes.data?.about?.html || ''));
       await refreshEmailUsage();
     } catch {
       toast.error('Failed to load platform settings');
@@ -1154,16 +1203,150 @@ export default function Settings() {
           onSubmit={async (e: FormEvent) => {
             e.preventDefault();
             try {
+              setSavingEsendex(true);
+              const res = await api.put('/superadmin/platform-settings/esendex', {
+                user: esendexForm.user,
+                accountRef: esendexForm.accountRef,
+                originator: esendexForm.originator,
+                password: esendexForm.password || undefined,
+              });
+              setEsendex(res.data.esendex);
+              setEsendexForm((f) => ({ ...f, password: '' }));
+              toast.success('Esendex settings saved');
+            } catch {
+              toast.error('Failed to save Esendex settings');
+            } finally {
+              setSavingEsendex(false);
+            }
+          }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl border-t border-stone-200 pt-8"
+        >
+          <h3 className="md:col-span-2 text-lg font-semibold">Esendex SMS</h3>
+          <div className="md:col-span-2 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700 space-y-3">
+            <p>
+              Set platform SMS credentials here (same values as{' '}
+              <code className="text-xs bg-white px-1 py-0.5 rounded border">backend/.env.example</code>
+              ). Saved settings override server env on this host — no redeploy needed for staging.
+            </p>
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-stone-200">
+                  <th className="py-1.5 pr-3 font-semibold">Env variable (optional fallback)</th>
+                  <th className="py-1.5 font-semibold">Superadmin field below</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono">
+                <tr className="border-b border-stone-100">
+                  <td className="py-1.5 pr-3">ESENDEX_API_USER</td>
+                  <td className="py-1.5">API user</td>
+                </tr>
+                <tr className="border-b border-stone-100">
+                  <td className="py-1.5 pr-3">ESENDEX_API_PASSWORD or ESENDEX_API_KEY</td>
+                  <td className="py-1.5">API password / key</td>
+                </tr>
+                <tr className="border-b border-stone-100">
+                  <td className="py-1.5 pr-3">ESENDEX_ACCOUNT_REF</td>
+                  <td className="py-1.5">Account reference</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 pr-3">ESENDEX_DEFAULT_ORIGINATOR</td>
+                  <td className="py-1.5">Default sender name (max 11)</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Inbound STOP / opt-out webhook (Esendex push notifications):{' '}
+              <code className="text-xs bg-white px-1 py-0.5 rounded border">
+                POST /api/webhooks/esendex
+              </code>
+            </p>
+            <p>
+              Enable SMS per merchant: <strong>Merchants</strong> → merchant →{' '}
+              <strong>SMS (Esendex)</strong> + tier. Merchant panel: <strong>SMS</strong> menu when
+              licensed.
+            </p>
+            <p className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  esendex?.configured
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-900'
+                }`}
+              >
+                {esendex?.configured ? 'Ready to send' : 'Not configured'}
+              </span>
+              {esendex?.usingEnvFallback ? (
+                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-900">
+                  Using server env fallback (form empty)
+                </span>
+              ) : esendex?.passwordSet ? (
+                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-200 text-stone-800">
+                  Stored in platform settings
+                </span>
+              ) : null}
+            </p>
+          </div>
+          <label className="block">
+            <span className="text-sm font-medium">API user</span>
+            <input
+              className="input mt-1"
+              value={esendexForm.user}
+              onChange={(e) => setEsendexForm({ ...esendexForm, user: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Account reference</span>
+            <input
+              className="input mt-1"
+              value={esendexForm.accountRef}
+              onChange={(e) => setEsendexForm({ ...esendexForm, accountRef: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Default sender name</span>
+            <input
+              className="input mt-1"
+              maxLength={11}
+              value={esendexForm.originator}
+              onChange={(e) => setEsendexForm({ ...esendexForm, originator: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">
+              API password / key {esendex?.passwordSet ? `(${esendex.passwordMasked})` : ''}
+            </span>
+            <input
+              className="input mt-1"
+              type="password"
+              value={esendexForm.password}
+              onChange={(e) => setEsendexForm({ ...esendexForm, password: e.target.value })}
+              placeholder={esendex?.passwordSet ? 'Leave blank to keep current' : ''}
+            />
+          </label>
+          <div className="md:col-span-2">
+            <button type="submit" className="btn btn-primary" disabled={savingEsendex}>
+              {savingEsendex ? t('saving') : 'Save Esendex settings'}
+            </button>
+          </div>
+        </form>
+
+        <form
+          onSubmit={async (e: FormEvent) => {
+            e.preventDefault();
+            try {
               setSavingLegal(true);
               const res = await api.put('/superadmin/platform-settings/legal', legalForm);
               const leg = res.data.legal as PlatformLegalSettings;
               setLegal(leg);
               setLegalForm({
-                privacy: leg.privacy || '',
-                terms: leg.terms || '',
-                cookies: leg.cookies || '',
+                privacyUrl: leg.urlOverrides?.privacyUrl || '',
+                termsUrl: leg.urlOverrides?.termsUrl || '',
+                cookiesUrl: leg.urlOverrides?.cookiesUrl || '',
+                privacyHtml: leg.privacyHtml || '',
+                termsHtml: leg.termsHtml || '',
+                cookiesHtml: leg.cookiesHtml || '',
               });
-              toast.success('Platform legal URLs saved');
+              toast.success('Platform legal pages saved');
             } catch {
               toast.error('Failed to save platform legal URLs');
             } finally {
@@ -1174,46 +1357,131 @@ export default function Settings() {
         >
           <h3 className="text-lg font-semibold">Platform legal (shop footer)</h3>
           <p className="text-sm text-stone-600 md:col-span-2">
-            Links shown on every online shop footer (privacy, terms, cookies). Defaults to{' '}
+            Links shown on every online shop footer (privacy, terms, cookies). Write content below to
+            host pages on this app (<code className="text-xs">/legal/…</code>), or paste an external URL
+            to override. With no content and no URL, links default to{' '}
             <code className="text-xs">rebornsense.com</code>. Merchant imprint (VAT, address) stays on
             each shop&apos;s own footer block.
           </p>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-medium">Privacy policy URL</span>
-            <input
-              className="input mt-1"
-              type="url"
-              value={legalForm.privacy}
-              onChange={(e) => setLegalForm({ ...legalForm, privacy: e.target.value })}
-              placeholder="https://rebornsense.com/privacy-policy"
-            />
-          </label>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-medium">Terms of use URL</span>
-            <input
-              className="input mt-1"
-              type="url"
-              value={legalForm.terms}
-              onChange={(e) => setLegalForm({ ...legalForm, terms: e.target.value })}
-              placeholder="https://rebornsense.com/terms-of-use"
-            />
-          </label>
-          <label className="block md:col-span-2">
-            <span className="text-sm font-medium">Cookie policy URL</span>
-            <input
-              className="input mt-1"
-              type="url"
-              value={legalForm.cookies}
-              onChange={(e) => setLegalForm({ ...legalForm, cookies: e.target.value })}
-              placeholder="https://rebornsense.com/cookie-policy"
-            />
-          </label>
+
+          {(
+            [
+              {
+                id: 'privacy' as const,
+                title: 'Privacy policy',
+                urlKey: 'privacyUrl' as const,
+                htmlKey: 'privacyHtml' as const,
+                resolved: legal?.privacy,
+                placeholderUrl: 'https://rebornsense.com/privacy-policy',
+                editorPlaceholder: 'Privacy policy text for all shops…',
+              },
+              {
+                id: 'terms' as const,
+                title: 'Terms of use',
+                urlKey: 'termsUrl' as const,
+                htmlKey: 'termsHtml' as const,
+                resolved: legal?.terms,
+                placeholderUrl: 'https://rebornsense.com/terms-of-use',
+                editorPlaceholder: 'Terms of use text for all shops…',
+              },
+              {
+                id: 'cookies' as const,
+                title: 'Cookie policy',
+                urlKey: 'cookiesUrl' as const,
+                htmlKey: 'cookiesHtml' as const,
+                resolved: legal?.cookies,
+                placeholderUrl: 'https://rebornsense.com/cookie-policy',
+                editorPlaceholder: 'Cookie policy text for all shops…',
+              },
+            ] as const
+          ).map((section) => (
+            <div
+              key={section.id}
+              className="md:col-span-2 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-4"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className="text-base font-semibold m-0">{section.title}</h4>
+                {section.resolved ? (
+                  <a
+                    href={section.resolved}
+                    className="text-xs text-stone-600 underline-offset-2 hover:underline"
+                    target={section.resolved.startsWith('/legal/') ? undefined : '_blank'}
+                    rel={section.resolved.startsWith('/legal/') ? undefined : 'noopener noreferrer'}
+                  >
+                    Footer link: {section.resolved}
+                  </a>
+                ) : null}
+              </div>
+              <div>
+                <span className="text-sm font-medium">Page content</span>
+                <div className="mt-1">
+                  <PlatformHtmlEditor
+                    value={legalForm[section.htmlKey]}
+                    onChange={(html) => setLegalForm({ ...legalForm, [section.htmlKey]: html })}
+                    minHeight={200}
+                    placeholder={section.editorPlaceholder}
+                  />
+                </div>
+              </div>
+              <label className="block">
+                <span className="text-sm font-medium">External URL override (optional)</span>
+                <input
+                  className="input mt-1"
+                  type="url"
+                  value={legalForm[section.urlKey]}
+                  onChange={(e) =>
+                    setLegalForm({ ...legalForm, [section.urlKey]: e.target.value })
+                  }
+                  placeholder={section.placeholderUrl}
+                />
+                <span className="mt-1 block text-xs text-stone-500">
+                  Leave empty to use hosted content when the editor above has text.
+                </span>
+              </label>
+            </div>
+          ))}
+
           {legal?.origin ? (
-            <p className="text-xs text-stone-500 md:col-span-2">Current origin: {legal.origin}</p>
+            <p className="text-xs text-stone-500 md:col-span-2">Resolved origin hint: {legal.origin}</p>
           ) : null}
           <div className="md:col-span-2">
             <button type="submit" className="btn btn-primary" disabled={savingLegal}>
-              {savingLegal ? t('saving') : 'Save legal URLs'}
+              {savingLegal ? t('saving') : 'Save platform legal pages'}
+            </button>
+          </div>
+        </form>
+
+        <form
+          onSubmit={async (e: FormEvent) => {
+            e.preventDefault();
+            try {
+              setSavingMerchantAbout(true);
+              const res = await api.put('/superadmin/platform-settings/merchant-about', {
+                html: merchantAboutHtml,
+              });
+              setMerchantAboutHtml(String(res.data?.about?.html || merchantAboutHtml));
+              toast.success(t('superadminMerchantAboutSaved'));
+            } catch {
+              toast.error(t('superadminMerchantAboutSaveFailed'));
+            } finally {
+              setSavingMerchantAbout(false);
+            }
+          }}
+          className="grid grid-cols-1 gap-4 max-w-3xl border-t border-stone-200 pt-8"
+        >
+          <h3 className="text-lg font-semibold">{t('superadminMerchantAboutTitle')}</h3>
+          <p className="text-sm text-stone-600 md:col-span-2">{t('superadminMerchantAboutHint')}</p>
+          <div className="md:col-span-2">
+            <PlatformHtmlEditor
+              value={merchantAboutHtml}
+              onChange={setMerchantAboutHtml}
+              minHeight={280}
+              placeholder="WebPrintMedia company details, project links…"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <button type="submit" className="btn btn-primary" disabled={savingMerchantAbout}>
+              {savingMerchantAbout ? t('saving') : t('save')}
             </button>
           </div>
         </form>

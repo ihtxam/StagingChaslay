@@ -32,36 +32,52 @@ import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.ui.catalog.CatalogScreen
+import com.chaslay.pos.ui.theme.posUiColors
+import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.vectronColors
 @Composable
 fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = vectronColors()
+    val ui = posUiColors()
 
     state.message?.let { msg ->
         AlertDialog(
             onDismissRequest = viewModel::clearMessage,
-            confirmButton = { TextButton(onClick = viewModel::clearMessage) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearMessage) {
+                    Text(stringResource(R.string.ok))
+                }
+            },
             text = { Text(msg) }
         )
     }
 
-    Row(modifier = Modifier.fillMaxSize()) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ui.canvas)
+    ) {
         Column(
             modifier = Modifier
                 .width(180.dp)
                 .fillMaxHeight()
-                .background(colors.panelLight)
+                .background(ui.surface)
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(stringResource(R.string.menu_settings), fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
+            Text(
+                stringResource(R.string.menu_settings),
+                fontWeight = FontWeight.Bold,
+                color = ui.textPrimary,
+                modifier = Modifier.padding(8.dp),
+            )
             MenuSection.entries.forEach { section ->
                 val selected = state.section == section
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(if (selected) Color(0xFF00897B) else Color.Transparent)
+                        .background(if (selected) PosColors.Primary else Color.Transparent)
                         .clickable { viewModel.setSection(section) }
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
@@ -70,8 +86,7 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                             when (section) {
                                 MenuSection.PRODUCT_LIST -> R.string.product_list
                                 MenuSection.IMPORT_EXPORT -> R.string.menu_import_export
-                                MenuSection.MODIFIERS -> R.string.modifiers
-                                MenuSection.ADDONS -> R.string.addons
+                                MenuSection.EXTRAS_AND_NOS -> R.string.pos_extras_and_nos
                                 MenuSection.COMBOS -> R.string.combos
                             }
                         ),
@@ -94,13 +109,10 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                     onDismissPreview = viewModel::dismissImportPreview,
                     onExportTemplate = viewModel::exportTemplate
                 )
-                MenuSection.MODIFIERS -> ModifierListSection(
-                    groups = state.modifierGroups,
-                    viewModel = viewModel
-                )
-                MenuSection.ADDONS -> AddonListSection(
-                    groups = state.addonGroups,
-                    viewModel = viewModel
+                MenuSection.EXTRAS_AND_NOS -> ExtrasAndNosListSection(
+                    modifierGroups = state.modifierGroups,
+                    addonGroups = state.addonGroups,
+                    viewModel = viewModel,
                 )
                 MenuSection.COMBOS -> CombosSectionHost(viewModel = viewModel)
             }

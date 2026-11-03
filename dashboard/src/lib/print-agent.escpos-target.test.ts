@@ -25,5 +25,13 @@ assert.match(src, /isStaleUsbEthernetPrinterName/);
 assert.match(src, /connectionType === 'sunmi-internal'/);
 assert.match(src, /export function resolveLiveEscPosTargetNames/);
 assert.match(src, /export async function listNormalizedLiveAgentPrinters/);
+assert.match(src, /export function filterAgentPrintersForSettingsPick/);
+assert.match(src, /export function agentPrinterListKey/);
+assert.match(src, /export function agentPrinterOptionValue/);
+assert.match(src, /export function resolveAgentPrinterSelectValue/);
+assert.doesNotMatch(
+  src,
+  /connectionType === 'lan'\) return false/
+);
 
 console.log('print-agent.escpos-target.test.ts ok');

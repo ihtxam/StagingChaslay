@@ -99,6 +99,7 @@ export default function AccountPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [marketingSmsOptIn, setMarketingSmsOptIn] = useState(false);
   const [addresses, setAddresses] = useState<
     Array<{
       id: string;
@@ -132,6 +133,7 @@ export default function AccountPage() {
     setFirstName(c.firstName || '');
     setLastName(c.lastName || '');
     setPhone(c.phone || '');
+    setMarketingSmsOptIn(c.marketingSmsOptIn === true);
     setAddresses(Array.isArray(c.addresses) ? c.addresses : []);
     setLoyalty(loyaltyRes.data as LoyaltySummary);
     setOrders(ordersRes.data.orders || []);
@@ -198,7 +200,7 @@ export default function AccountPage() {
     try {
       const res = await axios.put(
         `/api/shop/${shopKey}/auth/me`,
-        { firstName, lastName, phone },
+        { firstName, lastName, phone, marketingSmsOptIn },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setCustomer(res.data.customer);
@@ -409,6 +411,7 @@ export default function AccountPage() {
             merchantName={merchantInfo?.name || ''}
             logoUrl={merchantInfo?.shopLogoUrl}
             hideBranding
+            smsLoginEnabled={merchant?.smsLoginEnabled === true}
             onAuthed={async (token) => {
               setLoading(true);
               setError('');
@@ -577,6 +580,17 @@ export default function AccountPage() {
                   <span className={SHOP_LABEL_CLASS}>{t('shopPhone')}</span>
                   <ShopPhoneField value={phone} onChange={setPhone} />
                 </label>
+                {merchant?.smsLoginEnabled === true ? (
+                  <label className="flex items-start gap-2 text-sm text-stone-700 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={marketingSmsOptIn}
+                      onChange={(e) => setMarketingSmsOptIn(e.target.checked)}
+                    />
+                    <span>{t('shopMarketingSmsOptIn')}</span>
+                  </label>
+                ) : null}
                 {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
                 <button
                   type="submit"

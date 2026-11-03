@@ -1,9 +1,9 @@
 package com.chaslay.pos.ui.orderhistory
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -27,14 +28,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -45,6 +47,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,7 +61,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,17 +76,12 @@ import com.chaslay.pos.payment.AdyenPaymentReceiptStorage
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ServiceType
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
+import com.chaslay.pos.ui.theme.PosShapes
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-private val PageBg = Color(0xFFF3F4F6)
-private val CardBg = Color.White
-private val HeaderBg = Color(0xFFFAFAFA)
-private val TextPrimary = Color(0xFF111827)
-private val TextMuted = Color(0xFF6B7280)
-private val AccentGreen = Color(0xFF059669)
-private val ChaslayTeal = Color(0xFF0F766E)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,38 +91,6 @@ fun OrderHistoryScreen(
     viewModel: OrderHistoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var showSearchDialog by remember { mutableStateOf(false) }
-
-    if (showSearchDialog) {
-        var searchText by remember(state.searchQuery) { mutableStateOf(state.searchQuery) }
-        AlertDialog(
-            onDismissRequest = { showSearchDialog = false },
-            title = { Text("Search orders") },
-            text = {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("ORDER ID...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setSearchQuery(searchText)
-                    showSearchDialog = false
-                }) { Text(stringResource(R.string.confirm)) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    searchText = ""
-                    viewModel.setSearchQuery("")
-                    showSearchDialog = false
-                }) { Text("Clear") }
-            }
-        )
-    }
 
     state.message?.let { message ->
         AlertDialog(
@@ -142,7 +112,8 @@ fun OrderHistoryScreen(
             canCancel = order.paymentStatus == PaymentStatus.COMPLETED,
             canRefund = order.paymentStatus == PaymentStatus.COMPLETED ||
                 order.paymentStatus == PaymentStatus.PARTIALLY_REFUNDED,
-            canDelete = state.deleteModeUnlocked && state.isAdminUser,
+            canDelete = state.deleteModeUnlocked && state.isAdminUser &&
+                OrderHistoryPurge.isGandolaPurgeEligible(order),
             onDismiss = viewModel::closeOrderDetail,
             onPrint = viewModel::printSelectedOrder,
             onPrintCustomerCard = viewModel::printAdyenCustomerReceiptForSelected,
@@ -214,13 +185,12 @@ fun OrderHistoryScreen(
     if (state.showBulkDeleteDialog) {
         AlertDialog(
             onDismissRequest = viewModel::dismissBulkDeleteDialog,
-            title = { Text(stringResource(R.string.delete_orders_in_range)) },
+            title = { Text(stringResource(R.string.order_history_purge_delete_selected)) },
             text = {
                 Text(
                     stringResource(
-                        R.string.delete_orders_in_range_confirm,
-                        state.bulkDeleteCount,
-                        state.dateRangeLabel
+                        R.string.order_history_purge_confirm,
+                        state.bulkDeleteCount
                     )
                 )
             },
@@ -243,11 +213,12 @@ fun OrderHistoryScreen(
             modifier = Modifier.fillMaxSize(),
             state = state,
             viewModel = viewModel,
-            showRefresh = true
+            showRefresh = true,
+            compactLayout = true
         )
     } else {
         Scaffold(
-            containerColor = PageBg,
+            containerColor = posUiColors().canvas,
             topBar = {
                 TopAppBar(
                     title = {
@@ -256,7 +227,7 @@ fun OrderHistoryScreen(
                             Text(
                                 stringResource(R.string.order_history),
                                 fontSize = 11.sp,
-                                color = TextMuted
+                                color = posUiColors().textSecondary
                             )
                         }
                     },
@@ -266,15 +237,8 @@ fun OrderHistoryScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { showSearchDialog = true }) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = "Search",
-                                tint = if (state.searchQuery.isNotBlank()) AccentGreen else Color.Unspecified
-                            )
-                        }
                         IconButton(onClick = viewModel::refresh) {
-                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
                         }
                     }
                 )
@@ -295,14 +259,28 @@ private fun OrderHistoryContent(
     modifier: Modifier = Modifier,
     state: OrderHistoryUiState,
     viewModel: OrderHistoryViewModel,
-    showRefresh: Boolean = false
+    showRefresh: Boolean = false,
+    compactLayout: Boolean = false
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(posUiColors().canvas)
+            .padding(horizontal = PosDimens.PagePaddingCompact, vertical = PosDimens.Space2)
     ) {
-        if (showRefresh) {
+        if (compactLayout) {
+            Text(
+                stringResource(R.string.order_records),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = PosDimens.Space2),
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                color = posUiColors().textPrimary,
+                textAlign = TextAlign.Center
+            )
+        }
+        if (showRefresh && !compactLayout) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -313,88 +291,85 @@ private fun OrderHistoryContent(
                 }
             }
         }
-            RecordsChannelTabs(
-                selected = state.channelTab,
-                onSelect = viewModel::setChannelTab
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            RecordsFilterBar(
-                state = state,
-                onDate = viewModel::setDateFilter,
-                onStatus = viewModel::setStatusFilter,
-                onType = viewModel::setServiceFilter,
-                onPayment = viewModel::setPaymentFilter
-            )
+        RecordsSearchRow(
+            query = state.searchQuery,
+            dateFilter = state.dateFilter,
+            onQueryChange = viewModel::setSearchQuery,
+            onDateChange = viewModel::setDateFilter,
+            onRefresh = viewModel::refresh,
+            showRefresh = showRefresh || compactLayout
+        )
+        Spacer(modifier = Modifier.height(PosDimens.Space3))
 
-            if (state.deleteModeUnlocked && state.isAdminUser) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = viewModel::requestBulkDelete) {
-                        Text(
-                            stringResource(R.string.delete_orders_in_range),
-                            color = Color(0xFFDC2626),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
+        if (state.deleteModeUnlocked && state.isAdminUser) {
+            OrderHistoryPurgeToolbar(
+                selectedCount = state.selectedPurgeOrderIds.size,
+                eligibleOnPageCount = state.orders.count { OrderHistoryPurge.isGandolaPurgeEligible(it) },
+                onSelectAll = viewModel::selectAllPurgeEligibleOnPage,
+                onClearSelection = viewModel::clearPurgeSelection,
+                onDeleteSelected = viewModel::requestDeleteSelectedPurge,
+                onExit = viewModel::exitDeleteMode
+            )
+            Spacer(modifier = Modifier.height(PosDimens.Space2))
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = PosShapes.ExtraLarge,
+            color = posUiColors().surface,
+            shadowElevation = 1.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                RecordsTableHeader(
+                    purgeMode = state.deleteModeUnlocked && state.isAdminUser,
+                    onAdminUnlockTap = viewModel::onAdminUnlockTap
+                )
+                HorizontalDivider(color = posUiColors().border)
+                if (state.orders.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(stringResource(R.string.no_orders_found), color = posUiColors().textSecondary)
                     }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        itemsIndexed(state.orders, key = { _, order -> order.id }) { index, order ->
+                            val globalIndex = (state.currentPage - 1) * state.pageSize + index + 1
+                            val isSplit = order.masterOrderId?.let { (state.splitCounts[it] ?: 0) > 1 } == true
+                            val purgeEligible = OrderHistoryPurge.isGandolaPurgeEligible(order)
+                            RecordsTableRow(
+                                index = globalIndex,
+                                order = order,
+                                tableLabel = order.tableId?.let { state.tableNames[it] },
+                                isSplit = isSplit,
+                                isSelected = state.selectedOrder?.id == order.id,
+                                currencySymbol = state.currencySymbol,
+                                purgeMode = state.deleteModeUnlocked && state.isAdminUser,
+                                purgeEligible = purgeEligible,
+                                purgeSelected = order.id in state.selectedPurgeOrderIds,
+                                onClick = { viewModel.openOrder(order) },
+                                onPurgeToggle = { viewModel.togglePurgeSelection(order) }
+                            )
+                            HorizontalDivider(color = posUiColors().canvas)
+                        }
+                    }
+                    RecordsPaginationBar(
+                        currentPage = state.currentPage,
+                        totalPages = state.totalPages,
+                        totalCount = state.totalFilteredCount,
+                        pageSize = state.pageSize,
+                        onPrevious = viewModel::previousPage,
+                        onNext = viewModel::nextPage
+                    )
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(12.dp),
-                color = CardBg,
-                shadowElevation = 1.dp
-            ) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    RecordsTableHeader(onAdminUnlockTap = viewModel::onAdminUnlockTap)
-                    HorizontalDivider(color = Color(0xFFE5E7EB))
-                    if (state.orders.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(stringResource(R.string.no_orders_found), color = TextMuted)
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                        ) {
-                            itemsIndexed(state.orders, key = { _, order -> order.id }) { index, order ->
-                                val globalIndex = (state.currentPage - 1) * state.pageSize + index + 1
-                                val isSplit = order.masterOrderId?.let { (state.splitCounts[it] ?: 0) > 1 } == true
-                                RecordsTableRow(
-                                    index = globalIndex,
-                                    order = order,
-                                    tableLabel = order.tableId?.let { state.tableNames[it] },
-                                    isSplit = isSplit,
-                                    currencySymbol = state.currencySymbol,
-                                    canDelete = state.deleteModeUnlocked && state.isAdminUser,
-                                    onClick = { viewModel.openOrder(order) },
-                                    onDeleteRequest = { viewModel.requestDeleteOrder(order) }
-                                )
-                                HorizontalDivider(color = Color(0xFFF3F4F6))
-                            }
-                        }
-                        RecordsPaginationBar(
-                            currentPage = state.currentPage,
-                            totalPages = state.totalPages,
-                            totalCount = state.totalFilteredCount,
-                            pageSize = state.pageSize,
-                            onPrevious = viewModel::previousPage,
-                            onNext = viewModel::nextPage
-                        )
-                    }
-                }
-            }
+        }
     }
 }
 
@@ -410,11 +385,11 @@ private fun RecordsPaginationBar(
     if (totalCount <= pageSize) return
     val from = ((currentPage - 1) * pageSize) + 1
     val to = minOf(currentPage * pageSize, totalCount)
-    HorizontalDivider(color = Color(0xFFE5E7EB))
+    HorizontalDivider(color = posUiColors().border)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(HeaderBg)
+            .background(posUiColors().surfaceSubtle)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -431,12 +406,12 @@ private fun RecordsPaginationBar(
                 stringResource(R.string.order_history_page_of, currentPage, totalPages),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                color = posUiColors().textPrimary
             )
             Text(
                 stringResource(R.string.order_history_showing_range, from, to, totalCount),
                 fontSize = 10.sp,
-                color = TextMuted
+                color = posUiColors().textSecondary
             )
         }
         OutlinedButton(
@@ -475,6 +450,91 @@ private fun RecordsChannelTabs(
 }
 
 @Composable
+private fun RecordsSearchRow(
+    query: String,
+    dateFilter: HistoryDateFilter,
+    onQueryChange: (String) -> Unit,
+    onDateChange: (HistoryDateFilter) -> Unit,
+    onRefresh: () -> Unit,
+    showRefresh: Boolean
+) {
+    var dateMenuOpen by remember { mutableStateOf(false) }
+    val dateLabel = when (dateFilter) {
+        HistoryDateFilter.TODAY -> stringResource(R.string.today)
+        HistoryDateFilter.YESTERDAY -> stringResource(R.string.yesterday)
+        HistoryDateFilter.WEEK -> stringResource(R.string.week)
+        HistoryDateFilter.MONTH -> stringResource(R.string.month)
+        HistoryDateFilter.THREE_MONTHS -> stringResource(R.string.order_history_three_months)
+        HistoryDateFilter.ALL -> stringResource(R.string.all)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(PosDimens.Space2),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.weight(1f),
+            placeholder = { Text(stringResource(R.string.order_history_search_hint), fontSize = 13.sp) },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search_orders), tint = posUiColors().textMuted)
+            },
+            singleLine = true,
+            shape = PosShapes.ExtraLarge,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = PosColors.Primary,
+                unfocusedBorderColor = posUiColors().border,
+                focusedContainerColor = posUiColors().surface,
+                unfocusedContainerColor = posUiColors().surface,
+                cursorColor = PosColors.Primary
+            )
+        )
+        Box {
+            Surface(
+                onClick = { dateMenuOpen = true },
+                shape = PosShapes.Medium,
+                color = posUiColors().surface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Default.CalendarToday, contentDescription = null, tint = posUiColors().textMuted, modifier = Modifier.size(16.dp))
+                    Text(dateLabel, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = posUiColors().textPrimary)
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = posUiColors().textMuted, modifier = Modifier.size(18.dp))
+                }
+            }
+            DropdownMenu(expanded = dateMenuOpen, onDismissRequest = { dateMenuOpen = false }) {
+                listOf(
+                    HistoryDateFilter.TODAY to stringResource(R.string.today),
+                    HistoryDateFilter.YESTERDAY to stringResource(R.string.yesterday),
+                    HistoryDateFilter.WEEK to stringResource(R.string.week),
+                    HistoryDateFilter.MONTH to stringResource(R.string.month),
+                    HistoryDateFilter.THREE_MONTHS to stringResource(R.string.order_history_three_months),
+                    HistoryDateFilter.ALL to stringResource(R.string.all)
+                ).forEach { (filter, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            dateMenuOpen = false
+                            onDateChange(filter)
+                        }
+                    )
+                }
+            }
+        }
+        if (showRefresh) {
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
+            }
+        }
+    }
+}
+
+@Composable
 private fun RecordsFilterBar(
     state: OrderHistoryUiState,
     onDate: (HistoryDateFilter) -> Unit,
@@ -485,7 +545,7 @@ private fun RecordsFilterBar(
     val scrollState = rememberScrollState()
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = Color.White,
+        color = posUiColors().surface,
         shadowElevation = 1.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -497,13 +557,13 @@ private fun RecordsFilterBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            FilterSectionLabel("DATE")
+            FilterSectionLabel(stringResource(R.string.order_history_filter_date))
             listOf(
                 HistoryDateFilter.TODAY to stringResource(R.string.today),
                 HistoryDateFilter.YESTERDAY to stringResource(R.string.yesterday),
-                HistoryDateFilter.WEEK to "Week",
+                HistoryDateFilter.WEEK to stringResource(R.string.week),
                 HistoryDateFilter.MONTH to stringResource(R.string.month),
-                HistoryDateFilter.THREE_MONTHS to "3 Mo",
+                HistoryDateFilter.THREE_MONTHS to stringResource(R.string.order_history_three_months),
                 HistoryDateFilter.ALL to stringResource(R.string.all)
             ).forEach { (filter, label) ->
                 RecordsTabChip(
@@ -516,13 +576,13 @@ private fun RecordsFilterBar(
 
             FilterDivider()
 
-            FilterSectionLabel("STATUS")
+            FilterSectionLabel(stringResource(R.string.order_history_filter_status))
             RecordsTabChip(label = stringResource(R.string.all), selected = state.statusFilter == null, compact = true, onClick = { onStatus(null) })
             PaymentStatus.entries
                 .filter { it != PaymentStatus.PENDING && it != PaymentStatus.FAILED }
                 .forEach { status ->
                     RecordsTabChip(
-                        label = statusShortLabel(status),
+                        label = orderHistoryPaymentStatusChipLabel(status),
                         selected = state.statusFilter == status,
                         compact = true,
                         onClick = { onStatus(status) }
@@ -537,7 +597,7 @@ private fun FilterSectionLabel(text: String) {
     Text(
         text,
         fontSize = 9.sp,
-        color = TextMuted,
+        color = posUiColors().textSecondary,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(start = 2.dp, end = 2.dp)
     )
@@ -549,26 +609,8 @@ private fun FilterDivider() {
         modifier = Modifier
             .height(20.dp)
             .width(1.dp)
-            .background(Color(0xFFE5E7EB))
+            .background(posUiColors().border)
     )
-}
-
-private fun statusShortLabel(status: PaymentStatus): String = when (status) {
-    PaymentStatus.COMPLETED -> "Done"
-    PaymentStatus.REFUNDED -> "Refund"
-    PaymentStatus.CANCELLED -> "Cancel"
-    PaymentStatus.PARTIALLY_REFUNDED -> "Part"
-    else -> status.name.take(6)
-}
-
-private fun paymentShortLabel(method: PaymentMethod): String = when (method) {
-    PaymentMethod.CASH -> "Cash"
-    PaymentMethod.CARD -> "Card"
-    PaymentMethod.TAP_TO_PAY -> "Tap"
-    PaymentMethod.ADYEN_TERMINAL -> "Term"
-    PaymentMethod.PAY_LATER -> "Later"
-    PaymentMethod.INVOICE -> "Invoice"
-    PaymentMethod.GIFT_CARD -> "Gift"
 }
 
 @Composable
@@ -583,14 +625,10 @@ private fun RecordsTabChip(
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(if (compact) 8.dp else 12.dp),
-        color = if (selected) {
-            if (compact) Color(0xFF111827) else ChaslayTeal
-        } else Color.White,
+        color = if (selected) PosColors.Primary else posUiColors().surface,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (selected) {
-                if (compact) Color(0xFF111827) else ChaslayTeal
-            } else Color(0xFFE5E7EB)
+            if (selected) PosColors.Primary else posUiColors().border
         )
     ) {
         Text(
@@ -599,7 +637,7 @@ private fun RecordsTabChip(
                 horizontal = if (compact) 8.dp else 14.dp,
                 vertical = if (compact) 4.dp else 8.dp
             ),
-            color = if (selected) Color.White else TextPrimary,
+            color = if (selected) PosColors.TextOnPrimary else posUiColors().textPrimary,
             fontSize = if (compact) 10.sp else 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
         )
@@ -607,25 +645,100 @@ private fun RecordsTabChip(
 }
 
 @Composable
-private fun RecordsTableHeader(onAdminUnlockTap: () -> Unit = {}) {
+private fun OrderHistoryPurgeToolbar(
+    selectedCount: Int,
+    eligibleOnPageCount: Int,
+    onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
+    onDeleteSelected: () -> Unit,
+    onExit: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = PosShapes.Medium,
+        color = Color(0xFFFFFBEB),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCD34D))
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text(
+                stringResource(R.string.order_history_purge_mode),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF92400E)
+            )
+            Text(
+                stringResource(R.string.order_history_purge_cash_only_hint),
+                fontSize = 10.sp,
+                color = Color(0xFFB45309),
+                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onSelectAll,
+                    enabled = eligibleOnPageCount > 0,
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.order_history_purge_select_all, eligibleOnPageCount),
+                        fontSize = 11.sp
+                    )
+                }
+                if (selectedCount > 0) {
+                    TextButton(onClick = onClearSelection) {
+                        Text(
+                            stringResource(R.string.order_history_purge_clear_selection),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Button(
+                    onClick = onDeleteSelected,
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.height(32.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = PosColors.Danger
+                    )
+                ) {
+                    Text(
+                        stringResource(R.string.order_history_purge_delete_selected, selectedCount),
+                        fontSize = 11.sp
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = onExit) {
+                    Text(stringResource(R.string.order_history_purge_exit), fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordsTableHeader(
+    purgeMode: Boolean = false,
+    onAdminUnlockTap: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(HeaderBg)
+            .background(posUiColors().surfaceSubtle)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        HeaderCell(stringResource(R.string.time), 76.dp)
-        HeaderCell(stringResource(R.string.order_number_short), 80.dp)
-        HeaderCell(stringResource(R.string.type), 68.dp)
-        HeaderCell(stringResource(R.string.status), 88.dp)
-        HeaderCell(stringResource(R.string.amount), 76.dp)
-        HeaderCell(stringResource(R.string.payment_method), 56.dp)
-        HeaderCell(
-            stringResource(R.string.staff),
-            72.dp,
-            modifier = Modifier.clickable(onClick = onAdminUnlockTap)
-        )
+        if (purgeMode) {
+            Spacer(modifier = Modifier.width(36.dp))
+        }
+        HeaderCell(stringResource(R.string.order_number_short), 72.dp, modifier = Modifier.clickable(onClick = onAdminUnlockTap))
+        HeaderCell(stringResource(R.string.order_history_date), 120.dp)
+        HeaderCell(stringResource(R.string.order_history_articles), 0.dp, modifier = Modifier.weight(1f))
+        HeaderCell(stringResource(R.string.total), 76.dp)
+        HeaderCell(stringResource(R.string.status), 92.dp)
+        HeaderCell(stringResource(R.string.type), 72.dp)
+        HeaderCell(stringResource(R.string.staff), 72.dp)
     }
 }
 
@@ -633,10 +746,10 @@ private fun RecordsTableHeader(onAdminUnlockTap: () -> Unit = {}) {
 private fun HeaderCell(text: String, width: Dp, modifier: Modifier = Modifier) {
     Text(
         text,
-        modifier = modifier.width(width),
+        modifier = if (width > 0.dp) modifier.width(width) else modifier,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
-        color = TextMuted
+        color = posUiColors().textSecondary
     )
 }
 
@@ -647,89 +760,114 @@ private fun RecordsTableRow(
     order: TransactionEntity,
     tableLabel: String?,
     isSplit: Boolean,
+    isSelected: Boolean,
     currencySymbol: String,
-    canDelete: Boolean,
+    purgeMode: Boolean,
+    purgeEligible: Boolean,
+    purgeSelected: Boolean,
     onClick: () -> Unit,
-    onDeleteRequest: () -> Unit
+    onPurgeToggle: () -> Unit
 ) {
     val displayAmount = if (order.refundAmount > 0) {
         (order.total - order.refundAmount).coerceAtLeast(0.0)
     } else {
         order.total
     }
+    val rowBg = when {
+        purgeMode && purgeSelected -> Color(0xFFFEE2E2)
+        isSelected -> posUiColors().surfaceSelected
+        index % 2 == 0 -> posUiColors().surface
+        else -> posUiColors().surfaceSubtle
+    }
+    val dateText = SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()).format(Date(order.createdAt))
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .background(if (index % 2 == 0) Color.White else Color(0xFFFAFAFA))
-            .padding(horizontal = 14.dp, vertical = 14.dp),
+            .background(rowBg)
+            .then(
+                if (isSelected) {
+                    Modifier.border(
+                        width = 1.dp,
+                        color = PosColors.Primary,
+                        shape = RoundedCornerShape(0.dp)
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CellText(
-            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(order.createdAt)),
-            76.dp,
-            color = TextMuted
-        )
-        Row(modifier = Modifier.width(80.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (purgeMode) {
+            Box(modifier = Modifier.width(36.dp)) {
+                if (purgeEligible) {
+                    Checkbox(
+                        checked = purgeSelected,
+                        onCheckedChange = { onPurgeToggle() },
+                        modifier = Modifier.size(32.dp),
+                        colors = CheckboxDefaults.colors(checkedColor = PosColors.Danger)
+                    )
+                }
+            }
+        }
+        Row(modifier = Modifier.width(72.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 shortOrderId(order.transactionNumber, order.notes),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary,
+                color = posUiColors().textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (isSplit) {
                 Spacer(Modifier.width(4.dp))
-                StatusPill("S", Color(0xFFF97316), compact = true)
+                StatusPill(stringResource(R.string.order_history_split_badge), Color(0xFFF97316), compact = true)
             }
         }
-        Box(modifier = Modifier.width(68.dp)) {
-            StatusPill(orderTypeLabel(order.serviceType), orderTypeColor(order.serviceType), compact = true)
-        }
-        Box(modifier = Modifier.width(88.dp)) {
-            StatusPill(orderStatusShort(order.paymentStatus), statusColor(order.paymentStatus), compact = true)
-        }
+        CellText(dateText, 120.dp, color = posUiColors().textSecondary, fontSize = 11.sp)
+        Text(
+            stringResource(R.string.order_history_articles_preview_placeholder),
+            modifier = Modifier.weight(1f).padding(end = 8.dp),
+            fontSize = 12.sp,
+            color = posUiColors().textSecondary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
         CellText(
             formatMoney(displayAmount, currencySymbol),
             76.dp,
             fontWeight = FontWeight.Bold
         )
-        CellText(paymentShortLabel(order.paymentMethod), 56.dp, color = TextMuted)
-        CellText(
-            order.userName.take(8),
-            72.dp,
-            color = TextMuted,
-            modifier = if (canDelete) {
-                Modifier.combinedClickable(onClick = onDeleteRequest, onLongClick = onDeleteRequest)
-            } else {
-                Modifier
-            }
-        )
+        Box(modifier = Modifier.width(92.dp)) {
+            StatusPill(
+                orderHistoryPaymentStatusChipLabel(order.paymentStatus),
+                statusColor(order.paymentStatus),
+                compact = true
+            )
+        }
+        Box(modifier = Modifier.width(72.dp)) {
+            StatusPill(orderHistoryServiceTypeChipLabel(order.serviceType), orderTypeColor(order.serviceType), compact = true)
+        }
+        CellText(order.userName, 72.dp, color = posUiColors().textSecondary)
     }
-}
-
-private fun orderStatusShort(status: PaymentStatus): String = when (status) {
-    PaymentStatus.COMPLETED -> "Done"
-    PaymentStatus.REFUNDED -> "Refund"
-    PaymentStatus.CANCELLED -> "Cancel"
-    PaymentStatus.PARTIALLY_REFUNDED -> "Part"
-    else -> status.name.take(5)
 }
 
 @Composable
 private fun CellText(
     text: String,
     width: Dp,
-    color: Color = TextPrimary,
+    color: Color = Color.Unspecified,
     fontWeight: FontWeight = FontWeight.Normal,
+    fontSize: androidx.compose.ui.unit.TextUnit = 12.sp,
     modifier: Modifier = Modifier
 ) {
+    val resolvedColor = if (color == Color.Unspecified) posUiColors().textPrimary else color
     Text(
         text,
         modifier = modifier.width(width),
-        fontSize = 12.sp,
-        color = color,
+        fontSize = fontSize,
+        color = resolvedColor,
         fontWeight = fontWeight,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
@@ -769,33 +907,17 @@ private fun shortOrderId(number: String, notes: String? = null): String {
     }
 }
 
-private fun orderTypeLabel(serviceType: ServiceType?): String = when (serviceType) {
-    ServiceType.DINE_IN -> "DINE IN"
-    ServiceType.TAKEAWAY -> "PICKUP"
-    else -> "WALK IN"
-}
-
 private fun orderTypeColor(serviceType: ServiceType?): Color = when (serviceType) {
-    ServiceType.DINE_IN -> Color(0xFF92400E)
-    ServiceType.TAKEAWAY -> Color(0xFF7C3AED)
-    else -> Color(0xFF0891B2)
+    ServiceType.DINE_IN -> PosColors.Warning
+    ServiceType.TAKEAWAY -> PosColors.Info
+    else -> PosColors.Primary
 }
 
 private fun statusColor(status: PaymentStatus): Color = when (status) {
-    PaymentStatus.COMPLETED -> Color(0xFF059669)
-    PaymentStatus.CANCELLED -> Color(0xFFDC2626)
-    PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED -> Color(0xFFD97706)
-    else -> Color(0xFF6B7280)
-}
-
-private fun paymentLabel(method: PaymentMethod): String = when (method) {
-    PaymentMethod.CASH -> "Cash"
-    PaymentMethod.CARD -> "Card"
-    PaymentMethod.ADYEN_TERMINAL -> "Terminal"
-    PaymentMethod.TAP_TO_PAY -> "Tap"
-    PaymentMethod.PAY_LATER -> "Pay Later"
-    PaymentMethod.INVOICE -> "Invoice"
-    PaymentMethod.GIFT_CARD -> "Gift card"
+    PaymentStatus.COMPLETED -> PosColors.Primary
+    PaymentStatus.CANCELLED -> PosColors.Danger
+    PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED -> PosColors.Warning
+    else -> PosColors.TextSecondary
 }
 
 @Composable

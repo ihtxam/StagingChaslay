@@ -7,7 +7,11 @@ import {
   installDesktopHardwareBridge,
 } from '@/lib/hardware/desktop-bridge';
 import { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
-import { isValidAgentRawPrintBase64 } from './escpos-payload';
+import {
+  agentPrintValidationErrorMessage,
+  classifyAgentPrintBase64,
+  normalizeAgentPrintBase64,
+} from './escpos-payload';
 import type { EscPosTextEncoding } from './escpos-encode';
 
 export { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
@@ -32,6 +36,14 @@ export type AgentPrinter = {
   /** Android Bridge Reborn: sunmi-internal | usb | bluetooth | lan */
   connectionType?: string;
   driver?: string;
+  /** Android Bridge: false until the merchant taps Allow on USB attach (e.g. after power-cycling the printer). */
+  hasPermission?: boolean;
+  /** Android Bridge USB: device declares USB printer class (preferred for receipts). */
+  usbPrinterClass?: boolean;
+  /** Android Bridge stable id (e.g. bt:MAC, usb:vid:pid). */
+  id?: string;
+  /** Android Bridge Bluetooth MAC — two paired printers may share the same name. */
+  address?: string;
 };
 
 export type ScaleDevice = {
@@ -229,10 +241,52 @@ export type PrinterResolutionHints = {
   matchHint?: string | null;
 };
 
-function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
-  const suitable = printers.filter(
+function suitableEscPosPrinters(printers: AgentPrinter[]): AgentPrinter[] {
+  return printers.filter(
     (p) => isEscPosTicketPrinterName(p.name) && !isStaleUsbEthernetPrinterName(p.name)
   );
+}
+
+/** Plugged USB receipt printer (Bridge "USB Printer Port" or USB printer class). */
+function isUsbReceiptPrinter(p: AgentPrinter): boolean {
+  if (p.connectionType === 'lan' || p.connectionType === 'bluetooth' || p.connectionType === 'sunmi-internal') {
+    return false;
+  }
+  if (p.connectionType === 'usb') {
+    if (p.usbPrinterClass === true) return true;
+    if (/printer port/i.test(p.name) || /^usb printer\b/i.test(p.name)) return true;
+    return p.usbPrinterClass !== false;
+  }
+  return /usb printer port/i.test(p.name);
+}
+
+function looksLikeUsbReceiptName(name: string): boolean {
+  return /usb printer port/i.test(name) || /^usb printer\b/i.test(name);
+}
+
+function bridgePrinterList(printers: AgentPrinter[]): boolean {
+  return printers.some(
+    (p) =>
+      p.connectionType === 'usb' ||
+      p.connectionType === 'lan' ||
+      p.connectionType === 'bluetooth' ||
+      p.connectionType === 'sunmi-internal'
+  );
+}
+
+/**
+ * One USB receipt printer keeps the same profile when Bridge renames it
+ * ("USB Printer Port" while permitted, "USB printer VID:PID" before that).
+ */
+function matchUsbReceiptAlias(want: string, live: AgentPrinter[]): AgentPrinter | null {
+  if (!looksLikeUsbReceiptName(want)) return null;
+  const usb = live.filter(isUsbReceiptPrinter);
+  if (usb.length === 1) return usb[0] || null;
+  return usb.find((p) => p.name.toLowerCase() === want.toLowerCase()) || null;
+}
+
+function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
+  const suitable = suitableEscPosPrinters(printers);
   if (isAndroidWebPosTill()) {
     return (
       suitable.find((p) => p.connectionType === 'sunmi-internal') ||
@@ -250,6 +304,32 @@ function defaultLivePrinter(printers: AgentPrinter[]): AgentPrinter | null {
     suitable[0] ||
     null
   );
+}
+
+/**
+ * Printer to use when the profile says "bridge default" or the saved USB name
+ * is missing from this scan. A remembered LAN host must not replace a plugged
+ * USB receipt printer. An explicit LAN queue name is left to the caller.
+ */
+function fallbackEscPosPrinter(configuredName: string, printers: AgentPrinter[]): AgentPrinter | null {
+  const suitable = suitableEscPosPrinters(printers);
+  const want = String(configuredName || '').trim();
+  const named = want
+    ? suitable.find((p) => p.name === want || (p.id && p.id === want))
+    : null;
+  if (named) return named;
+  if (!bridgePrinterList(suitable)) return defaultLivePrinter(suitable);
+  const usb = suitable.find(isUsbReceiptPrinter) || null;
+  const explicitLan = /^lan\b/i.test(want);
+  if (looksLikeUsbReceiptName(want)) return usb;
+  if (!want) {
+    if (usb) return usb;
+    return suitable.find((p) => p.connectionType !== 'lan') || suitable.find((p) => p.isDefault) || null;
+  }
+  if (explicitLan) return suitable.find((p) => p.name === want || p.id === want) || null;
+  const marked = suitable.find((p) => p.isDefault);
+  if (usb && marked?.connectionType === 'lan') return usb;
+  return marked && marked.connectionType !== 'lan' ? marked : usb || suitable.find((p) => p.connectionType !== 'lan') || null;
 }
 
 /**
@@ -278,22 +358,39 @@ export function resolveLivePrinterName(
   const byPort = findAgentPrinterByPort(hints?.portName, live);
   if (byPort && !isStaleUsbEthernetPrinterName(byPort.name)) return byPort.name;
 
+  const usbAlias = matchUsbReceiptAlias(want, live);
+  if (usbAlias?.name) return usbAlias.name;
+
   const hintRaw = String(hints?.matchHint || '').trim();
   const hint = isStaleUsbEthernetPrinterName(hintRaw) ? '' : hintRaw;
   if (hint) {
+    const byId = live.find((p) => p.id && p.id === hint);
+    if (byId?.name && !isStaleUsbEthernetPrinterName(byId.name)) return byId.name;
+  }
+  if (hint && /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(hint)) {
+    const byBtMac = live.find(
+      (p) => String(p.address || '').trim().toUpperCase() === hint.toUpperCase()
+    );
+    if (byBtMac?.name && !isStaleUsbEthernetPrinterName(byBtMac.name)) return byBtMac.name;
+  }
+  if (hint) {
     const byHint = resolveAgentPrinterName(hint, live);
     if (byHint && !isStaleUsbEthernetPrinterName(byHint)) return byHint;
+    const hintedUsb = matchUsbReceiptAlias(hint, live);
+    if (hintedUsb?.name) return hintedUsb.name;
   }
 
   const heal = suggestPrinterAutoHeal(want || hint, live);
-  if (heal && !isStaleUsbEthernetPrinterName(heal.name)) return heal.name;
-
-  const candidates = findPrinterHealCandidates(want || hint, live, 1);
-  if (candidates[0]?.name && !isStaleUsbEthernetPrinterName(candidates[0].name)) {
-    return candidates[0].name;
+  if (heal && !isStaleUsbEthernetPrinterName(heal.name)) {
+    const healIsLan = heal.connectionType === 'lan' || /^lan\b/i.test(heal.name);
+    const wantIsUsb = looksLikeUsbReceiptName(want);
+    if (!(wantIsUsb && healIsLan)) return heal.name;
   }
 
-  return defaultLivePrinter(live)?.name || null;
+  // Do not substitute a different printer. Callers that print can fall back
+  // separately. Persisting this used to replace USB Printer Port with a
+  // remembered LAN host and tickets stopped.
+  return null;
 }
 
 /**
@@ -314,7 +411,7 @@ export function resolveEscPosPrinterName(
     if (isStaleUsbEthernetPrinterName(want)) return null;
     return isEscPosTicketPrinterName(want) ? want : null;
   }
-  return defaultLivePrinter(livePrinters)?.name || null;
+  return fallbackEscPosPrinter(configuredName, livePrinters)?.name || null;
 }
 
 /** Sunmi built-in thermal expects UTF-8 raw bytes; USB/BT ESC/POS needs CP850 + ESC t 2. */
@@ -418,12 +515,7 @@ export function syncWebPosLocalPrinterName(livePrinters: AgentPrinter[]): string
     }
     return resolved;
   }
-  if (!fallback) {
-    try {
-      localStorage.removeItem(WEBPOS_PRINTER_STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
+  if (!fallback || (looksLikeUsbReceiptName(stored) && /^lan\b/i.test(fallback))) {
     return null;
   }
   try {
@@ -442,7 +534,11 @@ export type PosPrinterProfileWithRoles = PosPrinterProfileLike & {
   enabled?: boolean;
 };
 
-/** Point receipt routing at a live Bridge printer when saved WiFi/LAN names disappear. */
+/**
+ * Fill a blank receipt or kitchen profile with the plugged USB printer.
+ * An explicit name is kept, including across a scan that misses USB.
+ * A remembered LAN host is never written in as the printer.
+ */
 export function healStaleReceiptPrinterProfiles<T extends PosPrinterProfileWithRoles>(
   profiles: T[],
   livePrinters: AgentPrinter[]
@@ -450,59 +546,89 @@ export function healStaleReceiptPrinterProfiles<T extends PosPrinterProfileWithR
   if (!livePrinters.length) return { profiles, changed: false };
   const fallback = resolveEscPosPrinterName('', livePrinters);
   if (!fallback) return { profiles, changed: false };
+  const picked = livePrinters.find((ap) => ap.name === fallback);
+  if (!picked || picked.connectionType === 'lan' || /^lan\b/i.test(picked.name)) {
+    return { profiles, changed: false };
+  }
   let changed = false;
-  let hasLiveReceipt = false;
   const next = profiles.map((p) => {
-    if (!p.printReceipts) return p;
+    const hasRole = !!(p.printReceipts || p.printKitchenTickets || p.printEndOfDayReports);
+    if (!hasRole) return p;
     const name = String(p.name || '').trim();
-    if (name && printerNameInList(name, livePrinters)) {
-      hasLiveReceipt = true;
-      return p;
-    }
+    if (name) return p;
     changed = true;
-    hasLiveReceipt = true;
-    const picked = livePrinters.find((ap) => ap.name === fallback);
     return {
       ...p,
       name: fallback,
-      portName: picked?.portName ?? p.portName ?? null,
-      matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
+      portName: picked.portName ?? p.portName ?? null,
+      matchHint: picked.id || picked.matchHint || picked.driverName || p.matchHint || null,
     };
   });
-  if (!hasLiveReceipt) {
-    const blank = next.find((p) => p.enabled !== false && !String(p.name || '').trim());
-    if (blank) {
-      changed = true;
-      const picked = livePrinters.find((ap) => ap.name === fallback);
-      return {
-        profiles: next.map((p) =>
-          p === blank
-            ? {
-                ...p,
-                name: fallback,
-                printReceipts: true,
-                portName: picked?.portName ?? p.portName ?? null,
-                matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
-              }
-            : p
-        ),
-        changed,
-      };
-    }
-  }
   return { profiles: next, changed };
 }
 
-/** Dedupe agent enumeration by exact Windows queue name. */
+/** Stable key for deduping Bridge / Windows printer rows (name alone is not unique for BT). */
+export function agentPrinterListKey(p: AgentPrinter): string {
+  const id = String(p.id || '').trim();
+  if (id) return id.toLowerCase();
+  const addr = String(p.address || '').trim();
+  if (p.connectionType === 'bluetooth' && addr) return `bt:${addr.toUpperCase()}`;
+  const name = String(p.name || '').trim();
+  return name.toLowerCase();
+}
+
+/** Value for `<select>` options — must match resolveAgentPrinterSelectValue. */
+export function agentPrinterOptionValue(p: AgentPrinter): string {
+  return String(p.id || p.name || '').trim();
+}
+
+/** Map saved profile row to `<select value>` for Bridge rows keyed by id. */
+export function resolveAgentPrinterSelectValue(
+  profileName: string,
+  profileMatchHint: string | null | undefined,
+  pickList: AgentPrinter[]
+): string {
+  const name = String(profileName || '').trim();
+  if (!name) return '';
+  const byName = pickList.find((ap) => ap.name === name);
+  if (byName) return agentPrinterOptionValue(byName);
+  const byId = pickList.find((ap) => ap.id && ap.id === name);
+  if (byId) return agentPrinterOptionValue(byId);
+  const hint = String(profileMatchHint || '').trim();
+  if (hint) {
+    const byHint = pickList.find(
+      (ap) =>
+        (ap.id && ap.id === hint) ||
+        (ap.address && ap.address.toUpperCase() === hint.toUpperCase()) ||
+        ap.matchHint === hint
+    );
+    if (byHint) return agentPrinterOptionValue(byHint);
+  }
+  return name;
+}
+
+/** Dropdown label when two Bluetooth printers share a marketing name. */
+export function formatAgentPrinterOptionLabel(p: AgentPrinter): string {
+  const name = String(p.name || '').trim();
+  if (!name) return '';
+  const addr = String(p.address || '').trim();
+  if (p.connectionType === 'bluetooth' && addr && !name.toUpperCase().includes(addr.replace(/:/g, '').slice(-4))) {
+    return `${name} (${addr})`;
+  }
+  return name;
+}
+
+/** Dedupe agent enumeration by stable id (Windows: queue name). */
 export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinter[] {
   const seen = new Set<string>();
   const out: AgentPrinter[] = [];
   for (const p of printers) {
     const name = String(p.name || '').trim();
-    if (!name || seen.has(name) || isStaleUsbEthernetPrinterName(name)) continue;
+    const key = agentPrinterListKey(p);
+    if (!name || !key || seen.has(key) || isStaleUsbEthernetPrinterName(name)) continue;
     const status = String(p.status || '').trim();
     if (status === '7') continue;
-    seen.add(name);
+    seen.add(key);
     out.push({
       ...p,
       name,
@@ -510,6 +636,36 @@ export function normalizeAgentPrinterList(printers: AgentPrinter[]): AgentPrinte
     });
   }
   return out;
+}
+
+/**
+ * Settings → Receipts printer dropdown: hide generic "USB Serial" rows when a USB
+ * printer-class device (e.g. "USB Printer Port") is on the bus. Bridge LAN/network
+ * printers stay visible (stale USB-ethernet dongle names are dropped in normalizeAgentPrinterList).
+ */
+export function filterAgentPrintersForSettingsPick(printers: AgentPrinter[]): AgentPrinter[] {
+  const list = normalizeAgentPrinterList(printers);
+  if (!list.length) return list;
+
+  const isUsbReceiptCandidate = (p: AgentPrinter) => {
+    if (p.connectionType !== 'usb') return false;
+    if (p.usbPrinterClass === true) return true;
+    if (/printer port/i.test(p.name)) return true;
+    if (/^USB Serial$/i.test(p.name)) return false;
+    return true;
+  };
+
+  const hasUsbPrinterClass = list.some(
+    (p) => p.connectionType === 'usb' && (p.usbPrinterClass === true || /printer port/i.test(p.name))
+  );
+
+  return list.filter((p) => {
+    if (!hasUsbPrinterClass || p.connectionType !== 'usb') return true;
+    if (p.usbPrinterClass === true || /printer port/i.test(p.name)) return true;
+    if (/^USB Serial$/i.test(p.name)) return false;
+    if (p.usbPrinterClass === false) return false;
+    return isUsbReceiptCandidate(p);
+  });
 }
 
 export type PosPrinterProfileLike = {
@@ -539,19 +695,25 @@ export function reconcilePosPrinterProfiles<T extends PosPrinterProfileLike>(
       portName: p.portName,
       matchHint: p.matchHint,
     });
-    if (resolved) {
-      const picked = livePrinters.find((ap) => ap.name === resolved);
-      if (resolved === name && picked?.portName === (p.portName ?? null)) return p;
-      changed = true;
-      return {
-        ...p,
-        name: resolved,
-        portName: picked?.portName ?? p.portName ?? null,
-        matchHint: picked?.matchHint ?? picked?.driverName ?? p.matchHint ?? null,
-      };
-    }
+    // A scan that misses the USB printer must not clear the saved name and must
+    // not substitute the remembered LAN host. The next scan still finds USB.
+    if (!resolved || resolved === name) return p;
+    const picked = livePrinters.find((ap) => ap.name === resolved);
+    const savedIsUsb = looksLikeUsbReceiptName(name);
+    const resolvedIsLan = picked?.connectionType === 'lan' || /^lan\b/i.test(resolved);
+    if (savedIsUsb && resolvedIsLan) return p;
+    // Normalise both sides before comparing: a live printer with no port reports
+    // undefined, while a stored profile holds null. Comparing those directly marked
+    // every profile as changed on each pass, so WebPOS re-saved identical settings
+    // on every agent refresh (Android tills have no port name at all).
+    if ((picked?.portName ?? null) === (p.portName ?? null) && resolved === name) return p;
     changed = true;
-    return { ...p, name: '' };
+    return {
+      ...p,
+      name: resolved,
+      portName: picked?.portName ?? p.portName ?? null,
+      matchHint: picked?.id || picked?.matchHint || picked?.driverName || p.matchHint || null,
+    };
   });
   return { profiles: next, changed };
 }
@@ -565,11 +727,12 @@ export function prunePosPrinterProfiles<T extends PosPrinterProfileLike>(
   }
   const next = profiles.filter((p) => {
     const name = String(p.name || '').trim();
-    if (!name && !String(p.portName || '').trim()) return false;
-    return !!resolveLivePrinterName(name, livePrinters, {
-      portName: p.portName,
-      matchHint: p.matchHint,
-    });
+    const port = String(p.portName || '').trim();
+    const hint = String(p.matchHint || '').trim();
+    // Drop only rows that were never pointed at a printer. A named profile stays
+    // when this scan misses it, so a USB blip cannot delete kitchen routing.
+    if (!name && !port && !hint) return false;
+    return true;
   });
   return { profiles: next, changed: next.length !== profiles.length };
 }
@@ -775,12 +938,34 @@ function win32CodeFromPrintError(msg: string): number {
   return generic ? Number(generic[1]) || 0 : 0;
 }
 
+/** Sunmi / Bluetooth SPP: read after print when the device closed the socket early. */
+export function isPrinterSocketIoError(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw).toLowerCase();
+  if (!msg) return false;
+  return (
+    /read failed.*socket|socket might closed|socket.*timeout|read ret:\s*-1/i.test(msg) ||
+    (/socket/.test(msg) && /closed|timeout/.test(msg))
+  );
+}
+
 /** Win32 1801/1905/1906 — agent is up, printer queue is missing or unusable. */
 export function isPrinterDisconnectedError(raw: unknown): boolean {
   const msg = collectPrintErrorText(raw);
+  if (isPrinterSocketIoError(msg)) return true;
   if (WIN32_PRINTER_UNAVAILABLE.has(win32CodeFromPrintError(msg))) return true;
   return /error_invalid_printer_name|error_printer_deleted|error_invalid_printer_state|not found or disconnected|openprinter failed|startdocprinter failed|GLPrinter\d*|ERROR_INVALID_PRINTER_NAME/i.test(
     msg
+  );
+}
+
+/** Browser fetch to localhost Print Agent failed (Safari often reports "Load failed"). */
+export function isPrintAgentUnreachableError(raw: unknown): boolean {
+  const msg = collectPrintErrorText(raw).toLowerCase();
+  if (!msg) return false;
+  return (
+    /load failed|failed to fetch|networkerror|network error|econnrefused|err_network|print agent offline|127\.0\.0\.1:9101/i.test(
+      msg
+    ) || isPrinterDisconnectedError(raw)
   );
 }
 
@@ -1224,9 +1409,13 @@ export async function listAgentPrinters(): Promise<AgentPrinter[]> {
   }
   const data = await agentFetch('/printers');
   return normalizeAgentPrinterList(
-    (data.printers || []).map((p: AgentPrinter) => ({
+    (data.printers || []).map((p: AgentPrinter & { hasPermission?: boolean; usbPrinterClass?: boolean; id?: string; address?: string }) => ({
       ...p,
       unsuitableForRaw: p.unsuitableForRaw ?? isUnsuitableRawPrinter(p.name),
+      hasPermission: p.hasPermission === true,
+      usbPrinterClass: p.usbPrinterClass === true,
+      id: p.id ? String(p.id) : undefined,
+      address: p.address ? String(p.address) : undefined,
     }))
   );
 }
@@ -1245,11 +1434,10 @@ export async function printViaAgent(opts: {
   text?: string;
 }): Promise<PrintViaAgentResult> {
   const name = opts.printerName?.trim() || '';
-  const b64 = String(opts.dataBase64 || '').trim();
-  if (!isValidAgentRawPrintBase64(b64)) {
-    throw new Error(
-      'Print data is not valid ESC/POS (corrupt or truncated). Hard-refresh Web POS and print again.'
-    );
+  const b64 = normalizeAgentPrintBase64(opts.dataBase64);
+  const validationIssue = classifyAgentPrintBase64(b64);
+  if (validationIssue) {
+    throw new Error(agentPrintValidationErrorMessage(validationIssue));
   }
   const dedupeKey = `${name}|${b64.length}|${b64.slice(0, 48)}`;
   const now = Date.now();
@@ -1285,7 +1473,7 @@ export async function printViaAgent(opts: {
       method: 'POST',
       body: JSON.stringify({
         printerName: opts.printerName || undefined,
-        dataBase64: opts.dataBase64,
+        dataBase64: b64,
         text: opts.text,
       }),
     },

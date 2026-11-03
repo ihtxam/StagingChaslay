@@ -85,6 +85,14 @@ admin.chaslay.com {
 shop.chaslay.com {
 	encode gzip zstd
 
+	handle_errors {
+		@shop_api_down expression `{http.error.status_code} >= 502 && {http.error.status_code} <= 504`
+		handle @shop_api_down {
+			rewrite * /index.html
+			reverse_proxy dashboard:80
+		}
+	}
+
 	handle /api/* {
 		reverse_proxy api:3000
 	}
@@ -122,7 +130,12 @@ shop.chaslay.com {
 		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		# API injects Open Graph tags; dashboard SPA is fallback when API is restarting.
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {
@@ -206,7 +219,11 @@ status.chaslay.com {
 		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {
@@ -271,7 +288,11 @@ https:// {
 		not path_regexp fileExt \.[^/]+$
 	}
 	handle @shop_spa {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 dashboard:80 {
+			lb_policy first
+			fail_duration 15s
+			max_fails 2
+		}
 	}
 
 	handle {

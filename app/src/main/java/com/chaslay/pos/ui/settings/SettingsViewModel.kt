@@ -16,14 +16,18 @@ import com.chaslay.pos.domain.model.DashboardAuthResult
 import com.chaslay.pos.domain.model.AppLanguage
 import androidx.annotation.StringRes
 import com.chaslay.pos.R
+import com.chaslay.pos.domain.model.ExpressPayPlacement
 import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
+import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.domain.model.CategoryPrintSetting
 import com.chaslay.pos.domain.model.PrintTarget
 import com.chaslay.pos.domain.model.SupportedCurrency
 import com.chaslay.pos.printer.BluetoothPrinterService
+import com.chaslay.pos.printer.PrinterUserMessages
 import com.chaslay.pos.printer.DiscoveredPrinter
 import com.chaslay.pos.printer.UsbPrinterDevice
 import com.chaslay.pos.printer.UsbPrinterManager
@@ -47,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.chaslay.pos.sync.FloorLanServer
 import com.chaslay.pos.sync.NetworkAddress
+import com.chaslay.pos.sync.terminalSyncPayloadChanged
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -54,6 +59,18 @@ import javax.inject.Inject
 
 data class PrinterLinkProduct(val id: Long, val name: String)
 data class PrinterLinkCategory(val id: Long, val name: String, val products: List<PrinterLinkProduct>)
+
+/** Read-only summary for Settings → General (staff PIN session vs cloud merchant login). */
+data class PosSessionDisplay(
+    val staffName: String? = null,
+    val staffEmail: String? = null,
+    val staffRole: String? = null,
+    val merchantAccountEmail: String? = null,
+    val merchantShopName: String? = null,
+    val merchantLinked: Boolean = false,
+    val dashboardSignedIn: Boolean = false,
+    val isSyncedStaffAccount: Boolean = false,
+)
 
 enum class SettingsSection(@StringRes val titleRes: Int) {
     GENERAL(R.string.settings_section_general),
@@ -97,6 +114,9 @@ data class SettingsUiState(
     val cardEnabled: Boolean = true,
     val terminalEnabled: Boolean = true,
     val expressEnabled: Boolean = true,
+    val expressPayPlacement: ExpressPayPlacement = ExpressPayPlacement.PRODUCT_GRID,
+    val afterSaleGoToOrders: Boolean = false,
+    val retailCashTenderDialogEnabled: Boolean = true,
     val giftCardsEnabled: Boolean = false,
     val paymentMethodsManagedByCloud: Boolean = false,
     val printerPrintReceipts: Boolean = true,
@@ -110,6 +130,9 @@ data class SettingsUiState(
     val tables: List<String> = emptyList(),
     val printers: List<DiscoveredPrinter> = emptyList(),
     val networkPrinters: List<DiscoveredPrinter> = emptyList(),
+    /** In Add Printer dialog — not cleared by [clearMessage] toast handler. */
+    val printerDiscoveryMessage: String? = null,
+    val isDiscoveryScanBusy: Boolean = false,
     val selectedPrinter: DiscoveredPrinter? = null,
     val selectedKitchenPrinter: DiscoveredPrinter? = null,
     val receiptHeader: String = "",
@@ -121,6 +144,7 @@ data class SettingsUiState(
     val receiptShowQrCode: Boolean = true,
     val receiptDeliveryDirectionsQr: Boolean = true,
     val adyenReceiptDigitalOnly: Boolean = false,
+    val autoPrintReceipt: Boolean = true,
     val kitchenLargeItemText: Boolean = true,
     val kitchenLargeHeaderText: Boolean = true,
     val kitchenItemTextScale: Int = 2,
@@ -132,6 +156,9 @@ data class SettingsUiState(
     val newPresetName: String = "",
     val newPresetPercent: String = "",
     val savedPrinters: List<com.chaslay.pos.data.local.entity.PrinterConfigEntity> = emptyList(),
+    /** Live reachability keyed by [SettingsViewModel.printerReachabilityKey]. */
+    val printerReachability: Map<String, Boolean> = emptyMap(),
+    val isProbingPrinters: Boolean = false,
     val showAddPrinterDialog: Boolean = false,
     val editingPrinter: com.chaslay.pos.data.local.entity.PrinterConfigEntity? = null,
     val linkCategories: List<PrinterLinkCategory> = emptyList(),
@@ -140,17 +167,26 @@ data class SettingsUiState(
     val scaleUsbAddress: String? = null,
     val scaleDevices: List<com.chaslay.pos.scale.ScaleUsbDevice> = emptyList(),
     val scaleTestReading: String? = null,
+    /** Saved scale USB device is currently enumerated on the bus. */
+    val scaleUsbDeviceAttached: Boolean = false,
+    /** [android.hardware.usb.UsbManager.hasPermission] for [scaleUsbAddress]. */
+    val scaleUsbHasPermission: Boolean = false,
     val message: String? = null,
     val isMenuSyncing: Boolean = false,
     val syncBusinessInfo: Boolean = true,
     val selectedSection: SettingsSection = SettingsSection.GENERAL,
     val posThemeMode: PosThemeMode = PosThemeMode.LIGHT,
+    val kioskFullscreenEnabled: Boolean = true,
+    val posDisplayScale: Float = 1f,
+    val posTextScale: Float = 1f,
+    val posMenuDesign: PosMenuDesign = PosMenuDesign.CLASSIC,
     val crashLogs: List<CrashLogEntry> = emptyList(),
     val selectedCrashLog: String? = null,
     val crashLogContent: String = "",
     val isPrinterBusy: Boolean = false,
     val posMode: PosMode = PosMode.RESTAURANT,
     val coursesEnabled: Boolean = false,
+    val courseSendMode: CourseSendMode = CourseSendMode.FIRE_PER_COURSE,
     val tablesEnabled: Boolean = true,
     val retailDineInEnabled: Boolean = false,
     val retailTakeawayEnabled: Boolean = false,
@@ -174,7 +210,8 @@ data class SettingsUiState(
     val isCloudLoggingIn: Boolean = false,
     val cloudLoginError: String? = null,
     /** When set, POS mode follows merchant panel sync (retail vs restaurant). */
-    val posModeManagedByCloud: Boolean = false
+    val posModeManagedByCloud: Boolean = false,
+    val posSession: PosSessionDisplay = PosSessionDisplay(),
 )
 
 @HiltViewModel
@@ -232,12 +269,22 @@ class SettingsViewModel @Inject constructor(
             }
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(language.code))
             val themeMode = sessionManager.posThemeMode.first()
+            val kioskFullscreen = sessionManager.kioskFullscreenEnabled.first()
+            val displayScale = sessionManager.posDisplayScale.first()
+            val textScale = sessionManager.posTextScale.first()
+            val menuDesign = sessionManager.posMenuDesign.first()
             val syncBusinessInfo = syncPreferences.isSyncBusinessInfoEnabled()
             val categories = productRepository.getAllCategories()
+            val posSession = loadPosSessionDisplay(settings.businessName)
             _uiState.update {
                 it.copy(
+                    posSession = posSession,
                     businessName = settings.businessName,
                     posThemeMode = themeMode,
+                    kioskFullscreenEnabled = kioskFullscreen,
+                    posDisplayScale = displayScale,
+                    posTextScale = textScale,
+                    posMenuDesign = menuDesign,
                     vatNumber = settings.vatNumber,
                     address = settings.address,
                     phone = settings.phone,
@@ -264,6 +311,9 @@ class SettingsViewModel @Inject constructor(
                     cardEnabled = settings.cardEnabled,
                     terminalEnabled = settings.terminalEnabled,
                     expressEnabled = settings.expressEnabled,
+                    expressPayPlacement = ExpressPayPlacement.fromCheckoutValue(settings.expressPayPlacement),
+                    afterSaleGoToOrders = com.chaslay.pos.util.PosLocalPrefs.readAfterSaleGoToOrders(appContext),
+                    retailCashTenderDialogEnabled = settings.retailCashTenderDialogEnabled,
                     giftCardsEnabled = settings.giftCardsEnabled,
                     paymentMethodsManagedByCloud = settings.paymentMethodsManagedByCloud,
                     printerPrintReceipts = settings.printerPrintReceipts,
@@ -282,6 +332,7 @@ class SettingsViewModel @Inject constructor(
                     receiptShowQrCode = settings.receiptShowQrCode,
                     receiptDeliveryDirectionsQr = settings.receiptDeliveryDirectionsQr,
                     adyenReceiptDigitalOnly = settings.adyenReceiptDigitalOnly,
+                    autoPrintReceipt = settings.autoPrintReceipt,
                     kitchenLargeItemText = settings.kitchenLargeItemText,
                     kitchenLargeHeaderText = settings.kitchenLargeHeaderText,
                     kitchenItemTextScale = settings.kitchenItemTextScale.coerceIn(1, 3),
@@ -291,6 +342,7 @@ class SettingsViewModel @Inject constructor(
                     posMode = settings.posMode,
                     posModeManagedByCloud = cloudMerchant || settings.paymentMethodsManagedByCloud,
                     coursesEnabled = settings.coursesEnabled,
+                    courseSendMode = CourseSendMode.fromKey(settings.courseSendMode),
                     tablesEnabled = settings.tablesEnabled,
                     retailDineInEnabled = settings.retailDineInEnabled,
                     retailTakeawayEnabled = settings.retailTakeawayEnabled,
@@ -319,6 +371,8 @@ class SettingsViewModel @Inject constructor(
             loadTables()
             loadDiscountPresets()
             loadSavedPrinters()
+            syncMonitoredScaleUsbAddress()
+            refreshScaleConnectionState()
             loadLinkCategories()
             refreshCrashLogs()
         }
@@ -342,6 +396,16 @@ class SettingsViewModel @Inject constructor(
 
     fun selectSection(section: SettingsSection) {
         _uiState.update { it.copy(selectedSection = section, message = null) }
+        if (section == SettingsSection.PRINTERS) {
+            discoverUsbDevices()
+            refreshPrinterConnectionState()
+        }
+        if (section == SettingsSection.SCALE) {
+            refreshScaleConnectionState()
+            usbPrinterManager.requestMonitoredScalePermissionFromSettings(_uiState.value.scaleUsbAddress) { granted ->
+                if (granted) refreshScaleConnectionState()
+            }
+        }
     }
 
     fun clearMessage() {
@@ -456,6 +520,28 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { sessionManager.setPosThemeMode(mode) }
     }
 
+    fun updateKioskFullscreenEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(kioskFullscreenEnabled = enabled) }
+        viewModelScope.launch { sessionManager.setKioskFullscreenEnabled(enabled) }
+    }
+
+    fun updatePosDisplayScale(scale: Float) {
+        val clamped = com.chaslay.pos.ui.theme.PosAppearanceLimits.clampDisplay(scale)
+        _uiState.update { it.copy(posDisplayScale = clamped) }
+        viewModelScope.launch { sessionManager.setPosDisplayScale(clamped) }
+    }
+
+    fun updatePosTextScale(scale: Float) {
+        val clamped = com.chaslay.pos.ui.theme.PosAppearanceLimits.clampText(scale)
+        _uiState.update { it.copy(posTextScale = clamped) }
+        viewModelScope.launch { sessionManager.setPosTextScale(clamped) }
+    }
+
+    fun updatePosMenuDesign(design: PosMenuDesign) {
+        _uiState.update { it.copy(posMenuDesign = design) }
+        viewModelScope.launch { sessionManager.setPosMenuDesign(design) }
+    }
+
     fun refreshCrashLogs() {
         _uiState.update {
             it.copy(crashLogs = crashLogger.listLogs())
@@ -488,11 +574,85 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
             _uiState.update { it.copy(savedPrinters = settingsRepository.getPrinters()) }
+            usbPrinterManager.setMonitoredPrinterAddresses(
+                settingsRepository.getPrinters()
+                    .filter { it.connectionType == "USB" || UsbPrinterManager.isUsbAddress(it.address) }
+                    .map { usbPrinterManager.normalizeStoredAddress(it.address) }
+            )
+            if (_uiState.value.selectedSection == SettingsSection.PRINTERS) {
+                refreshPrinterConnectionState()
+            }
         }
     }
 
-    fun showAddPrinterDialog() = _uiState.update { it.copy(showAddPrinterDialog = true, editingPrinter = null) }
-    fun dismissAddPrinterDialog() = _uiState.update { it.copy(showAddPrinterDialog = false, editingPrinter = null) }
+    fun printerReachabilityKey(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity): String =
+        if (printer.connectionType == "USB") {
+            usbPrinterManager.normalizeStoredAddress(printer.address)
+        } else {
+            printer.address.trim()
+        }
+
+    fun refreshPrinterConnectionState() {
+        viewModelScope.launch {
+            val printers = _uiState.value.savedPrinters
+            if (printers.isEmpty()) {
+                _uiState.update { it.copy(printerReachability = emptyMap(), isProbingPrinters = false) }
+                return@launch
+            }
+            _uiState.update { it.copy(isProbingPrinters = true) }
+            usbPrinterManager.syncGrantedDevicesFromSystem()
+            val reachability = linkedMapOf<String, Boolean>()
+            for (printer in printers) {
+                val key = printerReachabilityKey(printer)
+                val reachable = withContext(Dispatchers.IO) {
+                    printerService.probePrinterReachable(printer.address, printer.connectionType)
+                }
+                reachability[key] = reachable
+            }
+            _uiState.update { it.copy(printerReachability = reachability, isProbingPrinters = false) }
+        }
+    }
+
+    private fun syncMonitoredScaleUsbAddress() {
+        val address = _uiState.value.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() }
+        usbPrinterManager.setMonitoredScaleAddresses(
+            listOfNotNull(address?.let { usbPrinterManager.normalizeStoredAddress(it) })
+        )
+    }
+
+    private fun refreshScaleConnectionState() {
+        val address = _uiState.value.scaleUsbAddress?.trim().orEmpty()
+        if (address.isBlank()) {
+            _uiState.update { it.copy(scaleUsbDeviceAttached = false, scaleUsbHasPermission = false) }
+            return
+        }
+        val attached = usbPrinterManager.resolveDevice(address) != null
+        val permitted = scaleService.hasPermission(address)
+        _uiState.update {
+            it.copy(scaleUsbDeviceAttached = attached, scaleUsbHasPermission = permitted)
+        }
+    }
+
+    fun showAddPrinterDialog() = _uiState.update {
+        it.copy(showAddPrinterDialog = true, editingPrinter = null, printerDiscoveryMessage = null)
+    }
+
+    fun clearNetworkDiscovery() {
+        _uiState.update {
+            it.copy(
+                networkPrinters = emptyList(),
+                printers = emptyList(),
+                isDiscoveryScanBusy = false,
+                isPrinterBusy = false,
+                printerDiscoveryMessage = null,
+            )
+        }
+    }
+
+    fun dismissAddPrinterDialog() {
+        clearNetworkDiscovery()
+        _uiState.update { it.copy(showAddPrinterDialog = false, editingPrinter = null) }
+    }
 
     fun editPrinter(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity) {
         _uiState.update { it.copy(showAddPrinterDialog = true, editingPrinter = printer) }
@@ -568,7 +728,7 @@ class SettingsViewModel @Inject constructor(
                     isPrinterBusy = false,
                     message = result.fold(
                         onSuccess = { "Test print sent" },
-                        onFailure = { e -> e.message ?: "Test print failed" }
+                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, form.name) }
                     )
                 )
             }
@@ -606,6 +766,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
     fun updateCoursesEnabled(enabled: Boolean) = _uiState.update { it.copy(coursesEnabled = enabled) }
+    fun updateCourseSendMode(mode: CourseSendMode) = _uiState.update { it.copy(courseSendMode = mode) }
     fun updateTablesEnabled(enabled: Boolean) = _uiState.update { it.copy(tablesEnabled = enabled) }
     fun updateRetailDineInEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDineInEnabled = enabled) }
     fun updateRetailTakeawayEnabled(enabled: Boolean) = _uiState.update { it.copy(retailTakeawayEnabled = enabled) }
@@ -644,8 +805,10 @@ class SettingsViewModel @Inject constructor(
     private suspend fun reloadBusinessFieldsFromSettings() {
         val settings = settingsRepository.getSettings()
         currentSettings = settings
+        val posSession = loadPosSessionDisplay(settings.businessName)
         _uiState.update {
             it.copy(
+                posSession = posSession,
                 businessName = settings.businessName,
                 vatNumber = settings.vatNumber,
                 address = settings.address,
@@ -660,6 +823,41 @@ class SettingsViewModel @Inject constructor(
                 language = AppLanguage.fromCode(settings.defaultLanguage)
             )
         }
+    }
+
+    private suspend fun loadPosSessionDisplay(businessName: String): PosSessionDisplay {
+        val userId = sessionManager.currentUserId.first()
+        val staffName = sessionManager.currentUserName.first()
+        val access = sessionManager.currentUserAccess.first()
+        val staffUser = userId?.let { authRepository.getUser(it) }
+        var dashboardEmail: String? = null
+        var dashboardName: String? = null
+        syncPreferences.getDashboardUserJson()?.let { json ->
+            runCatching {
+                val o = org.json.JSONObject(json)
+                dashboardEmail = o.optString("email").trim().takeIf { it.isNotEmpty() }
+                dashboardName = o.optString("name").trim().takeIf { it.isNotEmpty() }
+            }
+        }
+        val merchantLinked = !syncPreferences.getMerchantId().isNullOrBlank()
+        val dashboardSignedIn = !syncPreferences.getDashboardToken().isNullOrBlank()
+        val rawStaffEmail = staffUser?.email?.trim()?.takeIf { it.isNotEmpty() }
+        val staffEmail = rawStaffEmail?.takeIf { !it.startsWith("sync:", ignoreCase = true) }
+        val isSyncedStaff = rawStaffEmail?.startsWith("sync:", ignoreCase = true) == true
+        val merchantAccountEmail = dashboardEmail
+            ?: staffEmail?.takeIf { merchantLinked && (staffUser?.id ?: 0L) >= 100_000L }
+        val shopName = businessName.trim().takeIf { it.isNotEmpty() }
+            ?: dashboardName
+        return PosSessionDisplay(
+            staffName = staffName ?: staffUser?.name,
+            staffEmail = staffEmail,
+            staffRole = access?.roleName,
+            merchantAccountEmail = merchantAccountEmail,
+            merchantShopName = shopName,
+            merchantLinked = merchantLinked,
+            dashboardSignedIn = dashboardSignedIn,
+            isSyncedStaffAccount = isSyncedStaff,
+        )
     }
 
     fun pullOnlineMenuMerge() {
@@ -818,6 +1016,8 @@ class SettingsViewModel @Inject constructor(
     fun updateReceiptDeliveryDirectionsQr(value: Boolean) =
         _uiState.update { it.copy(receiptDeliveryDirectionsQr = value) }
     fun updateAdyenReceiptDigitalOnly(value: Boolean) = _uiState.update { it.copy(adyenReceiptDigitalOnly = value) }
+
+    fun updateAutoPrintReceipt(enabled: Boolean) = _uiState.update { it.copy(autoPrintReceipt = enabled) }
     fun updateKitchenLargeItems(value: Boolean) = _uiState.update { it.copy(kitchenLargeItemText = value) }
     fun updateKitchenLargeHeader(value: Boolean) = _uiState.update { it.copy(kitchenLargeHeaderText = value) }
     fun updateKitchenItemTextScale(scale: Int) = _uiState.update {
@@ -849,6 +1049,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
     fun updateReceiptTemplateName(value: String) = _uiState.update { it.copy(receiptTemplateName = value) }
+
+    fun previewReceiptText(): String =
+        printerService.buildSettingsPreviewReceiptText(buildSettingsFromState())
     /**
      * Take payment methods off panel control for this device, or hand them back.
      * The individual payment switches are disabled while the panel owns them, so
@@ -917,6 +1120,15 @@ class SettingsViewModel @Inject constructor(
     }
     fun updateExpressEnabled(enabled: Boolean) = _uiState.update {
         it.copy(expressEnabled = enabled, paymentMethodsManagedByCloud = false)
+    }
+    fun updateExpressPayPlacement(placement: ExpressPayPlacement) = _uiState.update {
+        it.copy(expressPayPlacement = placement)
+    }
+    fun updateAfterSaleGoToOrders(goToOrders: Boolean) = _uiState.update {
+        it.copy(afterSaleGoToOrders = goToOrders)
+    }
+    fun updateRetailCashTenderDialogEnabled(enabled: Boolean) = _uiState.update {
+        it.copy(retailCashTenderDialogEnabled = enabled)
     }
     fun updateGiftCardsEnabled(enabled: Boolean) {
         _uiState.update {
@@ -995,7 +1207,9 @@ class SettingsViewModel @Inject constructor(
 
     fun discoverPrinters(hasBluetoothPermission: Boolean) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isPrinterBusy = true) }
+            _uiState.update {
+                it.copy(isDiscoveryScanBusy = true, isPrinterBusy = true, printerDiscoveryMessage = "Scanning for devices…")
+            }
             try {
                 val printers = withContext(Dispatchers.IO) {
                     printerService.discoverPrinters(hasBluetoothPermission)
@@ -1003,7 +1217,7 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         printers = printers,
-                        message = if (hasBluetoothPermission) {
+                        printerDiscoveryMessage = if (hasBluetoothPermission) {
                             "${printers.size} printer(s) found"
                         } else {
                             "Simulated printer only. Grant Bluetooth to scan paired devices."
@@ -1012,17 +1226,23 @@ class SettingsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(message = "Bluetooth scan failed: ${e.message ?: "unknown error"}")
+                    it.copy(printerDiscoveryMessage = "Bluetooth scan failed: ${e.message ?: "unknown error"}")
                 }
             } finally {
-                _uiState.update { it.copy(isPrinterBusy = false) }
+                _uiState.update { it.copy(isDiscoveryScanBusy = false, isPrinterBusy = false) }
             }
         }
     }
 
     fun discoverNetworkPrinters(manualAddress: String = "") {
         viewModelScope.launch {
-            _uiState.update { it.copy(isPrinterBusy = true, message = "Scanning Wi-Fi network…") }
+            _uiState.update {
+                it.copy(
+                    isDiscoveryScanBusy = true,
+                    isPrinterBusy = true,
+                    printerDiscoveryMessage = "Scanning Wi-Fi network…",
+                )
+            }
             try {
                 val extras = manualAddress.trim().takeIf { it.isNotBlank() }?.let { listOf(it) }.orEmpty()
                 val found = withContext(Dispatchers.IO) {
@@ -1032,7 +1252,7 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         networkPrinters = found,
-                        message = when {
+                        printerDiscoveryMessage = when {
                             found.isNotEmpty() -> "${found.size} network printer(s) found"
                             localIp == null ->
                                 "Cannot detect Wi-Fi IP. Connect this device to the same Wi-Fi as the printer."
@@ -1045,10 +1265,10 @@ class SettingsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(message = "Network scan failed: ${e.message ?: "unknown error"}")
+                    it.copy(printerDiscoveryMessage = "Network scan failed: ${e.message ?: "unknown error"}")
                 }
             } finally {
-                _uiState.update { it.copy(isPrinterBusy = false) }
+                _uiState.update { it.copy(isDiscoveryScanBusy = false, isPrinterBusy = false) }
             }
         }
     }
@@ -1060,7 +1280,13 @@ class SettingsViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isPrinterBusy = true, message = "Checking $trimmed…") }
+            _uiState.update {
+                it.copy(
+                    isDiscoveryScanBusy = true,
+                    isPrinterBusy = true,
+                    printerDiscoveryMessage = "Checking $trimmed…",
+                )
+            }
             try {
                 val reachable = withContext(Dispatchers.IO) {
                     printerService.canReachNetworkPrinter(trimmed)
@@ -1071,20 +1297,20 @@ class SettingsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             networkPrinters = (listOf(printer) + it.networkPrinters).distinctBy { p -> p.address },
-                            message = "Printer reachable at $host — tap Add printer to save"
+                            printerDiscoveryMessage = "Printer reachable at $host — tap Add printer to save",
                         )
                     }
                 } else {
                     _uiState.update {
-                        it.copy(message = "Cannot reach $trimmed on port 9100. Check IP and Wi-Fi.")
+                        it.copy(printerDiscoveryMessage = "Cannot reach $trimmed on port 9100. Check IP and Wi-Fi.")
                     }
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(message = "Connection check failed: ${e.message ?: "unknown error"}")
+                    it.copy(printerDiscoveryMessage = "Connection check failed: ${e.message ?: "unknown error"}")
                 }
             } finally {
-                _uiState.update { it.copy(isPrinterBusy = false) }
+                _uiState.update { it.copy(isDiscoveryScanBusy = false, isPrinterBusy = false) }
             }
         }
     }
@@ -1128,7 +1354,7 @@ class SettingsViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 usbDevices = devices,
-                message = if (devices.isEmpty()) {
+                printerDiscoveryMessage = if (devices.isEmpty()) {
                     "No USB printers detected — connect POS-80 via USB OTG"
                 } else {
                     "${devices.size} USB printer(s) found — tap one, allow access once, then Save"
@@ -1168,7 +1394,12 @@ class SettingsViewModel @Inject constructor(
                                 "Test print sent"
                             }
                         },
-                        onFailure = { e -> e.message ?: "Test print failed" }
+                        onFailure = {
+                            PrinterUserMessages.fromPrintFailure(
+                                appContext,
+                                settings.printerName ?: settings.printerMacAddress
+                            )
+                        }
                     )
                 )
             }
@@ -1187,7 +1418,7 @@ class SettingsViewModel @Inject constructor(
                     isPrinterBusy = false,
                     message = result.fold(
                         onSuccess = { "USB test print sent" },
-                        onFailure = { e -> e.message ?: "USB test print failed" }
+                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, normalized) }
                     )
                 )
             }
@@ -1225,10 +1456,11 @@ class SettingsViewModel @Inject constructor(
                     isPrinterBusy = false,
                     message = result.fold(
                         onSuccess = { "Test print sent to ${printer.name}" },
-                        onFailure = { e -> e.message ?: "Test print failed" }
+                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, printer.name) }
                     )
                 )
             }
+            refreshPrinterConnectionState()
         }
     }
 
@@ -1239,17 +1471,68 @@ class SettingsViewModel @Inject constructor(
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 printerService.routeEndOfDayReport(settings, report)
             }.onSuccess { _uiState.update { it.copy(message = "End of day report printed") } }
-                .onFailure { e -> _uiState.update { it.copy(message = e.message) } }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(message = PrinterUserMessages.fromPrintFailure(appContext))
+                    }
+                }
         }
     }
 
     fun saveSettings() {
         viewModelScope.launch {
+            val previous = currentSettings
             val settings = buildSettingsFromState()
+            if (settings.autoPrintReceipt != previous.autoPrintReceipt) {
+                com.chaslay.pos.util.PosLocalPrefs.saveAutoPrintReceipt(appContext, settings.autoPrintReceipt)
+            }
+            if (settings.tablesEnabled != previous.tablesEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveTablesEnabled(appContext, settings.tablesEnabled)
+            }
+            if (settings.scaleEnabled != previous.scaleEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveScaleEnabled(appContext, settings.scaleEnabled)
+            }
+            if (settings.scaleUsbAddress != previous.scaleUsbAddress) {
+                com.chaslay.pos.util.PosLocalPrefs.saveScaleUsbAddress(appContext, settings.scaleUsbAddress)
+            }
+            if (settings.retailDineInEnabled != previous.retailDineInEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailDineInEnabled(appContext, settings.retailDineInEnabled)
+            }
+            if (settings.retailTakeawayEnabled != previous.retailTakeawayEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailTakeawayEnabled(appContext, settings.retailTakeawayEnabled)
+            }
+            if (settings.retailDeliveryEnabled != previous.retailDeliveryEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailDeliveryEnabled(appContext, settings.retailDeliveryEnabled)
+            }
+            if (settings.expressPayPlacement != previous.expressPayPlacement) {
+                com.chaslay.pos.util.PosLocalPrefs.saveExpressPayPlacement(appContext, settings.expressPayPlacement)
+            }
+            val afterSaleGoToOrders = _uiState.value.afterSaleGoToOrders
+            val previousAfterSaleGoToOrders =
+                com.chaslay.pos.util.PosLocalPrefs.readAfterSaleGoToOrders(appContext)
+            if (afterSaleGoToOrders != previousAfterSaleGoToOrders) {
+                com.chaslay.pos.util.PosLocalPrefs.writeAfterSaleGoToOrders(appContext, afterSaleGoToOrders)
+            }
+            if (settings.expressEnabled != previous.expressEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveExpressCheckoutEnabled(appContext, settings.expressEnabled)
+            }
+            if (settings.retailCashTenderDialogEnabled != previous.retailCashTenderDialogEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailCashTenderDialogEnabled(
+                    appContext,
+                    settings.retailCashTenderDialogEnabled
+                )
+            }
+            if (settings.courseSendMode != previous.courseSendMode) {
+                com.chaslay.pos.util.PosLocalPrefs.saveCourseSendMode(appContext, settings.courseSendMode)
+            }
             settingsRepository.saveSettings(settings)
             currentSettings = settings
-            val terminalSync = runCatching { terminalSyncRepository.pushLocalTerminalOnly() }
-                .getOrDefault(com.chaslay.pos.sync.TerminalSyncResult())
+            val terminalSync = if (previous.terminalSyncPayloadChanged(settings)) {
+                runCatching { terminalSyncRepository.pushLocalTerminalOnly() }
+                    .getOrDefault(com.chaslay.pos.sync.TerminalSyncResult())
+            } else {
+                com.chaslay.pos.sync.TerminalSyncResult(skipped = true)
+            }
             val syncNote = when {
                 terminalSync.skipped -> null
                 terminalSync.error != null -> " · terminal sync failed"
@@ -1259,6 +1542,8 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(message = "Settings saved${syncNote ?: ""}")
             }
+            syncMonitoredScaleUsbAddress()
+            refreshScaleConnectionState()
         }
     }
 
@@ -1292,6 +1577,8 @@ class SettingsViewModel @Inject constructor(
             cardEnabled = state.cardEnabled,
             terminalEnabled = state.terminalEnabled,
             expressEnabled = state.expressEnabled,
+            expressPayPlacement = ExpressPayPlacement.toCheckoutValue(state.expressPayPlacement),
+            retailCashTenderDialogEnabled = state.retailCashTenderDialogEnabled,
             giftCardsEnabled = state.giftCardsEnabled,
             // POS Settings wins when staff change toggles locally.
             paymentMethodsManagedByCloud = state.paymentMethodsManagedByCloud,
@@ -1315,6 +1602,7 @@ class SettingsViewModel @Inject constructor(
             receiptShowQrCode = state.receiptShowQrCode,
             receiptDeliveryDirectionsQr = state.receiptDeliveryDirectionsQr,
             adyenReceiptDigitalOnly = state.adyenReceiptDigitalOnly,
+            autoPrintReceipt = state.autoPrintReceipt,
             kitchenLargeItemText = state.kitchenLargeItemText,
             kitchenLargeHeaderText = state.kitchenLargeHeaderText,
             kitchenItemTextScale = state.kitchenItemTextScale.coerceIn(1, 3),
@@ -1323,6 +1611,7 @@ class SettingsViewModel @Inject constructor(
             receiptTemplateName = state.receiptTemplateName,
             posMode = state.posMode,
             coursesEnabled = state.coursesEnabled,
+            courseSendMode = state.courseSendMode.toStorageKey(),
             tablesEnabled = state.tablesEnabled,
             retailDineInEnabled = state.retailDineInEnabled,
             retailTakeawayEnabled = state.retailTakeawayEnabled,
@@ -1353,6 +1642,8 @@ class SettingsViewModel @Inject constructor(
                     message = "Scale selected — saving…"
                 )
             }
+            syncMonitoredScaleUsbAddress()
+            refreshScaleConnectionState()
             saveSettings()
         }
         if (scaleService.hasPermission(address)) {
@@ -1361,6 +1652,7 @@ class SettingsViewModel @Inject constructor(
         }
         scaleService.requestPermission(address) { granted ->
             _uiState.update { it.copy(scaleDevices = scaleService.listDevices()) }
+            refreshScaleConnectionState()
             if (granted) {
                 applySelection()
             } else {
@@ -1369,17 +1661,31 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun displayScaleUsbAddress(address: String?): String {
+        val trimmed = address?.trim().orEmpty()
+        if (trimmed.isEmpty()) return ""
+        return scaleService.displayNameForAddress(trimmed) ?: trimmed
+    }
+
     fun scanScaleUsbDevices() {
         val devices = scaleService.listDevices()
         _uiState.update {
             it.copy(
                 scaleDevices = devices,
-                message = if (devices.isEmpty()) {
-                    "No USB scale found — connect Aclas OS6X via USB OTG"
-                } else {
-                    "${devices.size} scale device(s) found — tap one below to connect"
+                message = when {
+                    devices.isEmpty() ->
+                        "No USB scale found — connect Aclas OS6X via USB OTG"
+                    devices.size == 1 ->
+                        "Scale found — connecting…"
+                    else ->
+                        "${devices.size} scale device(s) found — tap one below to connect"
                 }
             )
+        }
+        if (devices.size == 1) {
+            selectScaleDeviceAndSave(devices.first().stableAddress)
+        } else {
+            refreshScaleConnectionState()
         }
     }
 
@@ -1389,6 +1695,27 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(message = "Select a scale USB device first") }
             return
         }
+        syncMonitoredScaleUsbAddress()
+        if (!scaleService.hasPermission(address)) {
+            usbPrinterManager.requestMonitoredScalePermissionFromSettings(address) { granted ->
+                refreshScaleConnectionState()
+                if (granted) {
+                    performTestScaleReading(address)
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            scaleTestReading = null,
+                            message = appContext.getString(R.string.scale_usb_permission_required)
+                        )
+                    }
+                }
+            }
+            return
+        }
+        performTestScaleReading(address)
+    }
+
+    private fun performTestScaleReading(address: String) {
         viewModelScope.launch {
             scaleService.readOnce(address)
                 .onSuccess { reading ->

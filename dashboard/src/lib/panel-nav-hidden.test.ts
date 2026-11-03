@@ -7,6 +7,7 @@ import {
   isPanelNavGroupHidden,
   isPanelNavHidden,
   isPanelNavOptionChecked,
+  merchantSettingsSidebarVisible,
   parsePanelNavHidden,
   togglePanelNavOption,
 } from './panel-nav-hidden';
@@ -61,5 +62,37 @@ assert.equal(isPanelNavOptionChecked('products', ['catalog']), true);
 assert.equal(isPanelNavOptionChecked('cms', ['cms']), true);
 assert.deepEqual(togglePanelNavOption(['catalog'], 'products', false), []);
 assert.deepEqual(togglePanelNavOption([], 'cms', true), ['cms']);
+
+assert.equal(isPanelNavHidden('/merchant/settings', ['/merchant/settings']), true);
+assert.equal(
+  merchantSettingsSidebarVisible({
+    hidden: ['/merchant/settings'],
+    canOpenSettings: true,
+    isOwner: true,
+    mayManageSettings: false,
+    mayManageStaff: false,
+  }),
+  true
+);
+assert.equal(
+  merchantSettingsSidebarVisible({
+    hidden: ['/merchant/settings'],
+    canOpenSettings: true,
+    isOwner: false,
+    mayManageSettings: true,
+    mayManageStaff: false,
+  }),
+  true
+);
+assert.equal(
+  merchantSettingsSidebarVisible({
+    hidden: ['/merchant/settings'],
+    canOpenSettings: true,
+    isOwner: false,
+    mayManageSettings: false,
+    mayManageStaff: false,
+  }),
+  false
+);
 
 console.log('panel-nav-hidden tests passed');

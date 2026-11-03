@@ -52,6 +52,7 @@ const VALID_ADDON_KEYS = new Set([
   "google_reputation",
   "ai_web_seo",
   "phone_ordering",
+  "sms",
 ]);
 
 export class SubscriptionAddonsService {

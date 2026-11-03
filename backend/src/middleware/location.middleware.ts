@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { ensureLocationsSchema, ensureMerchantColumnsSchema, ensureOrdersColumnsSchema, ensureOrderItemsColumnsSchema } from "@/lib/ensure-merchant-schema";
+import { ensureLocationContextSchema } from "@/lib/ensure-merchant-schema";
 import { canSwitchPanelLocation } from "@/lib/panel-location-switch";
 import { LocationsService } from "@/services/locations.service";
 
@@ -23,10 +23,7 @@ export async function setLocationContext(req: Request, res: Response, next: Next
     const merchantId = req.merchantId;
     if (!merchantId) return next();
 
-    await ensureMerchantColumnsSchema();
-    await ensureOrdersColumnsSchema();
-    await ensureOrderItemsColumnsSchema();
-    await ensureLocationsSchema();
+    await ensureLocationContextSchema();
 
     const headerId = String(req.headers["x-location-id"] || "").trim();
     const isOwner = req.user?.role === "merchant";

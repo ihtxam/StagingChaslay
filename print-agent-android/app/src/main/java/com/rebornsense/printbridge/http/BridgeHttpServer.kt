@@ -3,6 +3,7 @@ package com.rebornsense.printbridge.http
 import android.content.Context
 import com.rebornsense.printbridge.BuildConfig
 import com.rebornsense.printbridge.device.DeviceProfiler
+import com.rebornsense.printbridge.display.CustomerDisplayController
 import com.rebornsense.printbridge.print.NiimbotPrintClient
 import com.rebornsense.printbridge.print.DriverRegistry
 import com.rebornsense.printbridge.print.PrintJobQueue
@@ -14,6 +15,9 @@ import com.rebornsense.printbridge.payment.TapToPaySaleOutcome
 import com.rebornsense.printbridge.setup.OemSetupPreferences
 import com.rebornsense.printbridge.payment.hasNfcFeature
 import com.rebornsense.printbridge.scale.AclasScaleReader
+import com.rebornsense.printbridge.scale.ScalePreferences
+import com.rebornsense.printbridge.scale.ScaleUsbHelper
+import com.rebornsense.printbridge.usb.UsbHostPermissions
 import com.rebornsense.printbridge.usb.UsbPlugPlay
 import com.rebornsense.printbridge.scale.AclasScaleReading
 import fi.iki.elonen.NanoHTTPD
@@ -83,6 +87,11 @@ class BridgeHttpServer(
                 if (tapToPayReady) features.put("tap-to-pay")
                 features.put("scale")
                 features.put("usb-scale")
+                val dualScreen = CustomerDisplayController.dualScreenAvailable(appContext)
+                if (dualScreen) features.put("dual-screen")
+                if (CustomerDisplayController.isOpen()) features.put("customer-display")
+                val customerLcd = registry.sunmiDriver().customerLcdAvailable(appContext)
+                if (customerLcd) features.put("customer-lcd")
 
                 jsonResponse(
                     JSONObject()
@@ -92,6 +101,9 @@ class BridgeHttpServer(
                         .put("deviceProfile", DeviceProfiler.deviceProfileId())
                         .put("manufacturer", android.os.Build.MANUFACTURER)
                         .put("model", android.os.Build.MODEL)
+                        .put("dualScreenAvailable", dualScreen)
+                        .put("customerDisplayOpen", CustomerDisplayController.isOpen())
+                        .put("customerLcdAvailable", customerLcd)
                         .put("features", features)
                         .put("printerReady", registry.hasReadyPrinter(appContext))
                         .put("usbPermissionRequired", registry.usbPermissionPending(appContext))
@@ -107,6 +119,7 @@ class BridgeHttpServer(
             uri == "/printers" && method == Method.GET -> {
                 val printers = registry.refresh(appContext).map { ep ->
                     JSONObject()
+                        .put("id", ep.id)
                         .put("name", ep.name)
                         .put("isDefault", ep.isDefault)
                         .put("connectionType", ep.connectionType)
@@ -115,6 +128,10 @@ class BridgeHttpServer(
                             "hasPermission",
                             ep.connectionType != "usb" || ep.meta["hasPermission"] == "true",
                         )
+                        .put("usbPrinterClass", ep.meta["usbPrinterClass"] == "true")
+                        .also { json ->
+                            ep.meta["address"]?.trim()?.takeIf { it.isNotEmpty() }?.let { json.put("address", it) }
+                        }
                 }
                 val arr = JSONArray()
                 printers.forEach { arr.put(it) }
@@ -364,6 +381,22 @@ class BridgeHttpServer(
                         Response.Status.BAD_REQUEST
                     )
                 }
+                ScalePreferences.setMonitoredScaleAddress(appContext, usbAddress)
+                UsbHostPermissions.syncMonitoredFromPreferences(appContext)
+                val resolved = ScaleUsbHelper.resolveDevice(appContext, usbAddress)
+                if (resolved != null) {
+                    val usb = appContext.getSystemService(android.content.Context.USB_SERVICE)
+                        as? android.hardware.usb.UsbManager
+                    if (usb != null && UsbHostPermissions.needsScalePermissionRequest(appContext, usb, resolved)) {
+                        UsbPlugPlay.promptForMissingScale(appContext, resolved)
+                        return jsonResponse(
+                            JSONObject()
+                                .put("ok", true)
+                                .put("reading", JSONObject.NULL)
+                                .put("message", "USB permission required — tap notification or open Bridge Reborn")
+                        )
+                    }
+                }
                 val outcome = runBlocking {
                     withTimeoutOrNull(timeoutMs + 800L) {
                         AclasScaleReader.readOnce(appContext, usbAddress, timeoutMs)
@@ -396,6 +429,68 @@ class BridgeHttpServer(
                             )
                     )
                 }
+            }
+
+            uri == "/customer-display" && method == Method.GET -> {
+                jsonResponse(
+                    JSONObject()
+                        .put("ok", true)
+                        .put("dualScreenAvailable", CustomerDisplayController.dualScreenAvailable(appContext))
+                        .put("open", CustomerDisplayController.isOpen())
+                        .put("url", CustomerDisplayController.currentUrl()),
+                )
+            }
+
+            uri == "/customer-display/open" && method == Method.POST -> {
+                val body = readBody(session)
+                val url = body.optString("url", "").trim()
+                if (url.isBlank()) {
+                    return jsonResponse(
+                        JSONObject().put("ok", false).put("error", "url is required"),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                val outcome = CustomerDisplayController.open(appContext, url)
+                jsonResponse(
+                    JSONObject()
+                        .put("ok", outcome.ok)
+                        .put("message", outcome.message)
+                        .put("displayId", outcome.displayId)
+                        .put("dualScreenAvailable", CustomerDisplayController.dualScreenAvailable(appContext)),
+                    if (outcome.ok) Response.Status.OK else Response.Status.BAD_REQUEST,
+                )
+            }
+
+            uri == "/customer-display/close" && method == Method.POST -> {
+                CustomerDisplayController.close(appContext)
+                jsonResponse(JSONObject().put("ok", true))
+            }
+
+            uri == "/customer-display/lcd" && method == Method.POST -> {
+                val body = readBody(session)
+                val top = body.optString("topText", body.optString("line1", ""))
+                val bottom = body.optString("bottomText", body.optString("line2", ""))
+                val clear = body.optBoolean("clear", false)
+                val sunmi = registry.sunmiDriver()
+                if (!sunmi.customerLcdAvailable(appContext)) {
+                    return jsonResponse(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "No Sunmi customer LCD on this device"),
+                        Response.Status.BAD_REQUEST,
+                    )
+                }
+                val outcome = if (clear) {
+                    sunmi.clearCustomerLcd(appContext)
+                } else {
+                    sunmi.showCustomerLcd(appContext, top, bottom)
+                }
+                val lcdPayload = JSONObject().put("ok", outcome.isSuccess)
+                outcome.exceptionOrNull()?.message?.let { lcdPayload.put("error", it) }
+                jsonResponse(
+                    lcdPayload,
+                    if (outcome.isSuccess) Response.Status.OK else Response.Status.BAD_REQUEST,
+                )
             }
 
             uri == "/drawer" && method == Method.POST -> {

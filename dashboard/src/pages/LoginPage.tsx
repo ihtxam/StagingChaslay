@@ -16,6 +16,7 @@ import { bootstrapStaffRegisterSessionAfterEmailLogin } from '@/lib/staff-email-
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
+import { readLoginFormCredentials } from '@/lib/login-form-credentials';
 import { shouldShowOnScreenKeyboardToggle } from '@/lib/platform';
 import { useSoftKeyboardLayout } from '@/lib/useSoftKeyboardLayout';
 
@@ -232,17 +233,18 @@ export default function LoginPage() {
   const onSubmit = async (form: LoginFormData) => {
     setIsLoading(true);
     try {
+      const { email, password } = readLoginFormCredentials(form);
       let data: UnifiedLoginResponse;
       try {
         const response = await api.post<UnifiedLoginResponse>('/auth/login', {
-          email: form.email.trim(),
-          password: form.password,
+          email,
+          password,
         });
         data = response.data;
       } catch (unifiedError: unknown) {
         const status = (unifiedError as { response?: { status?: number } }).response?.status;
         if (status !== 404) throw unifiedError;
-        data = await legacyLogin(form.email.trim(), form.password);
+        data = await legacyLogin(email, password);
       }
       const hit = userFromLogin(data);
       if (!hit) {
@@ -353,10 +355,14 @@ export default function LoginPage() {
                   <input
                     id="login-email"
                     {...emailField}
+                    name="email"
                     type="email"
                     placeholder="name@company.com"
                     className="input py-2.5"
                     autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     autoFocus={!keyboardOpen}
                     enterKeyHint="next"
                     onFocus={onFormFieldFocus}
@@ -383,10 +389,14 @@ export default function LoginPage() {
                   <input
                     id="login-password"
                     {...passwordField}
+                    name="password"
                     type="password"
                     placeholder="••••••••"
                     className="input py-2.5"
                     autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     enterKeyHint="go"
                     onFocus={onFormFieldFocus}
                   />

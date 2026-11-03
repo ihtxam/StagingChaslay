@@ -56,6 +56,8 @@ jobs:
           set -euo pipefail
           # rebornSense-only workflows (must not land in StagingChaslay)
           rm -f .github/workflows/deploy-rebornsense.yml
+          rm -f .github/workflows/production-api-auto-heal.yml
+          rm -f .github/workflows/production-health-watch.yml
           rm -f .github/workflows/recover-rebornsense-data.yml
           rm -f .github/workflows/restart-rebornsense.yml
           rm -f .github/workflows/restore-rebornsense-now.yml

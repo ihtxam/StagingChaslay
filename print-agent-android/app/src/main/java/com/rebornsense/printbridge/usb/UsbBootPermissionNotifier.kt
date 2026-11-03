@@ -32,6 +32,14 @@ object UsbBootPermissionNotifier {
     private const val NOTIFICATION_ID = 9102
 
     fun onDiscoveryFinished(context: Context) {
+        if (UsbBootAttachGrace.isWithinPostBootGrace(context)) {
+            BridgeEventsLog.record(
+                context,
+                "usb-permission",
+                "skip boot discovery prompt — post-reboot grace",
+            )
+            return
+        }
         UsbHostPermissions.promoteGrantedUsbPrinters(context)
         val missing = missingPermissionPrinterCandidates(context)
         if (missing.isEmpty()) {
@@ -82,7 +90,10 @@ object UsbBootPermissionNotifier {
     }
 
     private fun missingPermissionPrinterCandidates(context: Context): List<UsbDevice> {
-        return UsbPlugPlay.missingPrinterDevices(context)
+        UsbHostPermissions.syncMonitoredFromPreferences(context)
+        return UsbPlugPlay.missingPrinterDevices(context).filter { device ->
+            UsbHostPermissions.shouldAutoRequestPermission(context, device)
+        }
     }
 
     private fun currentBootWallTimeMs(): Long =

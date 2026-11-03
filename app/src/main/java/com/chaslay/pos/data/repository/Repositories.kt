@@ -17,6 +17,7 @@ import com.chaslay.pos.data.local.dao.TableOrderDao
 import com.chaslay.pos.data.local.dao.TableOrderItemDao
 import com.chaslay.pos.data.local.entity.HeldOrderEntity
 import com.chaslay.pos.data.local.entity.HeldOrderItemEntity
+import com.chaslay.pos.domain.model.KitchenMessageLabels
 import com.chaslay.pos.data.local.entity.KitchenMessageEntity
 import com.chaslay.pos.data.local.entity.RestaurantTableEntity
 import com.chaslay.pos.data.local.entity.TableOrderEntity
@@ -30,6 +31,8 @@ import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.DailySalesReport
 import com.chaslay.pos.domain.model.DashboardStats
+import com.chaslay.pos.domain.EodPaymentBuckets
+import com.chaslay.pos.domain.model.EodStaffSummaryRow
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.VatBreakdownRow
 import com.chaslay.pos.domain.model.PaymentMethodRow
@@ -136,19 +139,39 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun pinMatchesActiveStaff(pin: String): Boolean {
-        if (pin.length < com.chaslay.pos.domain.model.STAFF_PIN_MIN_LENGTH) return false
+        if (pin.length != com.chaslay.pos.domain.model.STAFF_PIN_LENGTH) return false
+        if (syncApiKeyStore.hasKey()) {
+            runCatching { syncApi.verifyStaffPin(VerifyStaffPinRequest(pin)).staff }.getOrNull()?.let {
+                return true
+            }
+        }
         val hash = hash(pin)
-        return userDao.getPinUsers().any { it.pinHash == hash && it.isActive }
+        return resolveLocalPinUser(hash) != null
     }
 
     suspend fun loginWithPin(pin: String): AuthSession? {
+        if (syncApiKeyStore.hasKey()) {
+            loginSyncedPinViaApi(pin)?.let { return it }
+        }
         val hash = hash(pin)
-        userDao.getPinUsers().find { it.pinHash == hash && it.isActive }?.let { user ->
+        resolveLocalPinUser(hash)?.let { user ->
             val role = roleDao.getById(user.roleId) ?: return null
             refreshDashboardTokenFromPin(pin)
             return AuthSession(user, role)
         }
-        return loginSyncedPinViaApi(pin)
+        return null
+    }
+
+    /**
+     * Bundled demo users can share PINs with synced staff; prefer cloud-synced accounts.
+     */
+    private suspend fun resolveLocalPinUser(pinHash: String): UserEntity? {
+        val matches = userDao.getPinUsers().filter { it.pinHash == pinHash && it.isActive }
+        if (matches.isEmpty()) return null
+        if (matches.size == 1) return matches.first()
+        return matches.firstOrNull { user ->
+            user.email?.startsWith("sync:", ignoreCase = true) == true
+        } ?: matches.minBy { it.id }
     }
 
     /** Staff PIN verify returns a dashboard JWT when the device has a merchant sync key. */
@@ -471,6 +494,7 @@ class AuthRepository @Inject constructor(
 
 @Singleton
 class ProductRepository @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val productDao: ProductDao,
     private val productVariantDao: ProductVariantDao,
     private val categoryDao: CategoryDao
@@ -522,6 +546,12 @@ class ProductRepository @Inject constructor(
             productDao.update(product.copy(updatedAt = System.currentTimeMillis()))
             product.id
         }
+        com.chaslay.pos.util.PosLocalPrefs.saveLocalProductPrice(
+            appContext,
+            id,
+            product.price,
+            product.remoteId
+        )
         return id
     }
 
@@ -818,11 +848,65 @@ class TransactionRepository @Inject constructor(
             ProductSalesReport(it.productName, it.qty, roundMoney(it.revenue))
         }
 
-    suspend fun getUserPerformance(userId: Long? = null): List<UserPerformanceReport> {
-        val (start, end) = dayBounds()
-        return transactionDao.getUserPerformance(start, end, userId ?: -1L).map {
-            UserPerformanceReport(it.userName, it.txCount, roundMoney(it.revenue))
+    suspend fun getUserPerformance(
+        start: Long,
+        end: Long,
+        userId: Long? = null
+    ): List<UserPerformanceReport> {
+        val txs = transactionDao.searchTransactions(start, end, null, null)
+            .filter { it.paymentStatus.isPaidSale() }
+            .let { list ->
+                if (userId != null) list.filter { it.userId == userId } else list
+            }
+        return buildStaffEodBreakdown(txs).map {
+            UserPerformanceReport(
+                userName = it.name,
+                transactionCount = it.salesCount,
+                revenue = it.revenue,
+                cashTotal = it.cashTotal,
+                cardTotal = it.cardTotal,
+                tapToPayTotal = it.tapToPayTotal,
+            )
         }
+    }
+
+    fun buildStaffEodBreakdown(paidSales: List<TransactionEntity>): List<EodStaffSummaryRow> {
+        data class Agg(
+            var count: Int = 0,
+            var revenue: Double = 0.0,
+            var cash: Double = 0.0,
+            var card: Double = 0.0,
+            var terminal: Double = 0.0,
+            var tap: Double = 0.0,
+            var other: Double = 0.0,
+        )
+        val byStaff = linkedMapOf<String, Agg>()
+        for (tx in paidSales) {
+            val name = tx.userName.trim().ifEmpty { "Unassigned" }
+            val agg = byStaff.getOrPut(name) { Agg() }
+            agg.count += 1
+            agg.revenue += EodPaymentBuckets.netTaxableSale(tx)
+            for ((methodKey, amount) in EodPaymentBuckets.netPaymentBucketsForTransaction(tx)) {
+                when {
+                    EodPaymentBuckets.isCashKey(methodKey) -> agg.cash += amount
+                    methodKey == "card" -> agg.card += amount
+                    methodKey == "terminal" -> agg.terminal += amount
+                    EodPaymentBuckets.isTapToPayKey(methodKey) -> agg.tap += amount
+                    else -> agg.other += amount
+                }
+            }
+        }
+        return byStaff.map { (name, agg) ->
+            EodStaffSummaryRow(
+                name = name,
+                salesCount = agg.count,
+                revenue = roundMoney(agg.revenue),
+                cashTotal = roundMoney(agg.cash),
+                cardTotal = roundMoney(EodPaymentBuckets.cardBucketTotal(agg.card, agg.terminal)),
+                tapToPayTotal = roundMoney(agg.tap),
+                otherTotal = roundMoney(agg.other),
+            )
+        }.sortedByDescending { it.revenue }
     }
 
     suspend fun getEndOfDayReport(): EndOfDayReport {
@@ -852,14 +936,20 @@ class TransactionRepository @Inject constructor(
         fun netPayment(tx: TransactionEntity) =
             (tx.total - tx.refundAmount.coerceAtLeast(0.0)).coerceAtLeast(0.0)
 
-        val refundTotal = roundMoney(paidSales.sumOf { it.refundAmount.coerceAtLeast(0.0) })
+        val refundTotal = roundMoney(
+            paidSales.sumOf {
+                it.refundAmount.coerceAtLeast(0.0) + it.goodwillAmount.coerceAtLeast(0.0)
+            }
+        )
         val refundedOrders = paidSales
-            .filter { it.refundAmount > 0.0 }
+            .filter { it.refundAmount > 0.0 || it.goodwillAmount > 0.0 }
             .sortedByDescending { it.refundedAt ?: it.createdAt }
             .map {
                 RefundedOrderRow(
                     orderNumber = it.transactionNumber,
-                    refundAmount = roundMoney(it.refundAmount),
+                    refundAmount = roundMoney(
+                        it.refundAmount.coerceAtLeast(0.0) + it.goodwillAmount.coerceAtLeast(0.0)
+                    ),
                     refundReason = it.refundReason,
                     refundedAt = it.refundedAt
                 )
@@ -1015,6 +1105,16 @@ class TransactionRepository @Inject constructor(
     /** Permanently removes an order and its line items from local history and reports. */
     suspend fun deleteOrderPermanently(transactionId: String) {
         deleteOrdersByIds(collectOrderDeleteIds(transactionId))
+    }
+
+    /** Permanently removes each order (and split siblings) from local history. Returns rows removed. */
+    suspend fun deleteOrdersPermanently(transactionIds: Collection<String>): Int {
+        val idsToDelete = linkedSetOf<String>()
+        transactionIds.forEach { id ->
+            idsToDelete.addAll(collectOrderDeleteIds(id))
+        }
+        deleteOrdersByIds(idsToDelete)
+        return idsToDelete.size
     }
 
     suspend fun countOrdersInRange(startMs: Long, endMs: Long): Int =
@@ -1226,13 +1326,57 @@ class SettingsRepository @Inject constructor(
     private val discountPresetDao: com.chaslay.pos.data.local.dao.DiscountPresetDao,
     private val printerConfigDao: com.chaslay.pos.data.local.dao.PrinterConfigDao
 ) {
-    private fun withLocalPreferences(settings: BusinessSettingsEntity): BusinessSettingsEntity =
-        settings.copy(
+    private fun withLocalPreferences(settings: BusinessSettingsEntity): BusinessSettingsEntity {
+        val tablesFromDb = settings.tablesEnabled
+        val tables = com.chaslay.pos.util.PosLocalPrefs.applyTablesEnabledIfUserSet(appContext, tablesFromDb)
+        return settings.copy(
             vatIncludedInPrice = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(
                 appContext,
                 settings.vatIncludedInPrice
+            ),
+            autoPrintReceipt = com.chaslay.pos.util.PosLocalPrefs.applyAutoPrintReceiptIfUserSet(
+                appContext,
+                settings.autoPrintReceipt
+            ),
+            tablesEnabled = tables,
+            scaleEnabled = com.chaslay.pos.util.PosLocalPrefs.applyScaleEnabledIfUserSet(
+                appContext,
+                settings.scaleEnabled
+            ),
+            scaleUsbAddress = com.chaslay.pos.util.PosLocalPrefs.applyScaleUsbAddressIfUserSet(
+                appContext,
+                settings.scaleUsbAddress
+            ),
+            retailDineInEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailDineInEnabledIfUserSet(
+                appContext,
+                settings.retailDineInEnabled
+            ),
+            retailTakeawayEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailTakeawayEnabledIfUserSet(
+                appContext,
+                settings.retailTakeawayEnabled
+            ),
+            retailDeliveryEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailDeliveryEnabledIfUserSet(
+                appContext,
+                settings.retailDeliveryEnabled
+            ),
+            expressPayPlacement = com.chaslay.pos.util.PosLocalPrefs.applyExpressPayPlacementIfUserSet(
+                appContext,
+                settings.expressPayPlacement
+            ),
+            expressEnabled = com.chaslay.pos.util.PosLocalPrefs.applyExpressCheckoutEnabledIfUserSet(
+                appContext,
+                settings.expressEnabled
+            ),
+            retailCashTenderDialogEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailCashTenderDialogEnabledIfUserSet(
+                appContext,
+                settings.retailCashTenderDialogEnabled
+            ),
+            courseSendMode = com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(
+                appContext,
+                settings.courseSendMode
             )
         )
+    }
 
     fun observeSettings(): Flow<BusinessSettingsEntity> =
         settingsDao.observe().map { withLocalPreferences(it ?: BusinessSettingsEntity()) }
@@ -1246,7 +1390,82 @@ class SettingsRepository @Inject constructor(
         } else {
             settings.vatIncludedInPrice
         }
-        settingsDao.upsert(settings.copy(id = 1, vatIncludedInPrice = vat))
+        val autoPrint = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetAutoPrintReceipt(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyAutoPrintReceiptIfUserSet(appContext, settings.autoPrintReceipt)
+        } else {
+            settings.autoPrintReceipt
+        }
+        val tablesRaw = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetTablesEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyTablesEnabledIfUserSet(appContext, settings.tablesEnabled)
+        } else {
+            settings.tablesEnabled
+        }
+        val tables = tablesRaw
+        val scaleEnabled = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetScaleEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyScaleEnabledIfUserSet(appContext, settings.scaleEnabled)
+        } else {
+            settings.scaleEnabled
+        }
+        val scaleUsb = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetScaleUsbAddress(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyScaleUsbAddressIfUserSet(appContext, settings.scaleUsbAddress)
+        } else {
+            settings.scaleUsbAddress
+        }
+        val retailDineIn = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailDineInEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailDineInEnabledIfUserSet(appContext, settings.retailDineInEnabled)
+        } else {
+            settings.retailDineInEnabled
+        }
+        val retailTakeaway = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailTakeawayEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailTakeawayEnabledIfUserSet(appContext, settings.retailTakeawayEnabled)
+        } else {
+            settings.retailTakeawayEnabled
+        }
+        val retailDelivery = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailDeliveryEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailDeliveryEnabledIfUserSet(appContext, settings.retailDeliveryEnabled)
+        } else {
+            settings.retailDeliveryEnabled
+        }
+        val expressPlacement = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetExpressPayPlacement(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyExpressPayPlacementIfUserSet(appContext, settings.expressPayPlacement)
+        } else {
+            settings.expressPayPlacement
+        }
+        val expressCheckout = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetExpressCheckoutEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyExpressCheckoutEnabledIfUserSet(appContext, settings.expressEnabled)
+        } else {
+            settings.expressEnabled
+        }
+        val retailCashDialog = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailCashTenderDialogEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailCashTenderDialogEnabledIfUserSet(
+                appContext,
+                settings.retailCashTenderDialogEnabled
+            )
+        } else {
+            settings.retailCashTenderDialogEnabled
+        }
+        val courseSend = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetCourseSendMode(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(appContext, settings.courseSendMode)
+        } else {
+            settings.courseSendMode
+        }
+        settingsDao.upsert(
+            settings.copy(
+                id = 1,
+                vatIncludedInPrice = vat,
+                autoPrintReceipt = autoPrint,
+                tablesEnabled = tables,
+                scaleEnabled = scaleEnabled,
+                scaleUsbAddress = scaleUsb?.trim()?.takeIf { it.isNotEmpty() },
+                retailDineInEnabled = retailDineIn,
+                retailTakeawayEnabled = retailTakeaway,
+                retailDeliveryEnabled = retailDelivery,
+                expressPayPlacement = expressPlacement,
+                expressEnabled = expressCheckout,
+                retailCashTenderDialogEnabled = retailCashDialog,
+                courseSendMode = courseSend
+            )
+        )
     }
 
     fun observeDiscountPresets(): Flow<List<com.chaslay.pos.domain.model.DiscountPreset>> =
@@ -1280,6 +1499,7 @@ class SettingsRepository @Inject constructor(
         printerConfigDao.getAll()
 
     suspend fun savePrinter(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity) {
+        // Device-local only — not synced from merchant panel; survives sync/reboot via Room.
         printerConfigDao.upsert(printer)
     }
 
@@ -1601,6 +1821,7 @@ class CartManager @Inject constructor(
         val included = vatIncludedInPrice ?: _cart.value.vatIncludedInPrice
         val afterDiscount = vatAfterDiscount ?: _cart.value.vatAfterDiscount
         val maxCourse = items.maxOfOrNull { it.courseNumber } ?: 1
+        val resolvedActiveCourse = (items.maxOfOrNull { it.courseNumber } ?: activeCourse).coerceAtLeast(1)
         _cart.value = CartSummary(
             items = items.map { it.copy(vatIncludedInPrice = included) },
             discountPercent = discountPercent,
@@ -1610,7 +1831,7 @@ class CartManager @Inject constructor(
             tableOrderId = orderId,
             tableName = tableName,
             guestCount = guestCount,
-            activeCourse = activeCourse,
+            activeCourse = resolvedActiveCourse,
             courseCount = maxOf(courseCount, maxCourse),
             vatIncludedInPrice = included,
             vatAfterDiscount = afterDiscount
@@ -1722,6 +1943,19 @@ class CartManager @Inject constructor(
                 deliveryAddress = null,
                 deliveryZip = null,
                 deliveryPhone = null
+            )
+        }
+    }
+
+    fun convertToDeliveryPreservingCart(orderNumber: String) {
+        _cart.update { cart ->
+            cart.copy(
+                fulfillmentType = FulfillmentType.DELIVERY,
+                orderNumber = orderNumber,
+                serviceType = ServiceType.TAKEAWAY,
+                tableId = null,
+                tableOrderId = null,
+                tableName = null
             )
         }
     }
@@ -2037,7 +2271,13 @@ class TableOrderRepository @Inject constructor(
         val order = orderDao.getById(orderId) ?: return
         val table = tableDao.getById(order.tableId)
         if (table != null) {
-            addKitchenMessage(orderId, table.id, table.name, "ORDER CANCELLED: $reason")
+            val lang = settingsDao.get()?.defaultLanguage ?: "en"
+            addKitchenMessage(
+                orderId,
+                table.id,
+                table.name,
+                KitchenMessageLabels.orderCancelled(lang, reason)
+            )
         }
         orderItemDao.deleteByOrder(orderId)
         orderDao.deleteById(orderId)
@@ -2076,11 +2316,12 @@ class TableOrderRepository @Inject constructor(
                     updatedAt = now
                 )
             )
+            val lang = settingsDao.get()?.defaultLanguage ?: "en"
             addKitchenMessage(
                 sourceOrder.id,
                 targetTableId,
                 targetTable.name,
-                "Table moved from ${sourceTable.name}"
+                KitchenMessageLabels.tableMovedFrom(lang, sourceTable.name)
             )
             return TableTransferResult.Success(
                 targetTableId = targetTableId,
@@ -2102,11 +2343,12 @@ class TableOrderRepository @Inject constructor(
             )
         )
         orderDao.deleteById(sourceOrder.id)
+        val lang = settingsDao.get()?.defaultLanguage ?: "en"
         addKitchenMessage(
             targetOrder.id,
             targetTableId,
             targetTable.name,
-            "Merged from ${sourceTable.name} (${sourceItems.size} item(s))"
+            KitchenMessageLabels.mergedFrom(lang, sourceTable.name, sourceItems.size)
         )
         return TableTransferResult.Success(
             targetTableId = targetTableId,
@@ -2164,11 +2406,12 @@ class TableOrderRepository @Inject constructor(
         }
 
         val itemSummary = toMove.joinToString(", ") { "${it.quantity}x ${it.productName}" }
+        val lang = settingsDao.get()?.defaultLanguage ?: "en"
         addKitchenMessage(
             targetOrder.id,
             targetTableId,
             targetTable.name,
-            "From ${sourceTable.name}: $itemSummary"
+            KitchenMessageLabels.fromTable(lang, sourceTable.name, itemSummary)
         )
 
         return TableTransferResult.Success(
@@ -2507,6 +2750,23 @@ class HeldOrderRepository @Inject constructor(
         heldOrderItemDao.deleteByOrder(id)
         if (items.isNotEmpty()) heldOrderItemDao.insertAll(items)
         return entity
+    }
+
+    /** Updates an existing held order snapshot; does not create a new held row. */
+    suspend fun updateHeldOrderIfExists(
+        cart: CartSummary,
+        userId: Long,
+        userName: String
+    ): Boolean {
+        val orderNumber = cart.orderNumber?.trim()?.takeIf { it.isNotBlank() } ?: return false
+        val existing = heldOrderDao.getByOrderNumber(orderNumber) ?: return false
+        createHeldOrder(
+            cart = cart,
+            sendToKitchen = existing.status == HeldOrderStatus.SENT_TO_KITCHEN,
+            userId = userId,
+            userName = userName
+        )
+        return true
     }
 
     suspend fun createProgrammedPayLaterOrder(

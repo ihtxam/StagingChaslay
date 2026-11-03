@@ -12,6 +12,7 @@ import com.chaslay.pos.data.local.entity.ModifierOptionEntity
 import com.chaslay.pos.data.local.entity.ComboSlotEntity
 import com.chaslay.pos.data.local.entity.ComboSlotOptionEntity
 import com.chaslay.pos.data.local.entity.ProductAddonGroupEntity
+import com.chaslay.pos.data.local.entity.ProductGroupLink
 import com.chaslay.pos.data.local.entity.ProductModifierGroupEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -102,6 +103,15 @@ interface ProductModifierGroupDao {
     )
     suspend fun getGroupsForProduct(productId: Long): List<ModifierGroupEntity>
 
+    @Query(
+        """
+        SELECT groupId, sortOrder FROM product_modifier_groups
+        WHERE productId = :productId
+        ORDER BY sortOrder
+        """
+    )
+    suspend fun getGroupLinksForProduct(productId: Long): List<ProductGroupLink>
+
     @Query("SELECT productId FROM product_modifier_groups WHERE groupId = :groupId")
     suspend fun getProductIdsForGroup(groupId: Long): List<Long>
 
@@ -126,6 +136,15 @@ interface ProductAddonGroupDao {
         """
     )
     suspend fun getGroupsForProduct(productId: Long): List<AddonGroupEntity>
+
+    @Query(
+        """
+        SELECT groupId, sortOrder FROM product_addon_groups
+        WHERE productId = :productId
+        ORDER BY sortOrder
+        """
+    )
+    suspend fun getGroupLinksForProduct(productId: Long): List<ProductGroupLink>
 
     @Query("SELECT productId FROM product_addon_groups WHERE groupId = :groupId")
     suspend fun getProductIdsForGroup(groupId: Long): List<Long>

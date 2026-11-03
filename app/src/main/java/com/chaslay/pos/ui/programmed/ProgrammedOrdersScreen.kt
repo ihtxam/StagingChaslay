@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.programmed
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +47,8 @@ import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.ProgrammedOrderCard
 import com.chaslay.pos.domain.model.ProgrammedOrderSource
 import com.chaslay.pos.domain.model.ServiceType
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
 import com.chaslay.pos.ui.theme.vectronColors
 import com.chaslay.pos.util.ScheduledOrderDateFormat
 import java.util.Locale
@@ -81,7 +85,7 @@ fun ProgrammedOrdersScreen(
                 Text(stringResource(R.string.loading), color = colors.textSecondary, modifier = Modifier.padding(8.dp))
             }
             state.errorMessage?.let { msg ->
-                Text(msg, color = Color(0xFFC0392B), modifier = Modifier.padding(8.dp))
+                Text(msg, color = PosColors.Danger, modifier = Modifier.padding(8.dp))
             }
             if (state.groups.isEmpty() && !state.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -153,24 +157,24 @@ fun ProgrammedOrdersScreen(
 
 @Composable
 private fun ProgrammedDayHeader(group: ProgrammedDayGroup) {
-    val colors = vectronColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.header)
+            .clip(PosShapes.Medium)
+            .background(posUiColors().surface)
+            .border(1.dp, posUiColors().border, PosShapes.Medium)
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Text(
             group.dayLabel,
-            color = colors.textPrimary,
+            color = posUiColors().textPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = 15.sp,
             maxLines = 2
         )
         Text(
             stringResource(R.string.programmed_orders_count, group.orders.size),
-            color = colors.textSecondary,
+            color = posUiColors().textSecondary,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 2.dp)
         )
@@ -185,12 +189,12 @@ private fun ProgrammedOrderCardView(
     onPrint: () -> Unit
 ) {
     val headerColor = when (order.fulfillmentType) {
-        FulfillmentType.DELIVERY -> Color(0xFFE67E22)
-        FulfillmentType.PICKUP -> Color(0xFF0288D1)
-        FulfillmentType.DINE_IN -> Color(0xFF2E7D32)
+        FulfillmentType.DELIVERY -> PosColors.Warning
+        FulfillmentType.PICKUP -> PosColors.Info
+        FulfillmentType.DINE_IN -> PosColors.Success
         FulfillmentType.WALK_IN -> when (order.serviceType) {
-            ServiceType.DINE_IN -> Color(0xFF2E7D32)
-            ServiceType.TAKEAWAY -> Color(0xFF0288D1)
+            ServiceType.DINE_IN -> PosColors.Success
+            ServiceType.TAKEAWAY -> PosColors.Info
         }
     }
     val typeLabel = when (order.fulfillmentType) {
@@ -198,7 +202,7 @@ private fun ProgrammedOrderCardView(
         FulfillmentType.DELIVERY -> stringResource(R.string.delivery)
         else -> order.serviceType.displayName
     }
-    val paidColor = if (order.isPaid) Color(0xFF2ECC71) else Color(0xFFE74C3C)
+    val paidColor = if (order.isPaid) PosColors.Success else PosColors.Danger
     val paidLabel = if (order.isPaid) stringResource(R.string.paid) else stringResource(R.string.not_paid)
     val scheduleLabel = ScheduledOrderDateFormat.formatDateTime(order.pickupTimeMs)
     val timeLabel = ScheduledOrderDateFormat.formatTime(order.pickupTimeMs)
@@ -207,8 +211,9 @@ private fun ProgrammedOrderCardView(
         modifier = Modifier
             .fillMaxWidth()
             .height(188.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF2A2A2A))
+            .clip(PosShapes.Card)
+            .border(1.dp, posUiColors().border, PosShapes.Card)
+            .background(posUiColors().surface)
             .clickable(onClick = onClick)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -220,8 +225,8 @@ private fun ProgrammedOrderCardView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(timeLabel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                Text("#${order.orderNumber}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(timeLabel, color = PosColors.TextOnPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("#${order.orderNumber}", color = PosColors.TextOnPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
             Column(
                 modifier = Modifier
@@ -232,7 +237,7 @@ private fun ProgrammedOrderCardView(
             ) {
                 Text(
                     scheduleLabel,
-                    color = Color(0xFFE67E22),
+                    color = PosColors.Warning,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -243,8 +248,8 @@ private fun ProgrammedOrderCardView(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(typeLabel, color = Color(0xFFAAAAAA), fontSize = 11.sp)
-                    Surface(color = paidColor.copy(alpha = 0.2f), shape = RoundedCornerShape(6.dp)) {
+                    Text(typeLabel, color = posUiColors().textSecondary, fontSize = 11.sp)
+                    Surface(color = paidColor.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
                         Text(
                             paidLabel,
                             color = paidColor,
@@ -256,38 +261,38 @@ private fun ProgrammedOrderCardView(
                 }
                 Text(
                     text = formatMoney(order.total, currencySymbol),
-                    color = Color.White,
+                    color = posUiColors().textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 22.sp
                 )
                 order.customerLabel?.let { label ->
                     Text(
                         label,
-                        color = Color(0xFFAAAAAA),
+                        color = posUiColors().textSecondary,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(order.statusLabel, color = Color(0xFFF1C40F), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.order_items_count, order.itemCount), color = Color(0xFFAAAAAA), fontSize = 11.sp)
+                Text(order.statusLabel, color = PosColors.Teal700, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.order_items_count, order.itemCount), color = posUiColors().textMuted, fontSize = 11.sp)
             }
             if (order.source == ProgrammedOrderSource.TRANSACTION) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF1F1F1F))
+                        .background(posUiColors().surfaceSubtle)
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                 ) {
                     Surface(
                         modifier = Modifier
                             .size(34.dp)
                             .clickable(onClick = onPrint),
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF3A3A3A)
+                        shape = PosShapes.Small,
+                        color = posUiColors().primarySubtle
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(Icons.Default.Print, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Print, contentDescription = null, tint = PosColors.Primary, modifier = Modifier.size(18.dp))
                         }
                     }
                 }

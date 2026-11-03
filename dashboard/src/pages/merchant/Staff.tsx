@@ -11,6 +11,8 @@ import { loginHomeFromPermissions, type StaffLoginHome } from '@/lib/staff-login
 import { useLocationStore, type MerchantLocation } from '@/store/location';
 import { useAuthStore } from '@/store/auth';
 import { PasswordInput } from '@/components/PasswordInput';
+import StaffUsersRolesPanel from '@/components/merchant/StaffUsersRolesPanel';
+import StaffRolesPermissionsPanel from '@/components/merchant/StaffRolesPermissionsPanel';
 
 type RoleRow = {
   id: string;
@@ -57,17 +59,6 @@ type StaffEditForm = {
 
 const STAFF_INDIVIDUAL_PERMISSIONS: Permission[] = ['STOREKEEPER_EDIT_INTAKE'];
 
-const emptyCreateForm = {
-  name: '',
-  roleId: '',
-  pin: '',
-  email: '',
-  password: '',
-  canAccessPanel: false,
-  pinOnly: true,
-  loginHome: 'panel' as 'panel' | 'pos',
-};
-
 export default function StaffPage({
   embedded = false,
   kioskLicensed: kioskLicensedProp,
@@ -92,8 +83,6 @@ export default function StaffPage({
   const [editForm, setEditForm] = useState<StaffEditForm | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [kioskLicensed, setKioskLicensed] = useState(kioskLicensedProp ?? false);
-
-  const [staffForm, setStaffForm] = useState(emptyCreateForm);
 
   const visiblePermissions = useMemo(
     () => permissionsForMerchantAddon(ALL_PERMISSIONS, kioskLicensed),
@@ -134,10 +123,6 @@ export default function StaffPage({
         const s = settingsRes.data?.settings || {};
         setKioskLicensed(isKioskLicensed(s));
       }
-      setStaffForm((f) => {
-        if (f.roleId || !rolesList[0]?.id) return f;
-        return { ...f, roleId: rolesList[0].id };
-      });
     } catch (e: any) {
       toastLoadError(e, t('staffLoadFailed'));
     } finally {
@@ -166,44 +151,6 @@ export default function StaffPage({
       void load();
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('staffRoleSaveFailed'));
-    }
-  };
-
-  const addStaff = async (e: FormEvent) => {
-    e.preventDefault();
-    const email = staffForm.email.trim();
-    const password = staffForm.password.trim();
-    const canAccessPanel = staffForm.canAccessPanel || !!(email && password);
-    if (canAccessPanel) {
-      if (!email) {
-        toast.error(t('staffEmailRequired'));
-        return;
-      }
-      if (!password) {
-        toast.error(t('staffPasswordRequired'));
-        return;
-      }
-    }
-    const pin = staffForm.pin.trim();
-    if (pin && !isValidStaffPin(pin)) {
-      toast.error(t('staffPinInvalid'));
-      return;
-    }
-    try {
-      await api.post('/merchant/staff', {
-        ...staffForm,
-        email,
-        password,
-        canAccessPanel,
-        pinOnly: canAccessPanel ? false : staffForm.pinOnly,
-        loginHome: canAccessPanel ? staffForm.loginHome : undefined,
-      });
-      toast.success(t('staffUserCreated'));
-      setStaffForm({ ...emptyCreateForm, roleId: roles[0]?.id || '' });
-      notifyStaffRosterChanged();
-      void load();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || t('staffUserCreateFailed'));
     }
   };
 
@@ -337,8 +284,6 @@ export default function StaffPage({
     return suggested === 'pos' ? 'pos' : 'panel';
   };
 
-  const showCreateLoginHome =
-    staffForm.canAccessPanel || !!(staffForm.email.trim() && staffForm.password.trim());
   const showEditLoginHome =
     editForm?.canAccessPanel || !!(editForm?.email.trim() && editForm?.password.trim());
 
@@ -373,7 +318,9 @@ export default function StaffPage({
             onClick={() => setTab(tabId)}
             className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
               tab === tabId
-                ? 'border-[var(--text)] text-[var(--text)]'
+                ? embedded
+                  ? 'border-teal-600 text-teal-800'
+                  : 'border-[var(--text)] text-[var(--text)]'
                 : 'border-transparent text-[var(--text-muted)]'
             }`}
           >
@@ -384,175 +331,39 @@ export default function StaffPage({
 
       {tab === 'staff' ? (
         <div className="space-y-6">
-          <form onSubmit={addStaff} className="card p-4 space-y-3">
-            <h2 className="font-medium">{t('staffAddUser')}</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                {t('name')}
-                <input
-                  className="input mt-1"
-                  required
-                  value={staffForm.name}
-                  onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
-                />
-              </label>
-              <label className="block text-sm">
-                {t('staffRole')}
-                <select
-                  className="input mt-1"
-                  value={staffForm.roleId}
-                  onChange={(e) => {
-                    const roleId = e.target.value;
-                    const canAccessPanel =
-                      staffForm.canAccessPanel ||
-                      !!(staffForm.email.trim() && staffForm.password.trim());
-                    setStaffForm({
-                      ...staffForm,
-                      roleId,
-                      loginHome: suggestLoginHome(roleId, canAccessPanel),
-                    });
-                  }}
-                >
-                  {visibleRoles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {staffRoleDisplayName(r.name, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm">
-                {t('staffPinLabel')}
-                <input
-                  className="input mt-1"
-                  inputMode="numeric"
-                  pattern="[0-9]{4,8}"
-                  maxLength={8}
-                  placeholder={t('staffPinPlaceholder')}
-                  value={staffForm.pin}
-                  onChange={(e) =>
-                    setStaffForm({
-                      ...staffForm,
-                      pin: sanitizeStaffPinInput(e.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label className="block text-sm">
-                {t('staffEmailPanel')}
-                <input
-                  className="input mt-1"
-                  type="email"
-                  autoComplete="off"
-                  value={staffForm.email}
-                  onChange={(e) => {
-                    const email = e.target.value;
-                    const canAccessPanel =
-                      staffForm.canAccessPanel || !!(email.trim() && staffForm.password.trim());
-                    setStaffForm({ ...staffForm, email, canAccessPanel });
-                  }}
-                />
-              </label>
-              <label className="block text-sm">
-                {t('password')}
-                <PasswordInput
-                  wrapperClassName="mt-1"
-                  autoComplete="new-password"
-                  minLength={8}
-                  value={staffForm.password}
-                  onChange={(e) => {
-                    const password = e.target.value;
-                    const canAccessPanel =
-                      staffForm.canAccessPanel || !!(staffForm.email.trim() && password.trim());
-                    setStaffForm({ ...staffForm, password, canAccessPanel });
-                  }}
-                />
-                <span className="block text-xs text-[var(--text-muted)] font-normal mt-1">
-                  {t('staffPasswordCreateHint')}
-                </span>
-              </label>
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={staffForm.canAccessPanel}
-                  onChange={(e) =>
-                    setStaffForm({
-                      ...staffForm,
-                      canAccessPanel: e.target.checked,
-                      pinOnly: e.target.checked ? false : staffForm.pinOnly,
-                    })
-                  }
-                />
-                <span>
-                  {t('staffEmailLogin')}
-                  <span className="block text-xs text-[var(--text-muted)] font-normal">
-                    {t('staffEmailLoginHint')}
-                  </span>
-                </span>
-              </label>
-              {!staffForm.canAccessPanel ? (
-                <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                  <input
-                    type="checkbox"
-                    checked={staffForm.pinOnly}
-                    onChange={(e) => setStaffForm({ ...staffForm, pinOnly: e.target.checked })}
-                  />
-                  <span>
-                    {t('staffPinOnlyLabel')}
-                    <span className="block text-xs text-[var(--text-muted)] font-normal">
-                      {t('staffPinOnlyHint')}
-                    </span>
-                  </span>
-                </label>
-              ) : null}
-              {showCreateLoginHome ? (
-                <fieldset className="block text-sm sm:col-span-2">
-                  <legend className="font-medium">{t('staffLoginHome')}</legend>
-                  <p className="text-xs text-[var(--text-muted)] font-normal mt-0.5 mb-2">
-                    {t('staffLoginHomeHint')}
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {(
-                      [
-                        ['panel', t('staffLoginHomePanel'), t('staffLoginHomePanelHint')],
-                        ['pos', t('staffLoginHomePos'), t('staffLoginHomePosHint')],
-                      ] as const
-                    ).map(([value, title, hint]) => {
-                      const active = staffForm.loginHome === value;
-                      return (
-                        <label
-                          key={value}
-                          className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2.5 ${
-                            active
-                              ? 'border-[var(--text)] bg-[var(--bg-muted)]'
-                              : 'border-[var(--border)]'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="createLoginHome"
-                            className="mt-1"
-                            checked={active}
-                            onChange={() =>
-                              setStaffForm({ ...staffForm, loginHome: value })
-                            }
-                          />
-                          <span>
-                            <span className="font-medium block">{title}</span>
-                            <span className="text-xs text-[var(--text-muted)]">{hint}</span>
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-              ) : null}
-            </div>
-            <button type="submit" className="btn-primary">
-              {t('staffAddUser')}
-            </button>
-          </form>
-
-          {ownerEmail ? (
+          <StaffUsersRolesPanel
+            staff={staff.map((s) => ({
+              id: s.id,
+              name: s.name,
+              email: s.email,
+              roleName: s.roleName,
+              isActive: s.isActive,
+            }))}
+            roles={visibleRoles.map((r) => ({ id: r.id, name: r.name }))}
+            onAddUser={async (payload) => {
+              await api.post('/merchant/staff', {
+                name: payload.name,
+                roleId: payload.roleId,
+                pin: payload.pin || undefined,
+                email: payload.email || undefined,
+                password: payload.password || undefined,
+                canAccessPanel: payload.canAccessPanel,
+                pinOnly: payload.pinOnly,
+              });
+              toast.success(t('staffUserCreated'));
+              notifyStaffRosterChanged();
+              void load();
+            }}
+            onEditUser={(id) => {
+              const row = staff.find((s) => s.id === id);
+              if (row) void openStaffEdit(row);
+            }}
+            onRemoveUser={async (id) => {
+              await removeStaff(id);
+            }}
+            canRemove={() => staff.length > 1}
+          />
+          {!embedded && ownerEmail ? (
             <div className="card p-4 space-y-1 border border-[var(--border)] bg-[var(--bg-muted)]">
               <p className="text-sm font-medium">{t('staffOwnerTitle')}</p>
               <p className="text-sm text-[var(--text)]">
@@ -562,182 +373,13 @@ export default function StaffPage({
               <p className="text-xs text-[var(--text-muted)]">{t('staffOwnerHint')}</p>
             </div>
           ) : null}
-
-          <div className="hidden sm:block card !p-0 table-scroll">
-            <table className="w-full text-sm min-w-[560px]">
-              <thead className="bg-[var(--bg-muted)] text-left">
-                <tr>
-                  <th className="px-3 py-2">{t('name')}</th>
-                  <th className="px-3 py-2">{t('staffRole')}</th>
-                  <th className="px-3 py-2">{t('staffPinCol')}</th>
-                  <th className="px-3 py-2">{t('staffPanelCol')}</th>
-                  <th className="px-3 py-2">{t('staffLoginHomeCol')}</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {staff.map((s) => (
-                  <tr key={s.id} className="border-t border-[var(--border)]">
-                    <td className="px-3 py-2 font-medium">
-                      <span className="cell-truncate block" title={s.name}>
-                        {s.name}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">{staffRoleDisplayName(s.roleName, t)}</td>
-                    <td className="px-3 py-2 font-mono tabular-nums tracking-wider">
-                      {s.pin ? (
-                        s.pin
-                      ) : s.pinSet ? (
-                        <span className="text-xs text-[var(--text-muted)]" title={t('staffPinHiddenHint')}>
-                          {t('staffPinHidden')}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {s.canAccessPanel || s.email ? (
-                        <span className="cell-truncate block" title={s.email || t('yes')}>
-                          {s.email || t('yes')}
-                        </span>
-                      ) : (
-                        t('no')
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-xs">
-                      {s.canAccessPanel || s.email
-                        ? s.loginHome === 'pos'
-                          ? t('staffLoginHomePos')
-                          : t('staffLoginHomePanel')
-                        : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        className="text-[var(--text)] text-xs font-medium mr-3 underline-offset-2 hover:underline"
-                        onClick={() => openStaffEdit(s)}
-                      >
-                        {t('edit')}
-                      </button>
-                      {staff.length > 1 ? (
-                        <button
-                          type="button"
-                          className="text-red-600 text-xs"
-                          onClick={() => void removeStaff(s.id)}
-                        >
-                          {t('remove')}
-                        </button>
-                      ) : (
-                        <span
-                          className="text-xs text-[var(--text-muted)]"
-                          title={t('staffCannotRemoveLast')}
-                        >
-                          {t('staffLastUser')}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="sm:hidden space-y-2">
-            {staff.map((s) => (
-              <div key={s.id} className="card p-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{s.name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {staffRoleDisplayName(s.roleName, t)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      className="text-[var(--text)] text-xs font-medium underline-offset-2 hover:underline"
-                      onClick={() => openStaffEdit(s)}
-                    >
-                      {t('edit')}
-                    </button>
-                    {staff.length > 1 ? (
-                      <button
-                        type="button"
-                        className="text-red-600 text-xs"
-                        onClick={() => void removeStaff(s.id)}
-                      >
-                        {t('remove')}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                  <div>
-                    <dt className="text-[var(--text-muted)]">{t('staffPinCol')}</dt>
-                    <dd className="font-mono tabular-nums tracking-wider">
-                      {s.pin ? (
-                        s.pin
-                      ) : s.pinSet ? (
-                        <span title={t('staffPinHiddenHint')}>{t('staffPinHidden')}</span>
-                      ) : (
-                        '—'
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--text-muted)]">{t('staffPanelCol')}</dt>
-                    <dd className="truncate">
-                      {s.canAccessPanel || s.email ? s.email || t('yes') : t('no')}
-                    </dd>
-                  </div>
-                  <div className="col-span-2">
-                    <dt className="text-[var(--text-muted)]">{t('staffLoginHomeCol')}</dt>
-                    <dd>
-                      {s.canAccessPanel || s.email
-                        ? s.loginHome === 'pos'
-                          ? t('staffLoginHomePos')
-                          : t('staffLoginHomePanel')
-                        : '—'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            ))}
-          </div>
         </div>
       ) : (
-        <div className="space-y-3">
-          {visibleRoles.map((role) => (
-            <div key={role.id} className="card p-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="font-medium">{staffRoleDisplayName(role.name, t)}</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {t('staffPermissionsCount').replace('{count}', String(role.permissions.length))}
-                  {role.isSystem ? ` - ${t('staffSystemProfile')}` : ''}
-                </p>
-                {role.name.trim().toLowerCase() === 'waiter' ||
-                role.name.trim().toLowerCase() === 'waiter (pos only)' ? (
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleWaiterHint')}</p>
-                ) : null}
-                {role.name.trim().toLowerCase().includes('menu editor') ? (
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleWaiterMenuHint')}</p>
-                ) : null}
-                {role.name.trim().toLowerCase() === 'storekeeper' ? (
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleStorekeeperHint')}</p>
-                ) : null}
-                {role.name.trim().toLowerCase() === 'kiosk operator' ? (
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleKioskHint')}</p>
-                ) : null}
-                {role.name.trim().toLowerCase() === 'order center operator' ? (
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('staffRoleOrderCenterHint')}</p>
-                ) : null}
-              </div>
-              <button type="button" className="btn-secondary text-sm" onClick={() => openRoleEdit(role)}>
-                {t('staffEditPermissions')}
-              </button>
-            </div>
-          ))}
-        </div>
+        <StaffRolesPermissionsPanel
+          roles={visibleRoles}
+          visiblePermissions={visiblePermissions}
+          onEditRole={openRoleEdit}
+        />
       )}
 
       {editingStaff && editForm ? (
@@ -798,7 +440,7 @@ export default function StaffPage({
                   className="input mt-1"
                   inputMode="numeric"
                   pattern="[0-9]{4,8}"
-                  maxLength={8}
+                  maxLength={4}
                   placeholder={
                     editingStaff.pinSet ? t('staffPinKeepPlaceholder') : t('staffPinPlaceholder')
                   }

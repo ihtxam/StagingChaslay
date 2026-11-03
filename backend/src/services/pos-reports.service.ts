@@ -1,6 +1,7 @@
 import { getDb, schema } from "@/db";
 import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
 import { loadMerchantRowById } from "@/lib/ensure-merchant-schema";
+import { addDaysYmd } from "@/lib/ymd";
 import { normalizePaymentMethod, paymentMethodLabelEn, netPaymentBucketsAfterRefund, refundBucketsFromCumulative, netTaxableSale } from "@/lib/payment-breakdown";
 
 export type ReportPreset =
@@ -55,11 +56,9 @@ function ymdInZurich(d = new Date()): string {
   }).format(d);
 }
 
-function addDaysYmd(ymd: string, delta: number): string {
-  const { start } = zurichDayBounds(ymd);
-  const next = new Date(start.getTime() + delta * 24 * 3600_000);
-  return ymdInZurich(next);
-}
+// Calendar-date stepping lives in @/lib/ymd so it can be unit tested without
+// pulling in the database. See the note there: adding 24h to a Zurich midnight
+// does not advance the date when the clocks go back.
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -82,6 +81,12 @@ function channelLabel(ch: string): string {
       return "Dine-in";
     case "delivery":
       return "Delivery";
+    case "in_store":
+    case "pos":
+    case "retail":
+      return "In store";
+    case "takeaway":
+      return "Takeaway";
     default:
       return "Takeaway";
   }
@@ -308,7 +313,19 @@ export class PosReportsService {
     const refundByMethod: Record<string, number> = {};
     const channels: Record<string, { count: number; total: number }> = {};
     const products = new Map<string, { name: string; qty: number; total: number }>();
-    const staffMap = new Map<string, { name: string; count: number; total: number }>();
+    const staffMap = new Map<
+      string,
+      {
+        name: string;
+        count: number;
+        total: number;
+        cash: number;
+        card: number;
+        terminal: number;
+        tap: number;
+        other: number;
+      }
+    >();
     const vatByChannel: Record<string, { brut: number; tva: number }> = {};
 
     for (const o of completed) {
@@ -365,9 +382,26 @@ export class PosReportsService {
       vatByChannel[ch]!.tva += taxKept;
 
       const staff = resolveStaffName(o);
-      const st = staffMap.get(staff) || { name: staff, count: 0, total: 0 };
+      const st = staffMap.get(staff) || {
+        name: staff,
+        count: 0,
+        total: 0,
+        cash: 0,
+        card: 0,
+        terminal: 0,
+        tap: 0,
+        other: 0,
+      };
       st.count += 1;
       st.total += brut;
+      for (const [method, net] of netBuckets) {
+        if (net <= 0) continue;
+        if (method === "cash") st.cash = round2(st.cash + net);
+        else if (method === "card") st.card = round2(st.card + net);
+        else if (method === "terminal") st.terminal = round2(st.terminal + net);
+        else if (method === "tap_to_pay") st.tap = round2(st.tap + net);
+        else st.other = round2(st.other + net);
+      }
       staffMap.set(staff, st);
 
       for (const item of o.items || []) {
@@ -467,6 +501,10 @@ export class PosReportsService {
         name: u.name,
         salesCount: u.count,
         total: round2(u.total),
+        cashTotal: round2(u.cash),
+        cardTotal: round2(u.card + u.terminal),
+        tapToPayTotal: round2(u.tap),
+        otherTotal: round2(u.other),
       }));
 
     const orderTypeRows = Object.entries(channels).map(([channel, v]) => ({
@@ -791,9 +829,18 @@ export class PosReportsService {
     } else {
       const byDay = new Map<string, number>();
       let cursor = range.from;
-      while (cursor <= range.to) {
+      // Hard stop: a cursor that fails to advance must never pin the event
+      // loop again. Ten years of daily buckets is far beyond any real report.
+      for (let guard = 0; cursor <= range.to && guard < 3700; guard += 1) {
         byDay.set(cursor, 0);
-        cursor = addDaysYmd(cursor, 1);
+        const next = addDaysYmd(cursor, 1);
+        if (next <= cursor) {
+          console.warn(
+            `[reports] day cursor failed to advance at ${cursor} (range ${range.from}..${range.to}); stopping`
+          );
+          break;
+        }
+        cursor = next;
       }
       for (const o of completed) {
         const day = new Intl.DateTimeFormat("en-CA", {

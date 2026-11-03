@@ -1,4 +1,5 @@
-export type PosChannel = 'takeaway' | 'dine_in' | 'delivery';
+/** Counter / register sales with no food-service channel (retail, barbershop, etc.). */
+export type PosChannel = 'takeaway' | 'dine_in' | 'delivery' | 'in_store';
 
 /** Virtual POS menu categories (not in catalog). */
 export const POS_MOST_SOLD_CATEGORY = '__most_sold__';

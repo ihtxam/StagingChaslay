@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { migrateKitchenPrintRoutingToPrinters } from './pos-print-settings';
+import { migrateKitchenPrintRoutingToPrinters, normalizePosPrintSettings } from './pos-print-settings';
 
 const printers = [
   {
@@ -30,5 +30,19 @@ const migrated = migrateKitchenPrintRoutingToPrinters(printers, {
 assert.deepEqual(migrated.printers[0].linkedCategoryIds, ['cat-food']);
 assert.deepEqual(migrated.printers[1].linkedCategoryIds, ['cat-drinks']);
 assert.equal(migrated.routing, undefined);
+
+const kept = normalizePosPrintSettings({
+  printers: [
+    {
+      id: 'kitchen',
+      name: '',
+      printKitchenTickets: true,
+      linkedCategoryIds: ['rind', 'kalb'],
+    },
+  ],
+});
+assert.equal(kept.printers.length, 1);
+assert.equal(kept.printers[0]?.name, '');
+assert.deepEqual(kept.printers[0]?.linkedCategoryIds, ['rind', 'kalb']);
 
 console.log('pos-print-settings kitchen routing migration: ok');

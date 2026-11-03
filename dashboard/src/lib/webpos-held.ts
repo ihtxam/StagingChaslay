@@ -74,7 +74,7 @@ export function resolveHeldChannel(opts: {
   const meta = parseHeldCartJson(opts.cartJson);
   if (meta.tableId || meta.tableLabel) return 'dine_in';
   const ch = (opts.channel || meta.channel || 'takeaway').toLowerCase();
-  if (ch === 'dine_in' || ch === 'delivery' || ch === 'takeaway') return ch;
+  if (ch === 'dine_in' || ch === 'delivery' || ch === 'takeaway' || ch === 'in_store') return ch;
   return 'takeaway';
 }
 

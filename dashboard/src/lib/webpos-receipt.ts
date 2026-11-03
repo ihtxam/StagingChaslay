@@ -21,7 +21,15 @@ import {
   escposQrCode,
   RECEIPT_QR_ESCPOS_MODULE_SIZE,
   giftCardRedeemQrRasterPx,
+  imageDataToEscPosRaster,
 } from '@/lib/qr';
+import { isAndroidDevice } from '@/lib/print-agent-platform';
+import { isDesktopApp } from '@/lib/platform';
+
+/** Android Bridge + RebornPOS Windows — raster header and extra QR feed before cut. */
+function receiptUsesKioskThermalEscPosTweaks(): boolean {
+  return isAndroidDevice() || isDesktopApp();
+}
 import {
   escposCp850Encode,
   escposTextEncode,
@@ -32,6 +40,13 @@ import { localDateTimeToIso } from '@/lib/shop-hours';
 import { resolveOrderItemName } from '@/lib/order-item-name';
 import { normalizePaymentMethod } from '@/lib/payment-breakdown';
 import { maskGiftCardNumberForReceipt } from '@/lib/gift-card-receipt-mask';
+import {
+  decodeHtmlEntities,
+  isReceiptHeaderContentConfigured,
+  receiptHeaderContentToLines,
+  receiptHeaderContentToPlainText,
+  receiptHeaderLooksLikeHtml,
+} from '@/lib/receipt-header-html';
 import {
   channelLabel,
   formatPayLaterPaymentLabel,
@@ -279,12 +294,18 @@ export type PosPrintSettingsClient = {
   receiptHeaderBold?: boolean;
   /** Receipt header text scale: 1=normal, 2=double height, 3=double width+height */
   receiptHeaderTextScale?: 1 | 2 | 3;
+  /** Store-name line size in pixels on the printed header (default 16). */
+  receiptHeaderTitlePx?: number;
+  /** Address, phone, and VAT size in pixels (default 8). */
+  receiptHeaderDetailPx?: number;
   kitchenTicketHeader?: string;
   kitchenTicketFooter?: string;
   kitchenItemTextScale?: 1 | 2 | 3;
   kitchenHeaderTextScale?: 1 | 2 | 3;
   kitchenModifierTextScale?: 1 | 2 | 3;
   kitchenBoldText?: boolean;
+  /** Receipt body: 1 normal, 2 double-width, 3 double width+height. */
+  receiptBodyTextScale?: 1 | 2 | 3;
   receiptShowVatTable?: boolean;
   receiptShowStaffLine?: boolean;
   receiptShowQrCode?: boolean;
@@ -627,6 +648,48 @@ export function formatSoldGiftCardsOnReceipt(
   return r;
 }
 
+/** Android Print Bridge corrupts native ESC/POS QR (GS ( k); use raster only. */
+function nativeEscposQrFallback(data: string, moduleSize: number): Uint8Array | null {
+  const trimmed = String(data || '').trim();
+  if (!trimmed || isAndroidDevice()) return null;
+  return escposQrCode(trimmed, moduleSize);
+}
+
+async function resolveReceiptQrRaster(
+  data: string,
+  paper: 58 | 80,
+  label?: string
+): Promise<Uint8Array | null> {
+  const trimmed = String(data || '').trim();
+  if (!trimmed) return null;
+  let raster = await generateReceiptQrRasterEscPos(trimmed, paper);
+  if (!raster?.length && label) {
+    raster = await buildLabeledReceiptQrRasterEscPos({
+      label,
+      data: trimmed,
+      paperWidthMm: paper,
+    });
+  }
+  if (!raster?.length) {
+    raster = nativeEscposQrFallback(trimmed, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  }
+  return raster?.length ? raster : null;
+}
+
+async function resolveDualReceiptQrRaster(
+  left: { label: string; data: string },
+  right: { label: string; data: string },
+  paper: 58 | 80
+): Promise<Uint8Array | null> {
+  const dual = await buildDualReceiptQrRasterEscPos({
+    left,
+    right,
+    paperWidthMm: paper,
+  });
+  if (dual?.length) return dual;
+  return resolveReceiptQrRaster(left.data, paper, left.label);
+}
+
 /** ESC/POS redeem QR (120px) + Code128 for each sold e-gift on an order receipt. */
 export async function buildSoldGiftCardRedeemEscPosSections(
   cards: SoldGiftCardOnReceipt[] | undefined,
@@ -647,8 +710,10 @@ export async function buildSoldGiftCardRedeemEscPosSections(
         qrData,
         paperWidthMm,
         giftCardRedeemQrRasterPx(paperWidthMm)
-      )) || escposQrCode(qrData, 4);
-    parts.push(alignCenter, qrRaster);
+      )) || nativeEscposQrFallback(qrData, 4);
+    if (qrRaster?.length) {
+      parts.push(alignCenter, qrRaster);
+    }
     parts.push(escposCode128(payload, 72, 2));
     if (label.trim()) {
       parts.push(escposCp850Encode(`${label.trim()}\n`));
@@ -684,7 +749,7 @@ export async function buildGiftCardSaleReceiptEscPos(
       paperWidthMm,
       giftCardRedeemQrRasterPx(paperWidthMm)
     )) ||
-    escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    nativeEscposQrFallback(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
   return textToEscPos(text, qrRaster, logoBytes, payload, label);
 }
 
@@ -697,7 +762,8 @@ export function giftCardSaleReceiptEscPos(
   const payload = giftCardSaleBarcodePayload(code);
   const label = buildGiftCardBarcodePayload(code);
   const qrData = buildGiftCardRedeemQrPayload(code);
-  const qrRaster = escposQrCode(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+  const qrRaster =
+    nativeEscposQrFallback(qrData, RECEIPT_QR_ESCPOS_MODULE_SIZE) ?? new Uint8Array(0);
   return textToEscPos(text, qrRaster, logoBytes, payload, label);
 }
 
@@ -759,28 +825,89 @@ function centerLine(text: string, width: number): string {
   return ' '.repeat(pad) + t;
 }
 
-export type ReceiptHeaderAlign = 'left' | 'center' | 'right';
+export const RECEIPT_HEADER_TITLE_PX_DEFAULT = 22;
+export const RECEIPT_HEADER_DETAIL_PX_DEFAULT = 18;
+export const RECEIPT_HEADER_PX_CHOICES = [16, 18, 20, 22, 24, 28, 32] as const;
+/** White band above the store name so the logo does not sit on the text. */
+export const RECEIPT_HEADER_LOGO_GAP_PX = 36;
+
+function receiptHeaderPxInRange(value: unknown): number | null {
+  const n = Number(value);
+  if (Number.isFinite(n) && n >= 16 && n <= 32) return Math.round(n);
+  return null;
+}
+
+export function clampReceiptHeaderTitlePx(value: unknown): number {
+  return receiptHeaderPxInRange(value) ?? RECEIPT_HEADER_TITLE_PX_DEFAULT;
+}
+
+export function clampReceiptHeaderDetailPx(value: unknown): number {
+  return receiptHeaderPxInRange(value) ?? RECEIPT_HEADER_DETAIL_PX_DEFAULT;
+}
+
+/**
+ * Store name and the lines under it.
+ * Automatic store-name sizes (unset, or the earlier 16 px / 18 px defaults
+ * with an automatic detail size) become 22 px. A size the merchant picked is kept.
+ */
+export function receiptHeaderPixelSizesFromSettings(
+  settings?: {
+    receiptHeaderTitlePx?: number;
+    receiptHeaderDetailPx?: number;
+  } | null
+): { titlePx: number; detailPx: number } {
+  const titleChosen = receiptHeaderPxInRange(settings?.receiptHeaderTitlePx);
+  const detailChosen = receiptHeaderPxInRange(settings?.receiptHeaderDetailPx);
+  const automaticStoreName =
+    titleChosen == null ||
+    (titleChosen === 16 && detailChosen == null) ||
+    (titleChosen === 18 && (detailChosen == null || detailChosen === 18));
+  if (automaticStoreName) {
+    return {
+      titlePx: RECEIPT_HEADER_TITLE_PX_DEFAULT,
+      detailPx: detailChosen ?? RECEIPT_HEADER_DETAIL_PX_DEFAULT,
+    };
+  }
+  return {
+    titlePx: titleChosen ?? RECEIPT_HEADER_TITLE_PX_DEFAULT,
+    detailPx: detailChosen ?? RECEIPT_HEADER_DETAIL_PX_DEFAULT,
+  };
+}
+
+/** ESC/POS character scale that matches a store-name pixel size. */
+export function receiptHeaderTextScaleFromTitlePx(titlePx: number): 1 | 2 | 3 {
+  if (titlePx >= 24) return 3;
+  if (titlePx >= 20) return 2;
+  return 1;
+}
 
 export function receiptHeaderFormatFromSettings(
   settings?: Pick<
     PosPrintSettingsClient,
-    'receiptHeaderAlign' | 'receiptHeaderBold' | 'receiptHeaderTextScale'
+    | 'receiptHeaderAlign'
+    | 'receiptHeaderBold'
+    | 'receiptHeaderTextScale'
+    | 'receiptHeaderTitlePx'
+    | 'receiptHeaderDetailPx'
   > | null
 ): {
   align: ReceiptHeaderAlign;
   bold: boolean;
   textScale: 1 | 2 | 3;
+  titlePx: number;
+  detailPx: number;
 } {
   const align =
     settings?.receiptHeaderAlign === 'left' || settings?.receiptHeaderAlign === 'right'
       ? settings.receiptHeaderAlign
       : 'center';
-  const scaleRaw = Number(settings?.receiptHeaderTextScale);
-  const textScale = (scaleRaw === 2 || scaleRaw === 3 ? scaleRaw : 1) as 1 | 2 | 3;
+  const { titlePx, detailPx } = receiptHeaderPixelSizesFromSettings(settings);
   return {
     align,
-    bold: settings?.receiptHeaderBold === true,
-    textScale,
+    bold: true,
+    textScale: receiptHeaderTextScaleFromTitlePx(titlePx),
+    titlePx,
+    detailPx,
   };
 }
 
@@ -923,9 +1050,57 @@ function splitReceiptHeaderSegment(line: string, pattern: RegExp): string[] {
   return parts.length > 1 ? parts : [text];
 }
 
+/**
+ * Split legacy one-line headers: `Store name - Rue … 2000 City`.
+ * Common on migrated merchant settings before receiptHeaderLines existed.
+ */
+export function splitReceiptHeaderNameDashRest(line: string): string[] {
+  const raw = String(line || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return [];
+  const dash = raw.match(/^(.{2,60}?)\s+-\s+(.+)$/);
+  if (!dash) return [raw];
+  const name = dash[1]!.trim();
+  const rest = dash[2]!.trim();
+  if (!name || !rest) return [raw];
+  const looksLikeAddress =
+    /\d{4}\b/.test(rest) ||
+    /(?:rue|rue des|route|avenue|av\.|chemin|place|boulevard|bd\.?|rte|strasse|straße|street)\b/i.test(
+      rest
+    );
+  if (!looksLikeAddress) return [raw];
+  return [name, ...expandReceiptHeaderDetailLines(rest)];
+}
+
+/** Expand settings rows (incl. one mashed line) into logical print lines. */
+export function flattenConfiguredReceiptHeaderLines(configuredLines: string[]): string[] {
+  const out: string[] = [];
+  const single = configuredLines.length === 1;
+  for (const line of configuredLines) {
+    const trimmed = decodeHtmlEntities(String(line || ''))
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[-–—_=]{3,}\s*$/g, '')
+      .trim();
+    if (!trimmed) continue;
+    const pieces = single ? splitReceiptHeaderNameDashRest(trimmed) : [trimmed];
+    for (const piece of pieces) {
+      for (const expanded of expandReceiptHeaderDetailLines(piece)) {
+        const normalized = normalizeHeaderContactLine(expanded);
+        if (normalized) out.push(normalized);
+      }
+    }
+  }
+  return dedupeHeaderLines(out);
+}
+
 /** Split one header detail line so Tel / VAT labels start on their own row. */
 export function splitReceiptHeaderDetailLine(line: string): string[] {
-  const raw = String(line || '').replace(/\s+/g, ' ').trim();
+  const raw = String(line || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[-–—_=]{3,}\s*$/g, '')
+    .replace(/,\s*$/g, '')
+    .trim();
   if (!raw) return [];
   const spaced = raw.replace(
     /([^\s:])(?=(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone|vat|tva|mwst|uid)\s*:)/gi,
@@ -937,6 +1112,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
     RECEIPT_GLUED_PHONE_SPLIT_RE,
     RECEIPT_GLUED_NUMBER_CITY_RE,
     RECEIPT_GLUED_PLZ_AFTER_STREET_RE,
+    /(?<=[A-Za-zÀ-ÿ])(?=\d{4}\b)/,
     RECEIPT_GLUED_STREET_LABEL_RE,
     RECEIPT_GLUED_LOWERCASE_RUE_RE,
     RECEIPT_GLUED_CAPS_STORE_STREET_RE,
@@ -966,7 +1142,7 @@ export function splitReceiptHeaderDetailLine(line: string): string[] {
 }
 
 function normalizeHeaderContactLine(line: string): string {
-  const text = String(line || '').replace(/\s+/g, ' ').trim();
+  const text = String(line || '').replace(/\s+/g, ' ').trim().replace(/,\s*$/g, '');
   const vat = text.match(/^(?:vat|tva|mwst|uid|n°\s*tva|no\.?\s*tva)\s*:\s*(.+)$/i);
   if (vat) return `VAT: ${vat[1]!.trim()}`;
   const tel = text.match(/^(?:tel|t[eé]l|telephone|t[eé]l[eé]phone|phone)\s*:\s*(.+)$/i);
@@ -1136,7 +1312,7 @@ export function isReceiptHeaderConfigured(
   headerTitle?: string | null,
   header?: string | null
 ): boolean {
-  return !!receiptHeaderCombinedText(headerTitle, header).trim();
+  return isReceiptHeaderContentConfigured(headerTitle, header);
 }
 
 /** Merge store-name + details fields into one multiline receipt header (settings / legacy DB). */
@@ -1192,19 +1368,13 @@ export function healLegacyMashedReceiptHeaderFields(
   return { headerTitle: titleTrim, header: bodyTrim };
 }
 
-/** One settings textarea row → one printed line (real newlines or legacy literal `\\n`). */
+/** One settings row → one printed line (HTML blocks, newlines, or legacy `\\n`). */
 export function splitReceiptHeaderTextToLines(text: string): string[] {
-  const raw = String(text ?? '').replace(/\r\n/g, '\n');
-  const trimmed = raw.trim();
-  if (!trimmed) return [];
-  const segments = raw.includes('\n')
-    ? raw.split('\n')
-    : /\\n/.test(raw)
-      ? raw.split(/\\n/)
-      : [raw];
-  return segments
-    .map((line) => line.trim())
-    .filter(Boolean)
+  return receiptHeaderContentToLines(text);
+}
+
+function capReceiptHeaderLines(lines: string[]): string[] {
+  return flattenConfiguredReceiptHeaderLines(lines)
     .slice(0, 24)
     .map((line) => line.slice(0, 200));
 }
@@ -1216,21 +1386,15 @@ export function receiptHeaderLinesFromPrintSettings(
     'receiptHeaderTitle' | 'receiptHeader' | 'receiptHeaderLines'
   > | null
 ): string[] {
-  const fromArray = Array.isArray(printSettings?.receiptHeaderLines)
-    ? printSettings!.receiptHeaderLines!
-        .map((line) => String(line ?? '').replace(/\r\n/g, '\n').trim())
-        .filter(Boolean)
-    : [];
-  if (fromArray.length) {
-    return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
-  }
   const healed = healLegacyMashedReceiptHeaderFields(
     printSettings?.receiptHeaderTitle,
     printSettings?.receiptHeader
   );
   const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
-  if (!combined.trim()) return [];
-  return splitReceiptHeaderTextToLines(combined);
+  const combinedPlain = receiptHeaderContentToPlainText(combined).trim();
+  // Empty rich-text box must not fall back to a stale one-line receiptHeaderLines array.
+  if (!combinedPlain) return [];
+  return capReceiptHeaderLines(splitReceiptHeaderTextToLines(combined));
 }
 
 /** Heal legacy blobs and keep `receiptHeader` + `receiptHeaderLines` in sync (Settings / WebPOS load). */
@@ -1241,10 +1405,16 @@ export function normalizeClientReceiptHeaderPrintSettings<
   >,
 >(ps: T): T {
   const tx = receiptHeaderTxFromPrintSettings(ps);
+  const rawHeader = String(ps.receiptHeader ?? '');
+  const receiptHeader = receiptHeaderLooksLikeHtml(rawHeader)
+    ? rawHeader
+    : tx.headerLines.length
+      ? tx.headerLines.join('\n')
+      : tx.header;
   return {
     ...ps,
     receiptHeaderTitle: '',
-    receiptHeader: tx.headerLines.length ? tx.headerLines.join('\n') : tx.header,
+    receiptHeader,
     receiptHeaderLines: tx.headerLines,
   };
 }
@@ -1256,9 +1426,14 @@ export function receiptHeaderTxFromPrintSettings(
   > | null
 ): { headerTitle: string; header: string; headerLines: string[] } {
   const headerLines = receiptHeaderLinesFromPrintSettings(printSettings);
+  const healed = healLegacyMashedReceiptHeaderFields(
+    printSettings?.receiptHeaderTitle,
+    printSettings?.receiptHeader
+  );
+  const combined = receiptHeaderCombinedText(healed.headerTitle, healed.header);
   return {
     headerTitle: '',
-    header: headerLines.join('\n'),
+    header: headerLines.length ? headerLines.join('\n') : receiptHeaderContentToPlainText(combined),
     headerLines,
   };
 }
@@ -1319,16 +1494,24 @@ export function getReceiptHeaderLines(
     explicitLines.length > 0
       ? explicitLines
       : combinedHeader.trim()
-        ? combinedHeader
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter(Boolean)
+        ? receiptHeaderContentToLines(combinedHeader)
         : [];
   const hasCustomReceiptHeader = configuredLines.length > 0;
   const lines: string[] = [];
   if (hasCustomReceiptHeader) {
-    for (let i = 0; i < configuredLines.length; i++) {
-      push(lines, configuredLines[i]!, i === 0 ? titleWidth : width);
+    const logical = flattenConfiguredReceiptHeaderLines(configuredLines);
+    for (let i = 0; i < logical.length; i++) {
+      push(lines, logical[i]!, i === 0 ? titleWidth : width);
+    }
+    return lines;
+  }
+  if (!combinedHeader.trim() && !explicitLines.length) {
+    const storeName = String(tx.businessName || '').trim();
+    if (storeName) push(lines, storeName, titleWidth);
+    appendMerchantHeaderContactLines(lines, tx, (text) => push(lines, text));
+    if (!lines.length) {
+      const fallback = String(tx.businessName || APP_NAME).trim();
+      if (fallback) push(lines, fallback, titleWidth);
     }
     return lines;
   }
@@ -1424,6 +1607,67 @@ export function getReceiptHeaderLines(
   return lines;
 }
 
+/** Bitmap header block — matches digital receipt layout (Android Bridge, RebornPOS Windows). */
+export async function buildReceiptHeaderRasterEscPos(
+  lines: string[],
+  opts: {
+    paperWidthMm?: 58 | 80;
+    align?: ReceiptHeaderAlign;
+    bold?: boolean;
+    textScale?: 1 | 2 | 3;
+    titlePx?: number;
+    detailPx?: number;
+    /** White pixels above the first line. Larger when a logo is printed above. */
+    topGapPx?: number;
+  }
+): Promise<Uint8Array | null> {
+  if (!lines.length || typeof document === 'undefined') return null;
+  const paper = opts.paperWidthMm ?? 80;
+  const canvasWidth = RECEIPT_LOGO_PAPER_MAX[paper];
+  const align = opts.align ?? 'center';
+  const titlePx = clampReceiptHeaderTitlePx(opts.titlePx);
+  const detailPx = clampReceiptHeaderDetailPx(opts.detailPx);
+  const lineGap = 6;
+  const padTop = opts.topGapPx ?? 8;
+  const padBottom = 8;
+  try {
+    const measure = document.createElement('canvas').getContext('2d');
+    if (!measure) return null;
+    const rows: { text: string; px: number; bold: boolean }[] = lines.map((line, i) => ({
+      text: String(line || '').trim(),
+      px: i === 0 ? titlePx : detailPx,
+      bold: i === 0,
+    }));
+    let height = padTop + padBottom;
+    for (const row of rows) {
+      measure.font = `${row.bold ? 'bold ' : ''}${row.px}px Arial, sans-serif`;
+      height += row.px + lineGap;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = Math.max(16, height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000000';
+    ctx.textBaseline = 'top';
+    let y = padTop;
+    for (const row of rows) {
+      if (!row.text) continue;
+      ctx.font = `${row.bold ? 'bold ' : ''}${row.px}px Arial, sans-serif`;
+      ctx.textAlign = align === 'left' ? 'left' : align === 'right' ? 'right' : 'center';
+      const x = align === 'left' ? 4 : align === 'right' ? canvasWidth - 4 : canvasWidth / 2;
+      ctx.fillText(row.text, x, y);
+      y += row.px + lineGap;
+    }
+    const { data: pixels } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return imageDataToEscPosRaster(pixels, canvas.width, canvas.height, 140);
+  } catch {
+    return null;
+  }
+}
+
 export function buildReceiptHeaderEscPos(
   lines: string[],
   opts: {
@@ -1467,7 +1711,7 @@ export function buildReceiptHeaderEscPos(
     for (const seg of segments) {
       parts.push(
         escAlign(alignMode),
-        escBold(i === 0 && opts.bold === true && lineScale > 1),
+        escBold(i === 0),
         escKitchenSize(lineScale),
         encode(`${seg}\n`)
       );
@@ -1475,12 +1719,6 @@ export function buildReceiptHeaderEscPos(
     }
   }
   parts.push(escAlign(0));
-  const lastLine = lines[lines.length - 1] || '';
-  if (isReceiptTelephoneLine(lastLine) || isReceiptVatLine(lastLine)) {
-    parts.push(ESC_POS_FEED_ONE);
-  } else {
-    parts.push(encode('\n\n'));
-  }
   return concatBytes(...parts);
 }
 
@@ -1498,6 +1736,47 @@ export function resolveReceiptPaperWidthMm(
   const fromPrinter = targets[0]?.paperWidthMm;
   if (fromPrinter === 58 || fromPrinter === 80) return fromPrinter;
   return settings?.paperWidthMm === 58 ? 58 : 80;
+}
+
+function isProvisionalReceiptBanner(line: string): boolean {
+  return /provis/i.test(String(line || '').trim());
+}
+
+/** Remove the plain-text header so only the bitmap header is printed. */
+function dropPlainTextReceiptHeader(bodyText: string, headerLines: string[]): string {
+  if (!headerLines.length) return bodyText;
+  const keys = headerLines
+    .map((line) => decodeHtmlEntities(line).replace(/\s+/g, '').toLowerCase())
+    .filter((key) => key.length >= 3);
+  const lines = bodyText.split('\n');
+  let i = 0;
+  if (isProvisionalReceiptBanner(lines[0] || '')) i = 1;
+  let removed = 0;
+  let matched = 0;
+  let blanks = 0;
+  // Title/body gap and the blank after Tel/VAT are part of the header block.
+  // Stopping at the first blank left the address on provisional tickets, under the bitmap header.
+  while (i < lines.length && removed < headerLines.length + 8 && blanks < 6) {
+    const trimmed = (lines[i] || '').trim();
+    if (!trimmed) {
+      i += 1;
+      blanks += 1;
+      if (matched >= keys.length && removed > 0) break;
+      continue;
+    }
+    blanks = 0;
+    if (/^[-=]{6,}$/.test(trimmed) || /^\d+\s*x\s/i.test(trimmed)) break;
+    const key = decodeHtmlEntities(trimmed).replace(/\s+/g, '').replace(/-+$/g, '').toLowerCase();
+    const matches = keys.some((k) => key === k || key.includes(k) || k.includes(key));
+    if (matches || /&(?:#\d+|[a-z]+);/i.test(trimmed)) {
+      i += 1;
+      removed += 1;
+      if (matches) matched += 1;
+      continue;
+    }
+    break;
+  }
+  return lines.slice(i).join('\n').replace(/^\n+/, '');
 }
 
 function stripPaddedReceiptHeaderFromText(
@@ -1559,6 +1838,26 @@ function stripPaddedReceiptHeaderFromText(
     }
   }
   return bodyText;
+}
+
+/**
+ * Drop the plain-text shop/custom header before the bitmap header is prepended.
+ * Provisional tickets print a banner line first, so the header block is not at column 0.
+ */
+export function stripPlainReceiptHeaderFromBody(
+  bodyText: string,
+  headerLines: string[],
+  width: number,
+  align: ReceiptHeaderAlign = 'center',
+  titleBodyGap = false
+): string {
+  if (!headerLines.length || !bodyText) return bodyText;
+  const lines = bodyText.split('\n');
+  const banner = isProvisionalReceiptBanner(lines[0] || '') ? `${lines[0]}\n` : '';
+  const rest = banner ? lines.slice(1).join('\n') : bodyText;
+  const padded = stripPaddedReceiptHeaderFromText(rest, headerLines, width, align, titleBodyGap);
+  const dropped = dropPlainTextReceiptHeader(padded, headerLines);
+  return `${banner}${dropped.replace(/^\n+/, '')}`;
 }
 
 /** Centered course banner: >> COURSE 1 << */
@@ -2102,17 +2401,13 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
   if (tx.isProvisional) {
     r += centerLine('PROVISIONAL', width) + '\n';
   }
-  const headerNorm = normalizeReceiptHeaderFields({
-    headerTitle: tx.headerTitle,
-    header: tx.header,
-  });
   const headerAlign = tx.headerAlign ?? 'center';
   const unpaddedHeaderLines = getReceiptHeaderLines(tx, width, { padLines: false });
   r += buildReceiptHeaderPlainTextBlock(
     unpaddedHeaderLines,
     width,
     headerAlign,
-    !!(headerNorm.title && headerNorm.body)
+    unpaddedHeaderLines.length > 1
   );
   if (tx.tableLabel) {
     r += `${L.table} ${tx.tableLabel}`;
@@ -2150,6 +2445,15 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     }
   }
 
+  const vatTotals = resolveOrderReceiptVat(tx);
+  r += thin + '\n';
+  r += centerLine(L.recapTitle, width) + '\n';
+  const recapSubtotal = roundMoney2(
+    tx.items?.length
+      ? tx.items.reduce((s, item) => s + roundMoney2(item.lineTotal), 0)
+      : tx.subtotal
+  );
+  r += padLine(`${L.subtotal}:`, `CHF ${recapSubtotal.toFixed(2)}`, width) + '\n';
   if (tx.discount > 0) {
     r += padLine(`${L.discount}:`, `-CHF ${tx.discount.toFixed(2)}`, width) + '\n';
   }
@@ -2164,6 +2468,11 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
         `${tx.rounding > 0 ? '+' : ''}CHF ${roundMoney2(tx.rounding).toFixed(2)}`,
         width
       ) + '\n';
+  }
+  if (tx.showVat !== false && vatTotals.taxAmount > 0.001 && vatTotals.taxRate > 0) {
+    const rateLabel = `${L.tva} (${vatTotals.taxRate}%)`;
+    const amounts = `${vatTotals.subtotal.toFixed(2)}  ${vatTotals.taxAmount.toFixed(2)}`;
+    r += padLine(rateLabel, amounts, width) + '\n';
   }
   r += sep + '\n';
   r += padLine(`${L.total}:`, `CHF ${tx.total.toFixed(2)}`, width) + '\n';
@@ -2250,13 +2559,6 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     }
     const loyaltyBlock = formatLoyaltyReceiptLines(tx, L, width);
     if (loyaltyBlock) r += loyaltyBlock;
-  }
-  // VAT calculations below payment section (includes gift-card sell/reload lines)
-  const vatTotals = resolveOrderReceiptVat(tx);
-  const vatSection = formatVatSection({ ...tx, ...vatTotals }, L, width);
-  if (vatSection) {
-    r += thin + '\n';
-    r += vatSection + '\n';
   }
   const soldGiftBlock = formatSoldGiftCardsOnReceipt(tx.soldGiftCards, L, width);
   if (soldGiftBlock) {
@@ -2486,6 +2788,7 @@ function formatChannelWhen(
   scheduledFor?: string | number | null
 ): string {
   const ch = channelLabel(L, channel);
+  if (!ch) return '';
   const when = formatKitchenWhen(scheduledFor);
   return `${ch} : ${when || L.asap}`;
 }
@@ -2855,6 +3158,16 @@ function escKitchenSize(scale: 1 | 2 | 3): Uint8Array {
   return new Uint8Array([0x1d, 0x21, n]);
 }
 
+/** Receipt body scale — Grand uses double width (not height) for a balanced ratio. */
+function escReceiptBodySize(scale: 1 | 2 | 3): Uint8Array {
+  const n = scale === 3 ? 0x11 : scale === 2 ? 0x10 : 0x00;
+  return new Uint8Array([0x1b, 0x45, 0x00, 0x1d, 0x21, n]);
+}
+
+function escReceiptBodySizeReset(): Uint8Array {
+  return new Uint8Array([0x1b, 0x45, 0x00, 0x1d, 0x21, 0x00]);
+}
+
 function escBold(on: boolean): Uint8Array {
   return new Uint8Array([0x1b, 0x45, on ? 1 : 0]);
 }
@@ -3189,6 +3502,37 @@ export function writeEodIncludeProductsSold(include: boolean): void {
   }
 }
 
+const EOD_INCLUDE_STAFF_PERF_KEY = 'chaslay_eod_include_staff_performance';
+
+/** Company-wide EOD: one line per staff (name, order count, sales). Default OFF. */
+export function readEodIncludeStaffPerformance(): boolean {
+  try {
+    const v = localStorage.getItem(EOD_INCLUDE_STAFF_PERF_KEY);
+    if (v === '1' || v === 'true') return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function writeEodIncludeStaffPerformance(include: boolean): void {
+  try {
+    localStorage.setItem(EOD_INCLUDE_STAFF_PERF_KEY, include ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
+export type EodStaffPerformanceRow = {
+  name: string;
+  salesCount: number;
+  total: number;
+  cashTotal?: number;
+  cardTotal?: number;
+  tapToPayTotal?: number;
+  otherTotal?: number;
+};
+
 export type EodReportPrint = {
   label: string;
   periodFrom?: string;
@@ -3222,6 +3566,12 @@ export type EodReportPrint = {
   productsSold: Array<{ name: string; quantity: number; total: number }>;
   /** When false, omit products-sold section from thermal print (totals unchanged). Default true. */
   includeProductsSold?: boolean;
+  /** Company-wide EOD: compact staff lines (name · orders · total). */
+  includeStaffPerformance?: boolean;
+  userPerformance?: EodStaffPerformanceRow[];
+  /** Optional label for unassigned orders in staff section. */
+  staffNameLabel?: (name: string) => string;
+  staffPerformanceTitle?: string;
   paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
   orderTypeRows?: Array<{ label: string; count: number; total: number; percent?: number }>;
   channelRows?: Array<{ channel: string; count: number; total: number }>;
@@ -3288,6 +3638,13 @@ export function generateEodReportText(report: EodReportPrint): string {
         `${L.mySales || 'My sales'}: ${report.scopeStaffName.trim()}`.slice(0, width),
         width
       ) + '\n';
+    const cardCombined = Number(report.cardTotal || 0) + Number(report.terminalTotal || 0);
+    if (Number(report.cashTotal || 0) > 0.001) {
+      r += padLine(`  ${paymentLabel(L, 'cash')}`, money(report.cashTotal), width) + '\n';
+    }
+    if (cardCombined > 0.001) {
+      r += padLine(`  ${paymentLabel(L, 'card')}`, money(cardCombined), width) + '\n';
+    }
   }
   r += '\n';
   r += centerLine(L.reportPeriod, width) + '\n';
@@ -3393,6 +3750,42 @@ export function generateEodReportText(report: EodReportPrint): string {
         money(orderTypes.reduce((s, o) => s + o.total, 0)),
         width
       ) + '\n';
+  }
+
+  const includeStaffPerformance = report.includeStaffPerformance === true;
+  const staffRows = report.userPerformance?.filter((u) => u.salesCount > 0 || u.total > 0) || [];
+  const showStaffBlock =
+    includeStaffPerformance &&
+    staffRows.length > 0 &&
+    !report.scopeStaffName?.trim();
+  if (showStaffBlock) {
+    const staffTitle = (report.staffPerformanceTitle || 'Staff').slice(0, width);
+    const nameFor = (name: string) =>
+      report.staffNameLabel ? report.staffNameLabel(name) : name;
+    r += '\n';
+    r += thin + '\n';
+    r += centerLine(staffTitle, width) + '\n';
+    r += thin + '\n';
+    for (const u of staffRows) {
+      const left = `${nameFor(u.name)} · ${L.orders} ${u.salesCount}`;
+      r += padLine(left.slice(0, Math.max(8, width - 14)), money(u.total), width) + '\n';
+      const cash = Number(u.cashTotal || 0);
+      const card = Number(u.cardTotal || 0);
+      const tap = Number(u.tapToPayTotal || 0);
+      const other = Number(u.otherTotal || 0);
+      if (cash > 0.001) {
+        r += padLine(`  ${paymentLabel(L, 'cash')}`, money(cash), width) + '\n';
+      }
+      if (card > 0.001) {
+        r += padLine(`  ${paymentLabel(L, 'card')}`, money(card), width) + '\n';
+      }
+      if (tap > 0.001) {
+        r += padLine(`  ${paymentLabel(L, 'tap_to_pay')}`, money(tap), width) + '\n';
+      }
+      if (other > 0.001) {
+        r += padLine(`  ${L.other || 'Other'}`, money(other), width) + '\n';
+      }
+    }
   }
 
   const includeProductsSold = report.includeProductsSold !== false;
@@ -3523,7 +3916,7 @@ export type RevenuePeriodSummaryPrint = {
   refundTotal: number;
   grandTotal: number;
   paymentRows: Array<{ method: string; count: number; total: number }>;
-  userPerformance?: Array<{ name: string; total: number }>;
+  userPerformance?: Array<{ name: string; total: number; salesCount?: number }>;
   businessName?: string;
   language?: string;
   paperWidthMm?: 58 | 80;
@@ -3586,7 +3979,11 @@ export function generateRevenuePeriodSummaryText(report: RevenuePeriodSummaryPri
     r += centerLine(report.labels.userPerformance, width) + '\n';
     r += thin + '\n';
     for (const u of report.userPerformance) {
-      r += padLine(report.staffNameLabel(u.name), money(u.total), width) + '\n';
+      const meta =
+        u.salesCount != null && u.salesCount > 0
+          ? ` · ${report.labels.qty} ${u.salesCount}`
+          : '';
+      r += padLine(`${report.staffNameLabel(u.name)}${meta}`.slice(0, width - 10), money(u.total), width) + '\n';
     }
   }
   if (report.footer?.trim()) {
@@ -3607,7 +4004,8 @@ export function textToEscPos(
   deliveryQrRaster?: Uint8Array | null,
   prefixAfterLogo?: Uint8Array | null,
   postBodySections?: Uint8Array | null,
-  textEncoding: EscPosTextEncoding = 'cp850'
+  textEncoding: EscPosTextEncoding = 'cp850',
+  bodyTextScale: 1 | 2 | 3 = 1
 ): Uint8Array {
   const encode = (s: string) => escposTextEncode(s, textEncoding);
   const codepage = textEncoding === 'utf8' ? new Uint8Array() : ESC_CODEPAGE_CP850;
@@ -3618,24 +4016,13 @@ export function textToEscPos(
   const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
   const parts: Uint8Array[] = [init, codepage];
   if (logoBytes?.length) {
-    // Finish the raster, feed past the logo row, then re-init so text never prints beside the bitmap.
-    parts.push(
-      alignCenter,
-      logoBytes,
-      encode('\n'),
-      ESC_POS_BLANK_LINE,
-      ESC_POS_BLANK_LINE,
-      ESC_POS_BLANK_LINE,
-      new Uint8Array([0x1b, 0x61, 0x00]),
-      new Uint8Array([0x1b, 0x64, 0x06]),
-      new Uint8Array([0x1b, 0x40]),
-      codepage
-    );
+    parts.push(alignCenter, logoBytes, encode('\n'));
   }
   if (prefixAfterLogo?.length) {
     parts.push(prefixAfterLogo);
   }
-  parts.push(ESC_POS_RESET_TEXT_ATTRS, alignLeft, body);
+  const bodyScale = bodyTextScale === 2 || bodyTextScale === 3 ? bodyTextScale : 1;
+  parts.push(ESC_POS_RESET_TEXT_ATTRS, alignLeft, escReceiptBodySize(bodyScale), body, escReceiptBodySizeReset());
   if (qrRaster?.length) {
     parts.push(alignCenter, qrRaster, alignLeft);
   }
@@ -3651,7 +4038,12 @@ export function textToEscPos(
   if (postBodySections?.length) {
     parts.push(postBodySections);
   }
-  parts.push(escposReceiptFeedAndCut(hasQr ? 5 : 4));
+  const kioskThermal = receiptUsesKioskThermalEscPosTweaks();
+  const cutFeed = hasQr && kioskThermal ? 10 : hasQr ? 6 : kioskThermal ? 5 : 4;
+  if (hasQr && kioskThermal) {
+    parts.push(new Uint8Array([0x1b, 0x64, 0x03]));
+  }
+  parts.push(escposReceiptFeedAndCut(cutFeed));
   return concatBytes(...parts);
 }
 
@@ -3676,9 +4068,12 @@ export async function buildReceiptEscPos(
     headerAlign?: ReceiptHeaderAlign;
     headerBold?: boolean;
     headerTextScale?: 1 | 2 | 3;
+    headerTitlePx?: number;
+    headerDetailPx?: number;
     soldGiftCards?: SoldGiftCardOnReceipt[];
     titleBodyGap?: boolean;
     textEncoding?: EscPosTextEncoding;
+    bodyTextScale?: 1 | 2 | 3;
   } = {}
 ): Promise<Uint8Array> {
   const paper = opts.paperWidthMm ?? 80;
@@ -3695,20 +4090,15 @@ export async function buildReceiptEscPos(
 
   if (opts.fastQr !== false) {
     if (digitalData && googleData) {
-      qrRaster =
-        (await buildDualReceiptQrRasterEscPos({
-          left: { label: L.digitalReceiptQrTitle, data: digitalData },
-          right: { label: L.googleReviewQrTitle, data: googleData },
-          paperWidthMm: paper,
-        })) || escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster = await resolveDualReceiptQrRaster(
+        { label: L.digitalReceiptQrTitle, data: digitalData },
+        { label: L.googleReviewQrTitle, data: googleData },
+        paper
+      );
     } else if (digitalData) {
-      qrRaster =
-        (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-        escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster = await resolveReceiptQrRaster(digitalData, paper, L.digitalReceiptQrTitle);
     } else if (googleData) {
-      qrRaster =
-        (await generateReceiptQrRasterEscPos(googleData, paper)) ||
-        escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+      qrRaster = await resolveReceiptQrRaster(googleData, paper, L.googleReviewQrTitle);
     }
   } else if (digitalData && googleData) {
     qrRaster =
@@ -3723,46 +4113,22 @@ export async function buildReceiptEscPos(
         paperWidthMm: paper,
       }));
   } else if (digitalData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.digitalReceiptQrTitle,
-        data: digitalData,
-        paperWidthMm: paper,
-      })) ||
-      (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-      escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(digitalData, paper, L.digitalReceiptQrTitle);
   } else if (googleData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.googleReviewQrTitle,
-        data: googleData,
-        paperWidthMm: paper,
-      })) || escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(googleData, paper, L.googleReviewQrTitle);
   }
 
   if (!qrRaster?.length && digitalData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.digitalReceiptQrTitle,
-        data: digitalData,
-        paperWidthMm: paper,
-      })) ||
-      (await generateReceiptQrRasterEscPos(digitalData, paper)) ||
-      escposQrCode(digitalData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(digitalData, paper, L.digitalReceiptQrTitle);
   } else if (!qrRaster?.length && googleData) {
-    qrRaster =
-      (await buildLabeledReceiptQrRasterEscPos({
-        label: L.googleReviewQrTitle,
-        data: googleData,
-        paperWidthMm: paper,
-      })) || escposQrCode(googleData, RECEIPT_QR_ESCPOS_MODULE_SIZE);
+    qrRaster = await resolveReceiptQrRaster(googleData, paper, L.googleReviewQrTitle);
   }
 
   const headerLines = opts.headerLines ?? [];
   let bodyText = text;
   if (headerLines.length > 0) {
     const titleBodyGap = opts.titleBodyGap ?? headerLines.length > 1;
-    bodyText = stripPaddedReceiptHeaderFromText(
+    bodyText = stripPlainReceiptHeaderFromBody(
       bodyText,
       headerLines,
       lineWidthForPaper(paper),
@@ -3772,8 +4138,20 @@ export async function buildReceiptEscPos(
   }
   const textEncoding = opts.textEncoding ?? 'cp850';
   const receiptLineWidth = lineWidthForPaper(paper);
+  const headerRaster =
+    headerLines.length > 0 && typeof document !== 'undefined'
+      ? await buildReceiptHeaderRasterEscPos(headerLines, {
+          paperWidthMm: paper,
+          align: opts.headerAlign,
+          bold: opts.headerBold,
+          textScale: opts.headerTextScale,
+          titlePx: opts.headerTitlePx,
+          detailPx: opts.headerDetailPx,
+          topGapPx: opts.logoBytes?.length ? RECEIPT_HEADER_LOGO_GAP_PX : 8,
+        })
+      : null;
   const headerEscPos =
-    headerLines.length > 0
+    headerLines.length > 0 && !headerRaster?.length
       ? buildReceiptHeaderEscPos(headerLines, {
           align: opts.headerAlign,
           bold: opts.headerBold,
@@ -3785,6 +4163,17 @@ export async function buildReceiptEscPos(
 
   const giftCardEscPos = await buildSoldGiftCardRedeemEscPosSections(opts.soldGiftCards, paper);
 
+  const prefixHeader = headerRaster?.length
+    ? concatBytes(
+        new Uint8Array([0x1b, 0x61, 0x01]),
+        headerRaster,
+        new Uint8Array([0x0a, 0x1b, 0x61, 0x00])
+      )
+    : headerEscPos;
+
+  const bodyScale =
+    opts.bodyTextScale === 2 || opts.bodyTextScale === 3 ? opts.bodyTextScale : 1;
+
   return textToEscPos(
     bodyText,
     qrRaster,
@@ -3792,13 +4181,14 @@ export async function buildReceiptEscPos(
     opts.barcodeData,
     opts.barcodeLabel,
     undefined,
-    headerEscPos,
+    prefixHeader,
     giftCardEscPos,
-    textEncoding
+    textEncoding,
+    bodyScale
   );
 }
 
-export { isEscPosBase64, isEscPosBytePayload, isValidAgentRawPrintBase64 } from '@/lib/escpos-payload';
+export { isEscPosBase64, isEscPosBytePayload, isValidAgentRawPrintBase64, normalizeAgentPrintBase64 } from '@/lib/escpos-payload';
 
 export function uint8ToBase64(bytes: Uint8Array): string {
   if (typeof btoa === 'undefined') return '';
@@ -4113,6 +4503,8 @@ export type KitchenPrintJob = {
   matchHint?: string | null;
   paperWidthMm: 58 | 80;
   items: KitchenTicketItem[];
+  /** Profile is "bridge default" (no queue name). Resolve to the live USB printer at print time. */
+  useBridgeDefault?: boolean;
 };
 
 function enabledKitchenPrinterProfiles(
@@ -4122,7 +4514,6 @@ function enabledKitchenPrinterProfiles(
     (p) =>
       p.enabled !== false &&
       p.printKitchenTickets &&
-      (p.name || p.portName) &&
       !looksLikeLabelPrinterName(p.name) &&
       !looksLikeLabelPrinterName(p.portName)
   );
@@ -4170,6 +4561,25 @@ export function resolveKitchenPrinterTarget(
   };
 }
 
+function kitchenPrinterHasExplicitRouting(printer: {
+  linkedCategoryIds?: string[];
+  printAllProducts?: boolean;
+}): boolean {
+  return (printer.linkedCategoryIds || []).length > 0 || printer.printAllProducts === false;
+}
+
+/** True when the merchant chose categories (or legacy exclusions) instead of "print everything". */
+function kitchenRoutingIsSelective(
+  settings: PosPrintSettingsClient | null | undefined,
+  kitchenPrinters: NonNullable<PosPrintSettingsClient['printers']>
+): boolean {
+  if ((settings?.kitchenExcludedCategoryIds || []).length > 0) return true;
+  if (settings?.kitchenPrintRouting && Object.keys(settings.kitchenPrintRouting).length > 0) {
+    return true;
+  }
+  return kitchenPrinters.some((p) => kitchenPrinterHasExplicitRouting(p));
+}
+
 function kitchenPrintJobsWithFallback(
   items: KitchenTicketItem[],
   settings: PosPrintSettingsClient | null | undefined,
@@ -4177,6 +4587,8 @@ function kitchenPrintJobsWithFallback(
 ): KitchenPrintJob[] {
   const jobs = resolveKitchenPrintJobs(items, settings).filter((j) => kitchenPrintJobHasTarget(j));
   if (jobs.length || !items.length) return jobs;
+  // Drinks-only (or any fully excluded) ticket must not fall back onto the kitchen printer.
+  if (kitchenRoutingIsSelective(settings, enabledKitchenPrinterProfiles(settings))) return [];
 
   const fallback = resolveKitchenPrinterTarget(settings, opts);
   if (fallback && kitchenPrintJobHasTarget(fallback)) {
@@ -4192,9 +4604,9 @@ export function kitchenPrintJobKey(job: Pick<KitchenPrintJob, 'printerName' | 'p
 
 /** Kitchen print job has a configured Windows name or COM port to resolve at print time. */
 export function kitchenPrintJobHasTarget(
-  job: Pick<KitchenPrintJob, 'printerName' | 'portName'>
+  job: Pick<KitchenPrintJob, 'printerName' | 'portName' | 'useBridgeDefault'>
 ): boolean {
-  return !!(job.printerName || '').trim() || !!(job.portName || '').trim();
+  return !!(job.printerName || '').trim() || !!(job.portName || '').trim() || job.useBridgeDefault === true;
 }
 
 function primaryDedicatedKitchenPrinterId(
@@ -4217,18 +4629,11 @@ function appendUnroutedKitchenItems(
   const unrouted = items.filter((item) => !assigned.has(kitchenItemIdentity(item)));
   if (!unrouted.length) return jobs;
 
+  // Only a real "print all categories" printer may receive lines that no station claimed.
+  // Falling back to kitchenPrinters[0] put deselected drinks back on the kitchen ticket.
   const catchAllProfile =
-    kitchenPrinters.find(
-      (p) =>
-        !p.printReceipts &&
-        !(p.linkedCategoryIds || []).length &&
-        p.printAllProducts !== false
-    ) ||
-    kitchenPrinters.find(
-      (p) => !(p.linkedCategoryIds || []).length && p.printAllProducts !== false
-    ) ||
-    kitchenPrinters.find((p) => !p.printReceipts) ||
-    kitchenPrinters[0];
+    kitchenPrinters.find((p) => !p.printReceipts && !kitchenPrinterHasExplicitRouting(p)) ||
+    kitchenPrinters.find((p) => !kitchenPrinterHasExplicitRouting(p));
   if (!catchAllProfile) return jobs;
 
   const key = (catchAllProfile.name || catchAllProfile.portName || '').trim();
@@ -4284,16 +4689,19 @@ export function buildKitchenPrintJobs(
   for (const kp of kitchenPrinters) {
     const filtered = filterKitchenItems(items, kp, filterCtx);
     if (!filtered.length) continue;
+    const named = (kp.name || kp.portName || '').trim();
     jobs.push({
-      printerName: kp.name || kp.portName || '',
+      printerName: named,
       portName: kp.portName ?? null,
       matchHint: kp.matchHint ?? null,
       paperWidthMm: resolveKitchenPaperWidthMm(settings, kp.paperWidthMm),
       items: filtered,
+      useBridgeDefault: !named,
     });
   }
 
   if (!jobs.length) {
+    if (kitchenRoutingIsSelective(settings, kitchenPrinters)) return [];
     const fallback = resolveKitchenPrinterTarget(settings);
     if (fallback && kitchenPrintJobHasTarget(fallback)) {
       return [{ ...fallback, items }];

@@ -152,6 +152,30 @@ button {
     overscroll-behavior: none;
   }
 
+  @media (max-width: 1023px) {
+    html.panel-vv-sync .panel-shell {
+      height: var(--panel-vvh, 100dvh);
+      max-height: var(--panel-vvh, 100dvh);
+    }
+
+    html.panel-vv-sync.panel-kb-open .panel-shell {
+      /* Stay in the top-left corner. top/left from visualViewport.offset*
+         stuck as a gap on Settings and then on POS after the keyboard closed. */
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: var(--panel-vvh, 100dvh);
+      max-height: var(--panel-vvh, 100dvh);
+      right: auto;
+      z-index: 1;
+    }
+
+    html.panel-vv-sync.panel-kb-open .reborn-powered-by--panel {
+      display: none;
+    }
+  }
+
   /* Merchant/reseller/superadmin nav — Reborn burgundy brand gradient */
   .panel-sidebar {
     --sidebar-active: rgba(0, 0, 0, 0.22);
@@ -259,12 +283,37 @@ button {
   html.webpos-lock body,
   html.webpos-lock #root {
     width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden;
+    max-width: 100%;
+    overflow: hidden;
     height: 100%;
-    height: 100dvh;
+    height: var(--webpos-vvh, 100dvh);
+    margin: 0;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+
+  /* A leftover document scroll from Settings shows as padding on the left and top. */
+  html.webpos-lock,
+  html.webpos-lock body {
+    position: fixed;
+    top: var(--webpos-vv-top, 0px);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: var(--webpos-vvh, 100dvh);
+  }
+
+  html.webpos-lock #root {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  html.webpos-lock .panel-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100% !important;
+    max-height: 100% !important;
   }
 
   .webpos-shell {
@@ -314,13 +363,16 @@ button {
    * Compensate layout box so Pay / cart dock stay inside 100dvh.
    */
   .webpos-shell.webpos-shell--fill {
-    height: calc(100dvh / var(--webpos-zoom));
-    width: calc(100vw / var(--webpos-zoom));
-    max-height: calc(100dvh / var(--webpos-zoom));
+    height: calc(var(--webpos-vvh, 100dvh) / var(--webpos-zoom));
+    /* 100vw includes the scrollbar and scrolls the document, which sticks as a
+       left/top gap after leaving Settings. Fill the parent instead. */
+    width: calc(100% / var(--webpos-zoom));
+    max-width: 100%;
+    max-height: calc(var(--webpos-vvh, 100dvh) / var(--webpos-zoom));
   }
   .webpos-shell.webpos-shell--embedded {
-    height: calc((100dvh - 4rem) / var(--webpos-zoom));
-    max-height: calc((100dvh - 4rem) / var(--webpos-zoom));
+    height: calc((var(--webpos-vvh, 100dvh) - 4rem) / var(--webpos-zoom));
+    max-height: calc((var(--webpos-vvh, 100dvh) - 4rem) / var(--webpos-zoom));
   }
 
   /* WebPOS toast stack — center-top column only; wrappers must not block top-bar clicks */
@@ -523,7 +575,7 @@ button {
     color: var(--webpos-text) !important;
   }
 
-  /* Prevent iOS Safari zoom-on-focus for POS inputs (needs >= 16px). */
+  /* Prevent iOS Safari zoom-on-focus (inputs need >= 16px or the page zooms and feels "stuck"). */
   .webpos-shell input,
   .webpos-shell textarea,
   .webpos-shell select,
@@ -535,6 +587,17 @@ button {
   .kds-shell select {
     font-size: 16px !important;
     touch-action: manipulation;
+  }
+
+  @media (max-width: 1023px), (pointer: coarse) {
+    .panel-shell input,
+    .panel-shell textarea,
+    .panel-shell select,
+    .panel-shell .input,
+    .panel-shell .field-input {
+      font-size: 16px !important;
+      touch-action: manipulation;
+    }
   }
 
   /* Desktop search: smaller text + flexible width so full query stays visible. */
@@ -849,6 +912,29 @@ button {
     overscroll-behavior-y: contain;
     touch-action: pan-y;
     transform: translateZ(0);
+  }
+
+  /*
+   * Register: product grid scrolls in the flex middle; Cash/Card dock the bottom
+   * of the left column (same pattern as .webpos-cart-dock on the cart panel).
+   */
+  .webpos-register-stack {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 0%;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  .webpos-register-stack .webpos-product-scroll {
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+
+  .webpos-register-stack .webpos-express-dock {
+    flex-shrink: 0;
+    margin-top: auto;
   }
 
   /* Self-order kiosk — portrait 23" / 27" touch screens (1080×1920 typical) */
@@ -1691,6 +1777,29 @@ button {
 
   .webpos-keypad-modal {
     max-width: 28rem;
+    min-width: min(100%, 18rem);
+  }
+
+  .webpos-keypad-modal--lg {
+    max-width: min(36rem, 96vw);
+    min-width: min(100%, 20rem);
+  }
+
+  .webpos-keypad-modal--lg .webpos-keypad-key {
+    min-height: 3.25rem;
+    font-size: 1.25rem;
+  }
+
+  .product-edit-page,
+  .merchant-product-editor-modal {
+    color: var(--text);
+  }
+
+  .product-edit-page .field-input,
+  .merchant-product-editor-modal .field-input {
+    background: var(--bg-elevated);
+    color: var(--text);
+    border-color: var(--border);
   }
 
   .webpos-mobile-pay-cart {
@@ -1762,10 +1871,10 @@ button {
     .webpos-shell[data-narrow='1'] {
       --webpos-zoom: 1;
       zoom: 1;
-      width: 100vw !important;
-      max-width: 100vw;
-      height: 100dvh !important;
-      max-height: 100dvh !important;
+      width: 100% !important;
+      max-width: 100%;
+      height: var(--webpos-vvh, 100dvh) !important;
+      max-height: var(--webpos-vvh, 100dvh) !important;
       overflow: hidden;
     }
   }
@@ -1916,6 +2025,46 @@ button {
     animation: webpos-pin-shake 0.4s ease-in-out;
   }
 
+  /* Phones: clock → message → keypad as one block above the footer (30px before keypad). */
+  @media (max-width: 639px) {
+    .webpos-pin-gate-body {
+      justify-content: flex-end;
+    }
+
+    .webpos-pin-gate-entry {
+      flex: 0 0 auto;
+    }
+
+    .webpos-pin-gate-stack {
+      width: 100%;
+    }
+
+    .webpos-pin-gate-mobile-clock {
+      margin-bottom: 0.75rem;
+    }
+
+    .webpos-pin-gate-mobile-clock .webpos-pin-gate-time {
+      font-size: clamp(2.15rem, 8.5vw, 3.25rem);
+    }
+
+    .webpos-pin-gate-keypad-shell {
+      width: 100%;
+      margin-top: 30px;
+      padding-top: 0;
+      padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+    }
+
+    .webpos-pin-gate-keypad {
+      max-width: min(20rem, 92vw);
+      gap: 0.5rem;
+    }
+
+    .webpos-pin-gate-key {
+      height: 3rem;
+      font-size: 1.35rem;
+    }
+  }
+
   /* Small tablets / phones in landscape (e.g. 6" POS) — keep PIN copy and logo visible */
   @media (orientation: landscape) and (max-height: 520px) {
     .webpos-pin-gate-time {
@@ -1936,7 +2085,10 @@ button {
       padding-bottom: 0.25rem;
     }
 
-    .webpos-pin-gate-clock,
+    .webpos-pin-gate-clock {
+      justify-content: flex-start;
+    }
+
     .webpos-pin-gate-entry {
       justify-content: flex-start;
     }
@@ -2147,6 +2299,32 @@ html.shop-shell #root {
 
 .shop-reservation-fab--pulse {
   animation: shop-reservation-fab-pulse 1.05s ease-in-out 2;
+}
+
+/* Scroll-reveal booking peek (half dock + full strip) */
+.shop-reservation-peek {
+  opacity: 0;
+  transform: translateY(1.25rem);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
+}
+
+.shop-reservation-peek--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.shop-reservation-peek__card {
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shop-reservation-peek--half.shop-reservation-peek--visible .shop-reservation-peek__card {
+  transform: translateY(46%);
+}
+
+.shop-reservation-peek--full.shop-reservation-peek--visible .shop-reservation-peek__card {
+  transform: translateY(0);
 }
 
 .shop-route-layout__footer {

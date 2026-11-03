@@ -45,7 +45,7 @@ import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { normalizeDietaryTags } from "@/lib/product-dietary";
-import { generateWebOrderNumber } from "@/lib/web-order-number";
+import { generateKioskOrderNumber, generateWebOrderNumber } from "@/lib/web-order-number";
 import {
   inStockProductSpecifications,
   SHOP_SIZE_MODIFIER_GROUP_ID,
@@ -689,6 +689,43 @@ async function resolveMerchant(slugOrHost: string) {
   return merchant;
 }
 
+const SHOP_ONLINE_ORDERS_DISABLED = "SHOP_ONLINE_ORDERS_DISABLED";
+
+type ResolvedShopMerchant = NonNullable<Awaited<ReturnType<typeof resolveMerchant>>>;
+
+function rejectShopNotFound(res: Response) {
+  return res.status(404).json({ error: "Shop not found" });
+}
+
+function rejectShopOrdersDisabled(res: Response) {
+  return res.status(403).json({ error: SHOP_ONLINE_ORDERS_DISABLED, code: SHOP_ONLINE_ORDERS_DISABLED });
+}
+
+/** Public storefront exists (CMS, menu browse). Does not require online ordering. */
+function requireShopMerchant(
+  res: Response,
+  merchant: ResolvedShopMerchant | null | undefined
+): merchant is ResolvedShopMerchant {
+  if (!merchant) {
+    rejectShopNotFound(res);
+    return false;
+  }
+  return true;
+}
+
+/** Checkout / place order — requires merchant "online shop" enabled. */
+function requireShopOrdering(
+  res: Response,
+  merchant: ResolvedShopMerchant | null | undefined
+): merchant is ResolvedShopMerchant {
+  if (!requireShopMerchant(res, merchant)) return false;
+  if (!merchant.shopEnabled) {
+    rejectShopOrdersDisabled(res);
+    return false;
+  }
+  return true;
+}
+
 async function resolvePrivacyManagerName(merchantId: string): Promise<string | null> {
   const db = getDb();
   const managerRole = await db.query.merchantRoles.findFirst({
@@ -760,6 +797,8 @@ function shopPageMerchantPayload(
     reservationsEnabled: !!merchant.reservationsEnabled,
     cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
     giftCards: ShopGiftCardService.publicSettings(ShopGiftCardService.settingsFromMerchant(merchant)),
+    smsLoginEnabled: (merchant as { smsAddonEnabled?: boolean }).smsAddonEnabled === true,
+    shopEnabled: merchant.shopEnabled !== false,
     acceptingOrders: merchant.acceptingOrders !== false,
     acceptingReservations: merchant.acceptingReservations !== false,
     vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -850,6 +889,26 @@ router.get("/platform/legal", async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/shop/platform/legal/pages/:pageSlug — hosted platform legal HTML (privacy, terms, cookies).
+ */
+router.get("/platform/legal/pages/:pageSlug", async (req: Request, res: Response) => {
+  try {
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const page = await PlatformSettingsService.getPlatformLegalPageBySlug(
+      String(req.params.pageSlug || "")
+    );
+    if (!page) {
+      return res.status(404).json({ error: "Page not found" });
+    }
+    res.json({ success: true, data: page });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to load platform legal page",
+    });
+  }
+});
+
 router.get("/tls-ask", async (req: Request, res: Response) => {
   try {
     const domain = String(req.query.domain || "").toLowerCase().split(":")[0];
@@ -873,9 +932,7 @@ router.get("/tls-ask", async (req: Request, res: Response) => {
 router.get("/:slug", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
 
     const hours = (merchant.storeHours || {}) as StoreHours;
     const channels = {
@@ -978,6 +1035,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
         giftCards: ShopGiftCardService.publicSettings(
           ShopGiftCardService.settingsFromMerchant(merchant)
         ),
+        smsLoginEnabled: (merchant as { smsAddonEnabled?: boolean }).smsAddonEnabled === true,
         reservationsEnabled: !!merchant.reservationsEnabled,
         cateringEnabled: !!(merchant as { cateringEnabled?: boolean }).cateringEnabled,
         ...(() => {
@@ -990,6 +1048,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
             phoneOrdering: page.phoneOrdering,
           };
         })(),
+        shopEnabled: merchant.shopEnabled !== false,
         acceptingOrders: merchant.acceptingOrders !== false,
         acceptingReservations: merchant.acceptingReservations !== false,
         vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -1009,9 +1068,7 @@ router.get("/:slug", async (req: Request, res: Response) => {
 router.get("/:slug/pages/home", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     if (!merchant.cmsHomepageEnabled) {
       return res.status(404).json({ error: "Homepage not published" });
     }
@@ -1050,6 +1107,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
             giftCards: ShopGiftCardService.publicSettings(
               ShopGiftCardService.settingsFromMerchant(merchant)
             ),
+            smsLoginEnabled: (merchant as { smsAddonEnabled?: boolean }).smsAddonEnabled === true,
             acceptingOrders: merchant.acceptingOrders !== false,
             acceptingReservations: merchant.acceptingReservations !== false,
             vacation: vacationPublicPayload(merchant.vacationSettings),
@@ -1071,9 +1129,7 @@ router.get("/:slug/pages/home", async (req: Request, res: Response) => {
 router.get("/:slug/site-pages", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     if (!merchant.cmsHomepageEnabled) {
       return res.json({ success: true, data: [] });
     }
@@ -1099,9 +1155,7 @@ router.get("/:slug/site-pages", async (req: Request, res: Response) => {
 router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const pageSlug = req.params.pageSlug;
 
     if (merchant.cmsHomepageEnabled) {
@@ -1168,7 +1222,7 @@ router.get("/:slug/pages/:pageSlug", async (req: Request, res: Response) => {
 router.get("/:slug/loyalty", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (customerId) {
       const summary = await ShopLoyaltyService.getCustomerLoyaltySummary(merchant.id, customerId);
@@ -1199,7 +1253,7 @@ router.get("/:slug/loyalty", async (req: Request, res: Response) => {
 router.get("/:slug/my-orders", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
 
@@ -1260,9 +1314,7 @@ router.get("/:slug/my-orders", async (req: Request, res: Response) => {
 router.get("/:slug/locations", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const { LocationsService } = await import("@/services/locations.service");
     const locations = await LocationsService.listPublicForShop(merchant.id);
     const db = getDb();
@@ -1299,9 +1351,7 @@ router.get("/:slug/locations", async (req: Request, res: Response) => {
 
 async function handleShopMenu(req: Request, res: Response, locationSlugParam?: string) {
   const merchant = await resolveMerchant(req.params.slug);
-  if (!merchant || !merchant.shopEnabled) {
-    return res.status(404).json({ error: "Shop not found or closed" });
-  }
+  if (!requireShopMerchant(res, merchant)) return;
 
   const db = getDb();
   const catalogChannel = shopMenuCatalogChannel(
@@ -1494,9 +1544,7 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
 router.get("/:slug/table/:tableId/session", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const tableId = String(req.params.tableId || "").trim();
     if (!tableId) return res.status(400).json({ error: "Table is required" });
 
@@ -1549,7 +1597,7 @@ router.get("/:slug/table/:tableId/session", async (req: Request, res: Response) 
 router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const qrSettings = normalizeTableQrSettings(merchant.tableQrSettings);
     if (!qrSettings.qrPayAtTableEnabled) {
       return res.status(400).json({ error: "Pay at table is not enabled for this venue" });
@@ -1614,7 +1662,7 @@ router.post("/:slug/table/:tableId/payment-session", async (req: Request, res: R
 router.post("/:slug/table/:tableId/confirm-payment", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const tableId = String(req.params.tableId || "").trim();
     const sessionToken = String(req.body?.tableSessionToken || "").trim();
     const session = await TableSessionService.assertOpenSession(merchant.id, tableId, sessionToken);
@@ -1633,9 +1681,7 @@ router.post("/:slug/table/:tableId/confirm-payment", async (req: Request, res: R
 router.get("/:slug/delivery-zip-rules", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const db = getDb();
     const rules = await db.query.deliveryZipRules.findMany({
       where: and(eq(schema.deliveryZipRules.merchantId, merchant.id), eq(schema.deliveryZipRules.isActive, true)),
@@ -1665,9 +1711,7 @@ router.get("/:slug/delivery-zip-rules", async (req: Request, res: Response) => {
 router.get("/:slug/delivery-zones", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const db = getDb();
     const zones = await db.query.deliveryZones.findMany({
       where: and(eq(schema.deliveryZones.merchantId, merchant.id), eq(schema.deliveryZones.isActive, true)),
@@ -1698,9 +1742,7 @@ router.get("/:slug/delivery-zones", async (req: Request, res: Response) => {
 router.get("/:slug/postal-suggest", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const { suggestSwissPostal, cityForSwissPostal } = await import("@/data/swiss-postal");
     const q = String(req.query.q || "");
     const suggestions = suggestSwissPostal(q, 15);
@@ -1724,9 +1766,7 @@ router.get("/:slug/postal-suggest", async (req: Request, res: Response) => {
 router.get("/:slug/address-suggest", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const q = String(req.query.q || "").trim();
     if (q.length < 3) {
       return res.json({ success: true, suggestions: [] });
@@ -1755,9 +1795,7 @@ router.get("/:slug/address-suggest", async (req: Request, res: Response) => {
 router.get("/:slug/house-number-suggest", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const street = String(req.query.street || "").trim();
     if (!street) {
       return res.json({ success: true, numbers: [] });
@@ -1786,9 +1824,7 @@ router.get("/:slug/house-number-suggest", async (req: Request, res: Response) =>
 router.post("/:slug/geocode", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found" });
-    }
+    if (!requireShopMerchant(res, merchant)) return;
     const query = String(req.body.query || "").trim();
     if (!query) return res.status(400).json({ error: "query required" });
 
@@ -1815,7 +1851,8 @@ router.post("/:slug/geocode", async (req: Request, res: Response) => {
 router.post("/:slug/check-delivery", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled || !merchant.deliveryEnabled) {
+    if (!requireShopMerchant(res, merchant)) return;
+    if (!merchant.deliveryEnabled) {
       return res.status(404).json({ error: "Delivery not available" });
     }
 
@@ -1889,7 +1926,7 @@ function optionalCustomer(req: Request): { customerId?: string } {
 router.post("/:slug/auth/register", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const result = await ShopCustomerService.register(merchant.id, req.body);
     res.status(201).json({ success: true, ...result });
   } catch (error) {
@@ -1903,12 +1940,49 @@ router.post("/:slug/auth/register", async (req: Request, res: Response) => {
 router.post("/:slug/auth/login", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { email, password } = req.body;
     const result = await ShopCustomerService.login(merchant.id, email, password);
     res.json({ success: true, ...result });
   } catch (error) {
     res.status(401).json({ error: error instanceof Error ? error.message : "Login failed" });
+  }
+});
+
+router.post("/:slug/auth/phone/request", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!requireShopMerchant(res, merchant)) return;
+    const { SmsOtpService } = await import("@/services/sms-otp.service");
+    const purpose = String(req.body?.purpose || "login") === "signup" ? "signup" : "login";
+    const result = await SmsOtpService.request({
+      merchantId: merchant.id,
+      phone: String(req.body?.phone || ""),
+      purpose,
+      ip: req.ip,
+      shopName: merchant.name,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Could not send code" });
+  }
+});
+
+router.post("/:slug/auth/phone/verify", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!requireShopMerchant(res, merchant)) return;
+    const { SmsOtpService } = await import("@/services/sms-otp.service");
+    const purpose = String(req.body?.purpose || "login") === "signup" ? "signup" : "login";
+    const result = await SmsOtpService.verify({
+      merchantId: merchant.id,
+      phone: String(req.body?.phone || ""),
+      code: String(req.body?.code || ""),
+      purpose,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Verification failed" });
   }
 });
 
@@ -1918,7 +1992,7 @@ router.post("/:slug/auth/login", async (req: Request, res: Response) => {
 router.post("/:slug/auth/forgot-password", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     await ShopCustomerService.requestPasswordReset(merchant.id, String(req.body?.email || ""));
     res.json({ success: true });
   } catch (error) {
@@ -1932,7 +2006,7 @@ router.post("/:slug/auth/forgot-password", async (req: Request, res: Response) =
 router.get("/:slug/auth/me", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
     const customer = await ShopCustomerService.getProfile(customerId, merchant.id);
@@ -1948,7 +2022,7 @@ router.get("/:slug/auth/me", async (req: Request, res: Response) => {
 router.put("/:slug/auth/me", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
     const customer = await ShopCustomerService.updateProfile(customerId, merchant.id, req.body);
@@ -1964,7 +2038,7 @@ router.put("/:slug/auth/me", async (req: Request, res: Response) => {
 router.get("/:slug/auth/addresses", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
     const addresses = await ShopCustomerService.listAddresses(customerId, merchant.id);
@@ -1980,7 +2054,7 @@ router.get("/:slug/auth/addresses", async (req: Request, res: Response) => {
 router.post("/:slug/auth/addresses", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
     const address = await ShopCustomerService.createAddress(customerId, merchant.id, req.body || {});
@@ -1996,7 +2070,7 @@ router.post("/:slug/auth/addresses", async (req: Request, res: Response) => {
 router.put("/:slug/auth/addresses/:addressId", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
     const address = await ShopCustomerService.updateAddress(
@@ -2017,7 +2091,7 @@ router.put("/:slug/auth/addresses/:addressId", async (req: Request, res: Respons
 router.delete("/:slug/auth/addresses/:addressId", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { customerId } = optionalCustomer(req);
     if (!customerId) return res.status(401).json({ error: "Not logged in" });
     await ShopCustomerService.deleteAddress(customerId, merchant.id, req.params.addressId);
@@ -2033,7 +2107,7 @@ router.delete("/:slug/auth/addresses/:addressId", async (req: Request, res: Resp
 router.get("/:slug/reservations/config", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { ReservationService } = await import("@/services/reservation.service");
     const config = ReservationService.getSettingsForMerchant(merchant);
     if (!config.enabled) return res.status(404).json({ error: "Reservations are not enabled" });
@@ -2062,7 +2136,8 @@ router.get("/:slug/reservations/config", async (req: Request, res: Response) => 
 router.get("/:slug/reservations/slots", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled || !merchant.reservationsEnabled) {
+    if (!requireShopMerchant(res, merchant)) return;
+    if (!merchant.reservationsEnabled) {
       return res.status(404).json({ error: "Reservations not available" });
     }
     const date = String(req.query.date || "");
@@ -2096,7 +2171,7 @@ router.get("/:slug/reservations/slots", async (req: Request, res: Response) => {
 router.get("/:slug/growth/reservation-campaign/:code", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const { ReservationCampaignsService } = await import(
       "@/services/reservation-campaigns.service"
     );
@@ -2115,7 +2190,8 @@ router.get("/:slug/growth/reservation-campaign/:code", async (req: Request, res:
 router.post("/:slug/reservations", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled || !merchant.reservationsEnabled) {
+    if (!requireShopMerchant(res, merchant)) return;
+    if (!merchant.reservationsEnabled) {
       return res.status(404).json({ error: "Reservations not available" });
     }
     if (merchant.acceptingReservations === false) {
@@ -2185,7 +2261,7 @@ router.post("/:slug/reservations", async (req: Request, res: Response) => {
 router.post("/:slug/vouchers/validate", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const code = String(req.body?.code || "");
     const subtotal = Number(req.body?.subtotal || 0);
     const authCustomer = optionalCustomer(req);
@@ -2209,7 +2285,7 @@ router.post("/:slug/vouchers/validate", async (req: Request, res: Response) => {
 router.post("/:slug/offers/preview", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const channel = String(req.body?.channel || "takeaway");
     const at = req.body?.scheduledFor ? new Date(req.body.scheduledFor) : new Date();
     const lines = Array.isArray(req.body?.items) ? req.body.items : [];
@@ -2282,7 +2358,7 @@ router.post("/:slug/offers/preview", async (req: Request, res: Response) => {
 router.get("/:slug/payment-options", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const cardReady = shopAdyenCardReady(merchant);
     res.json({
       success: true,
@@ -2309,7 +2385,7 @@ router.get("/:slug/payment-options", async (req: Request, res: Response) => {
 router.get("/:slug/gift-cards/settings", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const licensed = await merchantHasGiftCardsLicense(merchant.id);
     if (!licensed) {
       return res.json({
@@ -2338,7 +2414,7 @@ router.get("/:slug/gift-cards/settings", async (req: Request, res: Response) => 
 router.get("/:slug/gift-cards/balance/:code", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const data = await ShopGiftCardService.lookupPublicBalance(
       merchant.id,
       req.params.code
@@ -2355,7 +2431,7 @@ router.get("/:slug/gift-cards/balance/:code", async (req: Request, res: Response
 router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     if (!(await merchantHasGiftCardsLicense(merchant.id))) {
       return res.status(403).json({ error: "Gift cards are not enabled for this shop" });
     }
@@ -2421,7 +2497,7 @@ router.post("/:slug/gift-cards/purchase", async (req: Request, res: Response) =>
 router.get("/:slug/gift-cards/purchase/:purchaseId", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const purchase = await ShopGiftCardService.getPurchase(
       merchant.id,
       req.params.purchaseId
@@ -2451,7 +2527,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const merchant = await resolveMerchant(req.params.slug);
-      if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+      if (!requireShopMerchant(res, merchant)) return;
 
       const isDemo = req.body?.demo === true;
       if (!isDemo) {
@@ -2493,9 +2569,7 @@ router.post(
 router.post("/:slug/orders", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant || !merchant.shopEnabled) {
-      return res.status(404).json({ error: "Shop not found or closed" });
-    }
+    if (!requireShopOrdering(res, merchant)) return;
     const rateKey = `${req.ip || "unknown"}:${merchant.id}`;
     const rate = checkShopOrderRateLimit(rateKey);
     if (!rate.ok) {
@@ -3295,7 +3369,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     if (trimmedGiftCode && giftCardPreviewBalance > 0) {
       giftCardDiscount = roundMoney2(Math.min(giftCardPreviewBalance, preGiftTotal));
     }
-    const orderNumber = await generateWebOrderNumber(db, merchant.id);
+    const orderNumber = isKioskOrder
+      ? await generateKioskOrderNumber(db, merchant.id)
+      : await generateWebOrderNumber(db, merchant.id);
     const comoDiscount = isKioskOrder
       ? roundMoney2(Math.max(0, Math.min(Number(comoDiscountAmountRaw) || 0, preGiftTotal)))
       : 0;
@@ -3739,7 +3815,7 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
 router.get("/:slug/orders/:orderId/tracking", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const token = String(req.query.token || "").trim();
     if (!token) return res.status(400).json({ error: "Tracking token required" });
     const { DeliveryTrackingService } = await import("@/services/delivery-tracking.service");
@@ -3761,7 +3837,7 @@ router.get("/:slug/orders/:orderId/tracking", async (req: Request, res: Response
 router.get("/:slug/orders/:orderId", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const db = getDb();
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, req.params.orderId), eq(schema.orders.merchantId, merchant.id)),
@@ -3820,7 +3896,7 @@ router.get("/:slug/orders/:orderId", async (req: Request, res: Response) => {
 router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const db = getDb();
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, req.params.orderId), eq(schema.orders.merchantId, merchant.id)),
@@ -3877,7 +3953,7 @@ router.post("/:slug/orders/:orderId/payment-session", async (req: Request, res: 
 router.post("/:slug/orders/:orderId/confirm-payment", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
-    if (!merchant?.shopEnabled) return res.status(404).json({ error: "Shop not found" });
+    if (!requireShopMerchant(res, merchant)) return;
     const db = getDb();
     const order = await db.query.orders.findFirst({
       where: and(eq(schema.orders.id, req.params.orderId), eq(schema.orders.merchantId, merchant.id)),

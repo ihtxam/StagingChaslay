@@ -19,6 +19,7 @@ import {
   Vault,
   ArrowDownUp,
   Nfc,
+  ScrollText,
 } from 'lucide-react';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
 import { useFullscreenActive } from '@/hooks/useFullscreenActive';
@@ -422,12 +423,14 @@ export default function WebPosTopBar({
               onSwitchUser();
             }}
           >
-            <UserCircle2 size={18} className="shrink-0 lg:hidden" />
-            <UserCircle2 size={16} className="hidden shrink-0 lg:inline" />
-            <span className="hidden truncate lg:inline">{staffName || t('webPosSwitchUser')}</span>
+            <UserCircle2 size={18} className="shrink-0 sm:hidden" />
+            <UserCircle2 size={16} className="hidden shrink-0 sm:inline" />
+            <span className="hidden max-w-[5.5rem] truncate sm:inline sm:max-w-[7rem] lg:max-w-[9rem]">
+              {staffName || t('webPosSwitchUser')}
+            </span>
           </button>
 
-          {canDrawer ? (
+          {canDrawer && isLocalPrintStation ? (
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-50 lg:h-9 lg:w-9"
@@ -549,7 +552,34 @@ export default function WebPosTopBar({
   );
 }
 
+function WebPosEodGearSection({
+  showEodButton,
+  onEodReport,
+}: {
+  showEodButton?: boolean;
+  onEodReport?: () => void;
+}) {
+  const { t } = useI18n();
+  if (!showEodButton || !onEodReport) return null;
+  return (
+    <div className="space-y-1.5 border-b border-stone-100 pb-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+        {t('webPosEodReport')}
+      </p>
+      <button
+        type="button"
+        className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+        onClick={onEodReport}
+      >
+        {t('webPosEodPrint')}
+      </button>
+      <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
+    </div>
+  );
+}
+
 export function WebPosSettingsDropdown({
+  staffName,
   onReloadCatalog,
   shiftsEnabled,
   shiftOpen,
@@ -576,6 +606,8 @@ export function WebPosSettingsDropdown({
   locale = 'en',
   onLanguageChange,
   canManageChannels = false,
+  canManageOnlineShopChannels,
+  canManageOrderChannels,
   shopEnabled = false,
   reservationsEnabled = false,
   pickupEnabled = true,
@@ -589,6 +621,7 @@ export function WebPosSettingsDropdown({
   onDineInEnabledChange,
   onSendLogs,
   onOpenCustomerDisplay,
+  onOpenReceiptDesign,
   autoOpenCashDrawer = true,
   onAutoOpenCashDrawerChange,
   terminalEnabled = false,
@@ -610,6 +643,7 @@ export function WebPosSettingsDropdown({
   onStaffPrinterChange,
   hardwareGearOnly = false,
 }: {
+  staffName?: string | null;
   onReloadCatalog: () => void;
   shiftsEnabled?: boolean;
   shiftOpen?: boolean;
@@ -636,6 +670,10 @@ export function WebPosSettingsDropdown({
   locale?: Locale;
   onLanguageChange?: (lang: Locale) => void;
   canManageChannels?: boolean;
+  /** When set, overrides canManageChannels for the online shop / reservations block. */
+  canManageOnlineShopChannels?: boolean;
+  /** When set, overrides canManageChannels for pickup / delivery / dine-in toggles. */
+  canManageOrderChannels?: boolean;
   shopEnabled?: boolean;
   reservationsEnabled?: boolean;
   pickupEnabled?: boolean;
@@ -649,6 +687,8 @@ export function WebPosSettingsDropdown({
   onDineInEnabledChange?: (enabled: boolean) => void;
   onSendLogs?: () => void;
   onOpenCustomerDisplay?: () => void;
+  /** Merchant receipt logo/header/footer designer (panel-synced). */
+  onOpenReceiptDesign?: () => void;
   autoOpenCashDrawer?: boolean;
   onAutoOpenCashDrawerChange?: (enabled: boolean) => void;
   terminalEnabled?: boolean;
@@ -679,12 +719,23 @@ export function WebPosSettingsDropdown({
     if (!onTextSizeChange) return;
     onTextSizeChange(cycleWebPosTextSize(textSize, dir));
   };
+  const onlineShopChannelToggles = canManageOnlineShopChannels ?? canManageChannels;
+  const orderChannelToggles = canManageOrderChannels ?? canManageChannels;
+  const signedInLabel = staffName?.trim()
+    ? t('webPosSignedInAs').replace('{name}', staffName.trim())
+    : null;
 
   return (
     <div
-      className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(65vh,26rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
+      className="webpos-settings-dropdown absolute right-0 top-[calc(100%+6px)] z-[60] flex max-h-[min(78vh,32rem)] w-[min(18rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {signedInLabel ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-stone-100 bg-stone-50 px-3 py-2.5">
+          <UserCircle2 size={18} className="shrink-0 text-stone-500" aria-hidden />
+          <p className="min-w-0 truncate text-sm font-semibold text-stone-800">{signedInLabel}</p>
+        </div>
+      ) : null}
       <div className="webpos-settings-dropdown-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5">
       {hardwareGearOnly ? (
         <>
@@ -699,6 +750,7 @@ export function WebPosSettingsDropdown({
               onPrinterChange={onStaffPrinterChange}
             />
           ) : null}
+          <WebPosEodGearSection showEodButton={showEodButton} onEodReport={onEodReport} />
           <div className="grid grid-cols-2 gap-1.5 border-b border-stone-100 pb-2">
             <button
               type="button"
@@ -718,6 +770,43 @@ export function WebPosSettingsDropdown({
               </button>
             ) : null}
           </div>
+          {shiftsEnabled ? (
+            <div className="space-y-1.5 border-b border-stone-100 pb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                {t('webPosShiftMenu')}
+              </p>
+              {shiftOpen ? (
+                <button
+                  type="button"
+                  className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+                  onClick={onCloseShift}
+                >
+                  {t('webPosShiftClose')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
+                  onClick={onStartShift}
+                >
+                  {t('webPosShiftStart')}
+                </button>
+              )}
+              {shiftOpen && onCashMovement ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  onClick={onCashMovement}
+                >
+                  <ArrowDownUp size={16} />
+                  {t('webPosCashMovementTitle')}
+                </button>
+              ) : null}
+              <p className="text-[10px] text-stone-500">
+                {shiftOpen ? t('webPosShiftOpenHint') : t('webPosShiftClosedHint')}
+              </p>
+            </div>
+          ) : null}
         </>
       ) : null}
       {!hardwareGearOnly ? (
@@ -767,6 +856,16 @@ export function WebPosSettingsDropdown({
             {t('cdsOpenDisplay')}
           </button>
         ) : null}
+        {onOpenReceiptDesign ? (
+          <button
+            type="button"
+            className="inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50/80 px-2 py-2 text-[11px] font-semibold text-teal-900 hover:bg-teal-100"
+            onClick={onOpenReceiptDesign}
+          >
+            <ScrollText size={14} />
+            {t('webPosReceiptDesign')}
+          </button>
+        ) : null}
       </div>
 
       {onLanguageChange ? (
@@ -793,7 +892,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {canManageChannels && (onShopEnabledChange || onReservationsEnabledChange) ? (
+      {onlineShopChannelToggles && (onShopEnabledChange || onReservationsEnabledChange) ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
             {t('webPosOnlineChannels')}
@@ -841,7 +940,7 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {canManageChannels &&
+      {orderChannelToggles &&
       (onPickupEnabledChange || onDeliveryEnabledChange || onDineInEnabledChange) ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
@@ -1035,22 +1134,6 @@ export function WebPosSettingsDropdown({
         </div>
       ) : null}
 
-      {showEodButton ? (
-        <div className="space-y-1.5 border-b border-stone-100 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-            {t('webPosEodReport')}
-          </p>
-          <button
-            type="button"
-            className="webpos-accent-btn webpos-menu-accent-btn flex w-full items-center justify-center rounded-xl py-2 text-xs font-bold"
-            onClick={onEodReport}
-          >
-            {t('webPosEodPrint')}
-          </button>
-          <p className="text-[10px] text-stone-500">{t('webPosEodMenuHint')}</p>
-        </div>
-      ) : null}
-
       {posStations.length >= 2 && onDeviceDefaultStationChange ? (
         <div className="space-y-1.5 border-b border-stone-100 pb-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">
@@ -1180,6 +1263,11 @@ export function WebPosSettingsDropdown({
       ) : null}
       </>
       ) : null}
+
+      {!hardwareGearOnly ? (
+        <WebPosEodGearSection showEodButton={showEodButton} onEodReport={onEodReport} />
+      ) : null}
+
       <p className="border-t border-stone-100 pt-1.5 text-center text-[10px] text-stone-400">
         {webPosVersionLabel}
       </p>

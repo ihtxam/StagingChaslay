@@ -87,6 +87,7 @@ const managerPin: WebPosStaffSession = {
     jwtPermissions: MANAGER_PERMS,
     isOwner: false,
     authRole: 'staff',
+    jwtStaffId: 'mgr-1',
     hasStaffPins: true,
     pinSession: managerPin,
     pathname: '/merchant/products',
@@ -95,6 +96,26 @@ const managerPin: WebPosStaffSession = {
   assert.equal(access.canOpenPanel, true);
   assert.equal(access.canOpenCatalog, true);
   assert.equal(access.pinActive, true);
+}
+
+// Waiter staff JWT + switched manager PIN → manager PIN permissions (not waiter JWT)
+{
+  const waiterJwt: Permission[] = ['USE_WEBPOS', 'MANAGE_TABLES', 'VIEW_ORDER_HISTORY'];
+  const access = getEffectivePanelAccess({
+    jwtPermissions: waiterJwt,
+    isOwner: false,
+    authRole: 'staff',
+    jwtStaffId: 'waiter-1',
+    hasStaffPins: true,
+    pinSession: managerPin,
+    pathname: '/merchant',
+  });
+  assert.equal(access.canOpenPanel, true);
+  assert.equal(
+    access.permissions?.includes('MANAGE_SETTINGS'),
+    true,
+    'manager PIN settings permission must apply after user switch'
+  );
 }
 
 // Manager staff JWT + cashier PIN off POS floor → cashier scope only

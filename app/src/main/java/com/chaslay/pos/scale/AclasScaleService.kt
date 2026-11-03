@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,7 +55,8 @@ class AclasScaleService @Inject constructor(
     fun listDevices(): List<ScaleUsbDevice> {
         val manager = usbManager ?: return emptyList()
         return manager.deviceList.values
-            .filter { isLikelyScale(it) }
+            .filter { ScaleUsbMatcher.isLikelyScale(it, usbPrinterManager::isLikelyEscPosPrinter) }
+            .sortedByDescending { ScaleUsbMatcher.scalePreferenceScore(it) }
             .map { device ->
                 ScaleUsbDevice(
                     stableAddress = UsbPrinterManager.stableAddress(device),
@@ -64,6 +66,14 @@ class AclasScaleService @Inject constructor(
                     hasPermission = manager.hasPermission(device)
                 )
             }
+    }
+
+    fun displayNameForAddress(address: String): String? {
+        val normalized = usbPrinterManager.normalizeStoredAddress(address.trim())
+        if (normalized.isBlank()) return null
+        listDevices().firstOrNull { it.stableAddress == normalized }?.let { return it.displayName }
+        val device = usbPrinterManager.resolveDevice(normalized) ?: return null
+        return buildDisplayName(device)
     }
 
     fun hasPermission(address: String): Boolean = usbPrinterManager.hasPermission(address)
@@ -94,6 +104,7 @@ class AclasScaleService @Inject constructor(
         activePort = null
         connectedAddress = null
         _reading.value = null
+        _connectionMessage.value = null
     }
 
     suspend fun readOnce(address: String, timeoutMs: Long = 3_000): Result<AclasScaleReading> =
@@ -124,7 +135,7 @@ class AclasScaleService @Inject constructor(
         connectedAddress = address
         _connectionMessage.value = "Scale connected"
         val buffer = ByteArray(512)
-        while (scope.isActive) {
+        while (currentCoroutineContext().isActive) {
             val bytesRead = runCatching { port.read(buffer, 1_000) }.getOrDefault(0)
             if (bytesRead > 0) {
                 AclasScaleProtocol.findLatestReading(buffer, bytesRead)?.let { parsed ->
@@ -140,7 +151,7 @@ class AclasScaleService @Inject constructor(
         val device = usbPrinterManager.resolveDevice(address)
             ?: error("Scale not found � connect Aclas OS6X via USB OTG")
         if (!manager.hasPermission(device)) {
-            error("USB permission not granted � allow access in Settings ? Printers & Scale")
+            error("USB permission required — allow the system dialog, then try again")
         }
         val driver = findSerialDriver(device) ?: error("No serial interface found on scale")
         val connection = manager.openDevice(device) ?: error("Could not open USB scale")
@@ -160,16 +171,6 @@ class AclasScaleService @Inject constructor(
             .firstOrNull { it.device.deviceId == device.deviceId }
     }
 
-    private fun isLikelyScale(device: UsbDevice): Boolean {
-        if (device.vendorId == ACLAS_VENDOR_ID && device.productId == ACLAS_PRODUCT_ID) return true
-        if (device.vendorId == QINHENG_VENDOR_ID) return true
-        return (0 until device.interfaceCount).any { index ->
-            val usbInterface = device.getInterface(index)
-            usbInterface.interfaceClass == UsbConstants.USB_CLASS_CDC_DATA ||
-                usbInterface.interfaceClass == UsbConstants.USB_CLASS_COMM
-        }
-    }
-
     private fun buildDisplayName(device: UsbDevice): String {
         val label = listOfNotNull(
             device.productName?.trim()?.takeIf { it.isNotEmpty() },
@@ -181,8 +182,5 @@ class AclasScaleService @Inject constructor(
     companion object {
         private const val TAG = "AclasScale"
         private const val BAUD_RATE = 9600
-        private const val ACLAS_VENDOR_ID = 6790 // 0x1A86 CH340 used by Aclas OS6X USB adapter
-        private const val ACLAS_PRODUCT_ID = 29987 // 0x7523
-        private const val QINHENG_VENDOR_ID = 0x1A86
     }
 }

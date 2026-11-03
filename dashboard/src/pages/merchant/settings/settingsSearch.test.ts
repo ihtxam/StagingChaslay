@@ -12,6 +12,7 @@ import {
   nextTabForHiddenRetailSettings,
   normalizeSettingsSearchQuery,
   pickSettingsSearchMatch,
+  pickSettingsTabFallback,
   planSettingsSearchResultClick,
   resolveSettingsContentTab,
   scrollToSettingsSearchSection,
@@ -46,6 +47,7 @@ const allTabs = new Set(
     'email',
     'language',
     'users',
+    'extra-modules',
   ] as const
 );
 
@@ -148,7 +150,7 @@ test('matchSettingsSearch finds checkout EUR under payments-methods', () => {
 
 test('pickSettingsSearchMatch prefers current tab when it has a hit', () => {
   const index = buildSettingsSearchIndex(t);
-  const matches = matchSettingsSearch(index, 'terminal');
+  const matches = matchSettingsSearch(index, 'gift');
   const picked = pickSettingsSearchMatch(matches, 'pos');
   assert.equal(picked?.id, 'pos-payments');
 });
@@ -202,7 +204,7 @@ test('resolveSettingsContentTab stays on pos when match is on pos', () => {
 
 test('hasSettingsSearchMatchesOnTab detects cross-tab matches', () => {
   const index = buildSettingsSearchIndex(t);
-  const matches = filterAccessibleSettingsSearch(matchSettingsSearch(index, 'adyen'), openContext());
+  const matches = filterAccessibleSettingsSearch(matchSettingsSearch(index, 'swisspayout'), openContext());
   assert.equal(hasSettingsSearchMatchesOnTab(matches, 'pos'), false);
   assert.equal(hasSettingsSearchMatchesOnTab(matches, 'payments'), true);
 });
@@ -250,6 +252,25 @@ test('planSettingsSearchResultClick uses the clicked row tab, never forces pos',
   assert.equal(planSettingsSearchResultClick(null, 'pos'), null);
 });
 
+test('pickSettingsTabFallback prefers business over extra-modules', () => {
+  assert.equal(
+    pickSettingsTabFallback([
+      { id: 'extra-modules' },
+      { id: 'about' },
+      { id: 'business' },
+    ]),
+    'business'
+  );
+  assert.equal(
+    pickSettingsTabFallback([{ id: 'extra-modules' }, { id: 'about' }]),
+    'about'
+  );
+  assert.equal(
+    pickSettingsTabFallback([{ id: 'pos' }, { id: 'extra-modules' }]),
+    'pos'
+  );
+});
+
 test('retail tables→pos redirect is skipped when search query is set', () => {
   assert.equal(
     nextTabForHiddenRetailSettings('tables', {
@@ -280,6 +301,15 @@ test('retail tables→pos redirect is skipped when search query is set', () => {
       showTablesSettings: true,
       isRetailMerchant: false,
       reservationsLicensed: false,
+      query: '',
+    }),
+    'business'
+  );
+  assert.equal(
+    nextTabForHiddenRetailSettings('shop', {
+      showTablesSettings: true,
+      showShopSettings: false,
+      isRetailMerchant: false,
       query: '',
     }),
     'business'

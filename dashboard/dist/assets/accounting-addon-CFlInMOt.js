@@ -1,0 +1,1 @@
+function o(e){return(e==null?void 0:e.bexioAddonEnabled)===!0}function d(e){return(e==null?void 0:e.odooAddonEnabled)===!0}function n(e){return e?e.accountingAddonEnabled===!0||o(e)||d(e):!1}export{o as a,d as b,n as i};

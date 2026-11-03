@@ -58,9 +58,8 @@ export function panelCatalogListParams(
 ): { posLocationCatalog: '1'; locationId?: string } | Record<string, never> {
   if (!shouldUseBranchCatalogPanel(input)) return {};
   const locationId = String(input.locationId || '').trim();
-  return locationId
-    ? { posLocationCatalog: '1', locationId }
-    : { posLocationCatalog: '1' };
+  if (!locationId) return {};
+  return { posLocationCatalog: '1', locationId };
 }
 
 /** Branch panel: scope reports to X-Location-Id; HQ aggregate leaves reports org-wide. */

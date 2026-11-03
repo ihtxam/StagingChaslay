@@ -14,6 +14,13 @@ export type ReservationSlot = {
   remainingCovers: number;
   discountPercent?: number;
   discountLabel?: string | null;
+  promoKind?: string | null;
+  promoIcon?: 'percent' | 'wine' | 'dine' | string | null;
+};
+
+export type ReservationPeekBanner = {
+  message: string;
+  icon: 'percent' | 'wine' | 'dine';
 };
 
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
@@ -25,6 +32,7 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
   const [partySize, setPartySize] = useState(2);
   const [date, setDate] = useState(() => ymdZurich());
   const [slots, setSlots] = useState<ReservationSlot[]>([]);
+  const [peekBanner, setPeekBanner] = useState<ReservationPeekBanner | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [time, setTime] = useState('');
   const [guestName, setGuestName] = useState('');
@@ -73,6 +81,7 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
           params: { date, partySize },
         });
         if (cancelled) return;
+        setPeekBanner(res.data.peekBanner || null);
         setSlots(
           (res.data.slots || []).filter((s: ReservationSlot) => {
             if (date !== ymdZurich()) return true;
@@ -222,6 +231,19 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
     }
   };
 
+  const activePeekBanner = useMemo((): ReservationPeekBanner | null => {
+    if (time) {
+      const slot = slots.find((s) => s.time === time);
+      if (slot?.discountLabel) {
+        return {
+          message: slot.discountLabel,
+          icon: (slot.promoIcon as ReservationPeekBanner['icon']) || 'percent',
+        };
+      }
+    }
+    return peekBanner;
+  }, [peekBanner, slots, time]);
+
   const canSubmit =
     !!time &&
     !partyGate.blocked &&
@@ -249,6 +271,7 @@ export function useShopReservationsBooking(shopKey: string, t: TranslateFn) {
     maxDate,
     dateOptions,
     slots,
+    peekBanner: activePeekBanner,
     slotsLoading,
     lunchSlots,
     dinnerSlots,

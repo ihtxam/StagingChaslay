@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.settings
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,6 +55,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.PrinterConfigEntity
 import com.chaslay.pos.printer.DiscoveredPrinter
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
 import java.util.UUID
 
 data class AddPrinterForm(
@@ -81,6 +84,7 @@ fun AddPrinterDialog(
     initialForm: AddPrinterForm? = null,
     isEdit: Boolean = false,
     isBusy: Boolean = false,
+    isScanBusy: Boolean = false,
     statusMessage: String? = null,
     onScan: () -> Unit,
     onScanUsb: () -> Unit = {},
@@ -100,14 +104,15 @@ fun AddPrinterDialog(
     }
     val connectionTypes = listOf("BLUETOOTH", "WIFI", "USB")
     val canSave = form.address.trim().isNotBlank()
+    val scanButtonsEnabled = !isScanBusy
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.9f),
-            shape = RoundedCornerShape(20.dp),
-            color = Color.White
+            shape = PosShapes.Dialog,
+            color = posUiColors().surface
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                 Column(
@@ -134,9 +139,9 @@ fun AddPrinterDialog(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFF0FDF4)
+                        color = posUiColors().successSubtle
                     ) {
-                        Text(msg, modifier = Modifier.padding(12.dp), fontSize = 12.sp, color = Color(0xFF166534))
+                        Text(msg, modifier = Modifier.padding(12.dp), fontSize = 12.sp, color = PosColors.Success)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
@@ -148,11 +153,11 @@ fun AddPrinterDialog(
                                 .weight(1f)
                                 .clickable { form = form.copy(connectionType = type) },
                             shape = RoundedCornerShape(10.dp),
-                            color = if (selected) Color(0xFF111827) else Color(0xFFF3F4F6)
+                            color = if (selected) PosColors.Primary else posUiColors().surfaceMuted
                         ) {
                             Text(
                                 type,
-                                color = if (selected) Color.White else Color(0xFF374151),
+                                color = if (selected) PosColors.TextOnPrimary else posUiColors().textPrimary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
@@ -183,7 +188,7 @@ fun AddPrinterDialog(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = scanAction,
-                                enabled = !isBusy,
+                                enabled = scanButtonsEnabled,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
@@ -194,7 +199,7 @@ fun AddPrinterDialog(
                                     }
                                 )
                             }
-                            OutlinedButton(onClick = scanAction, enabled = !isBusy) {
+                            OutlinedButton(onClick = scanAction, enabled = scanButtonsEnabled) {
                                 Icon(Icons.Default.Search, contentDescription = null)
                             }
                         }
@@ -215,15 +220,15 @@ fun AddPrinterDialog(
                                             onRequestUsbPermission(device.stableAddress)
                                         },
                                     shape = RoundedCornerShape(10.dp),
-                                    color = if (selected) Color(0xFFE8F5E9) else Color(0xFFF8FAFC),
-                                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E7D32)) else null
+                                    color = if (selected) posUiColors().successSubtle else posUiColors().surfaceSubtle,
+                                    border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, PosColors.Success) else null
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Text(device.displayName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                         Text(
                                             if (device.hasPermission) "Access allowed" else "Tap to select, then allow USB access once",
                                             fontSize = 11.sp,
-                                            color = if (device.hasPermission) Color(0xFF2E7D32) else Color.Gray
+                                            color = if (device.hasPermission) PosColors.Success else posUiColors().textMuted
                                         )
                                     }
                                 }
@@ -234,13 +239,11 @@ fun AddPrinterDialog(
                                 fontSize = 11.sp,
                                 color = Color.Gray
                             )
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 160.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                items(scanResults.take(20), key = { it.address }) { printer ->
+                                scanResults.take(20).forEach { printer ->
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -252,7 +255,7 @@ fun AddPrinterDialog(
                                                 )
                                             },
                                         shape = RoundedCornerShape(10.dp),
-                                        color = Color(0xFFF8FAFC)
+                                        color = posUiColors().surfaceSubtle
                                     ) {
                                         Text(
                                             "${printer.name} (${printer.address})",
@@ -283,7 +286,7 @@ fun AddPrinterDialog(
                         if (form.connectionType == "WIFI" && form.address.trim().isNotBlank()) {
                             OutlinedButton(
                                 onClick = { onVerifyNetwork(form.address) },
-                                enabled = !isBusy,
+                                enabled = scanButtonsEnabled,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(stringResource(R.string.verify_printer_ip))
@@ -307,7 +310,7 @@ fun AddPrinterDialog(
                                 form = form.copy(paperWidthMm = 80)
                             }
                         }
-                        RoleToggle("KITCHEN TICKETS", form.printKitchenTickets) {
+                        RoleToggle(stringResource(R.string.printer_role_kitchen_tickets), form.printKitchenTickets) {
                             form = form.copy(printKitchenTickets = it)
                         }
                         RoleToggle("CUSTOMER TICKETS", form.printCustomerTickets) {
@@ -337,14 +340,14 @@ fun AddPrinterDialog(
                                     .fillMaxWidth()
                                     .clickable { showLinkDialog = true },
                                 shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFFF3F4F6)
+                                color = posUiColors().surfaceMuted
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(summary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                    Text("Link products ›", fontSize = 13.sp, color = Color(0xFF0E9F6E))
+                                    Text("Link products ›", fontSize = 13.sp, color = PosColors.Primary)
                                 }
                             }
                         }
@@ -359,7 +362,7 @@ fun AddPrinterDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.discard_changes), color = Color(0xFFDC2626))
+                        Text(stringResource(R.string.discard_changes), color = PosColors.Danger)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { onTestPrint(form.normalized()) }) {
@@ -370,7 +373,7 @@ fun AddPrinterDialog(
                         Button(
                             onClick = { onSave(form.normalized()) },
                             enabled = canSave && !isBusy,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF111827))
+                            colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                         ) {
                             Text(if (isEdit) stringResource(R.string.save) else stringResource(R.string.add_printer))
                         }
@@ -412,8 +415,8 @@ private fun LinkProductsDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.85f),
-            shape = RoundedCornerShape(20.dp),
-            color = Color.White
+            shape = PosShapes.Dialog,
+            color = posUiColors().surface
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(
@@ -446,13 +449,13 @@ private fun LinkProductsDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { activeCategory = category.id },
-                                color = if (isActive) Color(0xFFE8F5F0) else Color.White
+                                color = if (isActive) posUiColors().primarySubtle else posUiColors().surface
                             ) {
                                 Text(
                                     category.name,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
                                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isActive) Color(0xFF0E9F6E) else Color(0xFF374151)
+                                    color = if (isActive) PosColors.Primary else posUiColors().textPrimary
                                 )
                             }
                         }
@@ -515,7 +518,7 @@ private fun LinkProductsDialog(
                     Button(
                         onClick = { onConfirm(linkAll, selected) },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0E9F6E))
+                        colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
                     ) {
                         Text(stringResource(R.string.confirm))
                     }
@@ -537,10 +540,10 @@ private fun RowScope.PaperSizeCard(
             .weight(1f)
             .border(
                 width = if (selected) 2.dp else 1.dp,
-                color = if (selected) Color(0xFF111827) else Color(0xFFE5E7EB),
+                color = if (selected) PosColors.Primary else posUiColors().border,
                 shape = RoundedCornerShape(12.dp)
             )
-            .background(Color.White, RoundedCornerShape(12.dp))
+            .background(posUiColors().surface, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(14.dp)
     ) {

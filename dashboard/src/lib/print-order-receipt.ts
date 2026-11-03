@@ -14,7 +14,6 @@ import {
   generateRefundReceiptText,
   generateWebPosReceiptText,
   getReceiptHeaderLines,
-  normalizeReceiptHeaderFields,
   resolveReceiptPaperWidthMm,
   logoUrlToEscPos,
   resolveReceiptLogoWidthPx,
@@ -110,9 +109,6 @@ async function printReceiptText(
     lineWidthForPaper(paper === 58 ? 58 : 80),
     { padLines: false, titleScale: headerFmt.textScale }
   );
-  const headerNorm = normalizeReceiptHeaderFields(
-    receiptHeaderTxFromPrintSettings(opts.printSettings)
-  );
   const textEncoding = receiptEscPosTextEncodingForPrinter(
     named[0] || configuredNames[0],
     livePrinters
@@ -129,7 +125,9 @@ async function printReceiptText(
     headerAlign: headerFmt.align,
     headerBold: headerFmt.bold,
     headerTextScale: headerFmt.textScale,
-    titleBodyGap: !!(headerNorm.title && headerNorm.body),
+    headerTitlePx: headerFmt.titlePx,
+    headerDetailPx: headerFmt.detailPx,
+    titleBodyGap: headerLines.length > 1,
     textEncoding,
   });
   const dataBase64 = uint8ToBase64(escpos);

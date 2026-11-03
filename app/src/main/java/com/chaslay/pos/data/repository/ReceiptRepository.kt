@@ -13,7 +13,9 @@ import com.chaslay.pos.data.remote.dto.ReceiptTenderDto
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.PaymentTenderNotes
+import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ServiceType
+import com.chaslay.pos.domain.model.roundMoney
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import javax.inject.Inject
@@ -47,6 +49,12 @@ object ReceiptPublicUrls {
 class ReceiptRepository @Inject constructor(
     private val receiptApi: ReceiptApi
 ) {
+    data class PublishedReceipt(
+        val publicUrl: String,
+        /** Backend order UUID when publish succeeded (preferred for email lookup). */
+        val serverOrderId: String? = null
+    )
+
     private val gson = Gson()
     fun buildPublicUrl(transactionId: String, settings: BusinessSettingsEntity): String {
         return ReceiptPublicUrls.build(settings.receiptBaseUrl, transactionId)
@@ -118,18 +126,23 @@ class ReceiptRepository @Inject constructor(
     suspend fun ensureReceiptPublished(
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
-        settings: BusinessSettingsEntity
-    ): Result<String> = runCatching {
+        settings: BusinessSettingsEntity,
+        splitPartCount: Int? = null
+    ): Result<PublishedReceipt> = runCatching {
         val itemDiscountTotal = items.sumOf { it.lineDiscountPerUnit * it.quantity }
         val response = receiptApi.publishReceipt(
-            buildPublishRequest(transaction, items, settings, itemDiscountTotal)
-        )
-        val url = response.url?.takeIf { it.isNotBlank() }
-            ?: buildPublicUrl(
-                response.id?.takeIf { it.isNotBlank() } ?: transaction.id,
-                settings
+            buildPublishRequest(
+                transaction = transaction,
+                items = items,
+                settings = settings,
+                itemDiscountTotal = itemDiscountTotal,
+                splitPartCount = splitPartCount
             )
-        url
+        )
+        val serverOrderId = response.id?.takeIf { it.isNotBlank() }
+        val url = response.url?.takeIf { it.isNotBlank() }
+            ?: buildPublicUrl(serverOrderId ?: transaction.id, settings)
+        PublishedReceipt(publicUrl = url, serverOrderId = serverOrderId)
     }.recoverCatching { error ->
         throw Exception(apiErrorMessage(error, "Could not upload receipt to server"), error)
     }
@@ -191,11 +204,19 @@ class ReceiptRepository @Inject constructor(
     suspend fun sendReceiptEmail(
         receiptId: String,
         email: String,
-        customerName: String? = null
+        customerName: String? = null,
+        orderNumber: String? = null,
+        amount: Double? = null
     ): Result<String> = runCatching {
         val response = receiptApi.emailReceipt(
             receiptId = receiptId,
-            body = ReceiptEmailRequest(email = email.trim(), customerName = customerName?.trim())
+            body = ReceiptEmailRequest(
+                email = email.trim(),
+                customerName = customerName?.trim(),
+                orderNumber = orderNumber?.trim()?.takeIf { it.isNotEmpty() },
+                transactionNumber = orderNumber?.trim()?.takeIf { it.isNotEmpty() },
+                amount = amount?.takeIf { it > 0.001 }
+            )
         )
         if (response.success) {
             response.message ?: "Receipt sent to $email"
@@ -230,38 +251,94 @@ class ReceiptRepository @Inject constructor(
         transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
         settings: BusinessSettingsEntity,
-        itemDiscountTotal: Double
-    ) = ReceiptPublishRequest(
-        id = transaction.id,
-        transactionNumber = transaction.transactionNumber,
-        total = transaction.total,
-        currency = transaction.currencyCode,
-        paymentMethod = PaymentTenderNotes.methodKey(transaction.paymentMethod),
-        cardReference = transaction.cardReference,
-        businessName = settings.businessName,
-        createdAt = transaction.createdAt,
-        fulfillmentChannel = channelFromTransaction(transaction),
-        pickupTimeMs = transaction.pickupTimeMs,
-        subtotal = transaction.subtotal,
-        taxTotal = transaction.taxTotal,
-        discountAmount = transaction.discountAmount,
-        itemDiscountTotal = itemDiscountTotal,
-        tipAmount = transaction.tipAmount.takeIf { it > 0.0 },
-        items = items.map { item ->
+        itemDiscountTotal: Double,
+        splitPartCount: Int? = null
+    ): ReceiptPublishRequest {
+        val methodKey = PaymentTenderNotes.methodKey(transaction.paymentMethod)
+        val payLater =
+            methodKey == "pay_later" || methodKey == "invoice" ||
+                transaction.paymentStatus != PaymentStatus.COMPLETED
+        val receiptItems = receiptLineItemsForPublish(transaction, items)
+        return ReceiptPublishRequest(
+            id = transaction.id,
+            transactionNumber = transaction.transactionNumber,
+            total = transaction.total.coerceAtLeast(0.0),
+            currency = transaction.currencyCode,
+            paymentMethod = methodKey,
+            cardReference = transaction.cardReference,
+            businessName = settings.businessName,
+            createdAt = transaction.createdAt,
+            fulfillmentChannel = channelFromTransaction(transaction),
+            pickupTimeMs = transaction.pickupTimeMs,
+            subtotal = transaction.subtotal,
+            taxTotal = transaction.taxTotal,
+            discountAmount = transaction.discountAmount,
+            itemDiscountTotal = itemDiscountTotal,
+            tipAmount = transaction.tipAmount.takeIf { it > 0.0 },
+            roundingAmount = transaction.roundingAmount.takeIf { kotlin.math.abs(it) > 0.001 },
+            masterOrderId = transaction.masterOrderId?.trim()?.takeIf { it.isNotEmpty() },
+            splitCheckNumber = transaction.splitCheckNumber,
+            splitPartCount = splitPartCount?.takeIf { it > 1 },
+            staffName = transaction.userName.takeIf { it.isNotBlank() },
+            paymentStatus = if (payLater) "awaiting_payment" else "completed",
+            status = if (payLater) "preparing" else "completed",
+            tableId = transaction.tableId?.toString(),
+            notes = transaction.notes,
+            adyenCustomerReceiptJson = transaction.adyenCustomerReceiptJson,
+            adyenCashierReceiptJson = transaction.adyenCashierReceiptJson,
+            items = receiptItems,
+            paymentBreakdown = PaymentTenderNotes.parse(transaction.notes)
+                .takeIf { it.size >= 2 }
+                ?.map { ReceiptTenderDto(PaymentTenderNotes.methodKey(it.method), it.amount) }
+                ?: if (!payLater && transaction.total > 0.001) {
+                    listOf(ReceiptTenderDto(methodKey, transaction.total))
+                } else {
+                    null
+                }
+        )
+    }
+
+    /**
+     * Match WebPOS split receipts: scale lines to the paid share, and never publish an empty cart
+     * when the transaction total is positive (backend rejects itemCount === 0).
+     */
+    private fun receiptLineItemsForPublish(
+        transaction: TransactionEntity,
+        items: List<TransactionItemEntity>
+    ): List<ReceiptItemDto> {
+        if (items.isEmpty() && transaction.total > 0.001) {
+            return listOf(
+                ReceiptItemDto(
+                    productName = "Sale",
+                    quantity = 1,
+                    lineTotal = transaction.total,
+                    lineSubtotal = transaction.subtotal.coerceAtLeast(0.0),
+                    unitPrice = transaction.total
+                )
+            )
+        }
+        val merchandiseTotal = items.sumOf { it.lineTotal }
+        val paidMerchandise = roundMoney(
+            (transaction.total - transaction.tipAmount - transaction.roundingAmount).coerceAtLeast(0.0)
+        )
+        val scale = when {
+            merchandiseTotal <= 0.001 || paidMerchandise <= 0.001 -> 1.0
+            merchandiseTotal > paidMerchandise + 0.05 -> paidMerchandise / merchandiseTotal
+            else -> 1.0
+        }
+        return items.map { item ->
             ReceiptItemDto(
                 productName = item.productName,
+                productClientId = item.productId?.takeIf { it > 0L }?.toString(),
                 variantName = item.variantName,
-                quantity = item.quantity,
-                lineTotal = item.lineTotal,
-                lineSubtotal = item.lineSubtotal,
-                lineDiscount = item.lineDiscountPerUnit * item.quantity,
-                unitPrice = item.unitPrice
+                quantity = item.quantity.coerceAtLeast(1),
+                lineTotal = roundMoney(item.lineTotal * scale),
+                lineSubtotal = roundMoney(item.lineSubtotal * scale),
+                lineDiscount = roundMoney(item.lineDiscountPerUnit * item.quantity * scale),
+                unitPrice = roundMoney(item.unitPrice * scale)
             )
-        },
-        paymentBreakdown = PaymentTenderNotes.parse(transaction.notes)
-            .takeIf { it.size >= 2 }
-            ?.map { ReceiptTenderDto(PaymentTenderNotes.methodKey(it.method), it.amount) }
-    )
+        }
+    }
 
     private fun channelFromFulfillment(
         fulfillmentType: FulfillmentType,

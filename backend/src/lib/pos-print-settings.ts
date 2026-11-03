@@ -43,6 +43,10 @@ export type PosPrintSettings = {
   receiptHeaderBold?: boolean;
   /** Receipt header text scale: 1=normal, 2=double height, 3=double width+height */
   receiptHeaderTextScale?: 1 | 2 | 3;
+  /** Store-name line size in pixels (default 16). */
+  receiptHeaderTitlePx?: number;
+  /** Address, phone, and VAT size in pixels (default 8). */
+  receiptHeaderDetailPx?: number;
   kitchenTicketHeader?: string;
   kitchenTicketFooter?: string;
   /** Kitchen item text scale: 1=normal (plain), 2=double height, 3=double width+height */
@@ -51,6 +55,8 @@ export type PosPrintSettings = {
   kitchenHeaderTextScale?: 1 | 2 | 3;
   /** Kitchen modifier/extra text scale under dish lines */
   kitchenModifierTextScale?: 1 | 2 | 3;
+  /** Receipt body ESC/POS scale: 1 normal, 2 double-width, 3 double width+height */
+  receiptBodyTextScale?: 1 | 2 | 3;
   /** Bold kitchen item/header text (default false for plain tickets) */
   kitchenBoldText?: boolean;
   receiptShowVatTable?: boolean;
@@ -73,6 +79,11 @@ export type PosPrintSettings = {
    * When set, printed and digital receipts show an EUR equivalent under the total.
    */
   receiptChfToEurRate?: number | null;
+  /**
+   * Receipt layout template id (panel + WebPOS + Android).
+   * Only `"Default"` is supported today; stored so future templates stay in sync.
+   */
+  receiptTemplateName?: string;
   /** Override logo; empty/null falls back to shopLogoUrl */
   receiptLogoUrl?: string | null;
   /** Printed logo width in pixels (48–200, default 200). */
@@ -158,13 +169,16 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   receiptHeaderLines: [],
   receiptFooter: "Merci / Danke / Thank you",
   receiptHeaderAlign: "center",
-  receiptHeaderBold: false,
-  receiptHeaderTextScale: 1,
+  receiptHeaderBold: true,
+  receiptHeaderTextScale: 2,
+  receiptHeaderTitlePx: 22,
+  receiptHeaderDetailPx: 18,
   kitchenTicketHeader: "",
   kitchenTicketFooter: "",
   kitchenItemTextScale: 1,
   kitchenHeaderTextScale: 1,
   kitchenModifierTextScale: 1,
+  receiptBodyTextScale: 1,
   kitchenBoldText: false,
   receiptShowVatTable: true,
   receiptShowStaffLine: true,
@@ -175,6 +189,8 @@ export const DEFAULT_POS_PRINT_SETTINGS: Required<
   adyenReceiptDigitalOnly: false,
   paperWidthMm: 80,
   receiptLanguage: "panel",
+  receiptChfToEurRate: null,
+  receiptTemplateName: "Default",
   receiptLogoUrl: null,
   receiptLogoWidthPx: 200,
     autoPrintReceipt: true,
@@ -260,30 +276,63 @@ export function healLegacyMashedReceiptHeader(
   return { receiptHeaderTitle: titleTrim, receiptHeader: bodyTrim };
 }
 
+function decodeReceiptHeaderEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&egrave;/gi, "è")
+    .replace(/&eacute;/gi, "é")
+    .replace(/&ecirc;/gi, "ê")
+    .replace(/&agrave;/gi, "à")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+/** Plain text for Android sync / thermal print (strips simple HTML from panel header). */
+export function receiptHeaderHtmlToPlain(text: string): string {
+  const raw = String(text ?? "").trim();
+  if (!raw) return "";
+  if (!/<[a-z]/i.test(raw)) return decodeReceiptHeaderEntities(raw);
+  let html = raw
+    .replace(/\r\n/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*/gi, "\n")
+    .replace(/<\/div>\s*/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  return decodeReceiptHeaderEntities(html).replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function parseReceiptHeaderLines(
   linesRaw: unknown,
   fallbackText: string
 ): string[] {
-  const fromArray = Array.isArray(linesRaw)
-    ? linesRaw
-        .map((line) => String(line ?? "").replace(/\r\n/g, "\n").trim())
-        .filter(Boolean)
-    : [];
-  if (fromArray.length) {
-    return fromArray.slice(0, 24).map((line) => line.slice(0, 200));
-  }
-  const text = String(fallbackText ?? "").replace(/\r\n/g, "\n");
-  if (!text.trim()) return [];
-  const segments = text.includes("\n")
-    ? text.split("\n")
-    : /\\n/.test(text)
-      ? text.split(/\\n/)
-      : [text];
+  void linesRaw;
+  const plain = receiptHeaderHtmlToPlain(fallbackText);
+  if (!plain) return [];
+  const segments = plain.includes("\n")
+    ? plain.split("\n")
+    : /\\n/.test(plain)
+      ? plain.split(/\\n/)
+      : [plain];
   return segments
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 24)
     .map((line) => line.slice(0, 200));
+}
+
+export const RECEIPT_TEMPLATE_NAMES = ["Default"] as const;
+export type ReceiptTemplateName = (typeof RECEIPT_TEMPLATE_NAMES)[number];
+
+export function normalizeReceiptTemplateName(raw: unknown): ReceiptTemplateName {
+  const name = String(raw ?? "Default").trim().slice(0, 64);
+  return (RECEIPT_TEMPLATE_NAMES as readonly string[]).includes(name)
+    ? (name as ReceiptTemplateName)
+    : "Default";
 }
 
 export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
@@ -300,7 +349,16 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
       if (!p || typeof p !== "object") return null;
       const row = p as Record<string, unknown>;
       const name = String(row.name || "").trim().slice(0, 200);
-      if (!name) return null;
+      const keepsEmptyName =
+        row.printReceipts === true ||
+        row.printKitchenTickets === true ||
+        row.printEndOfDayReports === true ||
+        row.printLabels === true ||
+        (Array.isArray(row.linkedCategoryIds) && row.linkedCategoryIds.length > 0) ||
+        (Array.isArray(row.linkedProductIds) && row.linkedProductIds.length > 0);
+      // "Standarddrucker" stores an empty name (use the Bridge default). Dropping
+      // that row deleted the kitchen categories and tickets stopped.
+      if (!name && !keepsEmptyName) return null;
       return {
         id: String(row.id || `p-${i}-${Date.now()}`).slice(0, 64),
         name,
@@ -374,6 +432,8 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
   modifierScale === 3
     ? modifierScale
     : 1) as 1 | 2 | 3;
+  const bodyScale = Number(src.receiptBodyTextScale);
+  const receiptBodyTextScale = (bodyScale === 2 || bodyScale === 3 ? bodyScale : 1) as 1 | 2 | 3;
   let kitchenBoldText = src.kitchenBoldText === true;
 
   const receiptHeaderAlignRaw = String(src.receiptHeaderAlign ?? "center").toLowerCase();
@@ -381,10 +441,25 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     receiptHeaderAlignRaw === "left" || receiptHeaderAlignRaw === "right"
       ? receiptHeaderAlignRaw
       : "center";
-  const receiptHeaderScale = Number(src.receiptHeaderTextScale);
-  const receiptHeaderTextScale = (receiptHeaderScale === 2 || receiptHeaderScale === 3
-    ? receiptHeaderScale
-    : 1) as 1 | 2 | 3;
+  const titlePxRaw = Number(src.receiptHeaderTitlePx);
+  const detailPxRaw = Number(src.receiptHeaderDetailPx);
+  const titleChosen =
+    Number.isFinite(titlePxRaw) && titlePxRaw >= 16 && titlePxRaw <= 32
+      ? Math.round(titlePxRaw)
+      : null;
+  const detailChosen =
+    Number.isFinite(detailPxRaw) && detailPxRaw >= 16 && detailPxRaw <= 32
+      ? Math.round(detailPxRaw)
+      : null;
+  const automaticStoreName =
+    titleChosen == null ||
+    (titleChosen === 16 && detailChosen == null) ||
+    (titleChosen === 18 && (detailChosen == null || detailChosen === 18));
+  const receiptHeaderTitlePx = automaticStoreName ? 22 : titleChosen ?? 22;
+  const receiptHeaderDetailPx = detailChosen ?? 18;
+  const receiptHeaderTextScale = (
+    receiptHeaderTitlePx >= 24 ? 3 : receiptHeaderTitlePx >= 20 ? 2 : 1
+  ) as 1 | 2 | 3;
 
   // Legacy default was double-height (2) + bold — migrate to plain full-width tickets.
   if (kitchenItemTextScale === 2 && kitchenHeaderTextScale === 2 && src.kitchenBoldText !== false) {
@@ -412,13 +487,16 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     receiptHeaderLines,
     receiptFooter: String(src.receiptFooter ?? DEFAULT_POS_PRINT_SETTINGS.receiptFooter).slice(0, 2000),
     receiptHeaderAlign,
-    receiptHeaderBold: src.receiptHeaderBold === true,
+    receiptHeaderBold: true,
     receiptHeaderTextScale,
+    receiptHeaderTitlePx,
+    receiptHeaderDetailPx,
     kitchenTicketHeader: String(src.kitchenTicketHeader ?? "").slice(0, 2000),
     kitchenTicketFooter: String(src.kitchenTicketFooter ?? "").slice(0, 2000),
     kitchenItemTextScale,
     kitchenHeaderTextScale,
     kitchenModifierTextScale,
+    receiptBodyTextScale,
     kitchenBoldText,
     receiptShowVatTable: src.receiptShowVatTable !== false,
     receiptShowStaffLine: src.receiptShowStaffLine !== false,
@@ -433,6 +511,7 @@ export function normalizePosPrintSettings(raw: unknown): PosPrintSettings {
     paperWidthMm: paper,
     receiptLanguage,
     receiptChfToEurRate: parseReceiptChfToEurRate(src.receiptChfToEurRate),
+    receiptTemplateName: normalizeReceiptTemplateName(src.receiptTemplateName),
     receiptLogoUrl:
       src.receiptLogoUrl === null || src.receiptLogoUrl === undefined
         ? null

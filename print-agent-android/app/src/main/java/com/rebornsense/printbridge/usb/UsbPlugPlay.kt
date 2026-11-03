@@ -5,6 +5,8 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.util.Log
 import com.rebornsense.printbridge.print.PrinterEndpoint
+import com.rebornsense.printbridge.scale.ScalePreferences
+import com.rebornsense.printbridge.scale.ScaleUsbHelper
 
 /**
  * WebPOS prints from a background service — the system USB allow dialog must be
@@ -52,6 +54,41 @@ object UsbPlugPlay {
         if (
             UsbPermissionUi.launchImmediateUsbPrompt(app, device, minimizeAfter = minimizeAfter)
         ) {
+            UsbAttachPromptGuard.markPromptIssued(app, device)
+            return true
+        }
+        UsbBootPermissionNotifier.postPermissionNotificationForDevice(app, device)
+        return true
+    }
+
+    fun promptForMissingScale(
+        context: Context,
+        preferred: UsbDevice? = null,
+        allowForegroundActivity: Boolean = false,
+        userInitiated: Boolean = false,
+    ): Boolean {
+        val app = context.applicationContext
+        val usb = app.getSystemService(UsbManager::class.java) ?: return false
+        val device = preferred?.takeIf { dev ->
+            UsbHostPermissions.needsScalePermissionRequest(app, usb, dev)
+        } ?: run {
+            val key = ScalePreferences.getMonitoredScaleAddress(app)?.let { ScaleUsbHelper.permissionKey(it) }
+                ?: return false
+            usb.deviceList.values.firstOrNull { dev ->
+                UsbHostPermissions.stableUsbId(dev) == key &&
+                    UsbHostPermissions.needsScalePermissionRequest(app, usb, dev)
+            }
+        }
+        if (device == null) {
+            Log.d(TAG, "No missing USB scale permission to prompt for")
+            return false
+        }
+        Log.i(
+            TAG,
+            "Prompt USB scale permission for ${device.vendorId}:${device.productId} foreground=$allowForegroundActivity user=$userInitiated",
+        )
+        val minimizeAfter = userInitiated || allowForegroundActivity
+        if (UsbPermissionUi.launchImmediateUsbPrompt(app, device, minimizeAfter = minimizeAfter)) {
             UsbAttachPromptGuard.markPromptIssued(app, device)
             return true
         }

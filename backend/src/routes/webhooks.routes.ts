@@ -217,4 +217,25 @@ router.post("/phone/:merchantId", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/webhooks/esendex
+ * Inbound SMS (STOP / ARRET / STOPP). Configure in Esendex account push notifications.
+ */
+router.post("/esendex", async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const from = String(body.from || body.originator || body.Originator || "").trim();
+    const text = String(body.body || body.message || body.MessageText || body.summary || "").trim();
+    const merchantId = String(body.merchantId || req.query.merchantId || "").trim() || null;
+    if (from && text) {
+      const { SmsService } = await import("@/services/sms.service");
+      await SmsService.honorInboundStop(from, text, merchantId);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[webhooks] esendex inbound failed", error);
+    res.json({ success: true });
+  }
+});
+
 export default router;

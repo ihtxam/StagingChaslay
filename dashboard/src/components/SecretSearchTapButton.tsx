@@ -14,7 +14,6 @@ export default function SecretSearchTapButton({ onUnlock, onTap, className }: Pr
   const registerTap = useSecretTap(5, 3500);
 
   const handleTap = (event: MouseEvent | PointerEvent) => {
-    event.preventDefault();
     event.stopPropagation();
     onTap?.();
     registerTap(onUnlock);
@@ -29,7 +28,7 @@ export default function SecretSearchTapButton({ onUnlock, onTap, className }: Pr
         className ||
         'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-stone-300 bg-stone-100 text-stone-700 shadow-sm hover:bg-stone-200 active:scale-95'
       }
-      onPointerDown={handleTap}
+      onClick={handleTap}
     >
       <Search size={18} strokeWidth={2.25} />
     </button>

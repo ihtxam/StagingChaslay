@@ -385,7 +385,7 @@ Cloud agents and `cursor[bot]` **cannot** push to `ihtxam/StagingChaslay` (403 �
 
 **One-time setup** (your GitHub account, ~2 minutes):
 
-1. Create a [fine-grained PAT](https://github.com/settings/tokens?type=beta) or [classic PAT](https://github.com/settings/tokens) with **`repo`** scope (write access to `ihtxam/StagingChaslay`).
+1. Create a [fine-grained PAT](https://github.com/settings/tokens?type=beta) (Contents + **Workflows** write on `StagingChaslay`) or a [classic PAT](https://github.com/settings/tokens) with **`repo`** + **`workflow`** scope. Without **workflow**, pushes that add or change `.github/workflows/*` on the mirror are rejected.
 2. In **rebornSense** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
    - Name: `STAGING_CHASLAY_SYNC_TOKEN`
    - Value: the PAT

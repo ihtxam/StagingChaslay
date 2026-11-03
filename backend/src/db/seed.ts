@@ -184,6 +184,8 @@ async function seedDemoShop() {
     );
   }
 
+  await healDemoPanelNavSettings(merchant.id);
+
   const existingCats = await db.query.categories.findMany({
     where: eq(schema.categories.merchantId, merchant.id),
     limit: 1,
@@ -273,6 +275,27 @@ async function seedDemoShop() {
       console.log("Demo catering showcase already present");
     }
   }
+}
+
+/** Demo showcase account must keep the settings gear for owner/manager walkthroughs. */
+async function healDemoPanelNavSettings(merchantId: string) {
+  const db = getDb();
+  const row = await db.query.merchants.findFirst({
+    where: eq(schema.merchants.id, merchantId),
+    columns: { panelNavHidden: true },
+  });
+  if (!row) return;
+  const hidden = normalizePanelNavHidden(row.panelNavHidden);
+  if (!hidden.includes("/merchant/settings")) return;
+  const next = hidden.filter((key) => key !== "/merchant/settings");
+  await db
+    .update(schema.merchants)
+    .set({
+      panelNavHidden: next.length ? next : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.merchants.id, merchantId));
+  console.log("Demo merchant: restored settings gear in panel nav (cleared panel_nav_hidden settings key)");
 }
 
 /** Default demo location (Demo Food Truck / main) should be retail, not restaurant bootstrap default. */

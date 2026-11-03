@@ -1,10 +1,16 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import {
+  bindWebPosScrollLock,
+  clearWebPosVisualViewport,
+  releasePanelViewportOffset,
+  syncWebPosVisualViewport,
+} from '@/lib/panel-mobile-keyboard';
 
 const DEFAULT_VIEWPORT =
-  'width=device-width, initial-scale=1.0, viewport-fit=cover';
+  'width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual';
 const POS_VIEWPORT =
-  'width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+  'width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content';
 
 function isPosLikePath(pathname: string): boolean {
   return (
@@ -28,7 +34,19 @@ export default function PosViewportManager() {
   useEffect(() => {
     const lock = isPosLikePath(pathname);
     applyPosViewport(lock);
-    return () => applyPosViewport(false);
+    releasePanelViewportOffset();
+    if (lock) syncWebPosVisualViewport();
+    const unbind = lock ? bindWebPosScrollLock() : undefined;
+    const t = window.setTimeout(() => {
+      releasePanelViewportOffset();
+      if (lock) syncWebPosVisualViewport();
+    }, 50);
+    return () => {
+      window.clearTimeout(t);
+      unbind?.();
+      clearWebPosVisualViewport();
+      applyPosViewport(false);
+    };
   }, [pathname]);
 
   return null;

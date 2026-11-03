@@ -22,7 +22,9 @@ export type SettingsTabId =
   | 'kiosk'
   | 'email'
   | 'language'
-  | 'users';
+  | 'users'
+  | 'extra-modules'
+  | 'about';
 
 export type SettingsSearchEntry = {
   id: string;
@@ -147,10 +149,27 @@ export function isSettingsSearchQueryActive(query?: string | null): boolean {
  * Retail merchants used to bounce tables → POS. That steal must not run while
  * search is open (clicking a non-POS hit then getting forced onto ?tab=pos).
  */
+/** When the current tab is hidden, never default to catalog/marketing tabs. */
+export function pickSettingsTabFallback(
+  visibleTabs: ReadonlyArray<{ id: SettingsTabId }>
+): SettingsTabId | null {
+  if (!visibleTabs.length) return null;
+  const business = visibleTabs.find((item) => item.id === 'business');
+  if (business) return business.id;
+  const core = visibleTabs.find(
+    (item) => item.id !== 'extra-modules' && item.id !== 'about'
+  );
+  if (core) return core.id;
+  const about = visibleTabs.find((item) => item.id === 'about');
+  if (about) return about.id;
+  return visibleTabs[0].id;
+}
+
 export function nextTabForHiddenRetailSettings(
   tab: SettingsTabId,
   ctx: {
     showTablesSettings: boolean;
+    showShopSettings?: boolean;
     isRetailMerchant: boolean;
     reservationsLicensed?: boolean;
     query?: string | null;
@@ -158,6 +177,7 @@ export function nextTabForHiddenRetailSettings(
 ): SettingsTabId | null {
   if (isSettingsSearchQueryActive(ctx.query)) return null;
   if (tab === 'tables' && !ctx.showTablesSettings) return 'pos';
+  if (tab === 'shop' && ctx.showShopSettings === false) return 'business';
   if (tab === 'reservations' && (ctx.isRetailMerchant || ctx.reservationsLicensed === false)) {
     return 'business';
   }
@@ -394,6 +414,11 @@ export function buildSettingsSearchIndex(
         'express checkout',
         t('posCheckoutSettings'),
         t('tipsEnabled'),
+        t('terminalAskGratuityEnabled'),
+        'adyen',
+        'terminal',
+        'gratuity',
+        'trinkgeld',
         t('discountsEnabled'),
         t('quickCashEnabled'),
         t('splitBillsEnabled'),
@@ -411,6 +436,7 @@ export function buildSettingsSearchIndex(
         'paiement',
         'zahlung',
         'eur',
+        'exchange',
         t('webposPaymentMethods'),
         t('webposCash'),
         t('webposCard'),
@@ -584,6 +610,21 @@ export function buildSettingsSearchIndex(
       keywords: ['reservations', 'booking', 'slots', t('settingsReservations'), t('reservationsEnable')],
     },
     {
+      id: 'print-bridge-download',
+      tab: 'receipt',
+      keywords: [
+        'bridge',
+        'print bridge',
+        'android',
+        'apk',
+        'download',
+        'rebornprint',
+        t('downloadPrintBridge'),
+        t('installPrintBridge'),
+        t('kioskPrintBridgeTitle'),
+      ],
+    },
+    {
       id: 'receipt-print',
       tab: 'receipt',
       keywords: [
@@ -655,10 +696,22 @@ export function buildSettingsSearchIndex(
         'phone',
         'telephone',
         'twilio',
-        'sms',
         'voice',
         'call',
         t('settingsPhoneOrdering'),
+      ],
+    },
+    {
+      id: 'sms-addon',
+      tab: 'extra-modules',
+      keywords: [
+        'sms',
+        'esendex',
+        'text message',
+        'otp',
+        'marketing sms',
+        t('smsTitle'),
+        t('extraModuleSmsTitle'),
       ],
     },
     {

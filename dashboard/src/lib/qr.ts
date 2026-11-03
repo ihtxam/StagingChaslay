@@ -167,10 +167,10 @@ export function qrImageUrl(
   )}`;
 }
 
-/** Thermal digital-receipt QR raster width on 80mm (half of prior 50px default). */
-export const RECEIPT_QR_RASTER_PX_80 = 25;
-/** 58mm digital-receipt QR — half of prior 42px default. */
-export const RECEIPT_QR_RASTER_PX_58 = 21;
+/** Thermal digital-receipt QR raster width on 80mm. */
+export const RECEIPT_QR_RASTER_PX_80 = 120;
+/** 58mm digital-receipt QR — readable without dominating the ticket. */
+export const RECEIPT_QR_RASTER_PX_58 = 100;
 
 /** E-gift redeem QR on customer receipt — minimum readable size on thermal. */
 export const GIFT_CARD_REDEEM_QR_RASTER_PX_80 = 120;

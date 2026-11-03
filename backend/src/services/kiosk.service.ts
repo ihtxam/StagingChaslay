@@ -468,7 +468,7 @@ export class KioskService {
   static verifyAdminPin(settings: { adminPin?: string }, pin: string): boolean {
     const expected = String(settings.adminPin || "1234").replace(/\D/g, "");
     const given = String(pin || "").replace(/\D/g, "");
-    return expected.length >= 4 && given === expected;
+    return expected.length === 4 && given.length === 4 && given === expected;
   }
 
   static async getDiagnostics(merchantId: string) {

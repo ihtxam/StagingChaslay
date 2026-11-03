@@ -418,7 +418,7 @@ export default function OrderingPage() {
           }
         }
       } catch (e: any) {
-        setError(customerShopError(e.response?.data?.error, t('shopFailedLoad')));
+        setError(customerShopError(e.response?.data?.error, t('shopFailedLoad'), t));
       } finally {
         setLoading(false);
       }
@@ -1128,6 +1128,7 @@ export default function OrderingPage() {
   const checkoutDisabled =
     !cart.length ||
     !!merchant?.vacation?.active ||
+    merchant?.shopEnabled === false ||
     merchant?.acceptingOrders === false ||
     (!channelMeta?.open && merchant?.scheduledOrdersEnabled === false) ||
     minOrderNotMet;
@@ -1152,11 +1153,18 @@ export default function OrderingPage() {
       resolveShopOrderingBlock({
         vacationActive: !!merchant?.vacation?.active,
         vacationReturn,
+        shopEnabled: merchant?.shopEnabled,
         acceptingOrders: merchant?.acceptingOrders,
         t,
         variant: 'cart',
       }),
-    [merchant?.vacation?.active, vacationReturn, merchant?.acceptingOrders, t]
+    [
+      merchant?.vacation?.active,
+      vacationReturn,
+      merchant?.shopEnabled,
+      merchant?.acceptingOrders,
+      t,
+    ]
   );
 
   const orderingBlockHeader = useMemo(
@@ -1164,11 +1172,18 @@ export default function OrderingPage() {
       resolveShopOrderingBlock({
         vacationActive: !!merchant?.vacation?.active,
         vacationReturn,
+        shopEnabled: merchant?.shopEnabled,
         acceptingOrders: merchant?.acceptingOrders,
         t,
         variant: 'header',
       }),
-    [merchant?.vacation?.active, vacationReturn, merchant?.acceptingOrders, t]
+    [
+      merchant?.vacation?.active,
+      vacationReturn,
+      merchant?.shopEnabled,
+      merchant?.acceptingOrders,
+      t,
+    ]
   );
 
   const checkoutBlockedMessage = useMemo(() => {
@@ -1195,6 +1210,10 @@ export default function OrderingPage() {
     if (!cart.length) return;
     if (minOrderNotMet) {
       setError(effectiveDeliveryInfo?.message || t('shopMinOrderNotMet'));
+      return;
+    }
+    if (merchant?.shopEnabled === false) {
+      setError(t('shopOnlineOrdersDisabled'));
       return;
     }
     if (merchant?.acceptingOrders === false) {
@@ -1411,7 +1430,7 @@ export default function OrderingPage() {
 
   if (error && !merchant) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 text-red-700 font-medium px-4 text-center">
+      <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4 text-center text-red-700 font-medium">
         {error}
       </div>
     );

@@ -23,7 +23,8 @@ on:
 
 concurrency:
   group: deploy-rebornsense-production
-  cancel-in-progress: true
+  # Never cancel an in-flight production deploy (back-to-back .deploy touches aborted #903).
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -70,5 +71,26 @@ jobs:
             export DEPLOY_PATH="${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}"
             export DEPLOY_STACK=rebornsense
             export CADDYFILE="$DEPLOY_PATH/deploy/Caddyfile.rebornsense"
+            # Dashboard/API deploy must not block on Bridge APK when Gradle is broken or stale.
+            export SKIP_ANDROID_BRIDGE_BUILD=1
+            export SKIP_ANDROID_POS_BUILD=1
             bash "$DEPLOY_PATH/scripts/pre-deploy-sanity-check.sh"
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"
+
+      - name: Verify production health after deploy
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            CODE="$(curl -sS -o /tmp/prod-health.json -w '%{http_code}' --max-time 45 \
+              "https://app.rebornsense.com/api/health?deep=1" || echo "000")"
+            echo "attempt $attempt: HTTP $CODE"
+            cat /tmp/prod-health.json 2>/dev/null || true
+            echo
+            if [ "$CODE" = "200" ] && jq -e '.database == "ok"' /tmp/prod-health.json >/dev/null 2>&1; then
+              echo "Production health OK"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "ERROR: production health did not recover after deploy"
+          exit 1

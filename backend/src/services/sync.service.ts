@@ -844,7 +844,7 @@ export class SyncService {
             : null;
         const seatRaw = item.seatNumber;
         const seatNumber =
-          seatRaw != null && String(searRaw).trim() !== "" && Number.isFinite(Number(seatRaw))
+          seatRaw != null && String(seatRaw).trim() !== "" && Number.isFinite(Number(seatRaw))
             ? Math.floor(Number(seatRaw))
             : null;
 

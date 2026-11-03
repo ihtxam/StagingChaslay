@@ -6,6 +6,10 @@ import { useI18n } from '@/lib/i18n';
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { printThermalReportTextSafe } from '@/lib/print-thermal-report';
 import {
+  EodIncludeStaffPerformanceCheckbox,
+  useEodIncludeStaffPerformance,
+} from '@/components/EodIncludeProductsCheckbox';
+import {
   generateRevenuePeriodSummaryText,
   resolveReceiptLanguage,
   type PosPrintSettingsClient,
@@ -49,6 +53,7 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
   const [printSettings, setPrintSettings] = useState<PosPrintSettingsClient | null>(null);
   const [businessName, setBusinessName] = useState('');
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
+  const [includeStaffPerformance, setIncludeStaffPerformance] = useEodIncludeStaffPerformance();
 
   const periodLabel = useMemo(() => {
     if (from === to) {
@@ -104,10 +109,13 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
       refundTotal: report.refundTotal,
       grandTotal: report.grandTotal,
       paymentRows: report.paymentRows || [],
-      userPerformance: report.userPerformance?.map((u) => ({
-        name: u.name,
-        total: u.total,
-      })),
+      userPerformance: includeStaffPerformance
+        ? report.userPerformance?.map((u) => ({
+            name: u.name,
+            total: u.total,
+            salesCount: u.salesCount,
+          }))
+        : undefined,
       businessName,
       language: lang,
       paperWidthMm: printSettings?.paperWidthMm || 80,
@@ -191,6 +199,13 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+          {report?.userPerformance?.length ? (
+            <EodIncludeStaffPerformanceCheckbox
+              checked={includeStaffPerformance}
+              onChange={setIncludeStaffPerformance}
+              className="rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]/40 px-3 py-2"
+            />
+          ) : null}
           {loading ? (
             <p className="text-sm muted">{t('loading')}</p>
           ) : !report ? (
@@ -253,7 +268,13 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
                   <ul className="divide-y divide-[var(--border)] text-sm">
                     {report.userPerformance.map((u) => (
                       <li key={u.name} className="flex justify-between gap-2 px-3 py-2.5">
-                        <span className="truncate">{staffNameLabel(u.name)}</span>
+                        <span className="truncate">
+                          {staffNameLabel(u.name)}
+                          <span className="text-[var(--text-muted)]">
+                            {' '}
+                            · {t('reportsSalesCount')} {u.salesCount}
+                          </span>
+                        </span>
                         <span className="font-medium tabular-nums shrink-0">{money(u.total)}</span>
                       </li>
                     ))}

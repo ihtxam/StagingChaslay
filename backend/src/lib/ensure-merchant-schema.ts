@@ -9,6 +9,8 @@ import {
 import { repairAllChaslayHomepages } from "@/lib/chaslay-homepage-heal";
 import { SHOP_CATALOG_EXTRA_PATCHES, shopProductHealColumnNames } from "@/lib/product-column-patches";
 import { isShopCatalogSchemaError } from "@/lib/public-shop-error";
+import { recordSchemaColumnPatch, recordSchemaEnsureRun } from "@/lib/schema-patch-metrics";
+import { isLazyMerchantSchemaBootstrap } from "@/lib/schema-bootstrap-mode";
 
 /** Raw pg pool for DDL — Drizzle execute() often fails/no-ops on ALTER TABLE. */
 let ddlPool: Pool | null = null;
@@ -148,6 +150,8 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS min_pre_order_delay_minutes integer DEFAULT 30",
   category_pricing_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS category_pricing_enabled boolean NOT NULL DEFAULT false",
+  catalog_scope_mode:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS catalog_scope_mode varchar(20) NOT NULL DEFAULT 'per_location'",
   webpos_express_enabled:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS webpos_express_enabled boolean NOT NULL DEFAULT true",
   webpos_cash_enabled:
@@ -281,12 +285,26 @@ const MERCHANT_COLUMN_PATCHES: Record<string, string> = {
   como_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS como_settings jsonb",
   phone_ordering_settings:
     "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS phone_ordering_settings jsonb",
+  sms_addon_enabled:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_addon_enabled boolean NOT NULL DEFAULT false",
+  sms_tier: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_tier varchar(20) NOT NULL DEFAULT 'starter'",
+  sms_unit_price_cents:
+    "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_unit_price_cents integer NOT NULL DEFAULT 15",
+  sms_settings: "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS sms_settings jsonb",
 };
 
 /** Non-merchant columns added with the inventory cookbook v1 follow-up. */
 const EXTRA_COLUMN_PATCHES: Record<string, string> = {
   customers_crm_tags:
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS crm_tags jsonb NOT NULL DEFAULT '[]'::jsonb",
+  customers_marketing_sms_opt_in:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS marketing_sms_opt_in boolean NOT NULL DEFAULT false",
+  customers_phone_verified_at:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone_verified_at timestamp",
+  sms_usage_segments_billed:
+    "ALTER TABLE sms_usage ADD COLUMN IF NOT EXISTS segments_billed integer NOT NULL DEFAULT 0",
+  sms_usage_billable_cents:
+    "ALTER TABLE sms_usage ADD COLUMN IF NOT EXISTS billable_cents integer NOT NULL DEFAULT 0",
   chaslay_homepage_builders_last_good_editor_state:
     "ALTER TABLE chaslay_homepage_builders ADD COLUMN IF NOT EXISTS last_good_editor_state text",
   chaslay_homepage_builder_pages_last_good_editor_state:
@@ -361,6 +379,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS time_slot_prices jsonb NOT NULL DEFAULT '{}'::jsonb",
   products_catering_config:
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS catering_config jsonb NOT NULL DEFAULT '{}'::jsonb",
+  products_location_id:
+    "ALTER TABLE products ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES locations(id) ON DELETE SET NULL",
+  products_merchant_location_idx:
+    "CREATE INDEX IF NOT EXISTS products_merchant_location_idx ON products (merchant_id, location_id)",
   ...SHOP_CATALOG_EXTRA_PATCHES,
   modifier_groups_price_scope:
     "ALTER TABLE modifier_groups ADD COLUMN IF NOT EXISTS price_scope varchar(20) NOT NULL DEFAULT 'fixed'",
@@ -372,6 +394,10 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS extra_delivery_price numeric(10,2) DEFAULT 0",
   categories_shop_schedule:
     "ALTER TABLE categories ADD COLUMN IF NOT EXISTS shop_schedule jsonb NOT NULL DEFAULT '{}'::jsonb",
+  categories_location_id:
+    "ALTER TABLE categories ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES locations(id) ON DELETE SET NULL",
+  categories_merchant_location_idx:
+    "CREATE INDEX IF NOT EXISTS categories_merchant_location_idx ON categories (merchant_id, location_id)",
   orders_table_session_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_session_id uuid",
   orders_location_id: "ALTER TABLE orders ADD COLUMN IF NOT EXISTS location_id uuid",
   orders_station_id:
@@ -1497,6 +1523,69 @@ const TABLE_PATCHES: string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS device_enrollments_merchant_device_idx ON device_enrollments(merchant_id, device_id)`,
   `CREATE INDEX IF NOT EXISTS device_enrollments_merchant_id_idx ON device_enrollments(merchant_id)`,
+  `CREATE TABLE IF NOT EXISTS sms_messages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
+    campaign_id uuid,
+    to_e164 varchar(20) NOT NULL,
+    type varchar(20) NOT NULL,
+    event varchar(60) NOT NULL,
+    body text NOT NULL,
+    segments integer NOT NULL DEFAULT 1,
+    status varchar(20) NOT NULL DEFAULT 'queued',
+    provider_id varchar(80),
+    provider_batch_id varchar(80),
+    error text,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_merchant_idx ON sms_messages(merchant_id, created_at)`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_to_idx ON sms_messages(merchant_id, to_e164)`,
+  `CREATE INDEX IF NOT EXISTS sms_messages_type_idx ON sms_messages(merchant_id, type)`,
+  `CREATE TABLE IF NOT EXISTS sms_otps (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    phone_e164 varchar(20) NOT NULL,
+    purpose varchar(20) NOT NULL,
+    code_hash varchar(64) NOT NULL,
+    meta jsonb,
+    ip varchar(64),
+    attempts integer NOT NULL DEFAULT 0,
+    expires_at timestamp NOT NULL,
+    consumed_at timestamp,
+    created_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_otps_lookup_idx ON sms_otps(merchant_id, phone_e164, purpose)`,
+  `CREATE INDEX IF NOT EXISTS sms_otps_created_idx ON sms_otps(merchant_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS sms_usage (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    period_ym varchar(7) NOT NULL,
+    sent_count integer NOT NULL DEFAULT 0,
+    failed_count integer NOT NULL DEFAULT 0,
+    segments_billed integer NOT NULL DEFAULT 0,
+    billable_cents integer NOT NULL DEFAULT 0,
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS sms_usage_merchant_period_uq ON sms_usage(merchant_id, period_ym)`,
+  `CREATE TABLE IF NOT EXISTS sms_campaigns (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id uuid NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    title varchar(200) NOT NULL,
+    body text NOT NULL,
+    audience varchar(20) NOT NULL DEFAULT 'all',
+    selected_phones jsonb,
+    status varchar(20) NOT NULL DEFAULT 'draft',
+    recipient_count integer NOT NULL DEFAULT 0,
+    sent_count integer NOT NULL DEFAULT 0,
+    failed_count integer NOT NULL DEFAULT 0,
+    skipped_count integer NOT NULL DEFAULT 0,
+    sent_at timestamp,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS sms_campaigns_merchant_idx ON sms_campaigns(merchant_id, created_at)`,
 ];
 
 /** Subset of TABLE_PATCHES for multi-location feature (idempotent CREATE IF NOT EXISTS). */
@@ -1542,12 +1631,15 @@ function resolvePatchStatement(column: string, table?: string | null): string | 
 
 async function runPatch(column: string, table?: string | null): Promise<boolean> {
   const cacheKey = table ? `${table}.${column}` : column;
-  if (patchedColumns.has(cacheKey)) return false;
+  if (patchedColumns.has(cacheKey)) {
+    return false;
+  }
   const statement = resolvePatchStatement(column, table);
   if (!statement) return false;
   try {
     await execSql(statement);
     patchedColumns.add(cacheKey);
+    recordSchemaColumnPatch(cacheKey);
     console.info(`[schema] patched column ${cacheKey}`);
     return true;
   } catch (err) {
@@ -1751,18 +1843,68 @@ export async function ensurePhoneOrderingSchema(): Promise<void> {
   await ensureMerchantTables();
 }
 
+export async function ensureSmsAddonColumns(): Promise<void> {
+  await runPatch("sms_addon_enabled");
+  await runPatch("sms_tier");
+  await runPatch("sms_unit_price_cents");
+  await runPatch("sms_settings");
+  await runPatch("customers_marketing_sms_opt_in");
+  await runPatch("customers_phone_verified_at");
+  await runPatch("sms_usage_segments_billed");
+  await runPatch("sms_usage_billable_cents");
+  await ensureMerchantTables();
+}
+
+let merchantColumnsSchemaPromise: Promise<void> | null = null;
+let ordersColumnsSchemaPromise: Promise<void> | null = null;
+let orderItemsColumnsSchemaPromise: Promise<void> | null = null;
+let locationContextSchemaPromise: Promise<void> | null = null;
+
 /** Ensure optional merchants columns exist (multi-location, addons, tax, etc.). */
 export async function ensureMerchantColumnsSchema(): Promise<void> {
+  if (merchantColumnsSchemaPromise) return merchantColumnsSchemaPromise;
+  merchantColumnsSchemaPromise = ensureMerchantColumnsSchemaOnce().catch((err) => {
+    merchantColumnsSchemaPromise = null;
+    throw err;
+  });
+  return merchantColumnsSchemaPromise;
+}
+
+async function ensureMerchantColumnsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("merchantColumns");
   for (const column of Object.keys(MERCHANT_COLUMN_PATCHES)) {
     await runPatch(column, "merchants");
   }
   await runPatch("delivery_driver_pay_mode", "merchants");
   await runPatch("delivery_driver_hourly_rate", "merchants");
   await runPatch("delivery_per_order_fee", "merchants");
+  try {
+    await execSql(`
+      UPDATE merchants m SET catalog_scope_mode = 'shared'
+      WHERE m.catalog_scope_mode = 'per_location'
+      AND (
+        EXISTS (SELECT 1 FROM location_catalog_links l WHERE l.merchant_id = m.id LIMIT 1)
+        OR EXISTS (SELECT 1 FROM products p WHERE p.merchant_id = m.id LIMIT 1)
+        OR EXISTS (SELECT 1 FROM categories c WHERE c.merchant_id = m.id LIMIT 1)
+      )
+    `);
+  } catch {
+    /* columns / tables may not exist yet */
+  }
 }
 
 /** Ensure optional orders columns exist (online shop, QR table, multi-location). */
 export async function ensureOrdersColumnsSchema(): Promise<void> {
+  if (ordersColumnsSchemaPromise) return ordersColumnsSchemaPromise;
+  ordersColumnsSchemaPromise = ensureOrdersColumnsSchemaOnce().catch((err) => {
+    ordersColumnsSchemaPromise = null;
+    throw err;
+  });
+  return ordersColumnsSchemaPromise;
+}
+
+async function ensureOrdersColumnsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("ordersColumns");
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
     if (!column.startsWith("orders_")) continue;
     const col = column.slice("orders_".length);
@@ -1776,6 +1918,16 @@ export async function ensureOrdersColumnsSchema(): Promise<void> {
 
 /** Ensure optional order_items columns exist. */
 export async function ensureOrderItemsColumnsSchema(): Promise<void> {
+  if (orderItemsColumnsSchemaPromise) return orderItemsColumnsSchemaPromise;
+  orderItemsColumnsSchemaPromise = ensureOrderItemsColumnsSchemaOnce().catch((err) => {
+    orderItemsColumnsSchemaPromise = null;
+    throw err;
+  });
+  return orderItemsColumnsSchemaPromise;
+}
+
+async function ensureOrderItemsColumnsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("orderItemsColumns");
   for (const column of Object.keys(EXTRA_COLUMN_PATCHES)) {
     if (!column.startsWith("order_items_")) continue;
     const col = column.slice("order_items_".length);
@@ -1801,8 +1953,19 @@ async function runAlterTablePatches(): Promise<void> {
   }
 }
 
+let subscriptionPlansSchemaPromise: Promise<void> | null = null;
+
 /** Ensure editions + subscription_plans columns exist (plan lookup / POS entitlements). */
 export async function ensureSubscriptionPlansSchema(): Promise<void> {
+  if (subscriptionPlansSchemaPromise) return subscriptionPlansSchemaPromise;
+  subscriptionPlansSchemaPromise = ensureSubscriptionPlansSchemaOnce().catch((err) => {
+    subscriptionPlansSchemaPromise = null;
+    throw err;
+  });
+  return subscriptionPlansSchemaPromise;
+}
+
+async function ensureSubscriptionPlansSchemaOnce(): Promise<void> {
   for (const statement of TABLE_PATCHES) {
     if (!/editions/i.test(statement)) continue;
     try {
@@ -1832,8 +1995,40 @@ export async function ensureSubscriptionPlansSchema(): Promise<void> {
   await runPatch("included_addons", "subscription_plans");
 }
 
+let locationsSchemaPromise: Promise<void> | null = null;
+let posSessionsSchemaPromise: Promise<void> | null = null;
+
+/**
+ * Panel/POS location middleware: run column + location patches once per process (not per request).
+ */
+export async function ensureLocationContextSchema(): Promise<void> {
+  if (isLazyMerchantSchemaBootstrap()) return;
+  if (locationContextSchemaPromise) return locationContextSchemaPromise;
+  locationContextSchemaPromise = (async () => {
+    recordSchemaEnsureRun("locationContext");
+    await ensureMerchantColumnsSchema();
+    await ensureOrdersColumnsSchema();
+    await ensureOrderItemsColumnsSchema();
+    await ensureLocationsSchema();
+  })().catch((err) => {
+    locationContextSchemaPromise = null;
+    throw err;
+  });
+  return locationContextSchemaPromise;
+}
+
 /** Ensure multi-location tables/columns exist and backfill default location per merchant. */
 export async function ensureLocationsSchema(): Promise<void> {
+  if (locationsSchemaPromise) return locationsSchemaPromise;
+  locationsSchemaPromise = ensureLocationsSchemaOnce().catch((err) => {
+    locationsSchemaPromise = null;
+    throw err;
+  });
+  return locationsSchemaPromise;
+}
+
+async function ensureLocationsSchemaOnce(): Promise<void> {
+  recordSchemaEnsureRun("locations");
   for (const statement of TABLE_PATCHES) {
     if (!LOCATIONS_SCHEMA_PATTERN.test(statement)) continue;
     try {
@@ -1966,6 +2161,15 @@ export async function ensurePaymentProfilesSchema(): Promise<void> {
 
 /** Add columns that drizzle-kit often skips on pos_sessions (OOM / old CREATE TABLE). */
 export async function ensurePosSessionsSchema(): Promise<void> {
+  if (posSessionsSchemaPromise) return posSessionsSchemaPromise;
+  posSessionsSchemaPromise = ensurePosSessionsSchemaOnce().catch((err) => {
+    posSessionsSchemaPromise = null;
+    throw err;
+  });
+  return posSessionsSchemaPromise;
+}
+
+async function ensurePosSessionsSchemaOnce(): Promise<void> {
   if (!(await tableExists("pos_sessions"))) {
     patchedTables = false;
     await ensureMerchantTables();
@@ -1982,10 +2186,6 @@ export async function ensurePosSessionsSchema(): Promise<void> {
       console.warn("[schema] pos_sessions patch failed:", err);
     }
   }
-  patchedColumns.delete("pos_sessions.location_id");
-  patchedColumns.delete("pos_sessions.print_agent_online");
-  patchedColumns.delete("pos_sessions_location_id");
-  patchedColumns.delete("pos_sessions_print_agent_online");
   await runPatch("location_id", "pos_sessions");
   await runPatch("print_agent_online", "pos_sessions");
 }
@@ -2078,6 +2278,7 @@ function isVouchersColumnSchemaError(raw: string): boolean {
 }
 
 const SHOP_CATEGORY_HEAL_COLUMNS = [
+  "location_id",
   "client_id",
   "is_offers_category",
   "sort_order",
@@ -2216,8 +2417,15 @@ export async function backfillKioskCatalogVisibility(): Promise<void> {
   }
 }
 
-/** Apply all idempotent schema patches (safe to run on every boot). */
-export async function ensureAllMerchantSchema(): Promise<{
+export type EnsureAllMerchantSchemaOptions = {
+  /** Only for explicit repair: wipe in-memory patch caches so ALTERs re-run once. */
+  resetPatchCaches?: boolean;
+};
+
+/** Apply all idempotent schema patches (deploy repair or explicit POST /health/schema-repair). */
+export async function ensureAllMerchantSchema(
+  options?: EnsureAllMerchantSchemaOptions
+): Promise<{
   missingBefore: string[];
   missingAfter: string[];
   ordersMissing: string[];
@@ -2228,8 +2436,11 @@ export async function ensureAllMerchantSchema(): Promise<{
   posSessionsMissing: string[];
   chaslayHomepageRepair: Awaited<ReturnType<typeof repairAllChaslayHomepages>>;
 }> {
-  patchedColumns.clear();
-  patchedTables = false;
+  if (options?.resetPatchCaches) {
+    patchedColumns.clear();
+    patchedTables = false;
+    subscriptionPlansSchemaPromise = null;
+  }
   const missingBefore = await listMissingMerchantColumns().catch(() => [] as string[]);
   await ensureMerchantColumnsSchema();
   await runAlterTablePatches();
@@ -2383,8 +2594,11 @@ export async function ensureAllMerchantSchema(): Promise<{
   };
 }
 
-/** Run schema patches at startup — await before accepting traffic. */
+/** Run schema patches once per process (startup background task or explicit await). */
 export function ensureMerchantSchemaAtStartup(): Promise<void> {
+  if (isLazyMerchantSchemaBootstrap()) {
+    return Promise.resolve();
+  }
   if (!startupPatchPromise) {
     startupPatchPromise = ensureAllMerchantSchema()
       .then(() => undefined)

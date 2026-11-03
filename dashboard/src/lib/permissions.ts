@@ -138,6 +138,7 @@ export const PANEL_ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/merchant/vouchers': ['MANAGE_OFFERS'],
   '/merchant/terminals': ['MANAGE_SETTINGS'],
   '/merchant/newsletter': ['MANAGE_ONLINE_SHOP'],
+  '/merchant/sms': ['MANAGE_ONLINE_SHOP'],
   '/merchant/online-shop': ['MANAGE_ONLINE_SHOP'],
   '/merchant/website': ['MANAGE_ONLINE_SHOP'],
   '/merchant/chaslay-page-builder': ['MANAGE_ONLINE_SHOP'],
@@ -899,6 +900,8 @@ export function getEffectivePanelAccess(opts: {
   jwtPermissions: Permission[] | undefined;
   isOwner: boolean;
   authRole?: string | null;
+  /** Staff JWT id — used to detect "same user on their manager PIN" vs register user switch. */
+  jwtStaffId?: string | null;
   /** Shop has at least one active staff PIN configured. */
   hasStaffPins: boolean;
   /** @deprecated use hasStaffPins */
@@ -949,11 +952,15 @@ export function getEffectivePanelAccess(opts: {
   if (pinActive && opts.pinSession) {
     const permissions = opts.pinSession.permissions || [];
     const pinHasPanelAccess = hasPermission(permissions, 'ACCESS_PANEL', false);
-    const onPosFloor = opts.pathname ? isPosFloorPath(opts.pathname) : false;
-    const managerJwt = jwtHasPanelAccess(opts.jwtPermissions, opts.isOwner, opts.authRole);
-    // Restore JWT panel access when the clocked-in PIN user also has ACCESS_PANEL
-    // (manager on their own PIN). Owner/manager JWT must never bypass a restricted cashier/waiter PIN.
-    if (managerJwt && pinHasPanelAccess) {
+    const ownerEffective = opts.isOwner && opts.authRole !== 'staff';
+    const sameStaffAsJwt =
+      !!opts.jwtStaffId && opts.pinSession.id === opts.jwtStaffId;
+    // Restore JWT panel access for the owner or the same staff member on their manager PIN.
+    // Do not treat VIEW_ORDER_HISTORY / catalog JWT as "manager" when another user's manager PIN is active.
+    const restoreJwtPanel =
+      ownerEffective ||
+      (sameStaffAsJwt && hasPermission(opts.jwtPermissions, 'ACCESS_PANEL', false));
+    if (restoreJwtPanel && pinHasPanelAccess) {
       return { ...jwtAccess(), pinActive: true };
     }
     const canOpenPanel = hasPermission(permissions, 'ACCESS_PANEL', false);

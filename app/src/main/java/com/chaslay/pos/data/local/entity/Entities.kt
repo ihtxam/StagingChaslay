@@ -225,6 +225,7 @@ data class BusinessSettingsEntity(
     val roundingStep: Double = 0.05,
     /** Synced from merchant panel posCheckoutSettings */
     val tipsEnabled: Boolean = true,
+    val terminalAskGratuityEnabled: Boolean = false,
     val allowCustomTip: Boolean = true,
     /** Comma-separated tip preset percents, e.g. "0,5,10,15" */
     val tipPresetsPercentCsv: String = "0,5,10,15",
@@ -232,6 +233,11 @@ data class BusinessSettingsEntity(
     val quickCashEnabled: Boolean = true,
     /** Comma-separated quick-cash denominations, e.g. "10,20,50,100" */
     val quickCashDenominationsCsv: String = "10,20,50,100",
+    /** Show EUR equivalent on checkout when enabled and rate > 0 (1 CHF = X EUR). */
+    val checkoutEurDisplayEnabled: Boolean = false,
+    val checkoutChfToEurRate: Double = 0.0,
+    /** Receipt body ESC/POS scale: 1 normal, 2 wide, 3 wide+tall. */
+    val receiptBodyTextScale: Int = 1,
     val splitBillsEnabled: Boolean = true,
     val maxSplitParts: Int = 8,
     val openHour: Int = 10,
@@ -243,6 +249,10 @@ data class BusinessSettingsEntity(
     val terminalEnabled: Boolean = true,
     /** Quick one-tap cash sale (Xpress button). Synced from merchant panel. */
     val expressEnabled: Boolean = true,
+    /** cart | product_grid — express pay buttons under cart or product grid only. */
+    val expressPayPlacement: String = "product_grid",
+    /** Retail: show CashPaymentDialog (amount tendered) vs checkout keypad only. */
+    val retailCashTenderDialogEnabled: Boolean = true,
     /** When true, payment method toggles are controlled by the merchant panel sync. */
     val paymentMethodsManagedByCloud: Boolean = false,
     /** Gift card sell/reload/pay — synced from merchant panel; can be overridden locally. */
@@ -253,6 +263,8 @@ data class BusinessSettingsEntity(
     val kitchenPrinterPrintKitchen: Boolean = true,
     /** Synced from merchant panel posPrintSettings.autoPrintKitchen */
     val autoPrintKitchen: Boolean = true,
+    /** Synced from merchant panel posPrintSettings.autoPrintReceipt; local toggle in Settings → Receipt. */
+    val autoPrintReceipt: Boolean = true,
     /** Ring on main till when a waiter device sends kitchen print (panel sync). */
     val waiterTillBellEnabled: Boolean = true,
     /** Auto-retry failed kitchen prints before showing error (panel sync). */
@@ -592,6 +604,7 @@ data class ModifierOptionEntity(
     val name: String,
     val sortOrder: Int = 0,
     val inStock: Boolean = true,
+    val isDefault: Boolean = false,
     val isActive: Boolean = true
 )
 
@@ -626,7 +639,14 @@ data class AddonOptionEntity(
     val price: Double = 0.0,
     val sortOrder: Int = 0,
     val inStock: Boolean = true,
+    val isDefault: Boolean = false,
     val isActive: Boolean = true
+)
+
+/** Product ↔ modifier/add-on link row for sort order (Room query result). */
+data class ProductGroupLink(
+    val groupId: Long,
+    val sortOrder: Int
 )
 
 @Entity(

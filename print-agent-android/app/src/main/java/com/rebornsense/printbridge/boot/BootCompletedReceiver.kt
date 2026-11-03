@@ -8,6 +8,7 @@ import android.os.Looper
 import com.rebornsense.printbridge.BridgeSafeStart
 import com.rebornsense.printbridge.BridgeUserUnlock
 import com.rebornsense.printbridge.PrintBridgeLauncher
+import com.rebornsense.printbridge.usb.UsbBootAttachGrace
 /**
  * Starts the print bridge foreground service after device reboot or app update
  * so WebPOS can reach localhost:9101 without opening the app manually.
@@ -18,6 +19,13 @@ import com.rebornsense.printbridge.PrintBridgeLauncher
 class BootCompletedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
+        when (action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            ACTION_QUICKBOOT_POWERON -> {
+                UsbBootAttachGrace.markBootCompleted(context.applicationContext)
+            }
+        }
         when (action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,

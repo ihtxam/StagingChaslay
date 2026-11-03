@@ -16,6 +16,8 @@ const locationsSrc = readFileSync(join(root, "locations.service.ts"), "utf8");
 const schemaSrc = readFileSync(join(root, "../lib/ensure-merchant-schema.ts"), "utf8");
 
 assert.match(serviceSrc, /ensureProfileForLocation/, "branch auto-profile helper");
+assert.match(serviceSrc, /syncAdyenFromMerchant/, "merchant adyen sync to profiles");
+assert.match(serviceSrc, /healStaleAdyenFromMerchant/, "stale profile account heal on list");
 assert.match(locationsSrc, /ensureProfileForLocation/, "location create wires profile");
 assert.match(schemaSrc, /pp\.location_id = l\.id/, "schema heal backfills per location");
 

@@ -4,6 +4,7 @@ import { normalizePosPrintSettings } from "@/lib/pos-print-settings";
 import { shouldAutoAcceptOnlineShopOrder } from "@/lib/online-shop-auto-accept";
 import { normalizeAdyenEcommerceTender } from "@/lib/shop-adyen-session";
 import { ShopLoyaltyService } from "@/services/shop-loyalty.service";
+import { computeEstimatedReadyAt } from "@/lib/order-eta";
 
 type Merchant = typeof schema.merchants.$inferSelect;
 type Order = typeof schema.orders.$inferSelect;
@@ -65,6 +66,12 @@ export async function runOnlineShopOrderArrivalSideEffects(
       guestLocale: opts?.guestLocale || null,
     });
     if (shopAutoAccept) {
+      const db = getDb();
+      const estimatedReadyAt = computeEstimatedReadyAt(order, merchant);
+      await db
+        .update(schema.orders)
+        .set({ estimatedReadyAt })
+        .where(eq(schema.orders.id, order.id));
       await ShopOrderEmailService.sendGuestOrderEmail(merchant.id, order.id, "confirmed", {
         guestLocale: opts?.guestLocale || null,
       });

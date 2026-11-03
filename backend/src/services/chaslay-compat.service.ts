@@ -487,7 +487,9 @@ export class ChaslayCompatService {
       where: eq(schema.products.merchantId, merchantId),
     });
     const activeProducts = allProducts.filter((p) => p.isActive !== false);
-    const { products, categories: visibleCategories } = filterCatalogForChannel(
+    // Products follow POS channel visibility; categories are the full merchant list so native
+    // POS tabs match the panel (WebPOS filters client-side the same way).
+    const { products: visibleProducts } = filterCatalogForChannel(
       activeProducts,
       categories,
       "pos"
@@ -506,7 +508,7 @@ export class ChaslayCompatService {
     ];
 
     const categoryClientById = new Map(
-      visibleCategories.map((c) => [c.id, c.clientId || c.id] as const)
+      categories.map((c) => [c.id, c.clientId || c.id] as const)
     );
     const productClientById = new Map(
       allProducts.map((p) => [p.id, p.clientId || p.id] as const)
@@ -542,8 +544,8 @@ export class ChaslayCompatService {
         store_hours: merchant.storeHours || {},
         receipt_base_url: receiptPublicBaseUrl(),
       },
-      categories: visibleCategories.map((c) => this.mapCategory(c)),
-      products: products.map((p) =>
+      categories: categories.map((c) => this.mapCategory(c)),
+      products: visibleProducts.map((p) =>
         this.mapProduct(p, false, categoryClientById, productClientById, groupsByProduct, catalogById)
       ),
       paymentConfig: await this.getPaymentConfigPayload(merchantId),
@@ -609,7 +611,9 @@ export class ChaslayCompatService {
       !!merchant.adyenApiKey &&
       !!merchant.adyenMerchantAccount;
 
-    const { normalizePosPrintSettings } = await import("@/lib/pos-print-settings");
+    const { normalizePosPrintSettings, receiptHeaderHtmlToPlain } = await import(
+      "@/lib/pos-print-settings"
+    );
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
@@ -674,11 +678,22 @@ export class ChaslayCompatService {
       print: {
         adyen_receipt_digital_only: posPrintSettings.adyenReceiptDigitalOnly === true,
         receipt_delivery_directions_qr: posPrintSettings.receiptDeliveryDirectionsQr !== false,
+        auto_print_receipt: posPrintSettings.autoPrintReceipt !== false,
         auto_print_kitchen: posPrintSettings.autoPrintKitchen !== false,
         waiter_till_bell_enabled: posPrintSettings.waiterTillBellEnabled !== false,
         kitchen_print_retry_enabled: posPrintSettings.kitchenPrintRetryEnabled !== false,
         kitchen_print_retry_attempts: posPrintSettings.kitchenPrintRetryAttempts ?? 5,
         kitchen_print_retry_interval_sec: posPrintSettings.kitchenPrintRetryIntervalSec ?? 5,
+        receipt_template_name: posPrintSettings.receiptTemplateName ?? "Default",
+        receipt_header: receiptHeaderHtmlToPlain(posPrintSettings.receiptHeader ?? "").slice(
+          0,
+          2000
+        ),
+        receipt_footer: String(posPrintSettings.receiptFooter ?? "").slice(0, 2000),
+        receipt_show_vat_table: posPrintSettings.receiptShowVatTable !== false,
+        receipt_show_staff_line: posPrintSettings.receiptShowStaffLine !== false,
+        receipt_show_qr_code: posPrintSettings.receiptShowQrCode !== false,
+        receipt_body_text_scale: posPrintSettings.receiptBodyTextScale ?? 1,
       },
     };
   }
@@ -790,8 +805,8 @@ export class ChaslayCompatService {
       where: eq(schema.categories.merchantId, merchantId),
     });
     const activeChangedProducts = products.filter((p) => p.isActive !== false);
-    const { products: visibleProducts, categories: visibleChangedCategories } =
-      filterCatalogForChannel(activeChangedProducts, categories, "pos");
+    const { products: visibleProducts } =
+      filterCatalogForChannel(activeChangedProducts, allCategories, "pos");
     const categoryClientById = new Map(
       allCategories.map((c) => [c.id, c.clientId || c.id] as const)
     );
@@ -809,7 +824,7 @@ export class ChaslayCompatService {
 
     return {
       serverTime: Date.now(),
-      categories: visibleChangedCategories.map((c) => this.mapCategory(c, true)),
+      categories: categories.map((c) => this.mapCategory(c, true)),
       products: visibleProducts.map((p) =>
         this.mapProduct(p, true, categoryClientById, productClientById, groupsByProduct, catalogById)
       ),

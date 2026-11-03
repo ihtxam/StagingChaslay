@@ -11,7 +11,7 @@ import com.chaslay.pos.data.remote.dto.PushTerminalsRequest
 import com.chaslay.pos.data.remote.dto.SyncCheckoutDto
 import android.content.Context
 import com.chaslay.pos.data.repository.SettingsRepository
-import com.chaslay.pos.sync.mergePosCheckoutSettings
+import com.chaslay.pos.util.PosLocalPrefs
 import com.chaslay.pos.sync.mergePosPrintSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -175,14 +175,21 @@ class TerminalSyncRepository @Inject constructor(
 
         config.scale?.let { scale ->
             val usb = scale.usbAddress?.trim().orEmpty()
+            val cloudUsb = usb.takeIf { it.isNotEmpty() }
             merged = merged.copy(
-                scaleEnabled = scale.enabled || usb.isNotEmpty(),
-                scaleUsbAddress = usb.takeIf { it.isNotEmpty() } ?: merged.scaleUsbAddress
+                scaleEnabled = PosLocalPrefs.applyScaleEnabledIfUserSet(
+                    appContext,
+                    scale.enabled || usb.isNotEmpty()
+                ),
+                scaleUsbAddress = PosLocalPrefs.applyScaleUsbAddressIfUserSet(
+                    appContext,
+                    cloudUsb ?: merged.scaleUsbAddress
+                )
             )
         }
 
         config.print?.let { print ->
-            merged = merged.mergePosPrintSettings(print)
+            merged = merged.mergePosPrintSettings(print, appContext)
         }
 
         return merged

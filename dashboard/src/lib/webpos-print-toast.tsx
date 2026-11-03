@@ -4,7 +4,9 @@ import {
   collectPrintErrorText,
   extractPrinterNameFromError,
   isNoisyPrintAgentDump,
+  isPrintAgentUnreachableError,
   isPrinterDisconnectedError,
+  isPrinterSocketIoError,
 } from '@/lib/print-agent';
 
 export { isPrinterDisconnectedError };
@@ -17,6 +19,9 @@ export function shortPrintErrorMessage(
   const msg = collectPrintErrorText(raw);
   if (!msg) return t(fallbackKey);
   const lower = msg.toLowerCase();
+  if (isPrintAgentUnreachableError(raw)) {
+    return t('webPosPrintAgentOfflineShort');
+  }
   if (
     /print agent offline|agent offline|start chaslay|127\.0\.0\.1:9101|econnrefused|failed to fetch|networkerror/i.test(
       lower
@@ -29,6 +34,9 @@ export function shortPrintErrorMessage(
   }
   if (/onenote|pdf|xps|unsuitable|esc-pos|virtual|corrupted printer/i.test(lower)) {
     return t('webPosPrintPrinterIssueShort');
+  }
+  if (isPrinterSocketIoError(msg)) {
+    return t('webPosPrintSocketClosed');
   }
   if (isPrinterDisconnectedError(msg)) {
     const name = extractPrinterNameFromError(msg);

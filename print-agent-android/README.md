@@ -110,6 +110,14 @@ Optional later: `/scale/reading` for USB serial scales (Aclas on OTG / RJ11 adap
 - Device filter includes printer class, vendor-specific, CDC, and Niimbot VID 0x0355 so reboot restores access without a second prompt
 - Hot-plug: `ACTION_USB_DEVICE_ATTACHED` → rescan `/printers`
 
+**Permission behavior (do not regress — matches RebornPOS):**
+
+- Stable id `usb:VID:PID` only (no serial in prefs).
+- After the cashier taps **Allow** once (and optional “always”), Android keeps grant for the **same boot session**; app restarts should not re-prompt until reboot or unplug.
+- Auto `requestPermission` on attach / `MainActivity.onResume` only for **default USB printer** or **remembered** vid:pid (`UsbHostPermissions`); unknown USB devices do not get background notifications.
+- Foreground service syncs grants via `recordGrantedDevices` only — no dialog from the service thread.
+- Manual **Grant USB** button still prompts for any attached printer candidate.
+
 ### P2 — Bluetooth ESC/POS (SPP)
 
 Classic Bluetooth serial (`00001101-0000-1000-8000-00805F9B34FB`).

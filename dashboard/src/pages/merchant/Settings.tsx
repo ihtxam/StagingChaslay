@@ -1,7 +1,11 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useLocationStore } from '@/store/location';
-import { shouldHideMerchantSettingsInHqView } from '@/lib/panel-scope-nav';
+import {
+  isPanelLocationSwitcherActive,
+  shouldHideMerchantSettingsInHqView,
+} from '@/lib/panel-scope-nav';
+import { PANEL_LOCATION_SCOPE_EVENT } from '@/lib/panel-location-scope';
 import toast from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -10,19 +14,24 @@ import {
   Clock,
   CreditCard,
   Banknote,
+  FileText,
   FileCheck,
   Globe2,
+  LayoutGrid,
+  ScrollText,
+  Settings2,
+  Shield,
   Languages,
   Mail,
   MapPin,
   Monitor,
+  Weight,
   Package,
   Percent,
   Printer,
   RefreshCw,
   Save,
   Search,
-  ScrollText,
   SlidersHorizontal,
   Truck,
   Users,
@@ -36,6 +45,8 @@ import {
   Calculator,
   Award,
   Phone,
+  Puzzle,
+  Info,
 } from 'lucide-react';
 import ShopPublicLinks from '@/components/merchant/ShopPublicLinks';
 import CustomDomainWizard, { CUSTOM_DOMAIN_WIZARD_ENABLED } from '@/components/merchant/CustomDomainWizard';
@@ -43,10 +54,17 @@ import PosPostsSection from '@/components/settings/PosPostsSection';
 import TapToPayDeviceSetup from '@/components/settings/TapToPayDeviceSetup';
 import PaymentProfilesSection from '@/components/settings/PaymentProfilesSection';
 import DeviceEnrollmentWizard from '@/components/settings/DeviceEnrollmentWizard';
-import PrintCompanionVersionStatus from '@/components/settings/PrintCompanionVersionStatus';
 import KdsSettingsPanel from '@/components/merchant/KdsSettingsPanel';
 import OdsSettingsPanel from '@/components/merchant/OdsSettingsPanel';
 import CdsSettingsPanel from '@/components/merchant/CdsSettingsPanel';
+import ReceiptThermalPreview from '@/components/settings/ReceiptThermalPreview';
+import {
+  SettingsDemoPrinterRow,
+  SettingsPrinterProfileRow,
+  inferPrinterConnectionMeta,
+} from '@/components/settings/SettingsPrinterProfileRow';
+import { SETTINGS_DEMO_PRINTER_ROWS } from '@/lib/settings-printer-demo-rows';
+import { normalizeReceiptTemplateName } from '@/lib/receipt-template';
 import SettingsFiscalTab from '@/pages/merchant/settings/SettingsFiscalTab';
 import SettingsComoTab from '@/pages/merchant/settings/SettingsComoTab';
 import SettingsPhoneOrderingTab from '@/pages/merchant/settings/SettingsPhoneOrderingTab';
@@ -54,15 +72,22 @@ import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRou
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
 import api from '@/lib/api';
+import { formatUserFacingApiError, toastLoadError } from '@/lib/deploy-blip';
 import {
   RECEIPT_LOGO_WIDTH_PX_MAX,
   buildPrinterTestEscPos,
   resizeImageFileForReceiptLogo,
   uint8ToBase64,
   normalizeClientReceiptHeaderPrintSettings,
-  receiptHeaderCombinedText,
   splitReceiptHeaderTextToLines,
+  clampReceiptHeaderTitlePx,
+  clampReceiptHeaderDetailPx,
+  receiptHeaderPixelSizesFromSettings,
+  receiptHeaderTextScaleFromTitlePx,
+  RECEIPT_HEADER_PX_CHOICES,
 } from '@/lib/webpos-receipt';
+import { receiptHeaderContentToPlainText, receiptHeaderHtmlForEditor } from '@/lib/receipt-header-html';
+import HugeRteEditor from '@/components/editor/HugeRteEditor';
 import { parseLabelHeightMm, parseLabelWidthMm } from '@/lib/barcode-labels';
 import { buildTsplTestLabel, isTsplLabelPrinterName } from '@/lib/tspl-label';
 import { resolveLabelPrintProtocol } from '@/lib/label-print-protocol';
@@ -71,13 +96,17 @@ import { isInventoryLicensed } from '@/lib/inventory-addon';
 import { isKioskLicensed } from '@/lib/kiosk-addon';
 import { isSignageLicensed } from '@/lib/signage-addon';
 import { isStorekeeperLicensed } from '@/lib/storekeeper-addon';
-import { isAccountingLicensed } from '@/lib/accounting-addon';
 import {
   shouldShowOnlineReservationsToggle,
   shouldShowReservationsSettings,
+  shouldShowShopSettings,
 } from '@/lib/pos-hub-visibility';
 import {
   findPrinterHealCandidates,
+  filterAgentPrintersForSettingsPick,
+  formatAgentPrinterOptionLabel,
+  agentPrinterOptionValue,
+  resolveAgentPrinterSelectValue,
   formatScaleDeviceLabel,
   formatScalePortLabel,
   compareAgentVersion,
@@ -105,12 +134,6 @@ import {
   fetchPrintAgentManifest,
   fetchRebornPosManifest,
   isAndroidDevice,
-  isBridgeAlreadyInstalled,
-  openPrintBridgeApkInstall,
-  printAgentDownloadUrl,
-  printBridgeDownloadUrl,
-  preferredPrintCompanion,
-  rebornPosDownloadUrl,
   type DownloadManifest,
 } from '@/lib/print-agent-platform';
 import { useI18n, type Locale } from '@/lib/i18n';
@@ -129,7 +152,14 @@ import SettingsHoursTab from './settings/SettingsHoursTab';
 import SettingsReservationsTab from './settings/SettingsReservationsTab';
 import SettingsDeliveryPlatformsTab from './settings/SettingsDeliveryPlatformsTab';
 import SettingsAccountingTab from './settings/SettingsAccountingTab';
+import SettingsExtraModulesTab from './settings/SettingsExtraModulesTab';
+import SettingsPrintCompanionSection from '@/components/settings/SettingsPrintCompanionSection';
+import SettingsAboutTab from './settings/SettingsAboutTab';
+import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
+import { isLicensedSettingsAddonTab } from './settings/settings-extra-modules';
+import { isKdsLicensed } from '@/lib/kds-addon';
+import { isOdsLicensed } from '@/lib/ods-addon';
 import { normalizePosCheckoutSettings } from '@/lib/pos-checkout';
 import { writeShowPosToasts } from '@/lib/pos-toast-pref';
 import {
@@ -140,6 +170,7 @@ import {
   isSettingsSearchQueryActive,
   matchSettingsSearch,
   nextTabForHiddenRetailSettings,
+  pickSettingsTabFallback,
   normalizeSettingsSearchQuery,
   planSettingsSearchResultClick,
   resetSettingsClipperScroll,
@@ -155,7 +186,6 @@ import { canAccessRoute, hasPermission, isKioskRestrictedStaff } from '@/lib/per
 import { hasEditionFeature, showPosScaleFeature, type EditionFeatureKey } from '@/lib/edition-features';
 import { normalizeBusinessModule } from '@/lib/business-module';
 import { parsePanelNavHidden } from '@/lib/panel-nav-hidden';
-import { isPhoneOrderingLicensed } from '@/lib/phone-ordering-addon';
 import { desktopSidecarHealth, isDesktopApp } from '@/lib/platform';
 
 interface SettingsData {
@@ -199,9 +229,13 @@ interface SettingsData {
   businessCategory?: 'retail' | 'restaurant' | null;
   editionFeatures?: EditionFeatureKey[] | null;
   inventoryExpiryAlertDays?: number;
+  settingsScope?: 'branch' | 'merchant' | string;
+  settingsBranchLocationId?: string | null;
+  settingsBranchName?: string | null;
   posColorTheme?: string;
   posCheckoutSettings?: {
     tipsEnabled?: boolean;
+    terminalAskGratuityEnabled?: boolean;
     tipPresetsPercent?: number[];
     allowCustomTip?: boolean;
     discountsEnabled?: boolean;
@@ -222,6 +256,8 @@ interface SettingsData {
     requireTableForDineIn?: boolean;
     actionButtonSize?: 'sm' | 'md' | 'lg';
     expressCheckoutEnabled?: boolean;
+    expressPayPlacement?: 'cart' | 'product_grid';
+    retailCashTenderDialogEnabled?: boolean;
     showPosToasts?: boolean;
     retailLayoutEnabled?: boolean;
     retailScannerFirst?: boolean;
@@ -323,6 +359,8 @@ interface SettingsData {
     receiptHeaderAlign?: 'left' | 'center' | 'right';
     receiptHeaderBold?: boolean;
     receiptHeaderTextScale?: 1 | 2 | 3;
+    receiptHeaderTitlePx?: number;
+    receiptHeaderDetailPx?: number;
     kitchenTicketHeader?: string;
     kitchenTicketFooter?: string;
     kitchenItemTextScale?: 1 | 2 | 3;
@@ -339,6 +377,7 @@ interface SettingsData {
     paperWidthMm?: 58 | 80;
     receiptLanguage?: 'en' | 'fr' | 'de' | 'panel';
     receiptChfToEurRate?: number | null;
+    receiptTemplateName?: string;
     receiptLogoUrl?: string | null;
     receiptLogoWidthPx?: number;
     autoPrintReceipt?: boolean;
@@ -417,6 +456,9 @@ type TabId =
   | 'payments'
   | 'receipt'
   | 'printers'
+  | 'scale'
+  | 'appearance'
+  | 'license'
   | 'kds'
   | 'ods'
   | 'customerDisplay'
@@ -428,7 +470,9 @@ type TabId =
   | 'kiosk'
   | 'email'
   | 'language'
-  | 'users';
+  | 'users'
+  | 'extra-modules'
+  | 'about';
 
 const SETTINGS_TAB_IDS: TabId[] = [
   'business',
@@ -443,6 +487,9 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'payments',
   'receipt',
   'printers',
+  'scale',
+  'appearance',
+  'license',
   'kds',
   'ods',
   'customerDisplay',
@@ -455,20 +502,28 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'email',
   'language',
   'users',
+  'extra-modules',
+  'about',
 ];
 
-/** SpotOn-style settings groups: Team / Tables / Service / Guest / Money */
+/** SpotOn-style settings groups: Team / Tables / Service / Guest / Money / Add-ons */
 const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }> = [
   { id: 'business', labelKey: 'settingsGroupBusiness', ids: ['business'] },
-  { id: 'team', labelKey: 'settingsGroupTeam', ids: ['users', 'language'] },
+  { id: 'team', labelKey: 'settingsGroupTeam', ids: ['users', 'language', 'appearance'] },
   { id: 'tables', labelKey: 'settingsGroupTables', ids: ['tables', 'reservations'] },
   {
     id: 'service',
     labelKey: 'settingsGroupService',
-    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'printers', 'kiosk', 'signage', 'delivery', 'phone'],
+    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'printers', 'scale', 'receipt', 'delivery'],
   },
   { id: 'guest', labelKey: 'settingsGroupGuest', ids: ['shop', 'email', 'delivery-map'] },
-  { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting', 'como'] },
+  { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments'] },
+  {
+    id: 'addons',
+    labelKey: 'settingsGroupAddons',
+    ids: ['kiosk', 'signage', 'phone', 'fiscal', 'accounting', 'como', 'extra-modules'],
+  },
+  { id: 'about', labelKey: 'settingsGroupAbout', ids: ['about', 'license'] },
 ];
 
 const TAX_RATE_MAX = 100;
@@ -509,6 +564,8 @@ function parseSettingsTabFromSearch(search: string): TabId {
     if (q === 'reservations') return 'reservations';
     if (q === 'signage') return 'signage';
     if (q === 'kiosk') return 'kiosk';
+    if (q === 'extra-modules') return 'extra-modules';
+    if (q === 'about') return 'about';
   } catch {
     /* ignore */
   }
@@ -728,12 +785,24 @@ export default function Settings() {
   const { t, setLocale, locale } = useI18n();
   const user = useAuthStore((s) => s.user);
   const jwtIsOwner = user?.role === 'merchant' && user?.isOwner !== false;
-  const { isHqView, locations, limits } = useLocationStore();
+  const { isHqView, locations, limits, locationId: panelLocationId, location: panelLocation } =
+    useLocationStore();
+  const branchSwitcher = isPanelLocationSwitcherActive({
+    locationCount: locations.length,
+    maxLocations: limits?.maxLocations,
+  });
   const hqSettingsBlocked = shouldHideMerchantSettingsInHqView({
     locationCount: locations.length,
     maxLocations: limits?.maxLocations,
     isHqView,
   });
+  const panelBranchScopeKey = branchSwitcher && !isHqView ? panelLocationId || '' : '';
+  const settingsBranchQuery = useMemo(() => {
+    if (branchSwitcher && !isHqView && panelLocationId) {
+      return { branchPanel: '1' };
+    }
+    return null;
+  }, [branchSwitcher, isHqView, panelLocationId]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [panelNavHidden, setPanelNavHidden] = useState<string[]>([]);
@@ -803,6 +872,10 @@ export default function Settings() {
   const [printAgentManifest, setPrintAgentManifest] = useState<DownloadManifest | null>(null);
   const [rebornPosManifest, setRebornPosManifest] = useState<DownloadManifest | null>(null);
   const [agentPrinters, setAgentPrinters] = useState<AgentPrinter[]>([]);
+  const agentPrintersForPick = useMemo(
+    () => filterAgentPrintersForSettingsPick(agentPrinters),
+    [agentPrinters]
+  );
   const [refreshingPrinters, setRefreshingPrinters] = useState(false);
   const [testingPrinterId, setTestingPrinterId] = useState<string | null>(null);
   const [scalePorts, setScalePorts] = useState<ScaleDevice[]>([]);
@@ -823,13 +896,14 @@ export default function Settings() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const pinnedSearchHighlightRef = useRef<string | null>(null);
   const [tab, setTab] = useState<TabId>(() => parseSettingsTabFromSearch(window.location.search));
+  const [expandedPrinterId, setExpandedPrinterId] = useState<string | null>(null);
 
   const tabs = useMemo(
     () =>
       [
-        { id: 'business' as const, label: t('settingsBusiness'), navLabel: t('settingsNavBusiness'), icon: Building2 },
-        { id: 'taxes' as const, label: t('settingsTaxes'), navLabel: t('settingsNavTaxes'), icon: Percent },
-        { id: 'tables' as const, label: t('settingsTables'), navLabel: t('settingsNavTables'), icon: UtensilsCrossed },
+        { id: 'business' as const, label: t('settingsBusiness'), navLabel: t('settingsNavBusiness'), icon: Settings2 },
+        { id: 'taxes' as const, label: t('settingsTaxes'), navLabel: t('settingsNavTaxes'), icon: FileText },
+        { id: 'tables' as const, label: t('settingsTables'), navLabel: t('settingsNavTables'), icon: LayoutGrid },
         { id: 'shop' as const, label: t('shop'), navLabel: t('settingsNavShop'), icon: Globe2 },
         { id: 'delivery' as const, label: t('settingsDeliveryPlatforms'), navLabel: t('settingsNavDelivery'), icon: Truck },
         { id: 'delivery-map' as const, label: t('deliveryMapNav'), navLabel: t('settingsNavDeliveryMap'), icon: MapPin },
@@ -839,6 +913,7 @@ export default function Settings() {
         { id: 'payments' as const, label: t('settingsPayments'), navLabel: t('settingsNavPayments'), icon: CreditCard },
         { id: 'receipt' as const, label: t('settingsNavReceipt'), navLabel: t('settingsNavReceipt'), icon: ScrollText },
         { id: 'printers' as const, label: t('settingsNavPrinters'), navLabel: t('settingsNavPrinters'), icon: Printer },
+        { id: 'scale' as const, label: t('settingsNavScale'), navLabel: t('settingsNavScale'), icon: Weight },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
         {
@@ -861,6 +936,20 @@ export default function Settings() {
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
         { id: 'users' as const, label: t('staffPageTitle'), navLabel: t('settingsNavStaff'), icon: Users },
         { id: 'language' as const, label: t('language'), navLabel: t('settingsNavLanguage'), icon: Languages },
+        { id: 'appearance' as const, label: t('settingsNavAppearance'), navLabel: t('settingsNavAppearance'), icon: SlidersHorizontal },
+        {
+          id: 'extra-modules' as const,
+          label: t('settingsExtraModules'),
+          navLabel: t('settingsNavExtraModules'),
+          icon: Puzzle,
+        },
+        {
+          id: 'about' as const,
+          label: t('settingsAbout'),
+          navLabel: t('settingsNavAbout'),
+          icon: Shield,
+        },
+        { id: 'license' as const, label: t('settingsNavLicense'), navLabel: t('settingsNavLicense'), icon: Info },
       ] as const,
     [t]
   );
@@ -898,6 +987,11 @@ export default function Settings() {
         editionFeatures: settings?.editionFeatures,
       }),
     [isRetailMerchant, settings?.editionFeatures, settings?.reservationsEnabled]
+  );
+
+  const showShopSettings = useMemo(
+    () => shouldShowShopSettings(settings?.editionFeatures),
+    [settings?.editionFeatures]
   );
 
   const showReservationsChannelToggle = useMemo(
@@ -943,12 +1037,25 @@ export default function Settings() {
       tabs.filter((item) => {
         if (!canOpenSettingsTab(item.id)) return false;
         if (item.id === 'tables' && !showTablesSettings) return false;
+        if (item.id === 'shop' && !showShopSettings) return false;
         if (item.id === 'reservations' && !reservationsLicensed) return false;
-        if (item.id === 'phone' && !isPhoneOrderingLicensed(settings)) return false;
-        if (item.id === 'accounting' && !isAccountingLicensed(settings)) return false;
+        if (item.id === 'extra-modules' || item.id === 'about') return true;
+        if (
+          !isLicensedSettingsAddonTab(item.id, settings, { isRetailMerchant })
+        ) {
+          return false;
+        }
         return true;
       }),
-    [canOpenSettingsTab, reservationsLicensed, showTablesSettings, settings, tabs]
+    [
+      canOpenSettingsTab,
+      isRetailMerchant,
+      reservationsLicensed,
+      showShopSettings,
+      showTablesSettings,
+      settings,
+      tabs,
+    ]
   );
 
   const selectTab = useCallback(
@@ -1015,6 +1122,7 @@ export default function Settings() {
     if (!settings) return;
     const redirect = nextTabForHiddenRetailSettings(tab as SettingsTabId, {
       showTablesSettings,
+      showShopSettings,
       isRetailMerchant,
       reservationsLicensed,
       query: settingsQuery || normalizedQuery,
@@ -1023,6 +1131,7 @@ export default function Settings() {
   }, [
     tab,
     showTablesSettings,
+    showShopSettings,
     isRetailMerchant,
     reservationsLicensed,
     settings,
@@ -1038,9 +1147,12 @@ export default function Settings() {
       if (id === 'pos-courses') return showCoursesSettings;
       if (id === 'tables-floor' || id === 'tables-management') return showTablesSettings;
       if (id === 'reservations-config') return reservationsLicensed;
+      if (id === 'inventory-addon') return isInventoryLicensed(settings);
+      if (id === 'storekeeper-addon') return isInventoryLicensed(settings);
+      if (id === 'signage-addon') return isSignageLicensed(settings);
       return true;
     },
-    [reservationsLicensed, showCoursesSettings, showTablesSettings]
+    [reservationsLicensed, settings, showCoursesSettings, showTablesSettings]
   );
 
   const visibleTabIds = useMemo(
@@ -1151,7 +1263,10 @@ export default function Settings() {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const settingsRes = await api.get('/merchant/settings');
+        const settingsRes = await api.get(
+          '/merchant/settings',
+          settingsBranchQuery ? { params: settingsBranchQuery } : undefined
+        );
         const s = settingsRes.data?.settings;
         if (!s) {
           throw new Error('Settings response missing data');
@@ -1197,12 +1312,43 @@ export default function Settings() {
       }
     }
 
-    const err = lastError as { response?: { data?: { error?: string } }; message?: string };
-    const msg = err.response?.data?.error || err.message || t('settingsLoadFailed');
     setSettings(null);
-    setLoadError(msg);
-    toast.error(msg);
-  }, [adyenCredsFromSettings, applyAdyenCreds, setLocale, t]);
+    setLoadError(formatUserFacingApiError(lastError, t('settingsLoadFailed')));
+    toastLoadError(lastError, t('settingsLoadFailed'));
+  }, [adyenCredsFromSettings, applyAdyenCreds, setLocale, settingsBranchQuery, t]);
+
+  useEffect(() => {
+    if (!settingsBranchQuery) return;
+    const id = api.interceptors.request.use((config) => {
+      const url = String(config.url || '');
+      if (!/\/merchant\/settings/.test(url)) return config;
+      config.params = { ...(config.params as object), ...settingsBranchQuery };
+      return config;
+    });
+    return () => {
+      api.interceptors.request.eject(id);
+    };
+  }, [settingsBranchQuery]);
+
+  useEffect(() => {
+    paymentsDataLoadedRef.current = false;
+    receiptCatalogLoadedRef.current = false;
+    emailUsageLoadedRef.current = false;
+    setLoading(true);
+    void loadSettings().finally(() => setLoading(false));
+  }, [panelBranchScopeKey, loadSettings]);
+
+  useEffect(() => {
+    const reload = () => {
+      paymentsDataLoadedRef.current = false;
+      receiptCatalogLoadedRef.current = false;
+      emailUsageLoadedRef.current = false;
+      setLoading(true);
+      void loadSettings().finally(() => setLoading(false));
+    };
+    window.addEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
+    return () => window.removeEventListener(PANEL_LOCATION_SCOPE_EVENT, reload);
+  }, [loadSettings]);
 
   const loadPaymentsData = useCallback(
     async (opts?: { force?: boolean }) => {
@@ -1270,15 +1416,11 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
-    void loadSettings().finally(() => setLoading(false));
-  }, [loadSettings]);
+    if (tab === 'payments') void loadPaymentsData({ force: true });
+  }, [tab, loadPaymentsData, panelBranchScopeKey]);
 
   useEffect(() => {
-    if (tab === 'payments') void loadPaymentsData();
-  }, [tab, loadPaymentsData]);
-
-  useEffect(() => {
-    if (tab === 'receipt' || tab === 'printers') void loadReceiptCatalog();
+    if (tab === 'receipt' || tab === 'printers' || tab === 'scale') void loadReceiptCatalog();
   }, [tab, loadReceiptCatalog]);
 
   useEffect(() => {
@@ -1436,9 +1578,9 @@ export default function Settings() {
   }, [t]);
 
   useEffect(() => {
-    if (tab !== 'receipt' && tab !== 'printers') return;
+    if (tab !== 'receipt' && tab !== 'printers' && tab !== 'scale') return;
     void refreshPrintAgentPrinters();
-    if (tab === 'receipt') void refreshScalePorts();
+    if (tab === 'scale' || tab === 'receipt') void refreshScalePorts();
   }, [tab, printAgentManifest?.version, printBridgeManifest?.version, refreshPrintAgentPrinters, refreshScalePorts]);
 
   const onSave = async (e: FormEvent) => {
@@ -1657,10 +1799,7 @@ export default function Settings() {
           : [],
         linkedProductIds: Array.isArray(p.linkedProductIds) ? p.linkedProductIds.filter(Boolean) : [],
       }));
-      const receiptHeader = receiptHeaderCombinedText(
-        ps.receiptHeaderTitle,
-        ps.receiptHeader
-      ).slice(0, 2000);
+      const receiptHeader = String(ps.receiptHeader ?? '').slice(0, 2000);
       const receiptHeaderLines = splitReceiptHeaderTextToLines(receiptHeader);
       return {
         receiptHeaderTitle: '',
@@ -1671,11 +1810,12 @@ export default function Settings() {
           ps.receiptHeaderAlign === 'left' || ps.receiptHeaderAlign === 'right'
             ? ps.receiptHeaderAlign
             : 'center',
-        receiptHeaderBold: ps.receiptHeaderBold === true,
-        receiptHeaderTextScale:
-          ps.receiptHeaderTextScale === 2 || ps.receiptHeaderTextScale === 3
-            ? ps.receiptHeaderTextScale
-            : 1,
+        receiptHeaderBold: true,
+        receiptHeaderTitlePx: receiptHeaderPixelSizesFromSettings(ps).titlePx,
+        receiptHeaderDetailPx: receiptHeaderPixelSizesFromSettings(ps).detailPx,
+        receiptHeaderTextScale: receiptHeaderTextScaleFromTitlePx(
+          receiptHeaderPixelSizesFromSettings(ps).titlePx
+        ),
         kitchenTicketHeader: ps.kitchenTicketHeader || '',
         kitchenTicketFooter: ps.kitchenTicketFooter || '',
         kitchenItemTextScale: ps.kitchenItemTextScale === 2 || ps.kitchenItemTextScale === 3 ? ps.kitchenItemTextScale : 1,
@@ -1707,6 +1847,7 @@ export default function Settings() {
           if (!Number.isFinite(n) || n <= 0 || n > 2) return null;
           return Math.round(n * 10000) / 10000;
         })(),
+        receiptTemplateName: normalizeReceiptTemplateName(ps.receiptTemplateName),
         receiptLogoUrl: ps.receiptLogoUrl || null,
         receiptLogoWidthPx: Math.min(
           200,
@@ -1772,7 +1913,7 @@ export default function Settings() {
         }
         return merged;
       });
-      toast.success(successMessage);
+      if (successMessage) toast.success(successMessage);
     },
     [buildPosPrintSettingsPayload, t]
   );
@@ -1922,33 +2063,42 @@ export default function Settings() {
   const settingsOptionalTab = tab === 'users' || tab === 'delivery-map';
 
   useEffect(() => {
-    if (!visibleTabs.length) return;
+    if (!settings || !visibleTabs.length) return;
     if (isSettingsSearchQueryActive(settingsQuery) || isSettingsSearchQueryActive(normalizedQuery)) {
       return;
     }
-    if (!visibleTabs.some((item) => item.id === tab)) {
-      selectTab(visibleTabs[0].id);
+    const fromUrl = parseSettingsTabFromSearch(searchParams.toString());
+    if (!searchParams.get('tab') && fromUrl === 'business' && tab !== 'business') {
+      selectTab('business');
+      return;
     }
-  }, [selectTab, tab, visibleTabs, settingsQuery, normalizedQuery]);
+    if (!visibleTabs.some((item) => item.id === tab)) {
+      const fallback = pickSettingsTabFallback(visibleTabs);
+      if (fallback) selectTab(fallback);
+    }
+  }, [selectTab, tab, visibleTabs, settings, settingsQuery, normalizedQuery, searchParams]);
 
   if (hqSettingsBlocked) {
     return (
-      <div className="card mx-auto max-w-lg space-y-4 py-12 text-center">
+      <div className="p-3 sm:p-4">
+        <div className="card mx-auto max-w-lg space-y-4 py-12 text-center">
         <h1 className="text-xl font-semibold">{t('hqSettingsPickBranchTitle')}</h1>
         <p className="text-sm muted">{t('hqSettingsPickBranch')}</p>
         <Link to="/merchant/hq" className="btn-primary inline-flex">
           {t('navHq')}
         </Link>
+        </div>
       </div>
     );
   }
 
   if (loading && !settingsOptionalTab) {
-    return <div className="text-center py-12 muted text-sm">{t('loading')}</div>;
+    return <div className="p-3 sm:p-4 text-center py-12 muted text-sm">{t('loading')}</div>;
   }
   if (!settings && !settingsOptionalTab) {
     return (
-      <div className="card space-y-3 text-center py-8">
+      <div className="p-3 sm:p-4">
+        <div className="card space-y-3 text-center py-8">
         <p>{t('settingsLoadFailed')}</p>
         {loadError && loadError !== t('settingsLoadFailed') ? (
           <p className="text-sm muted">{loadError}</p>
@@ -1963,6 +2113,7 @@ export default function Settings() {
         >
           {t('settingsLoadRetry')}
         </button>
+        </div>
       </div>
     );
   }
@@ -2086,17 +2237,26 @@ export default function Settings() {
 
   return (
     <div
-      className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4 lg:h-full lg:min-h-0 lg:overflow-hidden"
+      className="flex w-full max-w-[1400px] flex-1 min-h-0 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">{t('settings')}</h1>
           <p className="page-sub">
-            {t('settingsFor')}{' '}
-            <span className="font-medium text-[var(--text)]">
-              {settings?.name || user?.name || '—'}
-            </span>
+            {settings?.settingsScope === 'branch' && (settings.settingsBranchName || panelLocation?.name)
+              ? t('settingsForBranch').replace(
+                  '{branch}',
+                  settings.settingsBranchName || panelLocation?.name || '—'
+                )
+              : (
+                  <>
+                    {t('settingsFor')}{' '}
+                    <span className="font-medium text-[var(--text)]">
+                      {settings?.name || user?.name || '—'}
+                    </span>
+                  </>
+                )}
           </p>
         </div>
         <label className="relative block w-full sm:max-w-sm">
@@ -2181,8 +2341,8 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="card !p-0 flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
-        <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:flex-row lg:overflow-hidden">
+      <div className="card !p-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           <aside className="sticky top-0 z-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] lg:static lg:z-auto lg:flex lg:w-56 lg:flex-col lg:border-b-0 lg:border-r">
             <nav
               className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 [-webkit-overflow-scrolling:touch] lg:flex lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:overflow-y-auto"
@@ -2217,7 +2377,7 @@ export default function Settings() {
                           title={item.label}
                           className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors whitespace-nowrap lg:w-full lg:py-2 lg:whitespace-normal ${
                             active
-                              ? 'bg-[var(--bg-muted)] text-[var(--text)]'
+                              ? 'bg-teal-50 text-teal-900 ring-1 ring-teal-100'
                               : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
                           } ${searchHit ? 'ring-1 ring-[var(--ring)]' : ''}`}
                         >
@@ -2257,7 +2417,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="min-w-0 flex-1 p-4 sm:p-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+            className="min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-0 [-webkit-overflow-scrolling:touch] lg:min-h-0"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary
@@ -2745,7 +2905,7 @@ export default function Settings() {
 
           {tab === 'users' && (
             <div className="space-y-5">
-              <SettingsPageHeader title={t('staffPageTitle')} subtitle={t('staffPageHint')} />
+              <SettingsPageHeader title={t('staffPageTitle')} subtitle={t('staffPageHintSettings')} />
               <Staff embedded kioskLicensed={isKioskLicensed(settings)} />
             </div>
           )}
@@ -3270,6 +3430,7 @@ export default function Settings() {
                 />
               </Section>
 
+              {isInventoryLicensed(settings) ? (
               <Section
                 id="inventory-addon"
                 icon={Package}
@@ -3359,7 +3520,9 @@ export default function Settings() {
                   {t('save')}
                 </button>
               </Section>
+              ) : null}
 
+              {isInventoryLicensed(settings) ? (
               <Section
                 id="storekeeper-addon"
                 icon={Package}
@@ -3378,7 +3541,9 @@ export default function Settings() {
                   </Link>
                 ) : null}
               </Section>
+              ) : null}
 
+              {isSignageLicensed(settings) ? (
               <Section
                 id="signage-addon"
                 icon={Tv}
@@ -3401,6 +3566,7 @@ export default function Settings() {
                   </button>
                 ) : null}
               </Section>
+              ) : null}
 
               {showCoursesSettings ? (
               <Section
@@ -3464,6 +3630,7 @@ export default function Settings() {
                   {(
                     [
                       ['tipsEnabled', 'tipsEnabled'],
+                      ['terminalAskGratuityEnabled', 'terminalAskGratuityEnabled'],
                       ['allowCustomTip', 'allowCustomTip'],
                       ['discountsEnabled', 'discountsEnabled'],
                       ['quickCashEnabled', 'quickCashEnabled'],
@@ -3477,7 +3644,11 @@ export default function Settings() {
                       <input
                         type="checkbox"
                         className="mt-0.5"
-                        checked={settings.posCheckoutSettings?.[key] !== false}
+                        checked={
+                          key === 'terminalAskGratuityEnabled'
+                            ? settings.posCheckoutSettings?.terminalAskGratuityEnabled === true
+                            : settings.posCheckoutSettings?.[key] !== false
+                        }
                         onChange={(e) =>
                           setSettings({
                             ...settings,
@@ -3492,6 +3663,7 @@ export default function Settings() {
                     </label>
                   ))}
                 </div>
+                <p className="text-xs text-[var(--text-muted)]">{t('terminalAskGratuityHint')}</p>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
                   <input
                     type="checkbox"
@@ -3511,6 +3683,51 @@ export default function Settings() {
                   <span>
                     <span className="font-medium">{t('expressCheckoutEnabled')}</span>
                     <span className="mt-0.5 block text-xs muted">{t('expressCheckoutEnabledHint')}</span>
+                  </span>
+                </label>
+                <Field label={t('expressPayPlacement')} hint={t('expressPayPlacementHint')}>
+                  <select
+                    className="input"
+                    value={
+                      settings.posCheckoutSettings?.expressPayPlacement === 'cart'
+                        ? 'cart'
+                        : 'product_grid'
+                    }
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posCheckoutSettings: {
+                          ...(settings.posCheckoutSettings || {}),
+                          expressPayPlacement:
+                            e.target.value === 'cart' ? 'cart' : 'product_grid',
+                        },
+                      })
+                    }
+                  >
+                    <option value="product_grid">{t('expressPayPlacementGrid')}</option>
+                    <option value="cart">{t('expressPayPlacementCart')}</option>
+                  </select>
+                </Field>
+                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={settings.posCheckoutSettings?.retailCashTenderDialogEnabled !== false}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posCheckoutSettings: {
+                          ...(settings.posCheckoutSettings || {}),
+                          retailCashTenderDialogEnabled: e.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{t('retailCashTenderDialogEnabled')}</span>
+                    <span className="mt-0.5 block text-xs muted">
+                      {t('retailCashTenderDialogEnabledHint')}
+                    </span>
                   </span>
                 </label>
                 <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
@@ -3998,8 +4215,8 @@ export default function Settings() {
                     <SettingsSaveBar saving={savingWebposPay} />
                   </form>
 
-                  <PaymentProfilesSection />
-                  <DeviceEnrollmentWizard />
+                  {!branchSwitcher ? <PaymentProfilesSection /> : null}
+                  {!branchSwitcher ? <DeviceEnrollmentWizard /> : null}
 
                   <Section
                     id="payments-terminals-list"
@@ -4350,11 +4567,23 @@ export default function Settings() {
             </form>
           )}
 
-          {tab === 'receipt' && (
+          {(tab === 'receipt' || tab === 'printers' || tab === 'scale') && (
             <form className="space-y-5" onSubmit={saveReceiptPrint}>
               <SettingsPageHeader
-                title={t('settingsNavReceipt')}
-                subtitle={t('settingsReceiptHint')}
+                title={
+                  tab === 'printers'
+                    ? t('settingsNavPrinters')
+                    : tab === 'scale'
+                      ? t('settingsNavScale')
+                      : t('settingsNavReceipt')
+                }
+                subtitle={
+                  tab === 'receipt'
+                    ? t('settingsReceiptHint')
+                    : tab === 'printers'
+                      ? t('settingsPrintersSubtitle')
+                      : t('settingsScaleHint')
+                }
                 action={
                   <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={savingReceipt}>
                     <Save className="h-4 w-4" aria-hidden />
@@ -4362,6 +4591,26 @@ export default function Settings() {
                   </button>
                 }
               />
+              <div
+                className={
+                  tab === 'receipt'
+                    ? 'grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(260px,340px)]'
+                    : 'space-y-5'
+                }
+              >
+              <div className="space-y-5 min-w-0">
+              <SettingsPrintCompanionSection
+                printBridgeManifest={printBridgeManifest}
+                printAgentManifest={printAgentManifest}
+                printAgentOk={printAgentOk}
+                printAgentHealthChecked={printAgentHealthChecked}
+                installedPrintCompanionVersion={installedPrintCompanionVersion}
+                printAgentOutdated={printAgentOutdated}
+                desktopBundledSidecarOk={desktopBundledSidecarOk}
+                onRefresh={() => void refreshPrintAgentPrinters()}
+                refreshing={refreshingPrinters}
+              />
+              {tab === 'receipt' && (
               <Section icon={ScrollText} accent={settingsDash.accent} title={t('settingsNavReceipt')} description={t('settingsReceiptHint')}>
                 <Field label={t('receiptLanguage')}>
                   <select
@@ -4467,10 +4716,12 @@ export default function Settings() {
                   />
                   {t('receiptShowGoogleReviewQr')}
                 </label>
-                {showScaleSettings ? (
-                  <>
-                <Field label={t('settingsScaleTitle')} hint={t('settingsScaleHint')}>
-                  <div className="space-y-3">
+              </Section>
+              )}
+
+              {tab === 'scale' && showScaleSettings && (
+              <Section icon={Weight} accent={settingsDash.accent} title={t('settingsScaleTitle')} description={t('settingsScaleHint')}>
+                <div id="settings-scale" className="space-y-3">
                     {(() => {
                       const savedUsb = sanitizeScaleUsbAddress(
                         settings.posPrintSettings?.scaleUsbAddress
@@ -4573,8 +4824,7 @@ export default function Settings() {
                     ) : scalePortsScanned && printAgentOk && !scanningScalePorts ? (
                       <p className="text-sm m-0 text-[var(--text-muted)]">{t('settingsScaleNoPorts')}</p>
                     ) : null}
-                  </div>
-                </Field>
+                </div>
                 <Field
                   label="Scale USB address (Bridge Reborn)"
                   hint={t('settingsScaleUsbHint')}
@@ -4600,8 +4850,15 @@ export default function Settings() {
                     }}
                   />
                 </Field>
-                  </>
-                ) : null}
+              </Section>
+              )}
+
+              {tab === 'scale' && !showScaleSettings && (
+                <p className="text-sm text-[var(--text-muted)]">{t('settingsScaleUnavailable')}</p>
+              )}
+
+              {tab === 'receipt' && (
+              <Section icon={ScrollText} accent={settingsDash.accent} title={t('settingsReceiptDesign')}>
                 <Field label={t('receiptLogoUpload')} hint={t('receiptLogoUploadHint')}>
                   <div className="space-y-2">
                     {(settings.posPrintSettings?.receiptLogoUrl || settings.shopLogoUrl) && (
@@ -4711,21 +4968,28 @@ export default function Settings() {
                     <span className="text-sm text-[var(--muted-fg)]">px</span>
                   </div>
                 </Field>
-                <Field label={t('receiptHeader')} hint={t('receiptHeaderMultilineHint')}>
-                  <textarea
-                    className="input min-h-[6rem] font-mono text-sm"
-                    value={settings.posPrintSettings?.receiptHeader || ''}
-                    placeholder={settings.name || ''}
-                    onChange={(e) =>
+                <Field label={t('receiptHeader')} hint={t('receiptHeaderRichHint')}>
+                  <HugeRteEditor
+                    variant="compact"
+                    minHeight={160}
+                    placeholder={t('receiptHeaderEmptyUsesShopDetails')}
+                    value={
+                      receiptHeaderHtmlForEditor(settings.posPrintSettings?.receiptHeader) ||
+                      settings.posPrintSettings?.receiptHeader ||
+                      ''
+                    }
+                    onChange={(html) => {
+                      const plain = receiptHeaderContentToPlainText(html).trim();
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
                           receiptHeaderTitle: '',
-                          receiptHeader: e.target.value,
+                          receiptHeader: plain ? html : '',
+                          receiptHeaderLines: plain ? splitReceiptHeaderTextToLines(html) : [],
                         },
-                      })
-                    }
+                      });
+                    }}
                   />
                 </Field>
                 <Field label={t('receiptHeaderAlign')}>
@@ -4747,41 +5011,61 @@ export default function Settings() {
                     <option value="right">{t('receiptHeaderAlignRight')}</option>
                   </select>
                 </Field>
-                <Field label={t('receiptHeaderTextScale')} hint={t('kitchenTextScaleHint')}>
+                <Field label={t('receiptHeaderTextScale')} hint={t('receiptHeaderTitlePxHint')}>
                   <select
                     className="input max-w-xs"
-                    value={settings.posPrintSettings?.receiptHeaderTextScale ?? 1}
-                    onChange={(e) =>
+                    value={receiptHeaderPixelSizesFromSettings(settings.posPrintSettings).titlePx}
+                    onChange={(e) => {
+                      const receiptHeaderTitlePx = clampReceiptHeaderTitlePx(e.target.value);
+                      const detailPx = receiptHeaderPixelSizesFromSettings(
+                        settings.posPrintSettings
+                      ).detailPx;
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
-                          receiptHeaderTextScale: Number(e.target.value) as 1 | 2 | 3,
+                          receiptHeaderTitlePx,
+                          receiptHeaderDetailPx: detailPx,
+                          receiptHeaderBold: true,
+                          receiptHeaderTextScale: receiptHeaderTextScaleFromTitlePx(receiptHeaderTitlePx),
                         },
-                      })
-                    }
+                      });
+                    }}
                   >
-                    <option value={1}>{t('kitchenScaleNormal')}</option>
-                    <option value={2}>{t('kitchenScaleLarge')}</option>
-                    <option value={3}>{t('kitchenScaleXLarge')}</option>
+                    {RECEIPT_HEADER_PX_CHOICES.map((px) => (
+                      <option key={px} value={px}>
+                        {px} px
+                      </option>
+                    ))}
                   </select>
                 </Field>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settings.posPrintSettings?.receiptHeaderBold === true}
-                    onChange={(e) =>
+                <Field label={t('receiptHeaderDetailPx')} hint={t('receiptHeaderDetailPxHint')}>
+                  <select
+                    className="input max-w-xs"
+                    value={receiptHeaderPixelSizesFromSettings(settings.posPrintSettings).detailPx}
+                    onChange={(e) => {
+                      const receiptHeaderDetailPx = clampReceiptHeaderDetailPx(e.target.value);
+                      const titlePx = receiptHeaderPixelSizesFromSettings(
+                        settings.posPrintSettings
+                      ).titlePx;
                       setSettings({
                         ...settings,
                         posPrintSettings: {
                           ...(settings.posPrintSettings || {}),
-                          receiptHeaderBold: e.target.checked,
+                          receiptHeaderTitlePx: titlePx,
+                          receiptHeaderDetailPx,
+                          receiptHeaderBold: true,
                         },
-                      })
-                    }
-                  />
-                  {t('receiptHeaderBold')}
-                </label>
+                      });
+                    }}
+                  >
+                    {RECEIPT_HEADER_PX_CHOICES.map((px) => (
+                      <option key={px} value={px}>
+                        {px} px
+                      </option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label={t('receiptFooter')}>
                   <textarea
                     className="input min-h-[4rem]"
@@ -4797,6 +5081,56 @@ export default function Settings() {
                     }
                   />
                 </Field>
+                <Field label={t('receiptTemplate')}>
+                  <select
+                    className="input max-w-xs"
+                    value={normalizeReceiptTemplateName(settings.posPrintSettings?.receiptTemplateName)}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptTemplateName: normalizeReceiptTemplateName(e.target.value),
+                        },
+                      })
+                    }
+                  >
+                    <option value="Default">{t('receiptTemplateDefault')}</option>
+                  </select>
+                </Field>
+                <p className="text-sm font-semibold text-[var(--text)] m-0 pt-1">{t('receiptDisplayOptions')}</p>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {(
+                    [
+                      ['receiptShowVatTable', t('receiptShowVat')],
+                      ['receiptShowStaffLine', t('receiptShowStaff')],
+                      ['receiptShowQrCode', t('receiptShowQr')],
+                      ['receiptDeliveryDirectionsQr', t('receiptDeliveryDirectionsQr')],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={settings.posPrintSettings?.[key] !== false}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            posPrintSettings: {
+                              ...(settings.posPrintSettings || {}),
+                              [key]: e.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </Section>
+              )}
+
+              {tab === 'printers' && (
+              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsPrintRoutingTitle')} description={t('settingsReceiptSubtitleShort')}>
                 <Field label={t('kitchenTicketHeader')}>
                   <textarea
                     className="input min-h-[3rem]"
@@ -4826,6 +5160,25 @@ export default function Settings() {
                       })
                     }
                   />
+                </Field>
+                <Field label={t('receiptBodyTextScale')} hint={t('receiptBodyTextScaleHint')}>
+                  <select
+                    className="input max-w-xs"
+                    value={settings.posPrintSettings?.receiptBodyTextScale ?? 1}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: {
+                          ...(settings.posPrintSettings || {}),
+                          receiptBodyTextScale: Number(e.target.value) as 1 | 2 | 3,
+                        },
+                      })
+                    }
+                  >
+                    <option value={1}>{t('kitchenScaleNormal')}</option>
+                    <option value={2}>{t('kitchenScaleLarge')}</option>
+                    <option value={3}>{t('kitchenScaleXLarge')}</option>
+                  </select>
                 </Field>
                 <Field label={t('kitchenItemTextScale')} hint={t('kitchenTextScaleHint')}>
                   <select
@@ -5064,63 +5417,86 @@ export default function Settings() {
                   </span>
                 </label>
               </Section>
+              )}
 
-              {!isAndroidDevice() && !isDesktopApp() ? (
-                <Section
-                  icon={Monitor}
-                  accent={settingsDash.accent}
-                  title={t('desktopAppDownload')}
-                  description={t('desktopAppDownloadHint')}
-                >
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      {rebornPosManifest?.available === false ? (
-                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                          {rebornPosManifest.message || t('desktopAppNotPublished')}
-                        </p>
-                      ) : (
-                        <a
-                          className="btn-primary inline-flex"
-                          href={rebornPosManifest?.downloadUrl || rebornPosDownloadUrl()}
-                          download="reborn-pos-setup.exe"
-                        >
-                          {rebornPosManifest?.version
-                            ? t('downloadDesktopAppVersion').replace(
-                                '{version}',
-                                rebornPosManifest.version
-                              )
-                            : t('downloadDesktopApp')}
-                        </a>
-                      )}
-                    </div>
-                    {rebornPosManifest?.version ? (
-                      <p className="text-sm text-emerald-800 max-w-xl m-0">
-                        {t('desktopAppCurrentVersion').replace('{version}', rebornPosManifest.version)}
-                      </p>
-                    ) : null}
-                    <p className="text-sm text-[var(--muted)] max-w-xl m-0">{t('desktopAppInstallSteps')}</p>
+              {tab === 'printers' && (
+              <>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--text)] m-0">{t('settingsPrintersSummaryTitle')}</p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1 m-0">
+                      {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length}{' '}
+                      {t('settingsPrintersConfigured')}
+                      {' · '}
+                      {printAgentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
+                    </p>
                   </div>
-                </Section>
-              ) : null}
-
-              <SettingsSaveBar saving={savingReceipt} />
-            </form>
-          )}
-
-          {tab === 'printers' && (
-            <form className="space-y-5" onSubmit={saveReceiptPrint}>
-              <SettingsPageHeader
-                title={t('settingsNavPrinters')}
-                subtitle={t('printerProfilesHint')}
-                action={
-                  <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={savingReceipt}>
-                    <Save className="h-4 w-4" aria-hidden />
-                    {savingReceipt ? t('saving') : t('save')}
+                  <button
+                    type="button"
+                    className="btn-primary text-sm"
+                    onClick={() => {
+                      const printers = [
+                        ...(settings.posPrintSettings?.printers || []),
+                        {
+                          id: `p-${Date.now()}`,
+                          name: '',
+                          enabled: true,
+                          paperWidthMm: 80 as const,
+                          printReceipts: true,
+                          printKitchenTickets: false,
+                          printEndOfDayReports: false,
+                          printLabels: false,
+                          printAllProducts: true,
+                        },
+                      ];
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                      });
+                    }}
+                  >
+                    {t('addPrinterProfile')}
                   </button>
-                }
-              />
+                </div>
+              </div>
 
-              <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')} description={t('printerProfilesHint')}>
+              <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')}>
+                <div id="settings-printers">
+                {(() => {
+                  const configured = (settings.posPrintSettings?.printers || []).filter((p) =>
+                    p.name?.trim()
+                  );
+                  let connected = 0;
+                  let attention = 0;
+                  for (const p of configured) {
+                    const missing = isConfiguredPrinterMissing(p.name, agentPrinters, {
+                      agentOk: printAgentOk,
+                      printersReady: agentPrinters.length > 0,
+                      portName: p.portName,
+                      matchHint: p.matchHint,
+                    });
+                    if (missing) attention += 1;
+                    else connected += 1;
+                  }
+                  if (!configured.length) return null;
+                  return (
+                    <p className="mb-3 text-sm font-medium text-[var(--text-muted)] m-0">
+                      {t('settingsPrintersStatusSummary')
+                        .replace('{connected}', String(connected))
+                        .replace('{attention}', String(attention))}
+                    </p>
+                  );
+                })()}
+                {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length ===
+                0 ? (
+                  <div className="mb-4 space-y-3">
+                    <p className="text-sm text-[var(--text-muted)] m-0">{t('settingsPrinterDemoHint')}</p>
+                    {SETTINGS_DEMO_PRINTER_ROWS.map((row) => (
+                      <SettingsDemoPrinterRow key={row.id} row={row} />
+                    ))}
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-3 mb-3">
                   <button
                     type="button"
@@ -5176,40 +5552,109 @@ export default function Settings() {
                     ? findPrinterHealCandidates(p.name, agentPrinters)
                     : [];
                   const useDropdown = printAgentOk && agentPrinters.length > 0;
+                  const savedPrinterName = String(p.name || '').trim();
+                  const selectValue =
+                    savedNameMissing || !savedPrinterName
+                      ? ''
+                      : resolveAgentPrinterSelectValue(p.name, p.matchHint, agentPrintersForPick);
+                  const conn = inferPrinterConnectionMeta(p.name, p.portName);
                   return (
-                  <div
-                    key={p.id}
-                    className="rounded-xl border border-[var(--border)] p-3 space-y-2"
-                  >
+                  <div key={p.id} className="space-y-2">
+                    <SettingsPrinterProfileRow
+                      profile={p}
+                      connectionDetail={conn.detail}
+                      connectionKind={conn.kind}
+                      status={savedNameMissing ? 'attention' : 'connected'}
+                      testing={testingPrinterId === p.id}
+                      expanded={expandedPrinterId === p.id}
+                      onTest={() => void testPrinterProfile(p)}
+                      onEdit={() =>
+                        setExpandedPrinterId((id) => (id === p.id ? null : p.id))
+                      }
+                      onDelete={() => {
+                        const printers = (settings.posPrintSettings?.printers || []).filter(
+                          (_, i) => i !== idx
+                        );
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                        });
+                        if (expandedPrinterId === p.id) setExpandedPrinterId(null);
+                      }}
+                    />
+                    {expandedPrinterId === p.id ? (
+                    <div className="rounded-xl border border-[var(--border)] p-3 space-y-2 bg-[var(--bg-muted)]/40">
                     <Field
                       label={t('printerName')}
-                      hint={useDropdown ? undefined : t('settingsPrinterManualEntry')}
+                      hint={
+                        useDropdown
+                          ? selectValue
+                            ? undefined
+                            : t('settingsPrinterBridgeDefaultHint')
+                          : t('settingsPrinterManualEntry')
+                      }
                     >
                       {useDropdown ? (
                         <select
                           className="input"
-                          value={savedNameMissing ? '' : p.name}
+                          value={selectValue}
                           onChange={(e) => {
                             const printers = [...(settings.posPrintSettings?.printers || [])];
-                            const picked = agentPrinters.find((ap) => ap.name === e.target.value);
-                            printers[idx] = {
-                              ...p,
-                              name: e.target.value,
-                              portName: picked?.portName || null,
-                              matchHint: picked?.matchHint || picked?.driverName || null,
-                            };
-                            setSettings({
+                            const raw = e.target.value;
+                            if (!raw) {
+                              printers[idx] = {
+                                ...p,
+                                name: '',
+                                portName: null,
+                                matchHint: null,
+                              };
+                            } else {
+                              const picked = agentPrinters.find(
+                                (ap) =>
+                                  ap.name === raw || (ap.id && ap.id === raw)
+                              );
+                              printers[idx] = {
+                                ...p,
+                                name: picked?.name || raw,
+                                portName: picked?.portName || null,
+                                matchHint:
+                                  picked?.id ||
+                                  (picked?.connectionType === 'bluetooth' && picked?.address
+                                    ? picked.address
+                                    : picked?.matchHint || picked?.driverName || null),
+                              };
+                            }
+                            const nextSettings = {
                               ...settings,
                               posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            };
+                            setSettings(nextSettings);
+                            // Save the queue immediately. The page Save button is easy to
+                            // miss, and a later refresh used to write the old printer back.
+                            void persistPosPrintSettings(nextSettings, '').catch((error: unknown) => {
+                              const msg =
+                                error && typeof error === 'object' && 'response' in error
+                                  ? String(
+                                      (error as { response?: { data?: { error?: string } } }).response?.data
+                                        ?.error || ''
+                                    )
+                                  : '';
+                              toast.error(msg || t('failedSaveReceipt'));
                             });
                           }}
                         >
                           <option value="">{t('webPosDefaultPrinter')}</option>
-                          {agentPrinters.map((ap) => {
+                          {savedPrinterName &&
+                          selectValue === savedPrinterName &&
+                          !agentPrintersForPick.some((ap) => agentPrinterOptionValue(ap) === selectValue) ? (
+                            <option value={savedPrinterName}>{savedPrinterName}</option>
+                          ) : null}
+                          {agentPrintersForPick.map((ap) => {
                             const bad = isUnsuitableRawPrinter(ap.name);
+                            const optionValue = agentPrinterOptionValue(ap);
                             return (
-                              <option key={ap.name} value={ap.name}>
-                                {ap.name}
+                              <option key={optionValue} value={optionValue}>
+                                {formatAgentPrinterOptionLabel(ap)}
                                 {ap.portName ? ` · ${ap.portName}` : ''}
                                 {ap.isDefault ? t('webPosDefaultSuffix') : ''}
                                 {bad ? t('webPosPrinterNotThermal') : ''}
@@ -5314,32 +5759,8 @@ export default function Settings() {
                         />
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        className="btn-secondary inline-flex items-center gap-2 text-sm"
-                        disabled={!p.name?.trim() || testingPrinterId === p.id}
-                        onClick={() => void testPrinterProfile(p)}
-                      >
-                        <Printer size={14} />
-                        {testingPrinterId === p.id ? t('loading') : t('testPrinter')}
-                      </button>
-                      <button
-                        type="button"
-                        className="text-xs text-red-600"
-                        onClick={() => {
-                          const printers = (settings.posPrintSettings?.printers || []).filter(
-                            (_, i) => i !== idx
-                          );
-                          setSettings({
-                            ...settings,
-                            posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                          });
-                        }}
-                      >
-                        {t('delete')}
-                      </button>
                     </div>
+                    ) : null}
                   </div>
                   );
                 })}
@@ -5369,108 +5790,6 @@ export default function Settings() {
                 >
                   {t('addPrinterProfile')}
                 </button>
-              </Section>
-
-              <Section
-                icon={Printer}
-                accent={settingsDash.info}
-                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentOptionalTitle')}
-                description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
-              >
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    {preferredPrintCompanion() !== 'android-bridge' &&
-                    !(isDesktopApp() && desktopBundledSidecarOk) ? (
-                      <a
-                        className="btn-secondary inline-flex"
-                        href={printAgentDownloadUrl()}
-                        download="reborn-print-agent-setup.exe"
-                      >
-                        {t('downloadPrintAgent')}
-                      </a>
-                    ) : isDesktopApp() && desktopBundledSidecarOk ? (
-                      <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                        {t('desktopSettingsHidePrintAgentDownload')}
-                      </p>
-                    ) : null}
-                    {preferredPrintCompanion() !== 'windows-agent' ? (
-                      printBridgeManifest?.versionMismatch ? (
-                        <p className="text-sm text-amber-900 max-w-xl m-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                          {t('printBridgeApkNotPublished')
-                            .replace('{apkVersion}', String(printBridgeManifest.version || ''))
-                            .replace(
-                              '{declaredVersion}',
-                              String(printBridgeManifest.declaredVersion || printBridgeManifest.version || '')
-                            )}
-                        </p>
-                      ) : printBridgeManifest?.available === false ? (
-                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                          {printBridgeManifest.message ||
-                            'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
-                        </p>
-                      ) : isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) &&
-                        printBridgeManifest?.version &&
-                        compareAgentVersion(
-                          String(installedPrintCompanionVersion || ''),
-                          String(printBridgeManifest.version)
-                        ) >= 0 ? (
-                        <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                          {t('printBridgeAlreadyInstalled').replace(
-                            '{version}',
-                            installedPrintCompanionVersion || ''
-                          )}
-                        </p>
-                      ) : isAndroidDevice() ? (
-                        <button
-                          type="button"
-                          className="btn-primary inline-flex"
-                          onClick={() =>
-                            openPrintBridgeApkInstall(
-                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
-                            )
-                          }
-                        >
-                          {t('installPrintBridge')}
-                        </button>
-                      ) : (
-                        <a
-                          className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
-                          href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                        >
-                          {t('downloadPrintBridge')}
-                        </a>
-                      )
-                    ) : null}
-                  </div>
-                  <div className="space-y-1">
-                    {preferredPrintCompanion() !== 'android-bridge' ? (
-                      <PrintCompanionVersionStatus
-                        kind="windows-agent"
-                        installedVersion={installedPrintCompanionVersion}
-                        serverVersion={printAgentManifest?.version}
-                        downloadUrl={printAgentDownloadUrl()}
-                        agentChecked={printAgentHealthChecked}
-                        agentOk={printAgentOk}
-                      />
-                    ) : null}
-                    {preferredPrintCompanion() !== 'windows-agent' &&
-                    printBridgeManifest?.available !== false ? (
-                      <PrintCompanionVersionStatus
-                        kind="android-bridge"
-                        installedVersion={installedPrintCompanionVersion}
-                        serverVersion={printBridgeManifest?.version}
-                        declaredVersion={printBridgeManifest?.declaredVersion}
-                        versionMismatch={printBridgeManifest?.versionMismatch}
-                        downloadUrl={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                        onAndroid={isAndroidDevice()}
-                        agentChecked={printAgentHealthChecked}
-                        agentOk={printAgentOk}
-                      />
-                    ) : null}
-                  </div>
-                  <p className="text-sm text-[var(--muted)] max-w-xl m-0">
-                    {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}
-                  </p>
                 </div>
               </Section>
 
@@ -5645,8 +5964,14 @@ export default function Settings() {
                 </div>
               </Section>
               ) : null}
+              </>
+              )}
 
-              <SettingsSaveBar saving={savingReceipt} />
+              </div>
+              {settings && tab === 'receipt' ? <ReceiptThermalPreview settings={settings} /> : null}
+              </div>
+
+              {tab !== 'receipt' ? <SettingsSaveBar saving={savingReceipt} /> : null}
             </form>
           )}
 
@@ -5696,7 +6021,15 @@ export default function Settings() {
             </div>
           )}
 
-          {tab === 'language' && (
+          {tab === 'extra-modules' && settings ? (
+            <SettingsExtraModulesTab settings={settings} isRetailMerchant={isRetailMerchant} />
+          ) : null}
+
+          {(tab === 'about' || tab === 'license') && settings ? (
+            <SettingsAboutTab settings={settings} isRetailMerchant={isRetailMerchant} />
+          ) : null}
+
+          {(tab === 'language' || tab === 'appearance') && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('language')} subtitle={t('languageSettingsHint')} />
               <Section icon={Languages} accent={settingsDash.accent} title={t('language')} description={t('languageSettingsHint')}>
@@ -5758,6 +6091,7 @@ export default function Settings() {
           </div>
         </div>
       </div>
+      <RebornPoweredByFooter variant="panel" className="shrink-0 rounded-b-xl" />
     </div>
   );
 }

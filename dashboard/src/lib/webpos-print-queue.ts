@@ -4,7 +4,10 @@
  */
 import { useEffect, useState } from 'react';
 import { friendlyPrintAgentError, listAgentPrinters, printViaAgent, resolveLivePrinterName } from '@/lib/print-agent';
-import { isValidAgentRawPrintBase64 } from '@/lib/escpos-payload';
+import {
+  isValidAgentRawPrintBase64,
+  normalizeAgentPrintBase64,
+} from './escpos-payload';
 
 function safeJobError(error: unknown, printerName?: string): string {
   return friendlyPrintAgentError(error, printerName);
@@ -91,6 +94,7 @@ function loadJobs(): PendingPrintJob[] {
     const cutoff = Date.now() - MAX_AGE_MS;
     return parsed
       .filter((j) => j && typeof j.id === 'string' && typeof j.dataBase64 === 'string')
+      .filter((j) => isValidAgentRawPrintBase64(normalizeAgentPrintBase64(j.dataBase64)))
       .filter((j) => (j.createdAt || 0) >= cutoff)
       .slice(0, MAX_JOBS)
       .map((j) =>
@@ -233,30 +237,16 @@ export function enqueueFailedPrintJob(input: {
   orderId?: string | null;
   lineIds?: string[];
   error?: unknown;
-}): PendingPrintJob {
-  if (!isValidAgentRawPrintBase64(input.dataBase64)) {
-    const lastError =
-      safeJobError(input.error, input.printerName) ||
-      'Print payload corrupt — not queued for retry.';
-    const job: PendingPrintJob = {
-      id: newId(),
-      kind: input.kind || 'other',
-      label: (input.label || '').trim() || defaultLabel(input.kind || 'other', input.orderId),
-      createdAt: Date.now(),
-      lastAttemptAt: Date.now(),
-      attempts: retryConfig.maxAttempts,
-      lastError,
-      dataBase64: input.dataBase64,
-      printerName: input.printerName || undefined,
-      exhausted: true,
-    };
-    jobs = [job, ...jobs].slice(0, MAX_JOBS);
-    persist();
-    return job;
+}): PendingPrintJob | null {
+  const dataBase64 = normalizeAgentPrintBase64(input.dataBase64);
+  if (!isValidAgentRawPrintBase64(dataBase64)) {
+    return null;
   }
   const lastError = safeJobError(input.error, input.printerName);
   const existing = jobs.find(
-    (j) => j.dataBase64 === input.dataBase64 && (j.printerName || '') === (input.printerName || '')
+    (j) =>
+      normalizeAgentPrintBase64(j.dataBase64) === dataBase64 &&
+      (j.printerName || '') === (input.printerName || '')
   );
   if (existing) {
     existing.lastError = lastError || existing.lastError;
@@ -279,7 +269,7 @@ export function enqueueFailedPrintJob(input: {
     lastAttemptAt: Date.now(),
     attempts: 1,
     lastError: lastError || undefined,
-    dataBase64: input.dataBase64,
+    dataBase64,
     printerName: input.printerName || undefined,
     text: input.text,
     orderId: input.orderId || null,

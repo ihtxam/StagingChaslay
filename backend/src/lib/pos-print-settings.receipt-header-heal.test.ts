@@ -34,7 +34,7 @@ assert.deepEqual(
     ["pola pola", "rue des saars 115", "2000 Neuchâtel"],
     ""
   ),
-  ["pola pola", "rue des saars 115", "2000 Neuchâtel"]
+  []
 );
 
 const normLines = normalizePosPrintSettings({

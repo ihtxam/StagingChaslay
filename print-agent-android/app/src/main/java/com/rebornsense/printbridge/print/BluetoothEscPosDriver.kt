@@ -95,7 +95,9 @@ class BluetoothEscPosDriver : PrinterDriver {
         val (body, cutSuffix) = splitCutSuffix(data)
         if (body.isNotEmpty()) {
             writePaced(socket, body, chunkSize = BT_CHUNK_SIZE, delayMs = BT_CHUNK_DELAY_MS)
-            val drainMs = (400L + body.size / 20L).coerceAtMost(2_500L)
+            // Short drain so the head can catch the buffer before GS V. A long sleep
+            // here is the "prints a bit, stalls, then dumps the rest" burp.
+            val drainMs = (80L + body.size / 80L).coerceAtMost(450L)
             Thread.sleep(drainMs)
         }
         val cutBytes = if (cutSuffix.isNotEmpty()) cutSuffix else btCutTrailer
@@ -103,25 +105,29 @@ class BluetoothEscPosDriver : PrinterDriver {
         Thread.sleep(120)
     }
 
-    /** Mirror Windows Split-CutSuffix — GS V / ESC m only (never ESC d; kitchen tickets use feed-only tails). */
+    /** Cut commands only, and only in the tail. Raster/QR bytes can contain 0x1D 0x56 by chance. */
     private fun splitCutSuffix(data: ByteArray): Pair<ByteArray, ByteArray> {
-        if (data.size < 4) return data to byteArrayOf()
-        val start = maxOf(0, data.size - 96)
-        var i = data.size - 1
+        if (data.size < 3) return data to byteArrayOf()
+        val start = maxOf(0, data.size - 24)
+        var i = data.size - 3
         while (i >= start) {
-            if (data[i] == 0x1D.toByte() && i + 1 < data.size && data[i + 1] == 0x56.toByte()) {
-                val body = data.copyOfRange(0, i)
-                val trail = data.copyOfRange(i, data.size)
-                return body to trail
-            }
-            if (data[i] == 0x1B.toByte() && i + 1 < data.size && data[i + 1] == 0x6D.toByte()) {
-                val body = data.copyOfRange(0, i)
-                val trail = data.copyOfRange(i, data.size)
-                return body to trail
+            if (isRealCutAt(data, i)) {
+                return data.copyOfRange(0, i) to data.copyOfRange(i, data.size)
             }
             i--
         }
         return data to byteArrayOf()
+    }
+
+    private fun isRealCutAt(data: ByteArray, i: Int): Boolean {
+        if (i < 0 || i + 1 >= data.size) return false
+        if (data[i] == 0x1B.toByte() && (data[i + 1] == 0x69.toByte() || data[i + 1] == 0x6D.toByte())) {
+            return true
+        }
+        if (i + 2 >= data.size) return false
+        if (data[i] != 0x1D.toByte() || data[i + 1] != 0x56.toByte()) return false
+        val mode = data[i + 2].toInt() and 0xFF
+        return mode == 0x00 || mode == 0x01 || mode == 0x30 || mode == 0x31 || mode == 0x41 || mode == 0x42
     }
 
     private fun writePaced(
@@ -210,7 +216,7 @@ class BluetoothEscPosDriver : PrinterDriver {
 
     companion object {
         private const val SOCKET_KEEP_MS = 12_000L
-        private const val BT_CHUNK_SIZE = 128
-        private const val BT_CHUNK_DELAY_MS = 40L
+        private const val BT_CHUNK_SIZE = 512
+        private const val BT_CHUNK_DELAY_MS = 12L
     }
 }

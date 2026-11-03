@@ -25,7 +25,9 @@ import {
 import { toastPrintError } from '@/lib/webpos-print-toast';
 import {
   EodIncludeProductsCheckbox,
+  EodIncludeStaffPerformanceCheckbox,
   useEodIncludeProductsSold,
+  useEodIncludeStaffPerformance,
 } from '@/components/EodIncludeProductsCheckbox';
 import {
   CashDrawerBreakdown,
@@ -116,6 +118,7 @@ export default function ReportsPage() {
   const [businessName, setBusinessName] = useState('');
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
   const [eodIncludeProductsSold, setEodIncludeProductsSold] = useEodIncludeProductsSold();
+  const [eodIncludeStaffPerformance, setEodIncludeStaffPerformance] = useEodIncludeStaffPerformance();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [emailSettings, setEmailSettings] = useState<ReportEmailSettings>({
@@ -337,6 +340,11 @@ export default function ReportsPage() {
         header: printSettings?.receiptHeader,
         footer: printSettings?.receiptFooter,
         includeProductsSold: eodIncludeProductsSold,
+        includeStaffPerformance: !ownOnly && eodIncludeStaffPerformance,
+        userPerformance: report.userPerformance,
+        staffPerformanceTitle: t('reportsTabUsers'),
+        staffNameLabel: (name) =>
+          name === 'Unassigned' ? t('reportsUnassignedSales') : name,
         reportKind: 'eod',
       });
       const names =
@@ -425,10 +433,18 @@ export default function ReportsPage() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <EodIncludeProductsCheckbox
-            checked={eodIncludeProductsSold}
-            onChange={setEodIncludeProductsSold}
-          />
+          <div className="flex flex-col gap-2 sm:max-w-xs">
+            <EodIncludeProductsCheckbox
+              checked={eodIncludeProductsSold}
+              onChange={setEodIncludeProductsSold}
+            />
+            {!ownOnly ? (
+              <EodIncludeStaffPerformanceCheckbox
+                checked={eodIncludeStaffPerformance}
+                onChange={setEodIncludeStaffPerformance}
+              />
+            ) : null}
+          </div>
           <button
             type="button"
             className="btn-secondary inline-flex items-center gap-1.5"

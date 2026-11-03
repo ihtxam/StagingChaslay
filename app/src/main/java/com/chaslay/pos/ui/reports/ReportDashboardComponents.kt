@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.reports
+import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,8 +16,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,24 +28,52 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chaslay.pos.R
+import com.chaslay.pos.domain.model.EodStaffSummaryRow
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosShapes
 import java.util.Locale
 
-internal object ReportDashColors {
-    val SurfaceDeep = Color(0xFFF7F7F7)
-    val SurfaceDeeper = Color(0xFFFFFFFF)
-    val HairlineLight = Color(0x1A000000)
-    val HairlineSoft = Color(0x0F000000)
-    val Accent = Color(0xFF13A99A)
-    val OnAccent = Color(0xFFFFFFFF)
-    val TextPrimary = Color(0xFF121826)
-    val TextSecondary = Color(0xFF556377)
-    val TextMuted = Color(0xFF8896A8)
-    val Success = Color(0xFF1F8F55)
-    val Warning = Color(0xFFB8862F)
-    val Danger = Color(0xFFD64545)
-    val Info = Color(0xFF3477D1)
+@Immutable
+internal data class ReportDashPalette(
+    val SurfaceDeep: Color,
+    val SurfaceDeeper: Color,
+    val HairlineLight: Color,
+    val HairlineSoft: Color,
+    val Accent: Color,
+    val OnAccent: Color,
+    val TextPrimary: Color,
+    val TextSecondary: Color,
+    val TextMuted: Color,
+    val Success: Color,
+    val Warning: Color,
+    val Danger: Color,
+    val Info: Color,
+)
+
+@Composable
+@ReadOnlyComposable
+internal fun reportDashColors(): ReportDashPalette {
+    val ui = posUiColors()
+    val scheme = MaterialTheme.colorScheme
+    return ReportDashPalette(
+        SurfaceDeep = ui.canvas,
+        SurfaceDeeper = ui.surface,
+        HairlineLight = ui.border,
+        HairlineSoft = ui.surfaceMuted,
+        Accent = scheme.primary,
+        OnAccent = scheme.onPrimary,
+        TextPrimary = ui.textPrimary,
+        TextSecondary = ui.textSecondary,
+        TextMuted = ui.textMuted,
+        Success = PosColors.Success,
+        Warning = PosColors.Warning,
+        Danger = PosColors.Danger,
+        Info = PosColors.Info,
+    )
 }
 
 internal val ReportMonoFont = FontFamily.Monospace
@@ -74,9 +106,9 @@ internal fun ReportKpiCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(ReportDashColors.SurfaceDeeper)
-            .border(1.dp, ReportDashColors.HairlineLight, RoundedCornerShape(14.dp))
+            .clip(PosShapes.Card)
+            .background(reportDashColors().SurfaceDeeper)
+            .border(1.dp, reportDashColors().HairlineLight, PosShapes.Card)
             .padding(16.dp),
     ) {
         Box(
@@ -91,7 +123,7 @@ internal fun ReportKpiCard(
         Spacer(Modifier.size(10.dp))
         Text(
             label,
-            color = ReportDashColors.TextSecondary,
+            color = reportDashColors().TextSecondary,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.4.sp,
@@ -99,7 +131,7 @@ internal fun ReportKpiCard(
         Spacer(Modifier.size(4.dp))
         Text(
             value,
-            color = if (muted) ReportDashColors.TextMuted else ReportDashColors.TextPrimary,
+            color = if (muted) reportDashColors().TextMuted else reportDashColors().TextPrimary,
             fontSize = 19.sp,
             fontWeight = FontWeight.ExtraBold,
             fontFamily = ReportMonoFont,
@@ -120,18 +152,23 @@ internal fun ReportBreakdownCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(ReportDashColors.SurfaceDeeper)
-            .border(1.dp, ReportDashColors.HairlineLight, RoundedCornerShape(14.dp))
+            .background(reportDashColors().SurfaceDeeper)
+            .border(1.dp, reportDashColors().HairlineLight, RoundedCornerShape(14.dp))
             .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text(title, color = ReportDashColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            Text(title, color = reportDashColors().TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
         }
         Spacer(Modifier.size(12.dp))
         if (rows.isEmpty()) {
-            Text("No data", color = ReportDashColors.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                stringResource(R.string.report_no_data),
+                color = reportDashColors().TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         } else {
             rows.forEach { row ->
                 val pct = if (total > 0.0) (row.total / total * 100.0) else 0.0
@@ -143,7 +180,7 @@ internal fun ReportBreakdownCard(
                 ) {
                     Text(
                         row.label,
-                        color = ReportDashColors.TextPrimary,
+                        color = reportDashColors().TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier.weight(1f),
@@ -158,7 +195,7 @@ internal fun ReportBreakdownCard(
                     if (row.count > 0) {
                         Text(
                             "${row.count}×",
-                            color = ReportDashColors.TextSecondary,
+                            color = reportDashColors().TextSecondary,
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = ReportMonoFont,
@@ -167,7 +204,7 @@ internal fun ReportBreakdownCard(
                     }
                     Text(
                         reportMoney(sym, row.total),
-                        color = ReportDashColors.TextPrimary,
+                        color = reportDashColors().TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = ReportMonoFont,
@@ -178,7 +215,7 @@ internal fun ReportBreakdownCard(
                         .fillMaxWidth()
                         .height(4.dp)
                         .clip(RoundedCornerShape(999.dp))
-                        .background(ReportDashColors.HairlineSoft),
+                        .background(reportDashColors().HairlineSoft),
                 ) {
                     Box(
                         modifier = Modifier
@@ -196,7 +233,7 @@ internal fun ReportBreakdownCard(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "TOTAL",
-                    color = ReportDashColors.TextSecondary,
+                    color = reportDashColors().TextSecondary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.sp,
@@ -204,7 +241,7 @@ internal fun ReportBreakdownCard(
                 )
                 Text(
                     reportMoney(sym, total),
-                    color = ReportDashColors.TextPrimary,
+                    color = reportDashColors().TextPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = ReportMonoFont,
@@ -220,26 +257,31 @@ internal fun ReportTaxBreakdownCard(rows: List<ReportTaxRow>, sym: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(ReportDashColors.SurfaceDeeper)
-            .border(1.dp, ReportDashColors.HairlineLight, RoundedCornerShape(14.dp))
+            .background(reportDashColors().SurfaceDeeper)
+            .border(1.dp, reportDashColors().HairlineLight, RoundedCornerShape(14.dp))
             .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 androidx.compose.material.icons.Icons.Outlined.LocalOffer,
                 contentDescription = null,
-                tint = ReportDashColors.Info,
+                tint = reportDashColors().Info,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(Modifier.size(8.dp))
-            Text("Tax Breakdown", color = ReportDashColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                stringResource(R.string.report_tax_breakdown),
+                color = reportDashColors().TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
         Spacer(Modifier.size(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
-            Text("TYPE", color = ReportDashColors.TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1.4f))
-            Text("NET", color = ReportDashColors.TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
-            Text("TAX", color = ReportDashColors.TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
-            Text("GROSS", color = ReportDashColors.TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
+            Text("TYPE", color = reportDashColors().TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1.4f))
+            Text("NET", color = reportDashColors().TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
+            Text("TAX", color = reportDashColors().TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
+            Text("GROSS", color = reportDashColors().TextMuted, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.size(8.dp))
         rows.forEach { r ->
@@ -250,12 +292,12 @@ internal fun ReportTaxBreakdownCard(rows: List<ReportTaxRow>, sym: String) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1.4f)) {
-                    Text(r.orderTypeLabel, color = ReportDashColors.TextPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("${"%.1f".format(Locale.US, r.rate)}%", color = ReportDashColors.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(r.orderTypeLabel, color = reportDashColors().TextPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("${"%.1f".format(Locale.US, r.rate)}%", color = reportDashColors().TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Text(reportMoney(sym, r.net), color = ReportDashColors.TextPrimary, fontSize = 12.5.sp, fontFamily = ReportMonoFont, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(reportMoney(sym, r.tax), color = ReportDashColors.Info, fontSize = 12.5.sp, fontFamily = ReportMonoFont, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(reportMoney(sym, r.gross), color = ReportDashColors.TextPrimary, fontSize = 12.5.sp, fontFamily = ReportMonoFont, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Text(reportMoney(sym, r.net), color = reportDashColors().TextPrimary, fontSize = 12.5.sp, fontFamily = ReportMonoFont, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(reportMoney(sym, r.tax), color = reportDashColors().Info, fontSize = 12.5.sp, fontFamily = ReportMonoFont, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(reportMoney(sym, r.gross), color = reportDashColors().TextPrimary, fontSize = 12.5.sp, fontFamily = ReportMonoFont, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -267,20 +309,20 @@ internal fun ReportTopProductRow(item: ReportTopProduct, sym: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(ReportDashColors.SurfaceDeeper)
-            .border(1.dp, ReportDashColors.HairlineLight, RoundedCornerShape(12.dp))
+            .background(reportDashColors().SurfaceDeeper)
+            .border(1.dp, reportDashColors().HairlineLight, RoundedCornerShape(12.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(item.name, color = ReportDashColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
+            Text(item.name, color = reportDashColors().TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
             item.category?.let {
-                Text(it, color = ReportDashColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(it, color = reportDashColors().TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        Text("${item.qty}×", color = ReportDashColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, fontFamily = ReportMonoFont)
+        Text("${item.qty}×", color = reportDashColors().TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, fontFamily = ReportMonoFont)
         Spacer(Modifier.size(16.dp))
-        Text(reportMoney(sym, item.revenue), color = ReportDashColors.Success, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, fontFamily = ReportMonoFont)
+        Text(reportMoney(sym, item.revenue), color = reportDashColors().Success, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, fontFamily = ReportMonoFont)
     }
 }
 
@@ -295,29 +337,29 @@ internal fun ReportRefundRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(ReportDashColors.Danger.copy(alpha = 0.06f))
-            .border(1.dp, ReportDashColors.Danger.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
+            .background(reportDashColors().Danger.copy(alpha = 0.06f))
+            .border(1.dp, reportDashColors().Danger.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 orderNumber,
-                color = ReportDashColors.TextPrimary,
+                color = reportDashColors().TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 "-${reportMoney(sym, amount)}",
-                color = ReportDashColors.Danger,
+                color = reportDashColors().Danger,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = ReportMonoFont,
             )
         }
         reason?.takeIf { it.isNotBlank() }?.let {
-            Text(it, color = ReportDashColors.TextSecondary, fontSize = 11.sp)
+            Text(it, color = reportDashColors().TextSecondary, fontSize = 11.sp)
         }
     }
 }
@@ -328,9 +370,143 @@ internal fun ReportHairlineDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(ReportDashColors.HairlineSoft),
+            .background(reportDashColors().HairlineSoft),
     )
 }
 
 internal fun reportMoney(sym: String, value: Double): String =
     "$sym ${"%.2f".format(Locale.US, value)}"
+
+@Composable
+internal fun ReportStaffEodBreakdownCard(
+    title: String,
+    icon: ImageVector,
+    accent: Color,
+    rows: List<EodStaffSummaryRow>,
+    sym: String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(reportDashColors().SurfaceDeeper)
+            .border(1.dp, reportDashColors().HairlineLight, RoundedCornerShape(14.dp))
+            .padding(18.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.size(8.dp))
+            Text(title, color = reportDashColors().TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Spacer(Modifier.size(12.dp))
+        if (rows.isEmpty()) {
+            Text(
+                stringResource(R.string.report_no_data),
+                color = reportDashColors().TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        } else {
+            val cashLabel = stringResource(R.string.cash)
+            val cardLabel = stringResource(R.string.card)
+            val tapLabel = stringResource(R.string.tap_to_pay_method)
+            rows.forEach { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            row.name,
+                            color = reportDashColors().TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                        Text(
+                            "${row.salesCount}× · ${reportMoney(sym, row.revenue)}",
+                            color = reportDashColors().TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = ReportMonoFont,
+                        )
+                    }
+                }
+                if (row.cashTotal > 0.001) {
+                    StaffPaymentSubRow(cashLabel, row.cashTotal, sym)
+                }
+                if (row.cardTotal > 0.001) {
+                    StaffPaymentSubRow(cardLabel, row.cardTotal, sym)
+                }
+                if (row.tapToPayTotal > 0.001) {
+                    StaffPaymentSubRow(tapLabel, row.tapToPayTotal, sym)
+                }
+                if (row.otherTotal > 0.001) {
+                    StaffPaymentSubRow(stringResource(R.string.eod_staff_other_payments), row.otherTotal, sym)
+                }
+                Spacer(Modifier.size(6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StaffPaymentSubRow(label: String, amount: Double, sym: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = reportDashColors().TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            reportMoney(sym, amount),
+            color = reportDashColors().TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = ReportMonoFont,
+        )
+    }
+}
+
+@Composable
+internal fun ReportScopedStaffPaymentsCard(
+    cashTotal: Double,
+    cardTotal: Double,
+    tapToPayTotal: Double,
+    otherTotal: Double,
+    sym: String,
+) {
+    val cashLabel = stringResource(R.string.cash)
+    val cardLabel = stringResource(R.string.card)
+    val tapLabel = stringResource(R.string.tap_to_pay_method)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(reportDashColors().SurfaceDeeper)
+            .border(1.dp, reportDashColors().HairlineLight, RoundedCornerShape(14.dp))
+            .padding(18.dp),
+    ) {
+        Text(
+            stringResource(R.string.eod_staff_my_payments_title),
+            color = reportDashColors().TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Spacer(Modifier.size(8.dp))
+        if (cashTotal > 0.001) StaffPaymentSubRow(cashLabel, cashTotal, sym)
+        if (cardTotal > 0.001) StaffPaymentSubRow(cardLabel, cardTotal, sym)
+        if (tapToPayTotal > 0.001) StaffPaymentSubRow(tapLabel, tapToPayTotal, sym)
+        if (otherTotal > 0.001) {
+            StaffPaymentSubRow(stringResource(R.string.eod_staff_other_payments), otherTotal, sym)
+        }
+    }
+}

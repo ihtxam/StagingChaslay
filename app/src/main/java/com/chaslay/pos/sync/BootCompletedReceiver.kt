@@ -8,11 +8,13 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.chaslay.pos.printer.UsbBootAttachGrace
 import java.util.concurrent.TimeUnit
 
 class BootCompletedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+        UsbBootAttachGrace.markBootCompleted(context.applicationContext)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -24,5 +26,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
             ExistingPeriodicWorkPolicy.KEEP,
             request
         )
+        DiagnosticUploadWorkScheduler.schedulePeriodic(context.applicationContext)
     }
 }

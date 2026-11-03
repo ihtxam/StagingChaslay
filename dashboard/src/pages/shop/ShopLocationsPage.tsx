@@ -40,7 +40,7 @@ export default function ShopLocationsPage() {
           /* still show wizard for fulfillment + order type */
         }
       } catch (e: any) {
-        if (!cancelled) setError(customerShopError(e.response?.data?.error, t('shopFailedLoad')));
+        if (!cancelled) setError(customerShopError(e.response?.data?.error, t('shopFailedLoad'), t));
       } finally {
         if (!cancelled) setLoading(false);
       }

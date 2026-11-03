@@ -53,7 +53,7 @@ export default function KioskTokenAdminPage() {
         <input
           type="password"
           inputMode="numeric"
-          maxLength={8}
+          maxLength={4}
           value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
           className="mt-8 w-full max-w-xs rounded-2xl border-2 border-stone-600 bg-stone-800 px-6 py-4 text-center text-3xl tracking-widest"
@@ -62,7 +62,7 @@ export default function KioskTokenAdminPage() {
         />
         <button
           type="button"
-          disabled={pin.length < 4 || submitting}
+          disabled={pin.length !== 4 || submitting}
           onClick={() => void submitPin()}
           className="mt-6 rounded-2xl bg-emerald-600 px-10 py-4 text-lg font-bold disabled:opacity-40"
         >

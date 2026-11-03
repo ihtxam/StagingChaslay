@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toastLoadError } from '@/lib/deploy-blip';
+import { toastOrderAlreadyPaid } from '@/lib/toast-notify';
 import { useI18n } from '@/lib/i18n';
 import { downloadInvoicePdf, viewInvoicePdf } from '@/lib/invoice-pdf';
 import { isPaidOnlineEcommerceOrder } from '@/lib/online-payment';
@@ -58,7 +59,11 @@ import {
   orderStatusLabel,
 } from '@/lib/order-management';
 import { formatOrderNumberDisplay } from '@/lib/order-number';
-import { collectPaymentAction, findPaidOrderForCartLink } from '@/lib/order-to-cart';
+import {
+  collectPaymentAction,
+  findPaidOrderForCartLink,
+  mergeMerchantOrderDetail,
+} from '@/lib/order-to-cart';
 import {
   parseHeldCartJson,
   clearLocalHeldDraftForRow,
@@ -96,6 +101,8 @@ import OrderRefundHistory from '@/components/orders/OrderRefundHistory';
 import WebPosOnlineOrdersView from '@/components/webpos/WebPosOnlineOrdersView';
 import SecretSearchTapButton from '@/components/SecretSearchTapButton';
 import GandolaPurgeToolbar from '@/components/GandolaPurgeToolbar';
+import ReportDatePresetFilter from '@/components/reports/ReportDatePresetFilter';
+import { resolveReportPresetRange, type ReportPreset } from '@/lib/report-preset';
 import {
   isGandolaPurgeEligible,
   orderMatchesPaymentFilter,
@@ -317,7 +324,14 @@ type Props = {
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
 
-function todayIso(): string {
+/** Match server held-heal lookback so paid tickets clear stale kitchen holds. */
+function ordersBoardDefaultFromIso(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
+}
+
+function ordersBoardDefaultToIso(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
 }
 
@@ -593,6 +607,13 @@ export default function WebPosOrdersPanel({
   const [purgePaymentFilter, setPurgePaymentFilter] = useState('cash');
   const [selectedPurgeIds, setSelectedPurgeIds] = useState<Set<string>>(() => new Set());
   const [purgeBusy, setPurgeBusy] = useState(false);
+  const [datePreset, setDatePreset] = useState<ReportPreset>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const { from: dateFrom, to: dateTo } = useMemo(
+    () => resolveReportPresetRange(datePreset, customFrom, customTo),
+    [datePreset, customFrom, customTo]
+  );
   const [kdsReadyMap, setKdsReadyMap] = useState<Map<string, Set<string>>>(() => new Map());
   const [kdsByTicket, setKdsByTicket] = useState<
     Record<string, { ready: number; sent: number; readyLineIds: string[] }>
@@ -668,9 +689,29 @@ export default function WebPosOrdersPanel({
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
+  const openRef = useRef(open);
+  const loadSeqRef = useRef(0);
+  useEffect(() => {
+    openRef.current = open;
+    if (!open) loadSeqRef.current += 1;
+    return () => {
+      openRef.current = false;
+      loadSeqRef.current += 1;
+    };
+  }, [open]);
+
   const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const seq = ++loadSeqRef.current;
     if (!opts?.silent) setLoading(true);
-    const params = new URLSearchParams({ limit: '200', from: todayIso(), to: todayIso() });
+    const params = new URLSearchParams({
+      limit:
+        purgeMode || statusFilter === 'completed' ? '500' : '200',
+      from: purgeMode ? dateFrom : ordersBoardDefaultFromIso(),
+      to: purgeMode ? dateTo : ordersBoardDefaultToIso(),
+    });
+    if (purgeMode || statusFilter === 'completed') {
+      params.set('status', 'completed');
+    }
     if (searchQ) params.set('q', searchQ);
     const heldPromise = api.get('/merchant/pos/held');
     const ordersPromise = api.get(`/merchant/pos/orders?${params.toString()}`);
@@ -680,13 +721,17 @@ export default function WebPosOrdersPanel({
       ordersPromise,
       invoicePromise,
     ]);
+    const reportLoadFailure = !opts?.silent && openRef.current && seq === loadSeqRef.current;
     let nextHeld: HeldRow[] = [];
     let nextOrders: PosOrder[] = [];
     if (heldRes.status === 'fulfilled') {
       nextHeld = asArray<HeldRow>(heldRes.value.data?.held);
     } else {
-      if (!opts?.silent) {
-        toastLoadError(heldRes.reason, t('webPosOrdersLoadFailed'));
+      if (reportLoadFailure) {
+        queueMicrotask(() => {
+          if (!openRef.current || seq !== loadSeqRef.current) return;
+          toastLoadError(heldRes.reason, t('webPosOrdersLoadFailed'));
+        });
       }
       console.warn('[WebPOS][orders] held list failed', heldRes.reason);
     }
@@ -695,8 +740,11 @@ export default function WebPosOrdersPanel({
       setReasons(asArray<CancelReason>(ordersRes.value.data?.cancelReasons));
       setRefundReasons(asArray<RefundReasonOption>(ordersRes.value.data?.refundReasons));
     } else if (heldRes.status === 'fulfilled') {
-      if (!opts?.silent) {
-        toastLoadError(ordersRes.reason, t('webPosOrdersLoadFailed'));
+      if (reportLoadFailure) {
+        queueMicrotask(() => {
+          if (!openRef.current || seq !== loadSeqRef.current) return;
+          toastLoadError(ordersRes.reason, t('webPosOrdersLoadFailed'));
+        });
       }
       console.warn('[WebPOS][orders] pos orders list failed', ordersRes.reason);
     }
@@ -709,6 +757,10 @@ export default function WebPosOrdersPanel({
       nextOrders = [...map.values()];
     }
     nextHeld = filterActiveHeldRows(nextHeld, nextOrders);
+    if (!openRef.current || seq !== loadSeqRef.current) {
+      if (!opts?.silent) setLoading(false);
+      return;
+    }
     console.info('[WebPOS][orders] loaded', {
       held: nextHeld.length,
       posOrders: nextOrders.length,
@@ -717,7 +769,7 @@ export default function WebPosOrdersPanel({
     setHeld(nextHeld);
     setOrders(nextOrders);
     if (!opts?.silent) setLoading(false);
-  }, [t, searchQ, channelFilter]);
+  }, [t, searchQ, channelFilter, dateFrom, dateTo, purgeMode, statusFilter]);
 
   useEffect(() => {
     if (open) void load();
@@ -763,7 +815,7 @@ export default function WebPosOrdersPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter, channelFilter, search]);
+  }, [statusFilter, channelFilter, search, datePreset, customFrom, customTo]);
 
   const splitCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -1161,9 +1213,11 @@ export default function WebPosOrdersPanel({
         }
       }
       setCollectFor(null);
-      setSelectedOrder(updated || null);
+      setSelectedOrder((prev) =>
+        updated ? mergeMerchantOrderDetail(prev, updated) : null
+      );
       onOrderActioned?.(collectFor.id);
-      void load();
+      void load({ silent: true });
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('webPosPaymentCollectFailed'));
     } finally {
@@ -1206,9 +1260,7 @@ export default function WebPosOrdersPanel({
         }
       const fresh = updated || order;
       setSelectedOrder((prev) =>
-        prev && prev.id === order.id
-          ? ({ ...prev, ...fresh, items: prev.items } as PosOrder)
-          : ({ ...order, ...fresh } as PosOrder)
+        mergeMerchantOrderDetail(prev && prev.id === order.id ? prev : order, fresh)
       );
       void load();
     } catch (e: any) {
@@ -1249,7 +1301,7 @@ export default function WebPosOrdersPanel({
   const startCollectPayment = (order: PosOrder) => {
     setPaymentEditFor(null);
     if (isPaidOrder(order)) {
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderListPrimaryLabel(order))
       );
       return;
@@ -1278,7 +1330,7 @@ export default function WebPosOrdersPanel({
   const openHeldInCart = (h: HeldRow) => {
     const paid = findPaidOrderForHeldRow(h, ordersForList);
     if (paid) {
-      toast.error(
+      toastOrderAlreadyPaid(
         t('webPosOrderAlreadyPaid').replace('{number}', orderListPrimaryLabel(paid))
       );
       return;
@@ -1319,6 +1371,7 @@ export default function WebPosOrdersPanel({
     setPurgeMode(true);
     setStatusFilter('completed');
     setPurgePaymentFilter('cash');
+    setChannelFilter('all');
     setSelectedPurgeIds(new Set());
     setSelectedOrder(null);
     setSelectedHeld(null);
@@ -1683,21 +1736,40 @@ export default function WebPosOrdersPanel({
           </div>
         </div>
         {purgeMode ? (
-          <GandolaPurgeToolbar
-            selectedCount={selectedPurgeIds.size}
-            visibleCount={displayItems.length}
-            paymentFilter={purgePaymentFilter}
-            onPaymentFilterChange={(value) => {
-              setPurgePaymentFilter(value);
-              setSelectedPurgeIds(new Set());
-              setPage(0);
-            }}
-            onSelectAll={selectAllPurgeVisible}
-            onClearSelection={() => setSelectedPurgeIds(new Set())}
-            onDelete={() => void purgeSelectedOrders()}
-            onExit={exitPurgeMode}
-            deleting={purgeBusy}
-          />
+          <>
+            <GandolaPurgeToolbar
+              selectedCount={selectedPurgeIds.size}
+              visibleCount={displayItems.length}
+              paymentFilter={purgePaymentFilter}
+              onPaymentFilterChange={(value) => {
+                setPurgePaymentFilter(value);
+                setSelectedPurgeIds(new Set());
+                setPage(0);
+              }}
+              onSelectAll={selectAllPurgeVisible}
+              onClearSelection={() => setSelectedPurgeIds(new Set())}
+              onDelete={() => void purgeSelectedOrders()}
+              onExit={exitPurgeMode}
+              deleting={purgeBusy}
+            />
+            <div className="border-b border-amber-100 bg-amber-50/60 px-2 py-2 sm:px-3">
+              <ReportDatePresetFilter
+                preset={datePreset}
+                onPresetChange={(preset) => {
+                  setDatePreset(preset);
+                  setSelectedPurgeIds(new Set());
+                }}
+                customFrom={customFrom}
+                customTo={customTo}
+                onCustomFromChange={setCustomFrom}
+                onCustomToChange={setCustomTo}
+                onApplyCustom={() => {
+                  setSelectedPurgeIds(new Set());
+                  void load();
+                }}
+              />
+            </div>
+          </>
         ) : null}
         <div
           className={`relative flex min-h-0 flex-1 flex-col lg:flex-row ${
@@ -2383,7 +2455,7 @@ export default function WebPosOrdersPanel({
                     );
                   })()}
                   <ul className="mt-4 space-y-2 text-sm">
-                    {selectedOrder.items.map((i, idx) => (
+                    {(selectedOrder.items || []).map((i, idx) => (
                       <li key={idx} className="flex justify-between gap-2">
                         <span>
                           {i.quantity}× {resolveOrderItemName(i.name)}

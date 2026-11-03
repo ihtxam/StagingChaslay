@@ -19,6 +19,15 @@ let pending: PendingError[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let installed = false;
 
+/** Expected POS UX — not production incidents for superadmin error logs. */
+function isBenignToastForClientLog(message: string): boolean {
+  const lower = message.toLowerCase();
+  if (/read failed.*socket|socket might closed|read ret:\s*-1/i.test(lower)) return true;
+  if (/déjà encaissée|already paid|bereits bezahlt/i.test(lower)) return true;
+  if (/panier vidé|cart cleared|warenkorb geleert/i.test(lower)) return true;
+  return false;
+}
+
 function normalizeMessage(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'string') return value.trim().slice(0, MAX_MESSAGE);
@@ -79,7 +88,10 @@ export function initClientErrorReporting() {
   toast.error = ((message: unknown, opts?: Parameters<typeof toast.error>[1]) => {
     // Transient deploy/gateway blips — show once in UI; do not spam System Logs as client_error.
     if (opts?.id !== DEPLOY_TOAST_ID) {
-      reportClientError(message, { source: 'toast.error' });
+      const normalized = normalizeMessage(message);
+      if (!isBenignToastForClientLog(normalized)) {
+        reportClientError(message, { source: 'toast.error' });
+      }
     }
     return originalError(message as Parameters<typeof toast.error>[0], opts);
   }) as typeof toast.error;

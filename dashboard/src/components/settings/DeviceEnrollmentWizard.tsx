@@ -114,6 +114,10 @@ export default function DeviceEnrollmentWizard() {
     }
   };
 
+  if (!branchSwitcher) {
+    return null;
+  }
+
   if (branchSwitcher && isHqView) {
     return null;
   }

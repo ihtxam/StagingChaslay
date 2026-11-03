@@ -13,6 +13,7 @@ import {
 } from "@/lib/online-order-scope";
 import { AdyenService } from "@/services/adyen.service";
 import { isPaidOnlineEcommerce, onlineCancelPaymentPatch } from "@/lib/online-payment-refund";
+import { computeEstimatedReadyAt } from "@/lib/order-eta";
 
 const TICKET_NOTE_RE = /\[ticket:([^\]]+)\]/i;
 const TAB_NOTE_RE = /\[tab:([^\]]+)\]/i;
@@ -53,21 +54,6 @@ async function releaseHeldAfterPosPayment(
       /* table may have been removed */
     }
   }
-}
-
-function computeEstimatedReadyAt(
-  order: { fulfillmentChannel?: string | null; scheduledFor?: Date | null },
-  merchant: { pickupEtaMinutes?: number | null; deliveryEtaMinutes?: number | null }
-): Date {
-  if (order.scheduledFor) {
-    return new Date(order.scheduledFor);
-  }
-  const channel = order.fulfillmentChannel || "takeaway";
-  const prepMinutes =
-    channel === "delivery"
-      ? Number(merchant.deliveryEtaMinutes ?? 45)
-      : Number(merchant.pickupEtaMinutes ?? 25);
-  return new Date(Date.now() + prepMinutes * 60 * 1000);
 }
 
 function isInvoiceOrderRecord(order: {

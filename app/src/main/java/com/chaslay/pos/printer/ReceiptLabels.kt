@@ -6,7 +6,7 @@ import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.ServiceType
 import java.util.Locale
 
-/** Localized receipt / print labels (uses business default language). */
+/** Localized receipt / print labels (app locale, else business default). */
 data class ReceiptLabels(
     val provisionalInvoice: String,
     val orderNumber: String,
@@ -15,6 +15,8 @@ data class ReceiptLabels(
     val discount: String,
     val discountPercent: String,
     val tip: String,
+    val recapTitle: String,
+    val subtotal: String,
     val total: String,
     val vatTitle: String,
     val vatType: String,
@@ -58,7 +60,10 @@ data class ReceiptLabels(
     val sourceOnline: String,
     val refunded: String,
     val netPaid: String,
-    val refundReason: String
+    val refundReason: String,
+    val refundTitle: String,
+    val refundOrderLabel: String,
+    val refundDateLabel: String
 ) {
     fun fulfillmentLabel(fulfillmentType: FulfillmentType, serviceType: ServiceType): String =
         when (fulfillmentType) {
@@ -115,6 +120,8 @@ data class ReceiptLabels(
             discount = "Discount:",
             discountPercent = "Discount (%d%%):",
             tip = "Tip:",
+            recapTitle = "SUMMARY",
+            subtotal = "Subtotal:",
             total = "TOTAL",
             vatTitle = "VAT",
             vatType = "Type",
@@ -158,7 +165,10 @@ data class ReceiptLabels(
             sourceOnline = "Online",
             refunded = "Refunded:",
             netPaid = "Net paid:",
-            refundReason = "Refund reason:"
+            refundReason = "Refund reason:",
+            refundTitle = "REFUND",
+            refundOrderLabel = "Order:",
+            refundDateLabel = "Date:"
         )
 
         private fun french() = ReceiptLabels(
@@ -169,6 +179,8 @@ data class ReceiptLabels(
             discount = "Remise :",
             discountPercent = "Remise (%d%%) :",
             tip = "Pourboire :",
+            recapTitle = "R\u00C9CAPITULATIF",
+            subtotal = "Sous-total :",
             total = "TOTAL",
             vatTitle = "TVA",
             vatType = "Type",
@@ -212,7 +224,10 @@ data class ReceiptLabels(
             sourceOnline = "En ligne",
             refunded = "Remboursé :",
             netPaid = "Net payé :",
-            refundReason = "Motif :"
+            refundReason = "Motif :",
+            refundTitle = "REMBOURSEMENT",
+            refundOrderLabel = "Commande :",
+            refundDateLabel = "Date :"
         )
 
         private fun german() = ReceiptLabels(
@@ -223,6 +238,8 @@ data class ReceiptLabels(
             discount = "Rabatt:",
             discountPercent = "Rabatt (%d%%):",
             tip = "Trinkgeld:",
+            recapTitle = "\u00DCBERSICHT",
+            subtotal = "Zwischensumme:",
             total = "TOTAL",
             vatTitle = "MwSt.",
             vatType = "Typ",
@@ -266,7 +283,10 @@ data class ReceiptLabels(
             sourceOnline = "Online",
             refunded = "Erstattet:",
             netPaid = "Netto bezahlt:",
-            refundReason = "Grund:"
+            refundReason = "Grund:",
+            refundTitle = "ERSTATTUNG",
+            refundOrderLabel = "Bestellung:",
+            refundDateLabel = "Datum:"
         )
 
         private fun italian() = ReceiptLabels(
@@ -277,6 +297,8 @@ data class ReceiptLabels(
             discount = "Sconto:",
             discountPercent = "Sconto (%d%%):",
             tip = "Mancia:",
+            recapTitle = "RIEPILOGO",
+            subtotal = "Subtotale:",
             total = "TOTALE",
             vatTitle = "IVA",
             vatType = "Tipo",
@@ -320,7 +342,10 @@ data class ReceiptLabels(
             sourceOnline = "Online",
             refunded = "Rimborsato:",
             netPaid = "Netto pagato:",
-            refundReason = "Motivo:"
+            refundReason = "Motivo:",
+            refundTitle = "RIMBORSO",
+            refundOrderLabel = "Ordine:",
+            refundDateLabel = "Data:"
         )
     }
 }

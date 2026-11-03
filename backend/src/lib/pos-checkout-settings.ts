@@ -14,8 +14,15 @@ export type ActionButtonSize = "sm" | "md" | "lg";
 export type RetailTileSize = "sm" | "md" | "lg";
 export type RetailProductSortMode = "most_sold" | "alphabetical" | "catalog_order";
 
+export type ExpressPayPlacement = "cart" | "product_grid";
+
 export type PosCheckoutSettings = {
   tipsEnabled: boolean;
+  /**
+   * When true, card terminal payments send Adyen AskGratuity (tip screen on device).
+   * Independent of Adyen Customer Area tipping presets and of POS checkout tip buttons.
+   */
+  terminalAskGratuityEnabled: boolean;
   tipPresetsPercent: number[];
   allowCustomTip: boolean;
   discountsEnabled: boolean;
@@ -68,6 +75,10 @@ export type PosCheckoutSettings = {
   actionButtonSize: ActionButtonSize;
   /** Show quick Cash/Card/Terminal bar under products on WebPOS / Android register. */
   expressCheckoutEnabled: boolean;
+  /** Express buttons under cart panel vs product grid (not both). */
+  expressPayPlacement: ExpressPayPlacement;
+  /** Retail: tender dialog (amount given) vs checkout keypad only. */
+  retailCashTenderDialogEnabled: boolean;
   /** Show POS toast notifications. Off by default — they block the till. */
   showPosToasts: boolean;
   /** Retail register: three-column layout (categories | products | cart). */
@@ -100,6 +111,7 @@ export type PosCheckoutSettings = {
 
 export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   tipsEnabled: true,
+  terminalAskGratuityEnabled: false,
   tipPresetsPercent: [0, 5, 10, 15],
   allowCustomTip: true,
   discountsEnabled: true,
@@ -128,6 +140,8 @@ export const DEFAULT_POS_CHECKOUT: PosCheckoutSettings = {
   requireCustomerForDelivery: true,
   actionButtonSize: "md",
   expressCheckoutEnabled: true,
+  expressPayPlacement: "product_grid",
+  retailCashTenderDialogEnabled: true,
   showPosToasts: false,
   retailLayoutEnabled: true,
   retailScannerFirst: true,
@@ -204,6 +218,7 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
 
   return {
     tipsEnabled: src.tipsEnabled !== false,
+    terminalAskGratuityEnabled: src.terminalAskGratuityEnabled === true,
     tipPresetsPercent: tipPresets.length ? tipPresets : DEFAULT_POS_CHECKOUT.tipPresetsPercent,
     allowCustomTip: src.allowCustomTip !== false,
     discountsEnabled: src.discountsEnabled !== false,
@@ -235,6 +250,8 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
         ? src.actionButtonSize
         : DEFAULT_POS_CHECKOUT.actionButtonSize,
     expressCheckoutEnabled: resolveExpressCheckoutEnabled(src),
+    expressPayPlacement: src.expressPayPlacement === "cart" ? "cart" : "product_grid",
+    retailCashTenderDialogEnabled: src.retailCashTenderDialogEnabled !== false,
     showPosToasts: src.showPosToasts === true,
     retailLayoutEnabled:
       src.retailLayoutEnabled === undefined ? posMode === "retail" : src.retailLayoutEnabled !== false,
@@ -287,4 +304,16 @@ export function normalizePosCheckoutSettings(raw: unknown): PosCheckoutSettings 
           .slice(0, 12)
       : [],
   };
+}
+
+/** Whether to send Adyen Terminal API AskGratuity for this payment. */
+export function shouldAskGratuityOnTerminal(
+  checkout: PosCheckoutSettings,
+  opts?: { askGratuity?: boolean; posTipAmount?: number }
+): boolean {
+  const posTip = Math.round(Math.max(0, Number(opts?.posTipAmount) || 0) * 100) / 100;
+  if (posTip > 0.001) return false;
+  if (opts?.askGratuity === false) return false;
+  if (opts?.askGratuity === true) return true;
+  return checkout.terminalAskGratuityEnabled === true;
 }

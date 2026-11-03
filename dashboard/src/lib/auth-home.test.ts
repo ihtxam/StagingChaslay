@@ -94,6 +94,17 @@ const STOREKEEPER_PERMS: Permission[] = ['STOREKEEPER_INTAKE'];
   assert.equal(path, '/merchant');
 }
 
+// Manager with loginHome pos still lands on panel after email login
+{
+  const path = homePathForUser({
+    role: 'staff',
+    permissions: MANAGER_PERMS,
+    isOwner: false,
+    loginHome: 'pos',
+  });
+  assert.equal(path, '/merchant');
+}
+
 const WAITER_MENU_PERMS: Permission[] = [
   'USE_WEBPOS',
   'MANAGE_TABLES',
@@ -131,7 +142,7 @@ const WAITER_MENU_PERMS: Permission[] = [
   );
 }
 
-// POS switch user → manager goes to panel
+// POS switch user → manager stays on register (panel home is for email login only)
 {
   assert.equal(
     navigateTargetAfterStaffPin(
@@ -139,7 +150,7 @@ const WAITER_MENU_PERMS: Permission[] = [
       '/merchant/pos',
       'switch'
     ),
-    '/merchant'
+    null
   );
 }
 

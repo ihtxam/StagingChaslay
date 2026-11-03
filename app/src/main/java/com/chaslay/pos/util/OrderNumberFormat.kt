@@ -34,7 +34,8 @@ object OrderNumberFormat {
     fun formatCheckoutOrderRef(
         orderNumber: String?,
         kitchenNumber: String? = null,
-        tabNumber: String? = null
+        tabNumber: String? = null,
+        kitchenRefLabel: String = "Kitchen"
     ): String {
         val primary = guestOrderNumber(orderNumber, kitchenNumber, tabNumber)
         if (primary.isEmpty()) return ""
@@ -47,7 +48,7 @@ object OrderNumberFormat {
             TX_RE.containsMatchIn(raw) &&
             primary.equals(raw, ignoreCase = true)
         ) {
-            return "$primary · Kitchen $kitchenHash"
+            return "$primary · $kitchenRefLabel $kitchenHash"
         }
         return primary
     }

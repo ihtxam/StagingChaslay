@@ -138,6 +138,8 @@ export default function Modifiers() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [reordering, setReordering] = useState(false);
+  type ExtrasFilter = 'all' | 'free' | 'paid' | 'required' | 'optional';
+  const [extrasFilter, setExtrasFilter] = useState<ExtrasFilter>('all');
 
   const load = async () => {
     try {
@@ -173,14 +175,41 @@ export default function Modifiers() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.filter(
-      (g) =>
+    return groups.filter((g) => {
+      if (extrasFilter === 'free' && g.pricingType !== 'free') return false;
+      if (extrasFilter === 'paid' && g.pricingType === 'free') return false;
+      if (extrasFilter === 'required' && g.selectionType !== 'required') return false;
+      if (extrasFilter === 'optional' && g.selectionType !== 'optional') return false;
+      if (!q) return true;
+      return (
         g.title.toLowerCase().includes(q) ||
         g.options.some((o) => o.name.toLowerCase().includes(q)) ||
         g.products.some((p) => p.name.toLowerCase().includes(q))
-    );
-  }, [groups, search]);
+      );
+    });
+  }, [groups, search, extrasFilter]);
+
+  const filterCounts = useMemo(() => {
+    const free = groups.filter((g) => g.pricingType === 'free').length;
+    const paid = groups.filter((g) => g.pricingType !== 'free').length;
+    const required = groups.filter((g) => g.selectionType === 'required').length;
+    const optional = groups.filter((g) => g.selectionType === 'optional').length;
+    return { all: groups.length, free, paid, required, optional };
+  }, [groups]);
+
+  const formatGroupPrice = (group: ModifierGroup) => {
+    if (group.pricingType === 'free') return t('free');
+    if (group.pricingType === 'toppings_by_size') return t('toppingsBySizeShort');
+    const firstPaid = group.options.find((o) => parseMoney(String(o.price ?? 0)) > 0);
+    if (firstPaid) return `CHF ${parseMoney(String(firstPaid.price))}`;
+    return t('fixedPrice');
+  };
+
+  const formatSelectionRule = (group: ModifierGroup) => {
+    const base = group.selectionType === 'required' ? t('required') : t('optional');
+    const min = group.selectionType === 'required' ? Math.max(1, group.minSelectable) : group.minSelectable;
+    return `${base} · min ${min} · max ${group.maxSelectable}`;
+  };
 
   const filteredIds = useMemo(() => filtered.map((g) => g.id), [filtered]);
   const allFilteredSelected =
@@ -419,34 +448,17 @@ export default function Modifiers() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{t('modifiersAddons')}</h1>
-          <p className="text-slate-600 mt-1">{t('modifiersPageHint')}</p>
-          <p className="text-slate-600 mt-1 text-sm">{t('extrasNosPageHint')}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{t('extrasNosTitle')}</h1>
+          <p className="text-slate-600 mt-1">{t('extrasNosPageHint')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => openCreateTemplate('extras')}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <Plus size={16} />
-            {t('extrasNosQuickExtras')}
-          </button>
-          <button
-            type="button"
-            onClick={() => openCreateTemplate('nos')}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <Plus size={16} />
-            {t('extrasNosQuickNos')}
-          </button>
           <button
             type="button"
             onClick={openCreate}
             className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
           >
             <Plus size={18} />
-            {t('addNewGroup')}
+            {t('extrasNosAddGroup')}
           </button>
         </div>
       </div>
@@ -460,6 +472,90 @@ export default function Modifiers() {
           className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         />
       </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            ['all', 'extrasNosFilterAll', filterCounts.all],
+            ['free', 'extrasNosFilterFree', filterCounts.free],
+            ['paid', 'extrasNosFilterPaid', filterCounts.paid],
+            ['required', 'extrasNosFilterRequired', filterCounts.required],
+            ['optional', 'extrasNosFilterOptional', filterCounts.optional],
+          ] as const
+        ).map(([id, labelKey, count]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setExtrasFilter(id)}
+            className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
+              extrasFilter === id
+                ? 'border-teal-600 bg-teal-50 text-teal-800'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-teal-200'
+            }`}
+          >
+            {t(labelKey)} ({count})
+          </button>
+        ))}
+      </div>
+
+      {filtered.length > 0 ? (
+        <div className="hidden lg:block overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-sm">
+          <table className="min-w-full text-sm">
+            <thead className="bg-[var(--bg-muted)]/60 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              <tr>
+                <th className="px-4 py-3">{t('extrasNosColGroup')}</th>
+                <th className="px-4 py-3">{t('extrasNosColPrice')}</th>
+                <th className="px-4 py-3">{t('extrasNosColRule')}</th>
+                <th className="px-4 py-3">{t('extrasNosColOptions')}</th>
+                <th className="px-4 py-3">{t('extrasNosColLinked')}</th>
+                <th className="px-4 py-3">{t('status')}</th>
+                <th className="px-4 py-3 text-right">{t('edit')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((group) => (
+                <tr key={`table-${group.id}`} className="border-t border-[var(--border)]">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold">{group.title}</div>
+                    <div className="text-xs text-[var(--text-muted)] line-clamp-1">
+                      {group.options.map((o) => o.name).join(', ') || '—'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        group.pricingType === 'free'
+                          ? 'bg-teal-50 text-teal-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {formatGroupPrice(group)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{formatSelectionRule(group)}</td>
+                  <td className="px-4 py-3 tabular-nums">{group.options.length}</td>
+                  <td className="px-4 py-3 tabular-nums">{group.products.length}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      {t('active')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--bg-muted)]"
+                      onClick={() => openEdit(group)}
+                    >
+                      {t('edit')}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {filtered.length > 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
@@ -505,7 +601,7 @@ export default function Modifiers() {
         <p className="text-xs text-slate-500">{t('sortOrder')}: drag groups to set tab order on POS.</p>
       ) : null}
 
-      <div className="space-y-3">
+      <div className="space-y-3 lg:hidden">
         {filtered.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
             <p className="font-semibold text-slate-800">{t('noModifierGroupsYet')}</p>
@@ -618,7 +714,7 @@ export default function Modifiers() {
           >
             <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
               <h2 className="text-xl font-bold text-slate-900">
-                {editingId ? t('editGroup') : t('addNewGroup')}
+                {editingId ? t('editGroup') : t('extrasNosAddGroup')}
               </h2>
               <button type="button" onClick={closeEditor} className="rounded-lg p-2 hover:bg-slate-100">
                 <X size={18} />
@@ -1040,51 +1136,42 @@ export default function Modifiers() {
                         <Plus size={18} />
                       </button>
                     </div>
-                    <div className="overflow-hidden rounded-lg border border-slate-200">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-slate-50 text-left text-slate-500">
-                          <tr>
-                            <th className="px-3 py-2 w-12">#</th>
-                            <th className="px-3 py-2">{t('items')}</th>
-                            <th className="px-3 py-2 w-10" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {linkedProducts.length === 0 && (
-                            <tr>
-                              <td colSpan={3} className="px-3 py-8 text-center text-slate-400">
-                                {t('noDataYet')}
-                              </td>
-                            </tr>
-                          )}
-                          {linkedProducts.map((p, idx) => (
-                            <tr key={p.id} className="border-t border-slate-100">
-                              <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
-                              <td className="px-3 py-2">
-                                <div className="font-medium text-slate-800">{p.name}</div>
-                                {p.category?.name && (
-                                  <div className="text-xs text-slate-500">{p.category.name}</div>
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                <button
-                                  type="button"
-                                  className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                  onClick={() =>
-                                    setForm({
-                                      ...form,
-                                      productIds: form.productIds.filter((id) => id !== p.id),
-                                    })
-                                  }
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    {linkedProducts.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
+                        {t('noDataYet')}
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {linkedProducts.map((p) => (
+                          <span
+                            key={p.id}
+                            className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 py-1 pl-3 pr-1.5 text-sm font-medium text-teal-900 ring-1 ring-teal-200/80"
+                          >
+                            <span className="truncate">
+                              {p.name}
+                              {p.category?.name ? (
+                                <span className="ml-1 text-xs font-normal text-teal-700/80">
+                                  · {p.category.name}
+                                </span>
+                              ) : null}
+                            </span>
+                            <button
+                              type="button"
+                              className="rounded-full p-1 text-teal-700/70 hover:bg-teal-100 hover:text-red-600"
+                              aria-label={t('delete')}
+                              onClick={() =>
+                                setForm({
+                                  ...form,
+                                  productIds: form.productIds.filter((id) => id !== p.id),
+                                })
+                              }
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>

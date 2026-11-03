@@ -1,5 +1,7 @@
 # Self-hosted GitHub Actions runner on Hetzner (Rebornsense)
 
+**Overview (workflows, billing, Cloud Agent workers):** [docs/github-self-hosted-runner.md](../docs/github-self-hosted-runner.md)
+
 Use this when GitHub-hosted runners hit **minutes/concurrency** limits, or you want Bridge APK builds closer to production (`app.rebornsense.com`).
 
 **Artifact storage quota** is separate: only fixed by deleting old artifacts, lowering `retention-days`, skipping `upload-artifact`, or buying more storage. See [GITHUB_ACTIONS_ARTIFACTS.md](./GITHUB_ACTIONS_ARTIFACTS.md).

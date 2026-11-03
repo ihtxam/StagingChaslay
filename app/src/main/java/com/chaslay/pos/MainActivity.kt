@@ -16,27 +16,36 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.LicenseRepository
 import com.chaslay.pos.payment.taptopay.TapToPayEngine
 import com.chaslay.pos.domain.model.LicenseGateState
 import com.chaslay.pos.domain.model.PosThemeMode
+import com.chaslay.pos.printer.UsbPrinterManager
 import com.chaslay.pos.sync.FloorSyncCoordinator
 import com.chaslay.pos.sync.PosSessionRepository
 import com.chaslay.pos.sync.SyncService
 import com.chaslay.pos.ui.license.ActivationScreen
 import com.chaslay.pos.ui.navigation.ChaslayNavHost
 import com.chaslay.pos.ui.scanner.BarcodeWedgeHub
+import com.chaslay.pos.ui.scanner.ScaleWedgeHub
 import com.chaslay.pos.ui.theme.ChaslayPosTheme
+import com.chaslay.pos.ui.theme.ProvidePosAppearanceScale
 import com.chaslay.pos.ui.theme.ProvideVectronTheme
-import com.chaslay.pos.ui.theme.ChaslayBrand
-import com.chaslay.pos.ui.theme.rebornLoginBackground
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.posCanvasBackground
+import com.chaslay.pos.ui.ImmersiveMode
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -50,6 +59,9 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var floorSyncCoordinator: FloorSyncCoordinator
     @Inject lateinit var posSessionRepository: PosSessionRepository
     @Inject lateinit var tapToPayEngine: TapToPayEngine
+    @Inject lateinit var usbPrinterManager: UsbPrinterManager
+
+    private var kioskFullscreenEnabled by mutableStateOf(true)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -59,6 +71,17 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
+
+        lifecycleScope.launch {
+            sessionManager.kioskFullscreenEnabled.collect { enabled ->
+                kioskFullscreenEnabled = enabled
+                if (enabled) {
+                    ImmersiveMode.apply(this@MainActivity)
+                } else {
+                    ImmersiveMode.showSystemBars(this@MainActivity)
+                }
+            }
+        }
 
         // Register the Tap to Pay result listener before this activity reaches
         // RESUMED, because sale results are delivered through it. Inert in builds
@@ -81,27 +104,51 @@ class MainActivity : AppCompatActivity() {
         floorSyncCoordinator.start(lifecycleScope)
         posSessionRepository.startHeartbeat(lifecycleScope)
 
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) {
+                val authEpoch = sessionManager.currentAuthEpoch()
+                lifecycleScope.launch {
+                    // Let POS composables finish tearing down before session revoke/clear.
+                    kotlinx.coroutines.yield()
+                    runCatching { posSessionRepository.revoke() }
+                    sessionManager.clearAuthSessionIfStillEpoch(authEpoch)
+                }
+            }
+        })
+
         setContent {
             val userAccess by sessionManager.currentUserAccess.collectAsStateWithLifecycle(initialValue = null)
             val themeMode by sessionManager.posThemeMode.collectAsStateWithLifecycle(initialValue = PosThemeMode.LIGHT)
+            val kioskMode by sessionManager.kioskFullscreenEnabled.collectAsStateWithLifecycle(initialValue = true)
+            val posDisplayScale by sessionManager.posDisplayScale.collectAsStateWithLifecycle(initialValue = 1f)
+            val posTextScale by sessionManager.posTextScale.collectAsStateWithLifecycle(initialValue = 1f)
             val licenseState by licenseRepository.uiState.collectAsStateWithLifecycle(
                 initialValue = com.chaslay.pos.domain.model.LicenseUiState()
             )
             val darkTheme = themeMode == PosThemeMode.DARK
 
             ChaslayPosTheme(darkTheme = darkTheme) {
+                ProvidePosAppearanceScale(
+                    displayScale = posDisplayScale,
+                    textScale = posTextScale,
+                ) {
                 ProvideVectronTheme(darkTheme = darkTheme) {
-                    // Keep keypad / checkout / PIN controls above the Android nav bar on all screens.
-                    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+                    // When kiosk mode hides system bars, skip extra bottom padding.
+                    val rootModifier = if (kioskMode) {
+                        Modifier.fillMaxSize()
+                    } else {
+                        Modifier.fillMaxSize().systemBarsPadding()
+                    }
+                    Box(modifier = rootModifier) {
                         when (licenseState.gateState) {
                             LicenseGateState.LOADING -> {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .rebornLoginBackground(),
+                                        .posCanvasBackground(),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    CircularProgressIndicator(color = ChaslayBrand.WarmWhite)
+                                    CircularProgressIndicator(color = PosColors.Primary)
                                 }
                             }
                             LicenseGateState.NEEDS_ACTIVATION, LicenseGateState.EXPIRED -> {
@@ -121,11 +168,29 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                }
             }
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (kioskFullscreenEnabled) {
+            ImmersiveMode.apply(this)
+        }
+        // Sync USB grant state; one post-reboot prompt when needed (UsbPrinterManager).
+        usbPrinterManager.syncForegroundUsbPermissionState()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && kioskFullscreenEnabled) {
+            ImmersiveMode.apply(this)
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (ScaleWedgeHub.dispatch(event, currentFocus)) return true
         if (BarcodeWedgeHub.dispatch(event, currentFocus)) return true
         return super.dispatchKeyEvent(event)
     }

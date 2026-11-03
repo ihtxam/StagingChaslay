@@ -3,7 +3,11 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen, ChevronDown, CreditCard, LifeBuoy, LogOut, MonitorSmartphone, Settings, Store, User, UserCircle2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
-import { displaySidebarAccountName, displaySidebarShopName, REBORN_LOGO_WHITE } from '@/lib/brand';
+import {
+  displaySidebarAccountName,
+  displaySidebarShopName,
+  REBORN_LOGO_WHITE,
+} from '@/lib/brand';
 import type { PanelLocationHeaderLabels } from '@/lib/panel-location-header';
 import PanelLocationTitle from '@/components/PanelLocationTitle';
 import { useI18n, type Locale } from '@/lib/i18n';

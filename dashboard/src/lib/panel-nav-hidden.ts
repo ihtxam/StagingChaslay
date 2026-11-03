@@ -155,6 +155,24 @@ export function isPanelNavOptionChecked(key: string, hidden: string[] | null | u
   return (PANEL_NAV_GROUP_ALIASES[key] || []).some((alias) => list.includes(alias));
 }
 
+const MERCHANT_SETTINGS_PATH = '/merchant/settings';
+
+/**
+ * Settings gear in the sidebar — resellers may hide it from the default team nav, but owners
+ * and staff who may open Settings keep the gear (see panelNavVisibilityHelp in i18n).
+ */
+export function merchantSettingsSidebarVisible(opts: {
+  hidden: string[] | null | undefined;
+  canOpenSettings: boolean;
+  isOwner: boolean;
+  mayManageSettings: boolean;
+  mayManageStaff: boolean;
+}): boolean {
+  if (!opts.canOpenSettings) return false;
+  if (!isPanelNavHidden(MERCHANT_SETTINGS_PATH, opts.hidden)) return true;
+  return opts.isOwner || opts.mayManageSettings || opts.mayManageStaff;
+}
+
 export function togglePanelNavOption(
   hidden: string[] | null | undefined,
   key: string,

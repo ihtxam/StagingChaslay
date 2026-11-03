@@ -12,6 +12,7 @@ import com.chaslay.pos.data.repository.TransactionRepository
 import com.chaslay.pos.debug.CrashLogger
 import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.CartSummary
+import com.chaslay.pos.domain.model.applyCashRounding
 import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.HeldOrderStatus
 import com.chaslay.pos.domain.model.OngoingOrderCard
@@ -21,7 +22,9 @@ import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.TableOrderStatus
 import com.chaslay.pos.printer.BluetoothPrinterService
+import com.chaslay.pos.printer.PrinterUserMessages
 import com.chaslay.pos.printer.KitchenPrintMeta
+import com.chaslay.pos.printer.ReceiptPrintContext
 import com.chaslay.pos.sync.OnlineKitchenPrintHelper
 import com.chaslay.pos.sync.OnlineOrderAlertCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -158,7 +161,7 @@ class OngoingOrdersViewModel @Inject constructor(
                 itemCount = items.sumOf { it.quantity },
                 statusLabel = when {
                     isPayLater -> "Awaiting payment"
-                    order.status == HeldOrderStatus.SENT_TO_KITCHEN -> "Kitchen sent"
+                    order.status == HeldOrderStatus.SENT_TO_KITCHEN -> appContext.getString(com.chaslay.pos.R.string.status_kitchen_sent)
                     else -> "On hold"
                 },
                 source = OngoingOrderSource.HELD,
@@ -183,7 +186,7 @@ class OngoingOrdersViewModel @Inject constructor(
                         total = if (cartItems.isEmpty()) 0.0 else CartSummary(cartItems).total,
                         itemCount = items.sumOf { it.quantity },
                         statusLabel = when (order.status) {
-                            TableOrderStatus.SENT -> "Kitchen sent"
+                            TableOrderStatus.SENT -> appContext.getString(com.chaslay.pos.R.string.status_kitchen_sent)
                             TableOrderStatus.HELD -> "On hold"
                             else -> "Open"
                         },
@@ -319,26 +322,45 @@ class OngoingOrdersViewModel @Inject constructor(
                             customerCopy,
                             cashierCopy
                         )
-                    }.onFailure { e ->
-                        _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Print failed")
+                    }.onFailure {
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
+                        )
                     }
                 }
                 else -> {
-                    val lines = loadOrderLines(card)
-                    if (lines.isEmpty()) {
+                    val cart = loadCartSummaryForReceipt(card) ?: run {
                         _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
                         return@launch
                     }
-                    val total = lines.sumOf { it.second }
+                    if (cart.isEmpty) {
+                        _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
+                        return@launch
+                    }
+                    val staffName = sessionManager.currentUserName.first() ?: "Staff"
+                    val total = applyCashRounding(cart.merchandiseTotal(), settings.roundingStep)
+                    val context = ReceiptPrintContext(
+                        orderNumber = cart.orderNumber,
+                        serviceType = cart.serviceType,
+                        fulfillmentType = cart.fulfillmentType,
+                        tableName = cart.tableName,
+                        paymentMethod = null,
+                        staffName = staffName,
+                        isProvisional = true
+                    )
                     withContext(Dispatchers.IO) {
-                        printerService.routeCartPreview(
+                        printerService.routeCartReceipt(
                             settings = settings,
-                            lines = lines.map { it.first to it.second },
-                            total = total,
-                            title = "ORDER ${card.orderNumber}"
+                            cart = cart,
+                            context = context,
+                            discountAmount = cart.discountValue,
+                            tipAmount = 0.0,
+                            total = total
                         )
-                    }.onFailure { e ->
-                        _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Print failed")
+                    }.onFailure {
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
+                        )
                     }
                 }
             }
@@ -356,7 +378,7 @@ class OngoingOrdersViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(errorMessage = "No items to send")
                 return@launch
             }
-            withContext(Dispatchers.IO) {
+            val printResult = withContext(Dispatchers.IO) {
                 printerService.routeKitchen(
                     settings = settings,
                     tableName = payload.tableName,
@@ -369,9 +391,97 @@ class OngoingOrdersViewModel @Inject constructor(
                     products = products,
                     meta = payload.meta
                 )
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(errorMessage = e.message ?: "Kitchen print failed")
             }
+            printResult.onFailure {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
+                )
+            }.onSuccess {
+                persistKitchenSend(card, payload, userName)
+                refresh()
+            }
+        }
+    }
+
+    private suspend fun persistKitchenSend(
+        card: OngoingOrderCard,
+        payload: KitchenPayload,
+        userName: String
+    ) {
+        when (card.source) {
+            OngoingOrderSource.TABLE -> {
+                val unsent = tableOrderRepository.getOrderItemEntities(card.id)
+                    .filter { it.sentToKitchenAt == null }
+                val toMark = if (unsent.isNotEmpty()) unsent else payload.items
+                if (toMark.isNotEmpty()) {
+                    tableOrderRepository.markItemsSentToKitchen(card.id, toMark)
+                }
+            }
+            OngoingOrderSource.HELD -> {
+                val cart = loadCartSummaryForReceipt(card) ?: return
+                val userId = sessionManager.currentUserId.first() ?: 0L
+                heldOrderRepository.createHeldOrder(
+                    cart = cart,
+                    sendToKitchen = true,
+                    userId = userId,
+                    userName = userName
+                )
+            }
+            OngoingOrderSource.TRANSACTION -> Unit
+        }
+    }
+
+    private suspend fun loadCartSummaryForReceipt(card: OngoingOrderCard): CartSummary? {
+        val settings = settingsRepository.getSettings()
+        val rawVat = settings.vatIncludedInPrice
+        val vatIncluded = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(appContext, rawVat)
+        return when (card.source) {
+            OngoingOrderSource.HELD -> {
+                val detail = heldOrderRepository.getHeldOrderWithItems(card.id) ?: return null
+                val (order, items) = detail
+                if (items.isEmpty()) return null
+                CartSummary(
+                    items = items.map { it.toCartItem() },
+                    discountPercent = order.discountPercent,
+                    discountAmount = order.discountAmount,
+                    cartNotes = order.notes,
+                    serviceType = order.serviceType,
+                    fulfillmentType = order.fulfillmentType,
+                    orderNumber = order.orderNumber,
+                    pickupTimeMs = order.pickupTimeMs,
+                    deliveryName = order.deliveryName,
+                    deliveryAddress = order.deliveryAddress,
+                    deliveryZip = order.deliveryZip,
+                    deliveryPhone = order.deliveryPhone,
+                    tableId = order.tableId,
+                    tableOrderId = order.tableOrderId,
+                    tableName = order.tableName,
+                    vatIncludedInPrice = vatIncluded,
+                    vatAfterDiscount = settings.vatAfterDiscount
+                )
+            }
+            OngoingOrderSource.TABLE -> {
+                val order = tableOrderRepository.getOrder(card.id) ?: return null
+                val table = tableOrderRepository.getTable(order.tableId)
+                val items = tableOrderRepository.getOrderItems(card.id)
+                if (items.isEmpty()) return null
+                CartSummary(
+                    items = items,
+                    discountPercent = order.discountPercent,
+                    discountAmount = order.discountAmount,
+                    cartNotes = order.notes,
+                    serviceType = order.serviceType,
+                    fulfillmentType = FulfillmentType.DINE_IN,
+                    orderNumber = card.orderNumber,
+                    tableId = order.tableId,
+                    tableOrderId = order.id,
+                    tableName = table?.name,
+                    guestCount = order.guestCount,
+                    vatIncludedInPrice = vatIncluded,
+                    vatAfterDiscount = settings.vatAfterDiscount
+                )
+            }
+            OngoingOrderSource.TRANSACTION -> null
         }
     }
 
@@ -465,6 +575,9 @@ class OngoingOrdersViewModel @Inject constructor(
         quantity = quantity,
         taxRate = taxRate,
         sku = sku,
+        notes = notes,
+        originalUnitPrice = originalUnitPrice,
+        lineDiscountPerUnit = lineDiscountPerUnit,
         courseNumber = courseNumber,
         isWeighed = isWeighed
     )

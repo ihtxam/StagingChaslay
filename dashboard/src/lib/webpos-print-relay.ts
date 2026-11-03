@@ -16,6 +16,7 @@ import {
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { escposKitchenCut, uint8ToBase64 } from '@/lib/webpos-receipt';
+import { normalizeAgentPrintBase64 } from '@/lib/escpos-payload';
 import { enqueueFailedPrintJob } from '@/lib/webpos-print-queue';
 import { isBrowserOnline } from '@/lib/webpos-offline/types';
 import {
@@ -174,9 +175,7 @@ export async function enqueueEscPosPrintJob(opts: {
  * True when this browser may host the till print hub (poll local Print Agent, drain jobs).
  * Mobile phones and narrow layouts without a local agent should not probe localhost.
  */
-export function isTillPrintHubCandidate(): boolean {
-  return isLocalPrintStation(false);
-}
+export { isTillPrintHubCandidate } from '@/lib/till-print-hub-candidate';
 
 /**
  * True when this browser is the register PC (local Print Agent + 8s retry queue).
@@ -254,7 +253,7 @@ export async function printViaAgentOrQueue(opts: {
   }
   const retryLocally = opts.retryLocally !== false && !isKioskPrintContext();
   const persistLocal = (error: unknown) => {
-    if (!opts.dataBase64) return;
+    if (!normalizeAgentPrintBase64(opts.dataBase64)) return;
     enqueueFailedPrintJob({
       kind: opts.jobKind,
       label: opts.jobLabel,

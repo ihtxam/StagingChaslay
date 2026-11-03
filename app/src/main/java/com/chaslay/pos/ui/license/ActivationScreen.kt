@@ -1,4 +1,5 @@
 package com.chaslay.pos.ui.license
+import com.chaslay.pos.ui.theme.posUiColors
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -47,8 +48,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.LicenseGateState
-import com.chaslay.pos.ui.theme.ChaslayBrand
-import com.chaslay.pos.ui.theme.rebornLoginBackground
+import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.posBrandHeroBackground
 
 @Composable
 fun LicenseSettingsSection(
@@ -66,14 +67,14 @@ fun LicenseSettingsSection(
     Spacer(modifier = Modifier.height(8.dp))
 
     val bannerBg = when (license.gateState) {
-        LicenseGateState.TRIAL -> Color(0xFFFFF3E0)
-        LicenseGateState.ALLOWED -> Color(0xFFE8F5E9)
-        else -> Color(0xFFFFEBEE)
+        LicenseGateState.TRIAL -> posUiColors().warningSubtle
+        LicenseGateState.ALLOWED -> posUiColors().successSubtle
+        else -> posUiColors().dangerSubtle
     }
     val bannerFg = when (license.gateState) {
-        LicenseGateState.TRIAL -> Color(0xFFE65100)
-        LicenseGateState.ALLOWED -> Color(0xFF2E7D32)
-        else -> Color(0xFFC62828)
+        LicenseGateState.TRIAL -> PosColors.Warning
+        LicenseGateState.ALLOWED -> PosColors.Success
+        else -> PosColors.Danger
     }
     val statusText = when (license.gateState) {
         LicenseGateState.TRIAL -> stringResource(R.string.license_status_trial, license.trialDaysRemaining)
@@ -199,8 +200,8 @@ private fun LicenseActivationForm(
             modifier = Modifier.fillMaxWidth(),
             enabled = activationCode.isNotBlank() && !isActivating,
             colors = ButtonDefaults.buttonColors(
-                containerColor = ChaslayBrand.Burgundy,
-                contentColor = ChaslayBrand.White
+                containerColor = PosColors.Primary,
+                contentColor = PosColors.TextOnPrimary
             )
         ) {
             if (isActivating) {
@@ -222,14 +223,14 @@ fun ActivationScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .rebornLoginBackground()
+            .posBrandHeroBackground()
     ) {
         if (license.gateState == LicenseGateState.LOADING) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = ChaslayBrand.WarmWhite)
+                CircularProgressIndicator(color = PosColors.TextOnPrimary)
             }
             return
         }
@@ -254,12 +255,12 @@ fun ActivationScreen(
                 text = stringResource(R.string.app_name),
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
-                color = ChaslayBrand.WarmWhite
+                color = PosColors.TextOnPrimary
             )
             Text(
                 text = stringResource(R.string.license_brand_domain),
                 fontSize = 14.sp,
-                color = ChaslayBrand.WarmWhite.copy(alpha = 0.85f),
+                color = PosColors.TextOnPrimary.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -268,7 +269,7 @@ fun ActivationScreen(
                     .widthIn(max = 480.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
-                    .background(ChaslayBrand.WarmWhite)
+                    .background(posUiColors().surface)
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -276,11 +277,11 @@ fun ActivationScreen(
                     text = if (expired) stringResource(R.string.license_expired_title) else stringResource(R.string.license_activate_title),
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    color = ChaslayBrand.Gray900
+                    color = posUiColors().textPrimary
                 )
                 Text(
                     text = if (expired) stringResource(R.string.license_expired_body) else stringResource(R.string.license_activate_body),
-                    color = ChaslayBrand.Gray600
+                    color = posUiColors().textSecondary
                 )
                 LicenseActivationForm(
                     activationCode = form.activationCode,

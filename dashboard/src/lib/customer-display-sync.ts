@@ -1,5 +1,7 @@
 import api, { publicApi } from '@/lib/api';
 import { APP_ORIGIN, resolvePanelAppOrigin } from '@/lib/brand';
+import { openBridgeCustomerDisplay, probeDeviceBridgeHealth } from '@/lib/device-bridge';
+import { isAndroidWebPosTill } from '@/lib/print-agent';
 
 export type CustomerDisplayLine = {
   name: string;
@@ -44,6 +46,11 @@ const CDS_REQUEST_KIND = 'cds-request' as const;
 type CdsRequestMessage = { kind: typeof CDS_REQUEST_KIND };
 
 const WINDOW_NAME = 'reborn-customer-display';
+
+/** sessionStorage — one auto-open per WebPOS tab session on dual-screen tills. */
+export const CDS_AUTO_OPEN_SESSION_KEY = 'reborn-cds-auto-open-session';
+
+export type CustomerDisplayOpenResult = 'bridge' | 'window' | 'failed' | 'skipped';
 
 export function isCustomerDisplayLocale(value: unknown): value is CustomerDisplayLocale {
   return value === 'en' || value === 'fr' || value === 'de';
@@ -240,4 +247,62 @@ export function openCustomerDisplayWindow(parts: string | CdsUrlParts): Window |
     }
   }
   return win;
+}
+
+export function cdsAutoOpenSessionKey(parts: CdsUrlParts): string {
+  return `${CDS_AUTO_OPEN_SESSION_KEY}:${cdsPublicUrl(parts)}`;
+}
+
+/** Desktop: second monitor popup. Android + Bridge: rear Sunmi customer screen. */
+export async function openCustomerDisplayForTill(
+  parts: CdsUrlParts
+): Promise<CustomerDisplayOpenResult> {
+  const url = cdsPublicUrl(parts);
+  if (url.endsWith('/cds/')) return 'failed';
+  if (isAndroidWebPosTill()) {
+    const health = await probeDeviceBridgeHealth(4);
+    if (health.ok && health.dualScreenAvailable) {
+      const opened = await openBridgeCustomerDisplay(url);
+      if (opened.ok) return 'bridge';
+      return 'failed';
+    }
+    return 'failed';
+  }
+  const win = openCustomerDisplayWindow(parts);
+  return win ? 'window' : 'failed';
+}
+
+/** Called when WebPOS loads on a Sunmi till — no cashier action on the customer side. */
+export async function autoOpenCustomerDisplayOnTill(
+  parts: CdsUrlParts,
+  options?: { maxAttempts?: number; delayMs?: number }
+): Promise<void> {
+  if (!isAndroidWebPosTill()) return;
+  const key = cdsAutoOpenSessionKey(parts);
+  try {
+    if (sessionStorage.getItem(key)) return;
+  } catch {
+    return;
+  }
+  const maxAttempts = Math.max(1, options?.maxAttempts ?? 12);
+  const delayMs = Math.max(400, options?.delayMs ?? 2_000);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      if (sessionStorage.getItem(key)) return;
+    } catch {
+      return;
+    }
+    const result = await openCustomerDisplayForTill(parts);
+    if (result === 'bridge') {
+      try {
+        sessionStorage.setItem(key, String(Date.now()));
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (attempt + 1 < maxAttempts) {
+      await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+    }
+  }
 }
