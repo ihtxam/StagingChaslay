@@ -1,3 +1,5 @@
+# Deploy 2026-11-03T07:30:00Z — WebPOS register dock CSS + Android receipt print overlap (3300ead8, index-NgP1jFc1.js, WebPos-CQ32t-gb.js)
+
 # Deploy 2026-11-03T02:12:00Z — merchant rollback follow-up, fresh dashboard dist (WebPos-uUq2Nl54, index-Cn6D_uyo, reborn-build 5beca5e9)
 
 # Deploy 2026-11-03T01:58:00Z — fix: rollback merchant UI; keep roles printers receipt; Android print (48dc8261)
