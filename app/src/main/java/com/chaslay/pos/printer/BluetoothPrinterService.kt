@@ -744,6 +744,56 @@ class BluetoothPrinterService @Inject constructor(
         last
     }
 
+    /**
+     * Builds and caches ESC/POS receipt bytes for every configured receipt printer without sending.
+     * Call when the order-complete dialog opens so manual reprint avoids logo/QR raster work.
+     */
+    suspend fun warmEscPosReceiptPayload(
+        settings: BusinessSettingsEntity,
+        transaction: TransactionEntity,
+        items: List<TransactionItemEntity>,
+        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        loyaltyPointsEarned: Int? = null,
+        loyaltyPointsBalance: Int? = null
+    ) = withContext(Dispatchers.IO) {
+        val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
+            .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
+        if (receiptPrinters.isEmpty()) {
+            val lineWidth = lineWidthFor(80)
+            cachedOrBuildEscPosReceipt(
+                useCache = true,
+                transactionId = transaction.id,
+                printerAddress = settings.printerMacAddress.orEmpty(),
+                lineWidth = lineWidth,
+                settings = settings,
+                transaction = transaction,
+                items = items,
+                appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
+                appendAdyenCashierReceipt = appendAdyenCashierReceipt,
+                loyaltyPointsEarned = loyaltyPointsEarned,
+                loyaltyPointsBalance = loyaltyPointsBalance
+            )
+            return@withContext
+        }
+        for (printer in receiptPrinters) {
+            val lineWidth = lineWidthFor(printer.paperWidthMm)
+            cachedOrBuildEscPosReceipt(
+                useCache = true,
+                transactionId = transaction.id,
+                printerAddress = printer.address,
+                lineWidth = lineWidth,
+                settings = settings,
+                transaction = transaction,
+                items = items,
+                appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
+                appendAdyenCashierReceipt = appendAdyenCashierReceipt,
+                loyaltyPointsEarned = loyaltyPointsEarned,
+                loyaltyPointsBalance = loyaltyPointsBalance
+            )
+        }
+    }
+
     /** Short proof-of-refund slip (WebPOS parity) with optional line items. */
     suspend fun routeRefundReceipt(
         settings: BusinessSettingsEntity,
@@ -2406,6 +2456,15 @@ class BluetoothPrinterService @Inject constructor(
                 }
                 escPosReceiptPayloadCache.remove(cacheKey)
             }
+            val urlAgnosticPrefix =
+                "${transactionId.trim()}|${printerReachabilityCache.keyForAddress(printerAddress)}|$lineWidth|"
+            escPosReceiptPayloadCache.entries.firstOrNull { (key, entry) ->
+                key.startsWith(urlAgnosticPrefix) &&
+                    now - entry.cachedAtMs <= ESC_POS_RECEIPT_CACHE_TTL_MS
+            }?.let { (_, entry) ->
+                escPosReceiptPayloadCache[cacheKey] = entry
+                return entry.bytes
+            }
         }
         val payload = buildEscPosReceipt(
             settings,
@@ -2432,7 +2491,7 @@ class BluetoothPrinterService @Inject constructor(
             val output = socket.getOutputStream()
             transmitPayload(output, payload)
             output.flush()
-            Thread.sleep(150)
+            Thread.sleep(BT_POST_SEND_SETTLE_MS)
         } finally {
             runCatching { socket.close() }
         }
@@ -2465,10 +2524,10 @@ class BluetoothPrinterService @Inject constructor(
             output.flush()
             offset = end
             if (payload.size > chunkSize) {
-                Thread.sleep(25)
+                Thread.sleep(15)
             }
         }
-        val waitMs = (payload.size / 512 * 80).coerceIn(100, 4000)
+        val waitMs = (payload.size / 512 * 45).coerceIn(50, 1200)
         Thread.sleep(waitMs.toLong())
     }
 
@@ -2815,6 +2874,7 @@ class BluetoothPrinterService @Inject constructor(
         val SIMULATED_PRINTER = DiscoveredPrinter("Simulated (test)", SIMULATED_ADDRESS)
         private const val TAG = "PrinterService"
         private const val BT_CONNECT_TIMEOUT_MS = 8_000L
+        private const val BT_POST_SEND_SETTLE_MS = 60L
         private const val ESC_POS_RECEIPT_CACHE_TTL_MS = 30 * 60 * 1000L
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48

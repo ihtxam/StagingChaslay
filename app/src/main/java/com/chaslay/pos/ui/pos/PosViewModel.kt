@@ -96,6 +96,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -4407,8 +4409,8 @@ class PosViewModel @Inject constructor(
         val settings = settingsRepository.getSettings()
         val extrasSnapshot = _uiExtras.value
         val (transaction, publicUrl) = if (skipReceiptPublish) {
-            val url = full.first.receiptUrl?.takeIf { it.isNotBlank() }
-                ?: extrasSnapshot.receiptPublicUrl?.takeIf { it.isNotBlank() }
+            val url = extrasSnapshot.receiptPublicUrl?.takeIf { it.isNotBlank() }
+                ?: full.first.receiptUrl?.takeIf { it.isNotBlank() }
             full.first.copy(receiptUrl = url ?: full.first.receiptUrl) to url
         } else {
             publishAndPersistReceipt(full.first, full.second, settings)
@@ -5833,6 +5835,30 @@ class PosViewModel @Inject constructor(
             null
         }
 
+    private suspend fun warmOrderCompleteReceiptCache(
+        transaction: TransactionEntity,
+        receiptItems: List<TransactionItemEntity>,
+        settings: BusinessSettingsEntity,
+        adyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        adyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
+        loyaltyPointsEarned: Int? = null,
+        loyaltyPointsBalance: Int? = null
+    ) {
+        runCatching {
+            printerService.warmEscPosReceiptPayload(
+                settings = settings,
+                transaction = transaction,
+                items = receiptItems,
+                appendAdyenCustomerReceipt = adyenCustomerReceipt,
+                appendAdyenCashierReceipt = adyenCashierReceipt,
+                loyaltyPointsEarned = loyaltyPointsEarned,
+                loyaltyPointsBalance = loyaltyPointsBalance
+            )
+        }.onFailure { e ->
+            Log.w("POS", "Receipt payload warm failed", e)
+        }
+    }
+
     private fun queuePostSaleSideEffects(
         kitchenCart: CartSummary,
         transaction: TransactionEntity,
@@ -5846,16 +5872,29 @@ class PosViewModel @Inject constructor(
         membership: AttachedMembership?
     ) {
         viewModelScope.launch {
-            runCatching { printPendingKitchenForCurrentTable(kitchenCart) }
-                .onFailure { e ->
-                    Log.w("POS", "Kitchen print after sale failed", e)
-                    showPrinterUnavailable()
-                }
-            val (publishedTx, publicReceiptUrl) = publishAndPersistReceipt(
-                transaction,
-                receiptItems,
-                settings
+            val extrasAtSale = _uiExtras.value
+            val customerReceipt = extrasAtSale.adyenCustomerReceipt
+            val cashierReceipt = extrasAtSale.adyenCashierReceipt
+            warmOrderCompleteReceiptCache(
+                transaction = transaction,
+                receiptItems = receiptItems,
+                settings = settings,
+                adyenCustomerReceipt = customerReceipt,
+                adyenCashierReceipt = cashierReceipt,
+                loyaltyPointsEarned = extrasAtSale.lastLoyaltyPointsEarned,
+                loyaltyPointsBalance = extrasAtSale.lastLoyaltyPointsBalance
             )
+            val (publishedTx, publicReceiptUrl) = coroutineScope {
+                val publishDeferred = async(Dispatchers.IO) {
+                    publishAndPersistReceipt(transaction, receiptItems, settings)
+                }
+                runCatching { printPendingKitchenForCurrentTable(kitchenCart) }
+                    .onFailure { e ->
+                        Log.w("POS", "Kitchen print after sale failed", e)
+                        showPrinterUnavailable()
+                    }
+                publishDeferred.await()
+            }
             if (_uiExtras.value.completedTransaction?.id == transaction.id) {
                 updateExtras {
                     it.copy(
@@ -5864,6 +5903,17 @@ class PosViewModel @Inject constructor(
                         orderCompleteNotice = it.orderCompleteNotice ?: receiptUploadNotice(publicReceiptUrl)
                     )
                 }
+            }
+            if (publicReceiptUrl != transaction.receiptUrl?.takeIf { it.isNotBlank() }) {
+                warmOrderCompleteReceiptCache(
+                    transaction = publishedTx,
+                    receiptItems = receiptItems,
+                    settings = settings,
+                    adyenCustomerReceipt = customerReceipt,
+                    adyenCashierReceipt = cashierReceipt,
+                    loyaltyPointsEarned = extrasAtSale.lastLoyaltyPointsEarned,
+                    loyaltyPointsBalance = extrasAtSale.lastLoyaltyPointsBalance
+                )
             }
             membership?.takeIf { it.membershipEnabled }?.let { card ->
                 runCatching {
@@ -5929,7 +5979,8 @@ class PosViewModel @Inject constructor(
                 customerCopy,
                 null,
                 loyaltyPointsEarned = extras.lastLoyaltyPointsEarned,
-                loyaltyPointsBalance = extras.lastLoyaltyPointsBalance
+                loyaltyPointsBalance = extras.lastLoyaltyPointsBalance,
+                usePayloadCache = true
             )
         }.onFailure { e ->
             if (_uiExtras.value.completedTransaction?.id == transaction.id) {
