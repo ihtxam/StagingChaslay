@@ -40,6 +40,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -65,6 +66,14 @@ class BluetoothPrinterService @Inject constructor(
 ) {
     private val kitchenQtyLine = Regex("^\\d+x\\s+", RegexOption.IGNORE_CASE)
     private val kitchenDiscountNote = Regex("""^\d+(\.\d+)?% off$|(?i)^adjusted from """)
+
+    /** One in-flight job per printer — avoids parallel BT connects that can hit the 8s connect timeout. */
+    private val sendLocksByAddress = ConcurrentHashMap<String, Any>()
+
+    private data class CachedEscPosPayload(val bytes: ByteArray, val cachedAtMs: Long)
+
+    /** ESC/POS bytes for order-complete reprints (logo/QR raster is expensive to rebuild). */
+    private val escPosReceiptPayloadCache = ConcurrentHashMap<String, CachedEscPosPayload>()
 
     private fun receiptLanguageCode(settings: BusinessSettingsEntity): String =
         ReceiptPrintLanguage.codeFor(context, settings)
@@ -690,7 +699,8 @@ class BluetoothPrinterService @Inject constructor(
         appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
         appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
         loyaltyPointsEarned: Int? = null,
-        loyaltyPointsBalance: Int? = null
+        loyaltyPointsBalance: Int? = null,
+        usePayloadCache: Boolean = true
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
@@ -708,15 +718,18 @@ class BluetoothPrinterService @Inject constructor(
         var last: Result<Unit> = Result.success(Unit)
         for (printer in receiptPrinters) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
-            val payload = buildEscPosReceipt(
-                settings,
-                transaction,
-                items,
-                lineWidth,
-                appendAdyenCustomerReceipt,
-                appendAdyenCashierReceipt,
-                loyaltyPointsEarned,
-                loyaltyPointsBalance
+            val payload = cachedOrBuildEscPosReceipt(
+                useCache = usePayloadCache,
+                transactionId = transaction.id,
+                printerAddress = printer.address,
+                lineWidth = lineWidth,
+                settings = settings,
+                transaction = transaction,
+                items = items,
+                appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
+                appendAdyenCashierReceipt = appendAdyenCashierReceipt,
+                loyaltyPointsEarned = loyaltyPointsEarned,
+                loyaltyPointsBalance = loyaltyPointsBalance
             )
             last = sendBytes(printer.address, settings, payload, "Receipt ${printer.name}")
             if (printer.openCashDrawer) {
@@ -2341,17 +2354,21 @@ class BluetoothPrinterService @Inject constructor(
             Log.i(TAG, "$label skipped — printer unreachable (cached): $mac")
             return Result.failure(IOException("Printer unreachable"))
         }
-        val result: Result<Unit> = runCatching {
-            when {
-                isUsbAddress(mac) -> {
-                    val normalized = usbPrinterManager.normalizeStoredAddress(mac)
-                    if (usbPrinterManager.resolveDevice(normalized) == null) {
-                        error("USB printer not connected")
+        val lockKey = printerReachabilityCache.keyForAddress(mac)
+        val lock = sendLocksByAddress.getOrPut(lockKey) { Any() }
+        val result: Result<Unit> = synchronized(lock) {
+            runCatching {
+                when {
+                    isUsbAddress(mac) -> {
+                        val normalized = usbPrinterManager.normalizeStoredAddress(mac)
+                        if (usbPrinterManager.resolveDevice(normalized) == null) {
+                            error("USB printer not connected")
+                        }
+                        usbPrinterManager.sendBytes(normalized, payload).getOrThrow()
                     }
-                    usbPrinterManager.sendBytes(normalized, payload).getOrThrow()
+                    isNetworkAddress(mac) -> sendBytesOverNetwork(mac, payload).getOrThrow()
+                    else -> sendBytesOverBluetooth(mac, payload)
                 }
-                isNetworkAddress(mac) -> sendBytesOverNetwork(mac, payload).getOrThrow()
-                else -> sendBytesOverBluetooth(mac, payload)
             }
         }
         if (result.isSuccess) {
@@ -2360,6 +2377,54 @@ class BluetoothPrinterService @Inject constructor(
             printerReachabilityCache.markUnreachable(mac)
         }
         return result
+    }
+
+    private fun escPosReceiptCacheKey(
+        transactionId: String,
+        printerAddress: String,
+        lineWidth: Int,
+        receiptUrl: String?
+    ): String =
+        "${transactionId.trim()}|${printerReachabilityCache.keyForAddress(printerAddress)}|$lineWidth|${receiptUrl.orEmpty()}"
+
+    private fun cachedOrBuildEscPosReceipt(
+        useCache: Boolean,
+        transactionId: String,
+        printerAddress: String,
+        lineWidth: Int,
+        settings: BusinessSettingsEntity,
+        transaction: TransactionEntity,
+        items: List<TransactionItemEntity>,
+        appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt?,
+        appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt?,
+        loyaltyPointsEarned: Int?,
+        loyaltyPointsBalance: Int?
+    ): ByteArray {
+        val receiptUrl = transaction.receiptUrl?.takeIf { it.isNotBlank() }
+        val cacheKey = escPosReceiptCacheKey(transactionId, printerAddress, lineWidth, receiptUrl)
+        if (useCache) {
+            val now = System.currentTimeMillis()
+            escPosReceiptPayloadCache[cacheKey]?.let { entry ->
+                if (now - entry.cachedAtMs <= ESC_POS_RECEIPT_CACHE_TTL_MS) {
+                    return entry.bytes
+                }
+                escPosReceiptPayloadCache.remove(cacheKey)
+            }
+        }
+        val payload = buildEscPosReceipt(
+            settings,
+            transaction,
+            items,
+            lineWidth,
+            appendAdyenCustomerReceipt,
+            appendAdyenCashierReceipt,
+            loyaltyPointsEarned,
+            loyaltyPointsBalance
+        )
+        if (useCache) {
+            escPosReceiptPayloadCache[cacheKey] = CachedEscPosPayload(payload, System.currentTimeMillis())
+        }
+        return payload
     }
 
     private fun sendBytesOverBluetooth(mac: String, payload: ByteArray) {
@@ -2751,6 +2816,7 @@ class BluetoothPrinterService @Inject constructor(
         val SIMULATED_PRINTER = DiscoveredPrinter("Simulated (test)", SIMULATED_ADDRESS)
         private const val TAG = "PrinterService"
         private const val BT_CONNECT_TIMEOUT_MS = 8_000L
+        private const val ESC_POS_RECEIPT_CACHE_TTL_MS = 30 * 60 * 1000L
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
         /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80. */

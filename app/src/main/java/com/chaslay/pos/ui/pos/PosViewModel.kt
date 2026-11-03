@@ -172,6 +172,7 @@ data class PosUiState(
     val receiptPublicUrl: String? = null,
     val showReceiptEmailDialog: Boolean = false,
     val isSendingReceiptEmail: Boolean = false,
+    val isPrintingCompletedReceipt: Boolean = false,
     val receiptEmailError: String? = null,
     val discountPresets: List<DiscountPreset> = emptyList(),
     val showSplitBillScreen: Boolean = false,
@@ -408,6 +409,7 @@ class PosViewModel @Inject constructor(
             receiptPublicUrl = extras.receiptPublicUrl,
             showReceiptEmailDialog = extras.showReceiptEmailDialog,
             isSendingReceiptEmail = extras.isSendingReceiptEmail,
+            isPrintingCompletedReceipt = extras.isPrintingCompletedReceipt,
             receiptEmailError = extras.receiptEmailError,
             discountPresets = discountPresets,
             showSplitBillScreen = extras.showSplitBillScreen,
@@ -4291,6 +4293,7 @@ class PosViewModel @Inject constructor(
                 receiptPublicUrl = null,
                 showReceiptEmailDialog = false,
                 isSendingReceiptEmail = false,
+                isPrintingCompletedReceipt = false,
                 receiptEmailError = null
             )
         }
@@ -4332,7 +4335,17 @@ class PosViewModel @Inject constructor(
     fun printCompletedReceipt() {
         viewModelScope.launch {
             val tx = _uiExtras.value.completedTransaction ?: return@launch
-            printStoredTransactionReceipt(tx.id, adyenFromMemory = true)
+            if (_uiExtras.value.isPrintingCompletedReceipt) return@launch
+            updateExtras { it.copy(isPrintingCompletedReceipt = true) }
+            try {
+                printStoredTransactionReceipt(
+                    transactionId = tx.id,
+                    adyenFromMemory = true,
+                    skipReceiptPublish = true
+                )
+            } finally {
+                updateExtras { it.copy(isPrintingCompletedReceipt = false) }
+            }
         }
     }
 
@@ -4340,8 +4353,9 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             val currentId = _uiExtras.value.completedTransaction?.id
             printStoredTransactionReceipt(
-                transactionId,
-                adyenFromMemory = transactionId == currentId
+                transactionId = transactionId,
+                adyenFromMemory = transactionId == currentId,
+                skipReceiptPublish = true
             )
         }
     }
@@ -4386,34 +4400,40 @@ class PosViewModel @Inject constructor(
 
     private suspend fun printStoredTransactionReceipt(
         transactionId: String,
-        adyenFromMemory: Boolean
-    ) {
-        val full = transactionRepository.getTransaction(transactionId) ?: return
+        adyenFromMemory: Boolean,
+        skipReceiptPublish: Boolean = false
+    ) = withContext(Dispatchers.IO) {
+        val full = transactionRepository.getTransaction(transactionId) ?: return@withContext
         val settings = settingsRepository.getSettings()
-        val (transaction, publicUrl) = publishAndPersistReceipt(full.first, full.second, settings)
-        if (adyenFromMemory && transactionId == _uiExtras.value.completedTransaction?.id) {
+        val extrasSnapshot = _uiExtras.value
+        val (transaction, publicUrl) = if (skipReceiptPublish) {
+            val url = full.first.receiptUrl?.takeIf { it.isNotBlank() }
+                ?: extrasSnapshot.receiptPublicUrl?.takeIf { it.isNotBlank() }
+            full.first.copy(receiptUrl = url ?: full.first.receiptUrl) to url
+        } else {
+            publishAndPersistReceipt(full.first, full.second, settings)
+        }
+        if (adyenFromMemory && transactionId == extrasSnapshot.completedTransaction?.id) {
             if (publicUrl != null) {
                 updateExtras { it.copy(receiptPublicUrl = publicUrl, completedTransaction = transaction) }
             }
         }
-        val extras = _uiExtras.value
         val customerCopy = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
             .appendableForTransaction(
                 transaction,
-                memoryCustomer = if (adyenFromMemory) extras.adyenCustomerReceipt else null,
-                memoryCashier = if (adyenFromMemory) extras.adyenCashierReceipt else null
+                memoryCustomer = if (adyenFromMemory) extrasSnapshot.adyenCustomerReceipt else null,
+                memoryCashier = if (adyenFromMemory) extrasSnapshot.adyenCashierReceipt else null
             ).first
-        withContext(Dispatchers.IO) {
-            printerService.routeReceipt(
-                settings,
-                transaction,
-                full.second,
-                customerCopy,
-                null,
-                loyaltyPointsEarned = if (adyenFromMemory) extras.lastLoyaltyPointsEarned else null,
-                loyaltyPointsBalance = if (adyenFromMemory) extras.lastLoyaltyPointsBalance else null
-            )
-        }.onFailure {
+        printerService.routeReceipt(
+            settings,
+            transaction,
+            full.second,
+            customerCopy,
+            null,
+            loyaltyPointsEarned = if (adyenFromMemory) extrasSnapshot.lastLoyaltyPointsEarned else null,
+            loyaltyPointsBalance = if (adyenFromMemory) extrasSnapshot.lastLoyaltyPointsBalance else null,
+            usePayloadCache = true
+        ).onFailure {
             if (adyenFromMemory) {
                 updateExtras {
                     it.copy(orderCompleteNotice = PrinterUserMessages.fromPrintFailure(appContext))
@@ -6305,6 +6325,7 @@ class PosViewModel @Inject constructor(
         val receiptPublicUrl: String? = null,
         val showReceiptEmailDialog: Boolean = false,
         val isSendingReceiptEmail: Boolean = false,
+        val isPrintingCompletedReceipt: Boolean = false,
         val receiptEmailError: String? = null,
         val showCartCancelDialog: Boolean = false,
         val showCartCancelSimpleDialog: Boolean = false,

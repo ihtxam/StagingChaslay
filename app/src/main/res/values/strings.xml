@@ -142,6 +142,7 @@
     <string name="payment_failed">Payment failed</string>
     <string name="receipt_options">Receipt Options</string>
     <string name="print_receipt">Print Receipt</string>
+    <string name="print_receipt_in_progress">Printing…</string>
     <string name="print_payment_receipt">Print card receipt</string>
     <string name="print_customer_card_receipt">Customer card copy</string>
     <string name="print_merchant_card_receipt">Merchant card copy</string>

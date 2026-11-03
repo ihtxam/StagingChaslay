@@ -86,6 +86,7 @@ fun OrderCompleteDialog(
     orderCompleteNotice: String? = null,
     showAdyenPaymentReceipt: Boolean = false,
     showAdyenCashierReceipt: Boolean = false,
+    isPrintingReceipt: Boolean = false,
     onPrintReceipt: () -> Unit,
     onPrintSplitReceipt: (String) -> Unit = {},
     onPrintAllSplitReceipts: () -> Unit = {},
@@ -385,6 +386,7 @@ fun OrderCompleteDialog(
                     ) {
                         OutlinedButton(
                             onClick = onPrintReceipt,
+                            enabled = !isPrintingReceipt,
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
@@ -397,7 +399,11 @@ fun OrderCompleteDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                stringResource(R.string.print_receipt),
+                                if (isPrintingReceipt) {
+                                    stringResource(R.string.print_receipt_in_progress)
+                                } else {
+                                    stringResource(R.string.print_receipt)
+                                },
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = posUiColors().textPrimary
