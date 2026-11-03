@@ -1,0 +1,1 @@
+import{aN as o}from"./index-DxTjGz6F.js";const a="1.0.0",P="ba8ba812",n=`Panel build: ${P}`,s=`${o} v${a}`;export{a as APP_VERSION,P as PANEL_BUILD_STAMP,n as panelBuildLabel,s as webPosVersionLabel};

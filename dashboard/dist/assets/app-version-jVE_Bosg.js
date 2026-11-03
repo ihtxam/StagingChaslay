@@ -1,1 +1,0 @@
-import{aN as o}from"./index-Co5-vYpg.js";const P="1.0.0",a="a92195cf",n=`Panel build: ${a}`,s=`${o} v${P}`;export{P as APP_VERSION,a as PANEL_BUILD_STAMP,n as panelBuildLabel,s as webPosVersionLabel};

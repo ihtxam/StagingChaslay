@@ -1,8 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ChevronDown,
-  ChevronUp,
   ImagePlus,
   Loader2,
   Plus,
@@ -128,7 +126,6 @@ export default function Modifiers() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
-  const [otherOpen, setOtherOpen] = useState(true);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [optionUploadIdx, setOptionUploadIdx] = useState<number | null>(null);
@@ -272,7 +269,6 @@ export default function Modifiers() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm());
-    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -286,7 +282,6 @@ export default function Modifiers() {
       minSelectable: 0,
       maxSelectable: 10,
     });
-    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -339,7 +334,6 @@ export default function Modifiers() {
         : [emptyOption()],
       productIds: [...(group.productIds || [])],
     });
-    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -714,29 +708,33 @@ export default function Modifiers() {
       {editorOpen && typeof document !== 'undefined'
         ? createPortal(
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40"
+          className="modifier-drawer-backdrop fixed inset-0 z-[80] flex justify-end"
           onClick={closeEditor}
           role="presentation"
         >
           <form
             onSubmit={onSave}
+            className="modifier-drawer flex h-full flex-col"
             onClick={(e) => e.stopPropagation()}
-            className="flex h-full w-full max-w-3xl flex-col bg-[#f5f6f8] shadow-2xl"
           >
-            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
-              <h2 className="text-xl font-bold text-slate-900">
+            <div className="modifier-drawer__header flex items-center justify-between border-b px-5 py-4">
+              <h2 className="text-lg font-bold text-[var(--text)]">
                 {editingId ? t('editGroup') : t('extrasNosAddGroup')}
               </h2>
-              <button type="button" onClick={closeEditor} className="rounded-lg p-2 hover:bg-slate-100">
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+              >
                 <X size={18} />
               </button>
             </div>
 
             <div
               ref={modifierEditorScrollRef}
-              className="flex-1 overflow-y-auto overscroll-y-contain px-6 py-5 space-y-4 [-webkit-overflow-scrolling:touch]"
+              className="modifier-drawer__scroll flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-4 [-webkit-overflow-scrolling:touch]"
             >
-              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
+              <section className="modifier-drawer__card p-5 space-y-5">
                 <Field label={t('title')} required>
                   <input
                     className="field"
@@ -747,10 +745,10 @@ export default function Modifiers() {
                 </Field>
 
                 <fieldset>
-                  <legend className="mb-2 text-sm font-medium text-slate-700">
+                  <legend className="mb-2 text-sm font-medium text-[var(--text)]">
                     {t('pricingType')} <span className="text-red-500">*</span>
                   </legend>
-                  <div className="flex flex-wrap gap-5 text-sm">
+                  <div className="modifier-drawer__segment">
                     {(
                       [
                         ['free', 'free'],
@@ -758,45 +756,45 @@ export default function Modifiers() {
                         ['toppings_by_size', 'toppingsBySize'],
                       ] as const
                     ).map(([value, labelKey]) => (
-                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="pricingType"
-                          checked={form.pricingType === value}
-                          onChange={() => setForm({ ...form, pricingType: value })}
-                          className="accent-teal-600"
-                        />
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setForm({ ...form, pricingType: value })}
+                        className={`modifier-drawer__segment-btn ${
+                          form.pricingType === value ? 'modifier-drawer__segment-btn--active' : ''
+                        }`}
+                      >
                         {t(labelKey)}
-                      </label>
+                      </button>
                     ))}
                   </div>
                 </fieldset>
 
                 <fieldset>
-                  <legend className="mb-2 text-sm font-medium text-slate-700">
+                  <legend className="mb-2 text-sm font-medium text-[var(--text)]">
                     {t('selectionType')} <span className="text-red-500">*</span>
                   </legend>
-                  <div className="flex flex-wrap gap-5 text-sm mb-3">
+                  <div className="modifier-drawer__segment mb-3 max-w-xs">
                     {(
                       [
                         ['optional', 'optional'],
                         ['required', 'required'],
                       ] as const
                     ).map(([value, labelKey]) => (
-                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="selectionType"
-                          checked={form.selectionType === value}
-                          onChange={() => setSelectionType(value)}
-                          className="accent-teal-600"
-                        />
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setSelectionType(value)}
+                        className={`modifier-drawer__segment-btn ${
+                          form.selectionType === value ? 'modifier-drawer__segment-btn--active' : ''
+                        }`}
+                      >
                         {t(labelKey)}
-                      </label>
+                      </button>
                     ))}
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  <div className="modifier-drawer__card bg-[var(--bg-muted)]/30 p-4 space-y-3">
                     {form.selectionType === 'required' && (
                       <Stepper
                         label={t('minimumRequired')}
@@ -1129,99 +1127,76 @@ export default function Modifiers() {
                 </div>
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-5 py-4 text-left font-semibold"
-                  onClick={() => setOtherOpen((v) => !v)}
-                >
-                  {t('otherSettings')}
-                  {otherOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </button>
-                {otherOpen && (
-                  <div className="border-t border-slate-100 px-5 py-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-slate-800">{t('linkProducts')}</h4>
-                      <button
-                        type="button"
-                        onClick={() => setProductPickerOpen(true)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-teal-600 text-white hover:bg-teal-700"
+              <section className="modifier-drawer__card p-5 space-y-3">
+                <h3 className="font-semibold text-[var(--text)]">
+                  {t('linkProducts')} ({linkedProducts.length})
+                </h3>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    className="field pl-9"
+                    placeholder={t('searchModifierProductsPlaceholder')}
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    onFocus={() => setProductPickerOpen(true)}
+                  />
+                </div>
+                {linkedProducts.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
+                    {t('noDataYet')}
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {linkedProducts.map((p) => (
+                      <span
+                        key={p.id}
+                        className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 py-1 pl-3 pr-1.5 text-sm font-medium text-teal-900 ring-1 ring-teal-200/80"
                       >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                    {linkedProducts.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
-                        {t('noDataYet')}
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {linkedProducts.map((p) => (
-                          <span
-                            key={p.id}
-                            className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 py-1 pl-3 pr-1.5 text-sm font-medium text-teal-900 ring-1 ring-teal-200/80"
-                          >
-                            <span className="truncate">
-                              {p.name}
-                              {p.category?.name ? (
-                                <span className="ml-1 text-xs font-normal text-teal-700/80">
-                                  · {p.category.name}
-                                </span>
-                              ) : null}
-                            </span>
-                            <button
-                              type="button"
-                              className="rounded-full p-1 text-teal-700/70 hover:bg-teal-100 hover:text-red-600"
-                              aria-label={t('delete')}
-                              onClick={() =>
-                                setForm({
-                                  ...form,
-                                  productIds: form.productIds.filter((id) => id !== p.id),
-                                })
-                              }
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                        <span className="truncate">{p.name}</span>
+                        <button
+                          type="button"
+                          className="rounded-full p-1 text-teal-700/70 hover:bg-teal-100 hover:text-red-600"
+                          aria-label={t('delete')}
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              productIds: form.productIds.filter((id) => id !== p.id),
+                            })
+                          }
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
                   </div>
                 )}
               </section>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
+            <div className="modifier-drawer__footer flex justify-end gap-3 border-t px-5 py-4">
+              <button type="button" onClick={closeEditor} className="btn-secondary px-5 py-2.5 text-sm">
                 {t('cancel')}
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
-              >
+              <button type="submit" disabled={saving} className="btn-primary px-6 py-2.5 text-sm">
                 {saving ? t('saving') : t('save')}
               </button>
             </div>
           </form>
         </div>,
         document.body
-      )
+          )
         : null}
 
-      {productPickerOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-5 py-4">
-              <h3 className="font-bold text-slate-900">{t('linkProducts')}</h3>
+      {productPickerOpen && typeof document !== 'undefined'
+        ? createPortal(
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
+          <div className="merchant-dialog-surface w-full max-w-lg rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+              <h3 className="font-bold text-[var(--text)]">{t('linkProducts')}</h3>
               <button
                 type="button"
                 onClick={() => setProductPickerOpen(false)}
-                className="rounded-lg p-2 hover:bg-slate-100"
+                className="rounded-lg p-2 hover:bg-[var(--bg-muted)]"
               >
                 <X size={18} />
               </button>
@@ -1267,8 +1242,10 @@ export default function Modifiers() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+          )
+        : null}
 
       <BulkDeleteConfirmModal
         open={bulkDeleteOpen}
