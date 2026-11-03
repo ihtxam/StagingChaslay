@@ -335,6 +335,12 @@ fun PosScreen(
             onTogglePayWithGiftCard = viewModel::updateCheckoutPayWithGiftCard,
             onGiftCardPay = viewModel::openGiftCardPayDialog,
             posMenuDesign = posMenuDesign,
+            checkoutContextLine = cartFulfillmentHeadline(
+                cart = checkoutCart,
+                activeTableName = state.activeTableName,
+                serviceType = checkoutCart.serviceType,
+            ),
+            activeTableName = state.activeTableName,
         )
         if (state.showOrderComplete) {
             state.completedTransaction?.let { transaction ->
@@ -521,18 +527,12 @@ fun PosScreen(
             onNavigate = onNavigate,
             onLogout = onLogout
         )
-        if (isModernMenuDesign && mainTab == PosMainTab.REGISTER) {
-            ModernPosIdentityBar(
-                businessName = state.settings.businessName,
-                loggedInUserName = loggedInUserName,
-            )
-        }
         Row(modifier = Modifier.weight(1f)) {
             val orderingItemsForRail = state.cart.items.filter { !it.sentToKitchen }
             CartActionSidebar(
                 businessName = state.settings.businessName,
                 loggedInUserName = loggedInUserName,
-                showStoreIdentityInRail = !isModernMenuDesign,
+                showStoreIdentityInRail = true,
                 isRestaurantMode = isRestaurantMode,
                 ordersTabMode = mainTab == PosMainTab.ORDERS,
                 showRetailTakeaway = isRetailMode && retailTakeawayEnabled,

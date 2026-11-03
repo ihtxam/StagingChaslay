@@ -31,6 +31,22 @@ object OrderNumberFormat {
         return raw
     }
 
+    /** Guest receipt footer: channel · date/time · order ref on one line. */
+    fun formatReceiptMetaLine(
+        dateTime: String,
+        orderNumber: String? = null,
+        orderDisplay: String? = null,
+        tabNumber: String? = null,
+        orderType: String? = null,
+    ): String {
+        val guestRef = guestOrderNumber(orderNumber, orderDisplay, tabNumber)
+        return buildList {
+            orderType?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
+            dateTime.trim().takeIf { it.isNotEmpty() }?.let { add(it) }
+            guestRef.takeIf { it.isNotBlank() }?.let { add(it) }
+        }.joinToString(" · ")
+    }
+
     fun formatCheckoutOrderRef(
         orderNumber: String?,
         kitchenNumber: String? = null,

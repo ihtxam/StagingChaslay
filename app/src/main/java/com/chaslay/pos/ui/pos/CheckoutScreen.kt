@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -71,6 +72,8 @@ import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosDimens
 import com.chaslay.pos.ui.theme.PosShapes
 import com.chaslay.pos.util.suggestQuickCashTenderAmounts
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.round
 
@@ -150,8 +153,11 @@ fun CheckoutScreen(
     onTogglePayWithGiftCard: (Boolean) -> Unit = {},
     onGiftCardPay: () -> Unit = {},
     posMenuDesign: PosMenuDesign = PosMenuDesign.CLASSIC,
+    checkoutContextLine: String? = null,
+    activeTableName: String? = null,
 ) {
-    val showCartThumbnails = posMenuDesign.isModern
+    val isModernCheckout = posMenuDesign.isModern
+    val showCartThumbnails = isModernCheckout
     val equalSplitCount = if (isEqualSplit) splitBillCount ?: 1 else 1
     val totals = rememberCheckoutTotals(cart, checkoutState, equalSplitCount)
     val showSplitNav = splitBillIndex != null && splitBillCount != null && splitBillCount > 1
@@ -286,8 +292,10 @@ fun CheckoutScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                stringResource(R.string.checkout_title),
-                fontSize = 20.sp,
+                stringResource(
+                    if (isModernCheckout) R.string.checkout_payment_methods else R.string.checkout_title
+                ),
+                fontSize = if (isModernCheckout) 16.sp else 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = posUiColors().textPrimary
             )
@@ -466,25 +474,34 @@ fun CheckoutScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        if (checkoutOrderRef.isNotEmpty()) {
+                if (isModernCheckout) {
+                    ModernCheckoutOrderHeader(
+                        orderRef = checkoutOrderRef,
+                        contextLine = checkoutContextLine,
+                        tableName = activeTableName,
+                        itemCount = cart.items.size,
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            if (checkoutOrderRef.isNotEmpty()) {
+                                Text(
+                                    checkoutOrderRef,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = posUiColors().textPrimary
+                                )
+                            }
                             Text(
-                                checkoutOrderRef,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = posUiColors().textPrimary
+                                stringResource(R.string.total_items, cart.items.size),
+                                fontSize = 12.sp,
+                                color = posUiColors().textSecondary
                             )
                         }
-                        Text(
-                            stringResource(R.string.total_items, cart.items.size),
-                            fontSize = 12.sp,
-                            color = posUiColors().textSecondary
-                        )
                     }
                 }
 
@@ -682,6 +699,14 @@ fun CheckoutScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            if (isModernCheckout) {
+                Text(
+                    stringResource(R.string.checkout_settlement),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = posUiColors().textPrimary,
+                )
+            }
             if (cashEnabled) {
                 Text(
                     stringResource(R.string.checkout_amount_received),
@@ -1064,6 +1089,95 @@ private fun formatQuickCashAmount(amount: Double, symbol: String): String =
     } else {
         formatMoney(amount, symbol)
     }
+
+@Composable
+private fun ModernCheckoutOrderHeader(
+    orderRef: String,
+    contextLine: String?,
+    tableName: String?,
+    itemCount: Int,
+) {
+    val ui = posUiColors()
+    val timeLabel = remember {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (orderRef.isNotBlank()) {
+                    stringResource(R.string.checkout_order_heading, orderRef)
+                } else {
+                    stringResource(R.string.checkout_title)
+                },
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = ui.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(PosColors.Success),
+                )
+                Text(
+                    stringResource(R.string.checkout_status_unpaid),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PosColors.Success,
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            contextLine?.takeIf { it.isNotBlank() }?.let { line ->
+                Text(
+                    line,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = ui.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            tableName?.takeIf { it.isNotBlank() }?.let { table ->
+                Text(
+                    table,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ui.textPrimary,
+                    maxLines = 1,
+                )
+            }
+            Text(
+                timeLabel,
+                fontSize = 12.sp,
+                color = ui.textMuted,
+            )
+        }
+        Text(
+            stringResource(R.string.total_items, itemCount),
+            fontSize = 12.sp,
+            color = ui.textSecondary,
+        )
+    }
+}
 
 private fun formatTenderBuffer(amount: Double): String =
     if (amount == kotlin.math.floor(amount)) {

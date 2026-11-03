@@ -748,6 +748,10 @@
     <string name="clear">Réinitialiser</string>
     <string name="checkout_back">Retour</string>
     <string name="checkout_title">Paiement</string>
+    <string name="checkout_payment_methods">Mode de paiement</string>
+    <string name="checkout_order_heading">Commande %1$s</string>
+    <string name="checkout_status_unpaid">À payer</string>
+    <string name="checkout_settlement">Règlement</string>
     <string name="checkout_complete">Finalisez le paiement</string>
     <string name="checkout_complete_with_change">Valider · monnaie %1$s</string>
     <string name="checkout_amount_due">Montant dû</string>

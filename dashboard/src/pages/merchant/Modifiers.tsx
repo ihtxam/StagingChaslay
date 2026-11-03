@@ -507,6 +507,7 @@ export default function Modifiers() {
                 <th className="px-4 py-3">{t('extrasNosColPrice')}</th>
                 <th className="px-4 py-3">{t('extrasNosColRule')}</th>
                 <th className="px-4 py-3">{t('extrasNosColOptions')}</th>
+                <th className="px-4 py-3">{t('extrasNosColMax')}</th>
                 <th className="px-4 py-3">{t('extrasNosColLinked')}</th>
                 <th className="px-4 py-3">{t('status')}</th>
                 <th className="px-4 py-3 text-right">{t('edit')}</th>
@@ -516,9 +517,24 @@ export default function Modifiers() {
               {filtered.map((group) => (
                 <tr key={`table-${group.id}`} className="border-t border-[var(--border)]">
                   <td className="px-4 py-3">
-                    <div className="font-semibold">{group.title}</div>
-                    <div className="text-xs text-[var(--text-muted)] line-clamp-1">
-                      {group.options.map((o) => o.name).join(', ') || '—'}
+                    <div className="flex items-center gap-2.5">
+                      {group.options[0]?.imageUrl ? (
+                        <img
+                          src={group.options[0].imageUrl}
+                          alt=""
+                          className="h-9 w-9 shrink-0 rounded-full border border-[var(--border)] object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-bold text-teal-800">
+                          {group.title.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-semibold">{group.title}</div>
+                        <div className="text-xs text-[var(--text-muted)] line-clamp-1">
+                          {group.options.map((o) => o.name).join(', ') || '—'}
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -532,9 +548,22 @@ export default function Modifiers() {
                       {formatGroupPrice(group)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm">{formatSelectionRule(group)}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        group.selectionType === 'required'
+                          ? 'bg-teal-50 text-teal-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {group.selectionType === 'required' ? t('required') : t('optional')}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 tabular-nums">{group.options.length}</td>
-                  <td className="px-4 py-3 tabular-nums">{group.products.length}</td>
+                  <td className="px-4 py-3 tabular-nums">{group.maxSelectable}</td>
+                  <td className="px-4 py-3 tabular-nums text-teal-700 font-medium">
+                    {group.products.length}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />

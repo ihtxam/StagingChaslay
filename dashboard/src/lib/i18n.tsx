@@ -530,6 +530,7 @@ const en: Dict = {
   extrasNosColPrice: 'Price',
   extrasNosColRule: 'Selection rule',
   extrasNosColOptions: 'Options',
+  extrasNosColMax: 'Max qty',
   extrasNosColLinked: 'Linked products',
   extraModuleRequest: 'Request',
   extraModuleRequestConfirm:
@@ -6061,6 +6062,7 @@ const fr: Dict = {
   extrasNosColPrice: 'Prix',
   extrasNosColRule: 'Règle de sélection',
   extrasNosColOptions: 'Options',
+  extrasNosColMax: 'Qté max',
   extrasNosColLinked: 'Produits liés',
   extraModuleRequest: 'Demander',
   extraModuleRequestConfirm:
@@ -11279,6 +11281,7 @@ const de: Dict = {
   extrasNosColPrice: 'Preis',
   extrasNosColRule: 'Auswahlregel',
   extrasNosColOptions: 'Optionen',
+  extrasNosColMax: 'Max. Menge',
   extrasNosColLinked: 'Verknüpfte Produkte',
   extraModuleRequest: 'Anfragen',
   extraModuleRequestConfirm:

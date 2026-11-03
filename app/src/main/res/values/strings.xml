@@ -898,6 +898,10 @@
     <string name="clear">Clear</string>
     <string name="checkout_back">Back</string>
     <string name="checkout_title">Payment</string>
+    <string name="checkout_payment_methods">Payment method</string>
+    <string name="checkout_order_heading">Order %1$s</string>
+    <string name="checkout_status_unpaid">To pay</string>
+    <string name="checkout_settlement">Settlement</string>
     <string name="checkout_complete">Complete payment</string>
     <string name="checkout_complete_with_change">Complete · change %1$s</string>
     <string name="checkout_amount_due">Amount due</string>

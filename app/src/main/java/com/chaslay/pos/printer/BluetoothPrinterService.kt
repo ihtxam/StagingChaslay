@@ -2094,27 +2094,23 @@ class BluetoothPrinterService @Inject constructor(
         tabNumber: String? = null,
         orderType: String? = null
     ) {
-        val guestRef = com.chaslay.pos.util.OrderNumberFormat.guestOrderNumber(
-            orderNumber = orderNumber,
-            orderDisplay = orderDisplay,
-            tabNumber = tabNumber
-        )
         sb.append(escAlignLeft())
         sb.append(escDoubleHeight(false))
         sb.append(escBold(false))
-        if (guestRef.isNotBlank()) {
-            sb.appendLine(leftRight(dateTime, guestRef, lineWidth))
-        } else {
-            sb.appendLine(dateTime)
+        val metaLine = com.chaslay.pos.util.OrderNumberFormat.formatReceiptMetaLine(
+            dateTime = dateTime,
+            orderNumber = orderNumber,
+            orderDisplay = orderDisplay,
+            tabNumber = tabNumber,
+            orderType = orderType,
+        )
+        if (metaLine.isNotBlank()) {
+            sb.appendLine(center(metaLine, lineWidth))
         }
-        val secondaryParts = buildList {
-            orderType?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
-            if (showStaff) {
-                staffName?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
+        if (showStaff) {
+            staffName?.trim()?.takeIf { it.isNotBlank() }?.let { name ->
+                sb.appendLine(center(name, lineWidth))
             }
-        }
-        if (secondaryParts.isNotEmpty()) {
-            sb.appendLine(center(secondaryParts.joinToString(" | "), lineWidth))
         }
     }
 
@@ -2766,16 +2762,19 @@ class BluetoothPrinterService @Inject constructor(
         val sb = StringBuilder()
         appendReceiptStoreBlock(sb, settings, lineWidth)
         sb.appendLine(center(sep, lineWidth))
-        sb.appendLine(leftRight("${labels.orderNumber} #1032", "", lineWidth))
+        val sampleWhen = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date())
         sb.appendLine(
-            leftRight(
-                SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date()),
-                "",
+            center(
+                com.chaslay.pos.util.OrderNumberFormat.formatReceiptMetaLine(
+                    dateTime = sampleWhen,
+                    orderNumber = "TX-SAMPLE-1032",
+                    orderType = labels.takeaway,
+                ),
                 lineWidth
             )
         )
         if (settings.receiptShowStaffLine) {
-            sb.appendLine(leftRight("${labels.staff}: Admin", "", lineWidth))
+            sb.appendLine(center("${labels.staff} Admin", lineWidth))
         }
         sb.appendLine(center(sep, lineWidth))
         sb.appendLine(leftRight("Burger classique", formatMoney(12.0, settings.currencySymbol), lineWidth))

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -37,9 +38,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,7 +57,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Size
 import com.chaslay.pos.R
+import com.chaslay.pos.ui.components.ExpandableOrdersSearch
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.domain.model.PosMenuDesign
@@ -67,39 +69,6 @@ import com.chaslay.pos.ui.theme.PosShapes
 import com.chaslay.pos.ui.theme.categoryColor
 import com.chaslay.pos.ui.theme.posUiColors
 import java.util.Locale
-
-@Composable
-fun ModernPosIdentityBar(
-    businessName: String,
-    loggedInUserName: String?,
-    modifier: Modifier = Modifier,
-) {
-    val ui = posUiColors()
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(ui.canvas)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(
-            businessName,
-            color = ui.textPrimary,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        loggedInUserName?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
-            Text(
-                name,
-                color = ui.textSecondary,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
 
 @Composable
 fun ModernPosCatalogPane(
@@ -159,30 +128,16 @@ fun ModernPosCatalogPane(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text(
-                        stringResource(R.string.pos_catalog_search_hint),
-                        color = ui.textMuted,
-                        fontSize = 14.sp,
-                    )
-                },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = ui.textSecondary)
-                },
-                singleLine = true,
-                shape = PosShapes.Medium,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = ui.surface,
-                    unfocusedContainerColor = ui.surface,
-                    focusedBorderColor = ui.primaryBorder,
-                    unfocusedBorderColor = ui.border,
-                    focusedTextColor = ui.textPrimary,
-                    unfocusedTextColor = ui.textPrimary,
-                ),
+            ExpandableOrdersSearch(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                placeholderRes = R.string.pos_catalog_search_hint,
+                modifier = Modifier
+                    .weight(1f)
+                    .widthIn(min = 40.dp),
+                expandedMinWidth = 180.dp,
+                expandedMaxWidth = 720.dp,
+                searchContentDescriptionRes = R.string.pos_catalog_search_hint,
             )
             ModernPosCatalogFilters(
                 showProductImages = showProductImagesPref,
@@ -266,25 +221,18 @@ private fun ModernPosCatalogFilters(
     var expanded by remember { mutableStateOf(false) }
     val activeFilters = listOf(showProductImages, sortAlpha, sortBestseller).count { it }
     Box {
-        OutlinedButton(
+        IconButton(
             onClick = { expanded = true },
-            shape = PosShapes.Medium,
-            border = androidx.compose.foundation.BorderStroke(1.dp, ui.border),
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = ui.surface),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .size(40.dp)
+                .border(1.dp, if (activeFilters > 0) PosColors.Primary else ui.border, PosShapes.Medium)
+                .background(ui.surface, PosShapes.Medium),
         ) {
             Icon(
                 Icons.Default.FilterList,
                 contentDescription = stringResource(R.string.pos_catalog_filters),
                 tint = if (activeFilters > 0) PosColors.Primary else ui.textPrimary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                stringResource(R.string.pos_catalog_filters),
-                color = ui.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
+                modifier = Modifier.size(20.dp),
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -600,6 +548,8 @@ private fun ModernPosProductTile(
     onClick: () -> Unit,
 ) {
     val ui = posUiColors()
+    val context = LocalContext.current
+    val thumbSize = remember { Size(256, 256) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -624,7 +574,11 @@ private fun ModernPosProductTile(
         ) {
             if (showImage && !product.imageUri.isNullOrBlank()) {
                 AsyncImage(
-                    model = product.imageUri,
+                    model = ImageRequest.Builder(context)
+                        .data(product.imageUri)
+                        .size(thumbSize)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -656,6 +610,8 @@ private fun ModernPosProductTile(
 @Composable
 internal fun ModernPosCartLineThumbnail(imageUri: String?, modifier: Modifier = Modifier) {
     val ui = posUiColors()
+    val context = LocalContext.current
+    val thumbSize = remember { Size(80, 80) }
     Box(
         modifier = modifier
             .size(40.dp)
@@ -666,7 +622,11 @@ internal fun ModernPosCartLineThumbnail(imageUri: String?, modifier: Modifier = 
     ) {
         if (!imageUri.isNullOrBlank()) {
             AsyncImage(
-                model = imageUri,
+                model = ImageRequest.Builder(context)
+                    .data(imageUri)
+                    .size(thumbSize)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
