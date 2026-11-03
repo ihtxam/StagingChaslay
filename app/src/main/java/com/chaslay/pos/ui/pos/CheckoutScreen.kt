@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +38,8 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Redeem
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -62,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.cartMerchandiseBase
 import com.chaslay.pos.domain.resolveBillDiscountAmount
+import com.chaslay.pos.domain.model.CartItem
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.LoyaltyMath
@@ -275,6 +280,72 @@ fun CheckoutScreen(
         )
     }
 
+    if (isModernCheckout) {
+        ModernCheckoutBody(
+            cart = cart,
+            currencySymbol = currencySymbol,
+            checkoutState = checkoutState,
+            totals = totals,
+            checkoutOrderRef = checkoutOrderRef,
+            checkoutContextLine = checkoutContextLine,
+            activeTableName = activeTableName,
+            cashEnabled = cashEnabled,
+            cardEnabled = cardEnabled,
+            terminalEnabled = terminalEnabled,
+            tapToPayEnabled = tapToPayEnabled,
+            tapToPayReady = tapToPayReady,
+            tapToPayStatus = tapToPayStatus,
+            tipsEnabled = tipsEnabled,
+            discountsEnabled = discountsEnabled,
+            quickCashEnabled = quickCashEnabled,
+            currencyCode = currencyCode,
+            splitBillsEnabled = splitBillsEnabled,
+            showSplitNav = showSplitNav,
+            splitBillIndex = splitBillIndex,
+            splitBillCount = splitBillCount,
+            isEqualSplit = isEqualSplit,
+            equalSplitPaidCount = equalSplitPaidCount,
+            equalSplitCount = equalSplitCount,
+            giftCardsEnabled = giftCardsEnabled,
+            membershipPointsBalance = membershipPointsBalance,
+            membershipGiftBalance = membershipGiftBalance,
+            redeemThresholdPoints = redeemThresholdPoints,
+            checkoutEurDisplayEnabled = checkoutEurDisplayEnabled,
+            checkoutChfToEurRate = checkoutChfToEurRate,
+            tenderBuffer = tenderBuffer,
+            cashApplied = cashApplied,
+            cardApplied = cardApplied,
+            remaining = remaining,
+            changeDue = changeDue,
+            canComplete = canComplete,
+            onBack = onBack,
+            onSelectMethod = onSelectMethod,
+            onDeselectMethod = onDeselectMethod,
+            onApplyCardRemainder = onApplyCardRemainder,
+            onTenderAmount = onTenderAmount,
+            onComplete = onComplete,
+            onSplitClick = onSplitClick,
+            onOpenCashDrawer = onOpenCashDrawer,
+            onPrintReceipt = onPrintReceipt,
+            onScanBarcode = onScanBarcode,
+            onGiftCardPay = onGiftCardPay,
+            onTogglePayWithPoints = onTogglePayWithPoints,
+            onTogglePayWithGiftCard = onTogglePayWithGiftCard,
+            onPrevSplitBill = onPrevSplitBill,
+            onNextSplitBill = onNextSplitBill,
+            onShowTipDialog = { showTipDialog = true },
+            onShowDiscountDialog = { showDiscountDialog = true },
+            applyTender = ::applyTender,
+            appendTenderKey = ::appendTenderKey,
+            selectCardOrSplit = ::selectCardOrSplit,
+            clearTender = {
+                tenderBuffer = ""
+                onTenderAmount(0.0)
+            },
+        )
+        return
+    }
+
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -474,14 +545,7 @@ fun CheckoutScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (isModernCheckout) {
-                    ModernCheckoutOrderHeader(
-                        orderRef = checkoutOrderRef,
-                        contextLine = checkoutContextLine,
-                        tableName = activeTableName,
-                        itemCount = cart.items.size,
-                    )
-                } else {
+                if (!isModernCheckout) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1091,11 +1155,627 @@ private fun formatQuickCashAmount(amount: Double, symbol: String): String =
     }
 
 @Composable
+private fun ModernCheckoutBody(
+    cart: CartSummary,
+    currencySymbol: String,
+    checkoutState: CheckoutState,
+    totals: CheckoutTotals,
+    checkoutOrderRef: String,
+    checkoutContextLine: String?,
+    activeTableName: String?,
+    cashEnabled: Boolean,
+    cardEnabled: Boolean,
+    terminalEnabled: Boolean,
+    tapToPayEnabled: Boolean,
+    tapToPayReady: Boolean,
+    tapToPayStatus: String?,
+    tipsEnabled: Boolean,
+    discountsEnabled: Boolean,
+    quickCashEnabled: Boolean,
+    currencyCode: String,
+    splitBillsEnabled: Boolean,
+    showSplitNav: Boolean,
+    splitBillIndex: Int?,
+    splitBillCount: Int?,
+    isEqualSplit: Boolean,
+    equalSplitPaidCount: Int,
+    equalSplitCount: Int,
+    giftCardsEnabled: Boolean,
+    membershipPointsBalance: Int?,
+    membershipGiftBalance: Double?,
+    redeemThresholdPoints: Int,
+    checkoutEurDisplayEnabled: Boolean,
+    checkoutChfToEurRate: Double,
+    tenderBuffer: String,
+    cashApplied: Double,
+    cardApplied: Double,
+    remaining: Double,
+    changeDue: Double,
+    canComplete: Boolean,
+    onBack: () -> Unit,
+    onSelectMethod: (PaymentMethod) -> Unit,
+    onDeselectMethod: () -> Unit,
+    onApplyCardRemainder: (Double) -> Unit,
+    onTenderAmount: (Double) -> Unit,
+    onComplete: () -> Unit,
+    onSplitClick: () -> Unit,
+    onOpenCashDrawer: () -> Unit,
+    onPrintReceipt: () -> Unit,
+    onScanBarcode: () -> Unit,
+    onGiftCardPay: () -> Unit,
+    onTogglePayWithPoints: (Boolean) -> Unit,
+    onTogglePayWithGiftCard: (Boolean) -> Unit,
+    onPrevSplitBill: () -> Unit,
+    onNextSplitBill: () -> Unit,
+    onShowTipDialog: () -> Unit,
+    onShowDiscountDialog: () -> Unit,
+    applyTender: (Double) -> Unit,
+    appendTenderKey: (String) -> Unit,
+    selectCardOrSplit: () -> Unit,
+    clearTender: () -> Unit,
+) {
+    val ui = posUiColors()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ui.canvas),
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(280.dp)
+                    .fillMaxHeight()
+                    .background(ui.surface)
+                    .border(1.dp, ui.border)
+                    .clickableWithoutRipple { onDeselectMethod() }
+                    .padding(PosDimens.PagePaddingCompact)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.checkout_payment_methods),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ui.textPrimary,
+                )
+                if (cashEnabled) {
+                    ModernCheckoutMethodCard(
+                        title = stringResource(R.string.cash),
+                        icon = Icons.Default.AttachMoney,
+                        selected = checkoutState.method == PaymentMethod.CASH,
+                        onClick = { onSelectMethod(PaymentMethod.CASH) },
+                    )
+                }
+                if (cardEnabled) {
+                    ModernCheckoutMethodCard(
+                        title = stringResource(R.string.card),
+                        icon = Icons.Default.CreditCard,
+                        selected = checkoutState.method == PaymentMethod.CARD,
+                        onClick = selectCardOrSplit,
+                    )
+                }
+                if (terminalEnabled) {
+                    ModernCheckoutMethodCard(
+                        title = stringResource(R.string.adyen_terminal),
+                        icon = Icons.Default.PointOfSale,
+                        selected = checkoutState.method == PaymentMethod.ADYEN_TERMINAL,
+                        onClick = {
+                            if (cashApplied > 0.001 && remaining > 0.001) {
+                                onApplyCardRemainder(remaining)
+                                onSelectMethod(PaymentMethod.ADYEN_TERMINAL)
+                            } else {
+                                clearTender()
+                                onSelectMethod(PaymentMethod.ADYEN_TERMINAL)
+                            }
+                        },
+                    )
+                }
+                if (tapToPayEnabled) {
+                    ModernCheckoutMethodCard(
+                        title = stringResource(R.string.tap_to_pay_method),
+                        icon = Icons.Default.Contactless,
+                        selected = checkoutState.method == PaymentMethod.TAP_TO_PAY,
+                        enabled = tapToPayReady,
+                        subtitle = tapToPayStatus?.takeIf { !tapToPayReady },
+                        onClick = {
+                            if (cashApplied > 0.001 && remaining > 0.001) {
+                                onApplyCardRemainder(remaining)
+                                onSelectMethod(PaymentMethod.TAP_TO_PAY)
+                            } else {
+                                clearTender()
+                                onSelectMethod(PaymentMethod.TAP_TO_PAY)
+                            }
+                        },
+                    )
+                }
+                ModernCheckoutMethodCard(
+                    title = stringResource(R.string.checkout_deferred_payment),
+                    subtitle = stringResource(R.string.checkout_deferred_account),
+                    icon = Icons.Default.Schedule,
+                    selected = checkoutState.method == PaymentMethod.PAY_LATER,
+                    onClick = {
+                        clearTender()
+                        onSelectMethod(PaymentMethod.PAY_LATER)
+                    },
+                )
+                ModernCheckoutMethodCard(
+                    title = stringResource(R.string.invoice),
+                    icon = Icons.Default.Description,
+                    selected = checkoutState.method == PaymentMethod.INVOICE,
+                    onClick = {
+                        clearTender()
+                        onSelectMethod(PaymentMethod.INVOICE)
+                    },
+                )
+                if (giftCardsEnabled) {
+                    ModernCheckoutMethodCard(
+                        title = stringResource(R.string.gift_card_pay),
+                        icon = Icons.Default.Redeem,
+                        selected = checkoutState.payWithGiftCard && checkoutState.giftCardRedeemAmount > 0.001,
+                        onClick = onGiftCardPay,
+                    )
+                }
+                if (discountsEnabled || tipsEnabled || splitBillsEnabled) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (discountsEnabled) {
+                            CheckoutActionChip(
+                                icon = Icons.Default.Sell,
+                                label = stringResource(R.string.discount),
+                                selected = checkoutState.discountPercent > 0 || checkoutState.discountAmount > 0,
+                                onClick = onShowDiscountDialog,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (tipsEnabled) {
+                            CheckoutActionChip(
+                                icon = Icons.Default.Payments,
+                                label = stringResource(R.string.tip),
+                                selected = checkoutState.tipAmount > 0,
+                                onClick = onShowTipDialog,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+                if (splitBillsEnabled) {
+                    CheckoutActionChip(
+                        icon = Icons.AutoMirrored.Filled.CallSplit,
+                        label = stringResource(R.string.split_bill),
+                        selected = showSplitNav,
+                        onClick = onSplitClick,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    CheckoutIconChip(icon = Icons.Default.QrCodeScanner, onClick = onScanBarcode)
+                    CheckoutIconChip(icon = Icons.Default.Print, onClick = onPrintReceipt)
+                    CheckoutIconChip(icon = Icons.Default.LocalAtm, onClick = onOpenCashDrawer)
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(PosDimens.PagePaddingCompact)
+                    .clickableWithoutRipple { onDeselectMethod() },
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(PosShapes.ExtraLarge)
+                        .background(ui.surface)
+                        .border(1.dp, ui.border, PosShapes.ExtraLarge)
+                        .padding(PosDimens.PagePaddingCompact),
+                ) {
+                    ModernCheckoutOrderHeader(
+                        orderRef = checkoutOrderRef,
+                        contextLine = checkoutContextLine,
+                        tableName = activeTableName,
+                    )
+                    if (showSplitNav && splitBillIndex != null && splitBillCount != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(PosShapes.Card)
+                                .background(ui.surfaceSubtle)
+                                .border(1.dp, ui.border, PosShapes.Card)
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedButton(
+                                onClick = onPrevSplitBill,
+                                enabled = splitBillIndex > 1,
+                                shape = PosShapes.Medium,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, ui.border),
+                            ) {
+                                Text(stringResource(R.string.prev_bill), color = ui.textPrimary, fontSize = 12.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    stringResource(R.string.bill_x_of_y, splitBillIndex, splitBillCount),
+                                    fontWeight = FontWeight.Bold,
+                                    color = PosColors.Primary,
+                                    fontSize = 16.sp,
+                                )
+                                if (isEqualSplit && equalSplitPaidCount > 0) {
+                                    Text(
+                                        stringResource(R.string.bills_paid_count, equalSplitPaidCount, splitBillCount),
+                                        fontSize = 11.sp,
+                                        color = ui.textSecondary,
+                                    )
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = onNextSplitBill,
+                                enabled = splitBillIndex < splitBillCount,
+                                shape = PosShapes.Medium,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, ui.border),
+                            ) {
+                                Text(stringResource(R.string.next_bill), color = ui.textPrimary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(cart.items, key = { it.id }) { item ->
+                            ModernCheckoutLineItem(item = item, currencySymbol = currencySymbol)
+                        }
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (!cart.vatIncludedInPrice) {
+                            SummaryLine(stringResource(R.string.subtotal), formatMoney(cart.subtotal, currencySymbol))
+                        }
+                        if (totals.cartDiscount > 0) {
+                            SummaryLine(stringResource(R.string.discount), "-${formatMoney(totals.cartDiscount, currencySymbol)}")
+                        }
+                        val taxShare = if (equalSplitCount > 1) cart.taxTotal / equalSplitCount else cart.taxTotal
+                        val taxLabel = if (cart.vatIncludedInPrice) {
+                            stringResource(R.string.tax_included_in_total)
+                        } else {
+                            stringResource(R.string.tax)
+                        }
+                        SummaryLine(taxLabel, formatMoney(taxShare, currencySymbol))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.total),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = ui.textPrimary,
+                            )
+                            Text(
+                                formatMoney(totals.roundedTotal, currencySymbol),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                color = ui.textPrimary,
+                            )
+                        }
+                        if (checkoutEurDisplayEnabled) {
+                            chfTotalToEur(totals.roundedTotal, checkoutChfToEurRate)?.let { eur ->
+                                Text(
+                                    stringResource(
+                                        R.string.checkout_eur_equivalent,
+                                        String.format(Locale.FRENCH, "%,.2f", eur),
+                                    ),
+                                    fontSize = 13.sp,
+                                    color = ui.textSecondary,
+                                    modifier = Modifier.align(Alignment.End),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .width(320.dp)
+                    .fillMaxHeight()
+                    .background(ui.surface)
+                    .border(1.dp, ui.border)
+                    .clickableWithoutRipple { onDeselectMethod() }
+                    .padding(PosDimens.PagePaddingCompact)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    stringResource(R.string.checkout_settlement),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ui.textPrimary,
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(PosShapes.Large)
+                        .background(PosColors.Primary.copy(alpha = 0.08f))
+                        .border(1.dp, PosColors.Primary.copy(alpha = 0.25f), PosShapes.Large)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.checkout_amount_due),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ui.textSecondary,
+                    )
+                    Text(
+                        formatMoney(totals.roundedTotal, currencySymbol),
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ui.textPrimary,
+                    )
+                }
+                if (cashEnabled) {
+                    Text(
+                        stringResource(R.string.checkout_amount_received),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ui.textSecondary,
+                    )
+                }
+                if (quickCashEnabled && cashEnabled) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        buildQuickCashAmounts(totals.roundedTotal, currencyCode).forEach { amount ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 44.dp)
+                                    .clip(PosShapes.Card)
+                                    .background(ui.surfaceSubtle)
+                                    .border(1.dp, ui.border, PosShapes.Card)
+                                    .clickable { applyTender(amount) }
+                                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    formatQuickCashAmount(amount, currencySymbol),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = ui.textPrimary,
+                                    maxLines = 2,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 15.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (cashEnabled) {
+                    CheckoutTenderKeypad(
+                        buffer = tenderBuffer,
+                        currencySymbol = currencySymbol,
+                        onKey = appendTenderKey,
+                        onClear = clearTender,
+                        onEnter = {
+                            val amount = tenderBuffer.toDoubleOrNull() ?: 0.0
+                            if (amount > 0) applyTender(amount) else onSelectMethod(PaymentMethod.CASH)
+                        },
+                    )
+                }
+                if (changeDue > 0.001) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(PosShapes.Large)
+                            .background(ui.warningSubtle)
+                            .border(1.dp, PosColors.Warning.copy(alpha = 0.35f), PosShapes.Large)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.checkout_change_due_label),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PosColors.Warning,
+                        )
+                        Text(
+                            formatMoney(changeDue, currencySymbol),
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PosColors.Warning,
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(ui.surface)
+                .border(1.dp, ui.border)
+                .padding(horizontal = PosDimens.PagePaddingCompact, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = onBack,
+                shape = PosShapes.Large,
+                modifier = Modifier.height(52.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ui.border),
+            ) {
+                Text(
+                    stringResource(R.string.checkout_back),
+                    color = ui.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                )
+            }
+            OutlinedButton(
+                onClick = onBack,
+                shape = PosShapes.Large,
+                modifier = Modifier.height(52.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ui.border),
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = ui.textPrimary)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    stringResource(R.string.checkout_edit_order),
+                    color = ui.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                )
+            }
+            Button(
+                onClick = onComplete,
+                enabled = canComplete,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape = PosShapes.Large,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PosColors.Primary,
+                    contentColor = PosColors.TextOnPrimary,
+                    disabledContainerColor = ui.surfaceMuted,
+                    disabledContentColor = ui.textMuted,
+                ),
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    stringResource(
+                        R.string.checkout_confirm_payment_amount,
+                        formatMoney(totals.roundedTotal, currencySymbol),
+                    ),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModernCheckoutMethodCard(
+    title: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    subtitle: String? = null,
+) {
+    val ui = posUiColors()
+    val border = when {
+        !enabled -> ui.border
+        selected -> CheckoutTeal
+        else -> ui.border
+    }
+    val bg = when {
+        !enabled -> ui.surfaceMuted
+        selected -> ui.primarySubtle
+        else -> ui.surface
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp)
+            .clip(PosShapes.Card)
+            .background(bg)
+            .border(if (selected) 2.dp else 1.dp, border, PosShapes.Card)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (selected) CheckoutTeal else ui.textSecondary,
+            modifier = Modifier.size(24.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = ui.textPrimary)
+            subtitle?.let {
+                Text(it, fontSize = 12.sp, color = ui.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (selected) {
+            Icon(Icons.Default.Check, contentDescription = null, tint = CheckoutTeal, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun ModernCheckoutLineItem(item: CartItem, currencySymbol: String) {
+    val ui = posUiColors()
+    val subline = item.modifierSummary().takeIf { it.isNotBlank() }
+        ?: item.optionNotes()?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        ModernPosCartLineThumbnail(imageUri = item.imageUri, modifier = Modifier.padding(end = 10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "${item.quantity}x ${item.productName}",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = ui.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            subline?.let {
+                Text(it, fontSize = 12.sp, color = ui.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Text(
+            formatMoney(item.lineSubtotal, currencySymbol),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = ui.textPrimary,
+        )
+    }
+}
+
+@Composable
+private fun ModernCheckoutMetaPill(text: String) {
+    val ui = posUiColors()
+    Text(
+        text,
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(ui.surfaceSubtle)
+            .border(1.dp, ui.border, RoundedCornerShape(999.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        color = ui.textSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
 private fun ModernCheckoutOrderHeader(
     orderRef: String,
     contextLine: String?,
     tableName: String?,
-    itemCount: Int,
 ) {
     val ui = posUiColors()
     val timeLabel = remember {
@@ -1146,36 +1826,10 @@ private fun ModernCheckoutOrderHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            contextLine?.takeIf { it.isNotBlank() }?.let { line ->
-                Text(
-                    line,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = ui.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            tableName?.takeIf { it.isNotBlank() }?.let { table ->
-                Text(
-                    table,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = ui.textPrimary,
-                    maxLines = 1,
-                )
-            }
-            Text(
-                timeLabel,
-                fontSize = 12.sp,
-                color = ui.textMuted,
-            )
+            contextLine?.takeIf { it.isNotBlank() }?.let { ModernCheckoutMetaPill(it) }
+            tableName?.takeIf { it.isNotBlank() }?.let { ModernCheckoutMetaPill(it) }
+            ModernCheckoutMetaPill(timeLabel)
         }
-        Text(
-            stringResource(R.string.total_items, itemCount),
-            fontSize = 12.sp,
-            color = ui.textSecondary,
-        )
     }
 }
 

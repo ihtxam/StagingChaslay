@@ -1,7 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronUp,
   ImagePlus,
   Loader2,
   Plus,
@@ -126,7 +124,6 @@ export default function Modifiers() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
-  const [otherOpen, setOtherOpen] = useState(true);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [optionUploadIdx, setOptionUploadIdx] = useState<number | null>(null);
@@ -765,7 +762,7 @@ export default function Modifiers() {
                   <legend className="mb-2 text-sm font-medium text-slate-700">
                     {t('pricingType')} <span className="text-red-500">*</span>
                   </legend>
-                  <div className="flex flex-wrap gap-5 text-sm">
+                  <div className="inline-flex w-full max-w-xl rounded-lg border border-slate-200 bg-slate-50 p-1">
                     {(
                       [
                         ['free', 'free'],
@@ -773,16 +770,18 @@ export default function Modifiers() {
                         ['toppings_by_size', 'toppingsBySize'],
                       ] as const
                     ).map(([value, labelKey]) => (
-                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="pricingType"
-                          checked={form.pricingType === value}
-                          onChange={() => setForm({ ...form, pricingType: value })}
-                          className="accent-teal-600"
-                        />
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setForm({ ...form, pricingType: value })}
+                        className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
+                          form.pricingType === value
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-white'
+                        }`}
+                      >
                         {t(labelKey)}
-                      </label>
+                      </button>
                     ))}
                   </div>
                 </fieldset>
@@ -791,23 +790,25 @@ export default function Modifiers() {
                   <legend className="mb-2 text-sm font-medium text-slate-700">
                     {t('selectionType')} <span className="text-red-500">*</span>
                   </legend>
-                  <div className="flex flex-wrap gap-5 text-sm mb-3">
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 mb-3">
                     {(
                       [
                         ['optional', 'optional'],
                         ['required', 'required'],
                       ] as const
                     ).map(([value, labelKey]) => (
-                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="selectionType"
-                          checked={form.selectionType === value}
-                          onChange={() => setSelectionType(value)}
-                          className="accent-teal-600"
-                        />
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setSelectionType(value)}
+                        className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
+                          form.selectionType === value
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-white'
+                        }`}
+                      >
                         {t(labelKey)}
-                      </label>
+                      </button>
                     ))}
                   </div>
 
@@ -1144,63 +1145,47 @@ export default function Modifiers() {
                 </div>
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-5 py-4 text-left font-semibold"
-                  onClick={() => setOtherOpen((v) => !v)}
-                >
-                  {t('otherSettings')}
-                  {otherOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </button>
-                {otherOpen && (
-                  <div className="border-t border-slate-100 px-5 py-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-slate-800">{t('linkProducts')}</h4>
-                      <button
-                        type="button"
-                        onClick={() => setProductPickerOpen(true)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-teal-600 text-white hover:bg-teal-700"
+              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+                <h3 className="font-semibold text-slate-900">
+                  {t('linkProducts')} ({linkedProducts.length})
+                </h3>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    className="field pl-9"
+                    placeholder={t('searchModifierProductsPlaceholder')}
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    onFocus={() => setProductPickerOpen(true)}
+                  />
+                </div>
+                {linkedProducts.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
+                    {t('noDataYet')}
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {linkedProducts.map((p) => (
+                      <span
+                        key={p.id}
+                        className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 py-1 pl-3 pr-1.5 text-sm font-medium text-teal-900 ring-1 ring-teal-200/80"
                       >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                    {linkedProducts.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
-                        {t('noDataYet')}
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {linkedProducts.map((p) => (
-                          <span
-                            key={p.id}
-                            className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 py-1 pl-3 pr-1.5 text-sm font-medium text-teal-900 ring-1 ring-teal-200/80"
-                          >
-                            <span className="truncate">
-                              {p.name}
-                              {p.category?.name ? (
-                                <span className="ml-1 text-xs font-normal text-teal-700/80">
-                                  · {p.category.name}
-                                </span>
-                              ) : null}
-                            </span>
-                            <button
-                              type="button"
-                              className="rounded-full p-1 text-teal-700/70 hover:bg-teal-100 hover:text-red-600"
-                              aria-label={t('delete')}
-                              onClick={() =>
-                                setForm({
-                                  ...form,
-                                  productIds: form.productIds.filter((id) => id !== p.id),
-                                })
-                              }
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                        <span className="truncate">{p.name}</span>
+                        <button
+                          type="button"
+                          className="rounded-full p-1 text-teal-700/70 hover:bg-teal-100 hover:text-red-600"
+                          aria-label={t('delete')}
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              productIds: form.productIds.filter((id) => id !== p.id),
+                            })
+                          }
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
                   </div>
                 )}
               </section>

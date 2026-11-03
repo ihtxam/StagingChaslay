@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Box, List, Tags, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import WebPosErrorBoundary from '@/components/WebPosErrorBoundary';
@@ -1084,50 +1085,35 @@ function MerchantShell() {
   const fullMenuItems = [
     { label: t('overview'), path: '/merchant', icon: '📊' },
     (() => {
-      const catalogLinks = [
-        { label: t('products'), path: '/merchant/products', icon: '🛍️' },
-        { label: t('categories'), path: '/merchant/categories', icon: '🏷️' },
-      ].filter((item) => allow(item.path));
-      const moreOptionsLinks = [
-        { label: t('modifiers'), path: '/merchant/modifiers', icon: '🧩' },
-        { label: t('scheduledMenusTitle'), path: MERCHANT_SCHEDULED_MENUS_PATH, icon: '🕐' },
-        ...(isRestaurantModule(businessModule)
-          ? [{ label: t('pizzaBuilderTitle'), path: MERCHANT_PIZZA_BUILDER_PATH, icon: '🍕' }]
-          : []),
-      ].filter((item) => allow(item.path));
-      const retailOpsLinks = !isRestaurantModule(businessModule)
-        ? [
-            ...(allowInventory('/merchant/inventory')
-              ? [{ label: t('invTitle'), path: '/merchant/inventory', icon: '📦' }]
-              : []),
-            ...(allowStorekeeper('/merchant/storekeeper')
-              ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
-              : []),
-          ].filter((item) => {
-            if (item.path === '/merchant/inventory' || item.path.startsWith('/merchant/inventory')) {
-              return allowInventory(item.path);
-            }
-            if (item.path === '/merchant/storekeeper') return allowStorekeeper(item.path);
-            return allow(item.path);
-          })
-        : [];
-      const children = [
-        ...(catalogLinks.length
-          ? [{ heading: true as const, label: t('navGroupCatalog') }, ...catalogLinks]
-          : []),
-        ...(moreOptionsLinks.length
-          ? [{ heading: true as const, label: t('navGroupMoreOptions') }, ...moreOptionsLinks]
-          : []),
-        ...(retailOpsLinks.length
-          ? [{ heading: true as const, label: t('navGroupRetailOps') }, ...retailOpsLinks]
-          : []),
-      ];
-      if (!children.length) return null;
+      const menuIconClass = 'h-4 w-4 shrink-0 opacity-90';
+      const menuHubLinks = [
+        {
+          label: t('menuHubProductList'),
+          path: '/merchant/products',
+          icon: <List className={menuIconClass} aria-hidden />,
+        },
+        {
+          label: t('menuHubImportExport'),
+          path: '/merchant/products?view=catalog-io',
+          icon: <Upload className={menuIconClass} aria-hidden />,
+        },
+        {
+          label: t('modifiers'),
+          path: '/merchant/modifiers',
+          icon: <Tags className={menuIconClass} aria-hidden />,
+        },
+        {
+          label: t('menuHubCombos'),
+          path: '/merchant/products?filter=combos',
+          icon: <Box className={menuIconClass} aria-hidden />,
+        },
+      ].filter((item) => allow(item.path.split('?')[0]));
+      if (!menuHubLinks.length) return null;
       return {
         id: 'products',
-        label: t('navProducts'),
-        icon: '🛍️',
-        children,
+        label: t('navMenu'),
+        icon: '📋',
+        children: menuHubLinks,
       };
     })(),
     {

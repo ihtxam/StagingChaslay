@@ -902,6 +902,10 @@
     <string name="checkout_order_heading">Order %1$s</string>
     <string name="checkout_status_unpaid">To pay</string>
     <string name="checkout_settlement">Settlement</string>
+    <string name="checkout_deferred_payment">Deferred payment</string>
+    <string name="checkout_deferred_account">Customer account</string>
+    <string name="checkout_edit_order">Edit order</string>
+    <string name="checkout_confirm_payment_amount">Confirm payment · %1$s</string>
     <string name="checkout_complete">Complete payment</string>
     <string name="checkout_complete_with_change">Complete · change %1$s</string>
     <string name="checkout_amount_due">Amount due</string>

@@ -2,6 +2,8 @@ package com.chaslay.pos.ui.menu
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,8 +12,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,13 +83,28 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
             )
             MenuSection.entries.forEach { section ->
                 val selected = state.section == section
-                Box(
+                val icon = when (section) {
+                    MenuSection.PRODUCT_LIST -> Icons.AutoMirrored.Filled.List
+                    MenuSection.IMPORT_EXPORT -> Icons.Default.CloudUpload
+                    MenuSection.EXTRAS_AND_NOS -> Icons.Default.Sell
+                    MenuSection.COMBOS -> Icons.Default.Layers
+                }
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
                         .background(if (selected) PosColors.Primary else Color.Transparent)
                         .clickable { viewModel.setSection(section) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = if (selected) Color.White else colors.textPrimary,
+                        modifier = Modifier.size(18.dp),
+                    )
                     Text(
                         stringResource(
                             when (section) {
@@ -91,7 +115,8 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                             }
                         ),
                         color = if (selected) Color.White else colors.textPrimary,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     )
                 }
             }

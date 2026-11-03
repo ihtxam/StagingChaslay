@@ -752,6 +752,10 @@
     <string name="checkout_order_heading">Commande %1$s</string>
     <string name="checkout_status_unpaid">À payer</string>
     <string name="checkout_settlement">Règlement</string>
+    <string name="checkout_deferred_payment">Paiement différé</string>
+    <string name="checkout_deferred_account">Compte client</string>
+    <string name="checkout_edit_order">Modifier la commande</string>
+    <string name="checkout_confirm_payment_amount">Confirmer le paiement · %1$s</string>
     <string name="checkout_complete">Finalisez le paiement</string>
     <string name="checkout_complete_with_change">Valider · monnaie %1$s</string>
     <string name="checkout_amount_due">Montant dû</string>
