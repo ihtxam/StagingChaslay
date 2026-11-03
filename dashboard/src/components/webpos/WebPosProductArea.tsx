@@ -310,7 +310,7 @@ export default function WebPosProductArea({
   ) : null;
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
+    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--webpos-bg)]">
       <div className="shrink-0 border-b border-[var(--webpos-border)] bg-[var(--webpos-bg)] px-3 py-2">
         {showSearch && isPhoneLayout && mobileSearchOpen && onSearchChange ? (
           <label className="relative mb-2 block sm:hidden">
@@ -568,7 +568,6 @@ export default function WebPosProductArea({
           </div>
         );
       })()}
-      <div className="webpos-register-tail-spacer" aria-hidden="true" />
       </div>
     </section>
   );

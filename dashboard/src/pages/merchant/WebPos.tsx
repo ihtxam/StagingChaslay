@@ -12109,7 +12109,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             {/* Products (mobile default). Hidden on narrow viewports while cart page is open. */}
             {(!isNarrowViewport || !mobileCartOpen) ? (
             <div
-              className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+              className={`flex min-h-0 min-w-0 flex-1 flex-col lg:h-full lg:min-h-0 lg:self-stretch ${
                 useRetailLayout
                   ? cartSide === 'right'
                     ? 'lg:order-2'

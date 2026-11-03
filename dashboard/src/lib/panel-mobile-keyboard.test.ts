@@ -48,6 +48,21 @@ assert.equal(
   true,
   'register layout must dock express checkout under the product grid'
 );
+assert.equal(
+  cssRelease.includes('.webpos-register-stack .webpos-product-scroll'),
+  true,
+  'register product grid must grow in the flex column'
+);
+assert.equal(
+  cssRelease.includes('.webpos-register-stack .webpos-express-dock'),
+  true,
+  'express checkout must pin to the register column bottom'
+);
+assert.equal(
+  cssRelease.includes('.webpos-register-tail-spacer'),
+  false,
+  'tail spacer must not sit between products and express checkout'
+);
 
 if (typeof document !== 'undefined') {
   document.documentElement.classList.add('webpos-lock');

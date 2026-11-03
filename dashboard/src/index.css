@@ -915,8 +915,8 @@ button {
   }
 
   /*
-   * Register: keep Cash/Card docked under the product grid. Extra viewport
-   * space goes below the express bar, not as a dead zone above it.
+   * Register: product grid scrolls in the flex middle; Cash/Card dock the bottom
+   * of the left column (same pattern as .webpos-cart-dock on the cart panel).
    */
   .webpos-register-stack {
     display: flex;
@@ -924,16 +924,17 @@ button {
     flex: 1 1 0%;
     flex-direction: column;
     overflow: hidden;
+    height: 100%;
   }
 
   .webpos-register-stack .webpos-product-scroll {
-    flex: 0 1 auto;
-    max-height: calc(100% - var(--webpos-express-dock, 4.75rem));
-  }
-
-  .webpos-register-tail-spacer {
     flex: 1 1 0%;
     min-height: 0;
+  }
+
+  .webpos-register-stack .webpos-express-dock {
+    flex-shrink: 0;
+    margin-top: auto;
   }
 
   /* Self-order kiosk — portrait 23" / 27" touch screens (1080×1920 typical) */
