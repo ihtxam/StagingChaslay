@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  ScrollText,
   SlidersHorizontal,
   Truck,
   Users,
@@ -415,6 +416,7 @@ type TabId =
   | 'pos'
   | 'payments'
   | 'receipt'
+  | 'printers'
   | 'kds'
   | 'ods'
   | 'customerDisplay'
@@ -440,6 +442,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'pos',
   'payments',
   'receipt',
+  'printers',
   'kds',
   'ods',
   'customerDisplay',
@@ -462,7 +465,7 @@ const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }>
   {
     id: 'service',
     labelKey: 'settingsGroupService',
-    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'kiosk', 'signage', 'delivery', 'phone'],
+    ids: ['hours', 'pos', 'kds', 'ods', 'customerDisplay', 'receipt', 'printers', 'kiosk', 'signage', 'delivery', 'phone'],
   },
   { id: 'guest', labelKey: 'settingsGroupGuest', ids: ['shop', 'email', 'delivery-map'] },
   { id: 'money', labelKey: 'settingsGroupMoney', ids: ['taxes', 'payments', 'fiscal', 'accounting', 'como'] },
@@ -834,7 +837,8 @@ export default function Settings() {
         { id: 'reservations' as const, label: t('settingsReservations'), navLabel: t('settingsNavReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), navLabel: t('settingsNavPos'), icon: Monitor },
         { id: 'payments' as const, label: t('settingsPayments'), navLabel: t('settingsNavPayments'), icon: CreditCard },
-        { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: Printer },
+        { id: 'receipt' as const, label: t('settingsNavReceipt'), navLabel: t('settingsNavReceipt'), icon: ScrollText },
+        { id: 'printers' as const, label: t('settingsNavPrinters'), navLabel: t('settingsNavPrinters'), icon: Printer },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
         { id: 'ods' as const, label: t('odsSettingsTitle'), navLabel: t('settingsNavOds'), icon: Monitor },
         {
@@ -1274,7 +1278,7 @@ export default function Settings() {
   }, [tab, loadPaymentsData]);
 
   useEffect(() => {
-    if (tab === 'receipt') void loadReceiptCatalog();
+    if (tab === 'receipt' || tab === 'printers') void loadReceiptCatalog();
   }, [tab, loadReceiptCatalog]);
 
   useEffect(() => {
@@ -1432,9 +1436,9 @@ export default function Settings() {
   }, [t]);
 
   useEffect(() => {
-    if (tab !== 'receipt') return;
+    if (tab !== 'receipt' && tab !== 'printers') return;
     void refreshPrintAgentPrinters();
-    void refreshScalePorts();
+    if (tab === 'receipt') void refreshScalePorts();
   }, [tab, printAgentManifest?.version, printBridgeManifest?.version, refreshPrintAgentPrinters, refreshScalePorts]);
 
   const onSave = async (e: FormEvent) => {
@@ -1623,6 +1627,7 @@ export default function Settings() {
         webposTerminalEnabled: settings.webposTerminalEnabled !== false,
         webposGiftCardEnabled: settings.webposGiftCardEnabled === true,
         webposInvoiceEnabled: settings.webposInvoiceEnabled !== false,
+        posCheckoutSettings: normalizePosCheckoutSettings(settings.posCheckoutSettings),
         bankIban: settings.bankIban || null,
         bankQrIban: settings.bankQrIban || null,
         bankName: settings.bankName || null,
@@ -3658,6 +3663,76 @@ export default function Settings() {
                       toggleClass="bg-violet-500"
                     />
                   </div>
+                  <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={
+                        normalizePosCheckoutSettings(settings.posCheckoutSettings)
+                          .checkoutEurDisplayEnabled === true
+                      }
+                      onChange={(e) =>
+                        setSettings((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                posCheckoutSettings: {
+                                  ...(prev.posCheckoutSettings || {}),
+                                  checkoutEurDisplayEnabled: e.target.checked,
+                                },
+                              }
+                            : prev
+                        )
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('checkoutEurDisplayEnabled')}</span>
+                      <span className="mt-0.5 block text-xs muted">
+                        {t('checkoutEurDisplayEnabledHint')}
+                      </span>
+                    </span>
+                  </label>
+                  <Field label={t('checkoutChfToEurRate')} hint={t('checkoutChfToEurRateHint')}>
+                    <input
+                      type="number"
+                      className="input max-w-[12rem]"
+                      min={0}
+                      max={2}
+                      step={0.0001}
+                      placeholder="0.95"
+                      value={
+                        normalizePosCheckoutSettings(settings.posCheckoutSettings).checkoutChfToEurRate !=
+                        null
+                          ? String(
+                              normalizePosCheckoutSettings(settings.posCheckoutSettings)
+                                .checkoutChfToEurRate
+                            )
+                          : ''
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        const nextRate =
+                          raw === ''
+                            ? null
+                            : (() => {
+                                const n = Number(raw);
+                                if (!Number.isFinite(n) || n <= 0) return null;
+                                return Math.min(2, Math.round(n * 10000) / 10000);
+                              })();
+                        setSettings((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                posCheckoutSettings: {
+                                  ...(prev.posCheckoutSettings || {}),
+                                  checkoutChfToEurRate: nextRate,
+                                },
+                              }
+                            : prev
+                        );
+                      }}
+                    />
+                  </Field>
                 </Section>
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>
@@ -4278,7 +4353,7 @@ export default function Settings() {
           {tab === 'receipt' && (
             <form className="space-y-5" onSubmit={saveReceiptPrint}>
               <SettingsPageHeader
-                title={t('settingsReceipt')}
+                title={t('settingsNavReceipt')}
                 subtitle={t('settingsReceiptHint')}
                 action={
                   <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={savingReceipt}>
@@ -4287,7 +4362,7 @@ export default function Settings() {
                   </button>
                 }
               />
-              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsReceipt')} description={t('settingsReceiptHint')}>
+              <Section icon={ScrollText} accent={settingsDash.accent} title={t('settingsNavReceipt')} description={t('settingsReceiptHint')}>
                 <Field label={t('receiptLanguage')}>
                   <select
                     className="input"
@@ -5028,108 +5103,22 @@ export default function Settings() {
                 </Section>
               ) : null}
 
-              <Section
-                icon={Printer}
-                accent={settingsDash.info}
-                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentOptionalTitle')}
-                description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
-              >
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    {preferredPrintCompanion() !== 'android-bridge' &&
-                    !(isDesktopApp() && desktopBundledSidecarOk) ? (
-                      <a
-                        className="btn-secondary inline-flex"
-                        href={printAgentDownloadUrl()}
-                        download="reborn-print-agent-setup.exe"
-                      >
-                        {t('downloadPrintAgent')}
-                      </a>
-                    ) : isDesktopApp() && desktopBundledSidecarOk ? (
-                      <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                        {t('desktopSettingsHidePrintAgentDownload')}
-                      </p>
-                    ) : null}
-                    {preferredPrintCompanion() !== 'windows-agent' ? (
-                      printBridgeManifest?.versionMismatch ? (
-                        <p className="text-sm text-amber-900 max-w-xl m-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                          {t('printBridgeApkNotPublished')
-                            .replace('{apkVersion}', String(printBridgeManifest.version || ''))
-                            .replace(
-                              '{declaredVersion}',
-                              String(printBridgeManifest.declaredVersion || printBridgeManifest.version || '')
-                            )}
-                        </p>
-                      ) : printBridgeManifest?.available === false ? (
-                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                          {printBridgeManifest.message ||
-                            'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
-                        </p>
-                      ) : isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) &&
-                        printBridgeManifest?.version &&
-                        compareAgentVersion(
-                          String(installedPrintCompanionVersion || ''),
-                          String(printBridgeManifest.version)
-                        ) >= 0 ? (
-                        <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                          {t('printBridgeAlreadyInstalled').replace(
-                            '{version}',
-                            installedPrintCompanionVersion || ''
-                          )}
-                        </p>
-                      ) : isAndroidDevice() ? (
-                        <button
-                          type="button"
-                          className="btn-primary inline-flex"
-                          onClick={() =>
-                            openPrintBridgeApkInstall(
-                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
-                            )
-                          }
-                        >
-                          {t('installPrintBridge')}
-                        </button>
-                      ) : (
-                        <a
-                          className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
-                          href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                        >
-                          {t('downloadPrintBridge')}
-                        </a>
-                      )
-                    ) : null}
-                  </div>
-                  <div className="space-y-1">
-                    {preferredPrintCompanion() !== 'android-bridge' ? (
-                      <PrintCompanionVersionStatus
-                        kind="windows-agent"
-                        installedVersion={installedPrintCompanionVersion}
-                        serverVersion={printAgentManifest?.version}
-                        downloadUrl={printAgentDownloadUrl()}
-                        agentChecked={printAgentHealthChecked}
-                        agentOk={printAgentOk}
-                      />
-                    ) : null}
-                    {preferredPrintCompanion() !== 'windows-agent' &&
-                    printBridgeManifest?.available !== false ? (
-                      <PrintCompanionVersionStatus
-                        kind="android-bridge"
-                        installedVersion={installedPrintCompanionVersion}
-                        serverVersion={printBridgeManifest?.version}
-                        declaredVersion={printBridgeManifest?.declaredVersion}
-                        versionMismatch={printBridgeManifest?.versionMismatch}
-                        downloadUrl={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
-                        onAndroid={isAndroidDevice()}
-                        agentChecked={printAgentHealthChecked}
-                        agentOk={printAgentOk}
-                      />
-                    ) : null}
-                  </div>
-                  <p className="text-sm text-[var(--muted)] max-w-xl m-0">
-                    {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}
-                  </p>
-                </div>
-              </Section>
+              <SettingsSaveBar saving={savingReceipt} />
+            </form>
+          )}
+
+          {tab === 'printers' && (
+            <form className="space-y-5" onSubmit={saveReceiptPrint}>
+              <SettingsPageHeader
+                title={t('settingsNavPrinters')}
+                subtitle={t('printerProfilesHint')}
+                action={
+                  <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={savingReceipt}>
+                    <Save className="h-4 w-4" aria-hidden />
+                    {savingReceipt ? t('saving') : t('save')}
+                  </button>
+                }
+              />
 
               <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')} description={t('printerProfilesHint')}>
                 <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -5380,6 +5369,109 @@ export default function Settings() {
                 >
                   {t('addPrinterProfile')}
                 </button>
+              </Section>
+
+              <Section
+                icon={Printer}
+                accent={settingsDash.info}
+                title={isAndroidDevice() ? t('downloadPrintBridge') : t('printAgentOptionalTitle')}
+                description={isAndroidDevice() ? t('printBridgeDownloadHint') : t('printAgentDownloadHint')}
+              >
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {preferredPrintCompanion() !== 'android-bridge' &&
+                    !(isDesktopApp() && desktopBundledSidecarOk) ? (
+                      <a
+                        className="btn-secondary inline-flex"
+                        href={printAgentDownloadUrl()}
+                        download="reborn-print-agent-setup.exe"
+                      >
+                        {t('downloadPrintAgent')}
+                      </a>
+                    ) : isDesktopApp() && desktopBundledSidecarOk ? (
+                      <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                        {t('desktopSettingsHidePrintAgentDownload')}
+                      </p>
+                    ) : null}
+                    {preferredPrintCompanion() !== 'windows-agent' ? (
+                      printBridgeManifest?.versionMismatch ? (
+                        <p className="text-sm text-amber-900 max-w-xl m-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                          {t('printBridgeApkNotPublished')
+                            .replace('{apkVersion}', String(printBridgeManifest.version || ''))
+                            .replace(
+                              '{declaredVersion}',
+                              String(printBridgeManifest.declaredVersion || printBridgeManifest.version || '')
+                            )}
+                        </p>
+                      ) : printBridgeManifest?.available === false ? (
+                        <p className="text-sm text-amber-800 max-w-xl m-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                          {printBridgeManifest.message ||
+                            'Bridge Reborn APK is not published on this server yet. Contact support or try again after the next platform update.'}
+                        </p>
+                      ) : isBridgeAlreadyInstalled(printAgentOk, installedPrintCompanionVersion) &&
+                        printBridgeManifest?.version &&
+                        compareAgentVersion(
+                          String(installedPrintCompanionVersion || ''),
+                          String(printBridgeManifest.version)
+                        ) >= 0 ? (
+                        <p className="text-sm text-emerald-800 max-w-xl m-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                          {t('printBridgeAlreadyInstalled').replace(
+                            '{version}',
+                            installedPrintCompanionVersion || ''
+                          )}
+                        </p>
+                      ) : isAndroidDevice() ? (
+                        <button
+                          type="button"
+                          className="btn-primary inline-flex"
+                          onClick={() =>
+                            openPrintBridgeApkInstall(
+                              printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()
+                            )
+                          }
+                        >
+                          {t('installPrintBridge')}
+                        </button>
+                      ) : (
+                        <a
+                          className={`inline-flex ${preferredPrintCompanion() === 'android-bridge' ? 'btn-primary' : 'btn-secondary'}`}
+                          href={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
+                        >
+                          {t('downloadPrintBridge')}
+                        </a>
+                      )
+                    ) : null}
+                  </div>
+                  <div className="space-y-1">
+                    {preferredPrintCompanion() !== 'android-bridge' ? (
+                      <PrintCompanionVersionStatus
+                        kind="windows-agent"
+                        installedVersion={installedPrintCompanionVersion}
+                        serverVersion={printAgentManifest?.version}
+                        downloadUrl={printAgentDownloadUrl()}
+                        agentChecked={printAgentHealthChecked}
+                        agentOk={printAgentOk}
+                      />
+                    ) : null}
+                    {preferredPrintCompanion() !== 'windows-agent' &&
+                    printBridgeManifest?.available !== false ? (
+                      <PrintCompanionVersionStatus
+                        kind="android-bridge"
+                        installedVersion={installedPrintCompanionVersion}
+                        serverVersion={printBridgeManifest?.version}
+                        declaredVersion={printBridgeManifest?.declaredVersion}
+                        versionMismatch={printBridgeManifest?.versionMismatch}
+                        downloadUrl={printBridgeManifest?.downloadUrl || printBridgeDownloadUrl()}
+                        onAndroid={isAndroidDevice()}
+                        agentChecked={printAgentHealthChecked}
+                        agentOk={printAgentOk}
+                      />
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-[var(--muted)] max-w-xl m-0">
+                    {isAndroidDevice() ? t('printBridgeInstallSteps') : t('printAgentInstallSteps')}
+                  </p>
+                </div>
               </Section>
 
               <Section

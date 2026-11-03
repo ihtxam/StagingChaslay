@@ -2447,8 +2447,8 @@ const en: Dict = {
   settingsOperations: 'Operations',
   settingsPayments: 'Payments',
   settingsPaymentsHint: 'Configure payment methods and terminal settings.',
-  settingsReceipt: 'Receipts & printers',
-  settingsReceiptHint: 'Receipt layout, kitchen tickets, paper width, and Windows printer roles for Reborn.',
+  settingsReceipt: 'Receipts',
+  settingsReceiptHint: 'Receipt layout, logo, header, footer, and thermal preview.',
   receiptLanguage: 'Receipt language',
   receiptLangPanel: 'Follow panel language',
   receiptPaperWidth: 'Paper width',
@@ -3332,6 +3332,12 @@ const en: Dict = {
   expressCheckoutEnabled: 'Express checkout buttons',
   expressCheckoutEnabledHint:
     'Show or hide the Cash, Card, and Terminal quick-pay buttons under products on the register. Separate from cash/card/terminal methods in checkout.',
+  checkoutEurDisplayEnabled: 'Show EUR total at checkout',
+  checkoutEurDisplayEnabledHint:
+    'When enabled, checkout shows an EUR equivalent under the CHF total (requires rate below). Syncs to Android POS.',
+  checkoutChfToEurRate: 'CHF → EUR rate (checkout)',
+  checkoutChfToEurRateHint:
+    '1 CHF = X EUR. Example: 0.95. Used on POS checkout when EUR display is enabled.',
   showPosToasts: 'Show POS notifications',
   showPosToastsHint:
     'Toast messages on the register are hidden by default. Turn this on if you want on-screen confirmations. Tap a toast to dismiss it.',
@@ -7471,8 +7477,8 @@ const fr: Dict = {
   settingsOperations: 'Opérations',
   settingsPayments: 'Paiements',
   settingsPaymentsHint: 'Configurez les moyens de paiement et les terminaux.',
-  settingsReceipt: 'Reçus & imprimantes',
-  settingsReceiptHint: 'Mise en page des reçus, tickets cuisine, largeur papier et rôles imprimante Reborn.',
+  settingsReceipt: 'Reçus',
+  settingsReceiptHint: 'Mise en page du reçu, logo, en-tête, pied de page et aperçu thermique.',
   receiptLanguage: 'Langue du reçu',
   receiptLangPanel: 'Suivre la langue du panneau',
   receiptPaperWidth: 'Largeur papier',
@@ -8356,6 +8362,12 @@ const fr: Dict = {
   expressCheckoutEnabled: 'Boutons express sous les produits',
   expressCheckoutEnabledHint:
     'Afficher ou masquer les boutons Espèces, Carte et Terminal sous les produits à la caisse. Distinct des moyens de paiement dans l’encaissement.',
+  checkoutEurDisplayEnabled: 'Afficher le total EUR à la caisse',
+  checkoutEurDisplayEnabledHint:
+    'Si activé, la caisse affiche un équivalent EUR sous le total CHF (taux ci-dessous). Synchronisé avec le POS Android.',
+  checkoutChfToEurRate: 'Taux CHF → EUR (caisse)',
+  checkoutChfToEurRateHint:
+    '1 CHF = X EUR. Ex. 0,95. Utilisé à la caisse si l’affichage EUR est activé.',
   showPosToasts: 'Afficher les notifications caisse',
   showPosToastsHint:
     'Les toasts à la caisse sont masqués par défaut. Activez-les pour voir les confirmations. Touchez un toast pour le fermer.',
@@ -12384,8 +12396,8 @@ const de: Dict = {
   settingsOperations: 'Ablauf',
   settingsPayments: 'Zahlungen',
   settingsPaymentsHint: 'Zahlungsmethoden und Terminals konfigurieren.',
-  settingsReceipt: 'Belege & Drucker',
-  settingsReceiptHint: 'Beleglayout, Küchentickets, Papierbreite und Windows-Druckerrollen für Reborn.',
+  settingsReceipt: 'Belege',
+  settingsReceiptHint: 'Beleglayout, Logo, Kopf- und Fußzeile sowie Thermovorschau.',
   receiptLanguage: 'Belegsprache',
   receiptLangPanel: 'Panel-Sprache folgen',
   receiptPaperWidth: 'Papierbreite',
@@ -13269,6 +13281,12 @@ const de: Dict = {
   expressCheckoutEnabled: 'Express-Checkout-Buttons',
   expressCheckoutEnabledHint:
     'Schnell-Buttons Bar, Karte und Terminal unter den Produkten an der Kasse ein- oder ausblenden. Getrennt von den Zahlungsarten in der Kasse.',
+  checkoutEurDisplayEnabled: 'EUR-Total an der Kasse anzeigen',
+  checkoutEurDisplayEnabledHint:
+    'Wenn aktiv, zeigt die Kasse unter dem CHF-Total einen EUR-Gegenwert (Kurs unten). Synchron mit Android-POS.',
+  checkoutChfToEurRate: 'CHF → EUR Kurs (Kasse)',
+  checkoutChfToEurRateHint:
+    '1 CHF = X EUR. Z. B. 0,95. Nur wenn EUR-Anzeige aktiv ist.',
   showPosToasts: 'POS-Benachrichtigungen anzeigen',
   showPosToastsHint:
     'Toasts an der Kasse sind standardmässig aus. Aktivieren für Bestätigungen. Tippen schliesst eine Meldung.',
