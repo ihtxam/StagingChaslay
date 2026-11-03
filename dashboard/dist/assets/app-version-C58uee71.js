@@ -1,1 +1,0 @@
-import{aN as o}from"./index-BlDXIdg8.js";const P="1.0.0",e="6db3d3cf",s=`Panel build: ${e}`,a=`${o} v${P}`;export{P as APP_VERSION,e as PANEL_BUILD_STAMP,s as panelBuildLabel,a as webPosVersionLabel};

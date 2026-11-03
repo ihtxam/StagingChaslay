@@ -1,0 +1,1 @@
+import{aN as o}from"./index-fPPya6pk.js";const e="1.0.0",P="e292f7b3",s=`Panel build: ${P}`,a=`${o} v${e}`;export{e as APP_VERSION,P as PANEL_BUILD_STAMP,s as panelBuildLabel,a as webPosVersionLabel};
