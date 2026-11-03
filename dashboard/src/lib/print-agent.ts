@@ -1467,18 +1467,25 @@ export async function printViaAgent(opts: {
     markPrintAgentRecentSuccess();
     return { ok: true, printer: res.printer };
   }
-  const data = await agentFetch(
-    '/print',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        printerName: opts.printerName || undefined,
-        dataBase64: b64,
-        text: opts.text,
-      }),
-    },
-    name
-  );
+  let data: { printer?: string };
+  try {
+    data = (await agentFetchWithTimeout(
+      '/print',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          printerName: opts.printerName || undefined,
+          dataBase64: b64,
+          text: opts.text,
+        }),
+      },
+      60_000
+    )) as { printer?: string };
+  } catch (e) {
+    throw new Error(
+      friendlyPrintAgentError(e instanceof Error ? e.message : String(e), name)
+    );
+  }
   if (data?.printer && isUnsuitableRawPrinter(data.printer)) {
     throw new Error(unsuitableRawPrinterMessage(data.printer));
   }
