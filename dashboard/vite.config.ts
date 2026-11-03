@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs'
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
 function resolveBuildStamp(): string {
+  const override = process.env.REBORN_BUILD_STAMP?.trim()
+  if (override) return override
   try {
     const sha = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
     if (sha) return sha

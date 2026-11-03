@@ -1,1 +1,0 @@
-import{aN as e}from"./index-NgP1jFc1.js";const o="1.0.0",P="f86e5e5f",s=`Panel build: ${P}`,a=`${e} v${o}`;export{o as APP_VERSION,P as PANEL_BUILD_STAMP,s as panelBuildLabel,a as webPosVersionLabel};
