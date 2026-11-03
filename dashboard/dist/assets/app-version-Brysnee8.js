@@ -1,1 +1,0 @@
-import{aN as o}from"./index-Cx-4BCvq.js";const P="1.0.0",e="532b70d1",s=`Panel build: ${e}`,a=`${o} v${P}`;export{P as APP_VERSION,e as PANEL_BUILD_STAMP,s as panelBuildLabel,a as webPosVersionLabel};
