@@ -1769,6 +1769,7 @@ export default function Settings() {
         webposTerminalEnabled: settings.webposTerminalEnabled !== false,
         webposGiftCardEnabled: settings.webposGiftCardEnabled === true,
         webposInvoiceEnabled: settings.webposInvoiceEnabled !== false,
+        posCheckoutSettings: normalizePosCheckoutSettings(settings.posCheckoutSettings),
         bankIban: settings.bankIban || null,
         bankQrIban: settings.bankQrIban || null,
         bankName: settings.bankName || null,
@@ -3770,65 +3771,6 @@ export default function Settings() {
                     }}
                   />
                 </Field>
-                <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={
-                      normalizePosCheckoutSettings(settings.posCheckoutSettings)
-                        .checkoutEurDisplayEnabled === true
-                    }
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        posCheckoutSettings: {
-                          ...(settings.posCheckoutSettings || {}),
-                          checkoutEurDisplayEnabled: e.target.checked,
-                        },
-                      })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium">{t('checkoutEurDisplayEnabled')}</span>
-                    <span className="mt-0.5 block text-xs muted">{t('checkoutEurDisplayEnabledHint')}</span>
-                  </span>
-                </label>
-                <Field label={t('checkoutChfToEurRate')} hint={t('checkoutChfToEurRateHint')}>
-                  <input
-                    type="number"
-                    className="input max-w-[12rem]"
-                    min={0}
-                    max={2}
-                    step={0.0001}
-                    placeholder="0.95"
-                    value={
-                      normalizePosCheckoutSettings(settings.posCheckoutSettings).checkoutChfToEurRate !=
-                      null
-                        ? String(
-                            normalizePosCheckoutSettings(settings.posCheckoutSettings).checkoutChfToEurRate
-                          )
-                        : ''
-                    }
-                    onChange={(e) => {
-                      const raw = e.target.value.trim();
-                      const nextRate =
-                        raw === ''
-                          ? null
-                          : (() => {
-                              const n = Number(raw);
-                              if (!Number.isFinite(n) || n <= 0) return null;
-                              return Math.min(2, Math.round(n * 10000) / 10000);
-                            })();
-                      setSettings({
-                        ...settings,
-                        posCheckoutSettings: {
-                          ...(settings.posCheckoutSettings || {}),
-                          checkoutChfToEurRate: nextRate,
-                        },
-                      });
-                    }}
-                  />
-                </Field>
               </Section>
 
               <Section
@@ -3938,6 +3880,76 @@ export default function Settings() {
                       toggleClass="bg-violet-500"
                     />
                   </div>
+                  <label className="flex items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={
+                        normalizePosCheckoutSettings(settings.posCheckoutSettings)
+                          .checkoutEurDisplayEnabled === true
+                      }
+                      onChange={(e) =>
+                        setSettings((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                posCheckoutSettings: {
+                                  ...(prev.posCheckoutSettings || {}),
+                                  checkoutEurDisplayEnabled: e.target.checked,
+                                },
+                              }
+                            : prev
+                        )
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('checkoutEurDisplayEnabled')}</span>
+                      <span className="mt-0.5 block text-xs muted">
+                        {t('checkoutEurDisplayEnabledHint')}
+                      </span>
+                    </span>
+                  </label>
+                  <Field label={t('checkoutChfToEurRate')} hint={t('checkoutChfToEurRateHint')}>
+                    <input
+                      type="number"
+                      className="input max-w-[12rem]"
+                      min={0}
+                      max={2}
+                      step={0.0001}
+                      placeholder="0.95"
+                      value={
+                        normalizePosCheckoutSettings(settings.posCheckoutSettings).checkoutChfToEurRate !=
+                        null
+                          ? String(
+                              normalizePosCheckoutSettings(settings.posCheckoutSettings)
+                                .checkoutChfToEurRate
+                            )
+                          : ''
+                      }
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        const nextRate =
+                          raw === ''
+                            ? null
+                            : (() => {
+                                const n = Number(raw);
+                                if (!Number.isFinite(n) || n <= 0) return null;
+                                return Math.min(2, Math.round(n * 10000) / 10000);
+                              })();
+                        setSettings((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                posCheckoutSettings: {
+                                  ...(prev.posCheckoutSettings || {}),
+                                  checkoutChfToEurRate: nextRate,
+                                },
+                              }
+                            : prev
+                        );
+                      }}
+                    />
+                  </Field>
                 </Section>
                 <SettingsSaveBar saving={savingWebposPay} />
               </form>

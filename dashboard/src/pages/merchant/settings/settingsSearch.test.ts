@@ -140,6 +140,14 @@ test('filterAccessibleSettingsSearch drops tabs that are not visible', () => {
   assert.equal(filtered.length, 0);
 });
 
+test('matchSettingsSearch finds checkout EUR under payments-methods', () => {
+  const index = buildSettingsSearchIndex(t);
+  assert.ok(
+    matchSettingsSearch(index, 'checkoutEurDisplayEnabled').some((entry) => entry.id === 'payments-methods')
+  );
+  assert.ok(matchSettingsSearch(index, 'eur').some((entry) => entry.id === 'payments-methods'));
+});
+
 test('pickSettingsSearchMatch prefers current tab when it has a hit', () => {
   const index = buildSettingsSearchIndex(t);
   const matches = matchSettingsSearch(index, 'terminal');
