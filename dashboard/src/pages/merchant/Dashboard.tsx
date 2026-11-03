@@ -162,6 +162,7 @@ import { showOrderCenterForMerchant, merchantHasPos } from '@/lib/merchant-produ
 import {
   isPanelNavGroupHidden,
   isPanelNavHidden,
+  merchantSettingsSidebarVisible,
   parsePanelNavHidden,
 } from '@/lib/panel-nav-hidden';
 import { isPlatformNotificationsPath } from '@/lib/platform-notifications';
@@ -344,11 +345,12 @@ function MerchantShell() {
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
         authRole: user?.role,
+        jwtStaffId: user?.staffId,
         hasStaffPins,
         pinSession,
         pathname: location.pathname,
       }),
-    [user?.permissions, user?.role, jwtIsOwner, hasStaffPins, pinSession, location.pathname]
+    [user?.permissions, user?.role, user?.staffId, jwtIsOwner, hasStaffPins, pinSession, location.pathname]
   );
 
   /** Owner JWT bypass for staff-only route guards — disabled while a PIN session is active. */
@@ -562,6 +564,7 @@ function MerchantShell() {
         jwtPermissions: user?.permissions as Permission[] | undefined,
         isOwner: jwtIsOwner,
         authRole: user?.role,
+        jwtStaffId: user?.staffId,
         hasStaffPins,
         pinSession: loadWebPosStaffSession(),
         pathname: location.pathname,
@@ -687,7 +690,24 @@ function MerchantShell() {
       if (normalized === '/merchant/sales/phone' && !phoneOrderingLicensed) {
         return false;
       }
-      if (isPanelNavHidden(path, panelNavHidden)) {
+      const settingsHidden = isPanelNavHidden(path, panelNavHidden);
+      if (settingsHidden && normalized === '/merchant/settings') {
+        const canOpenSettings = canAccessRoute(
+          path,
+          effective.permissions,
+          effective.isOwner,
+          editionFeatures,
+          businessModule
+        );
+        return merchantSettingsSidebarVisible({
+          hidden: panelNavHidden,
+          canOpenSettings,
+          isOwner: effective.isOwner,
+          mayManageSettings: hasPermission(effective.permissions, 'MANAGE_SETTINGS', false),
+          mayManageStaff: hasPermission(effective.permissions, 'MANAGE_STAFF', false),
+        });
+      }
+      if (settingsHidden) {
         return false;
       }
       return canAccessRoute(
@@ -1023,8 +1043,23 @@ function MerchantShell() {
   );
 
   const hideSettingsInHqView = shouldHideMerchantSettingsInHqView(panelScopeNavInput);
+  const canOpenSettingsRoute = canAccessRoute(
+    '/merchant/settings',
+    effective.permissions,
+    effective.isOwner,
+    editionFeatures,
+    businessModule
+  );
   const merchantSettingsPath =
-    !panelChromeRestricted && allow('/merchant/settings') && !hideSettingsInHqView
+    !panelChromeRestricted &&
+    merchantSettingsSidebarVisible({
+      hidden: panelNavHidden,
+      canOpenSettings: canOpenSettingsRoute,
+      isOwner: effective.isOwner,
+      mayManageSettings: hasPermission(effective.permissions, 'MANAGE_SETTINGS', false),
+      mayManageStaff: hasPermission(effective.permissions, 'MANAGE_STAFF', false),
+    }) &&
+    !hideSettingsInHqView
       ? '/merchant/settings'
       : undefined;
 

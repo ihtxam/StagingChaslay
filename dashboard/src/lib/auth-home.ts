@@ -60,6 +60,9 @@ export function homePathForUser(
   }
 
   if (loginHome === 'pos') {
+    if (hasPermission(perms, 'ACCESS_PANEL', false)) {
+      return backOfficeHomePath(perms, user.isOwner === true);
+    }
     if (isOrderCenterOnlyStaff(perms, user.isOwner === true)) return orderCenterHomePath();
     if (hasPermission(perms, 'USE_WEBPOS', false)) return '/merchant/pos';
     if (hasPermission(perms, 'MANAGE_TABLES', false)) return '/merchant/waiter';

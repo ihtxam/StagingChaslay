@@ -1764,6 +1764,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       jwtPermissions: authUser?.permissions as Permission[] | undefined,
       isOwner: jwtIsOwner,
       authRole: authUser?.role,
+      jwtStaffId: authUser?.staffId,
       hasStaffPins: staffConfigured,
       pinSession: webposStaff,
       pathname: '/merchant/pos',
