@@ -238,7 +238,28 @@ export default function ProductEditFullPage({
               <p className="mt-0.5 text-sm text-[var(--text-muted)]">{t('editProductPageSubtitle')}</p>
             </div>
           </div>
-          <div className="shrink-0">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <span className="inline-flex max-w-[min(100%,14rem)] items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-muted)]/50 px-3 py-1.5 text-xs font-semibold text-[var(--text)]">
+              <span className="flex h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-[var(--bg-elevated)]">
+                {imageUrl ? (
+                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">
+                    <Package size={16} className="text-[var(--text-muted)]" />
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0 truncate">{productName.trim() || '—'}</span>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  inStock
+                    ? 'bg-teal-600/15 text-teal-700 dark:text-teal-300'
+                    : 'bg-amber-500/15 text-amber-800 dark:text-amber-200'
+                }`}
+              >
+                {inStock ? t('inStock') : t('outOfStock')}
+              </span>
+            </span>
             <LocationSwitcherChip />
           </div>
         </div>

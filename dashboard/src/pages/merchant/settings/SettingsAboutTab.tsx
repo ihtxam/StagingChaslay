@@ -10,6 +10,7 @@ import {
   EXTRA_MODULE_DEFINITIONS,
   type MerchantAddonSettings,
 } from './settings-extra-modules';
+import { panelBuildLabel } from '@/lib/app-version';
 
 export default function SettingsAboutTab({
   settings,
@@ -116,6 +117,10 @@ export default function SettingsAboutTab({
           ))}
         </ul>
       </section>
+
+      <p className="m-0 rounded-lg border border-dashed border-teal-600/35 bg-teal-600/5 px-3 py-2 text-center text-xs font-mono font-semibold text-teal-800 dark:text-teal-200">
+        {panelBuildLabel}
+      </p>
 
       <section className="space-y-4 border-t border-[var(--border)] pt-6">
         <SoftwareUpdates embedded />
