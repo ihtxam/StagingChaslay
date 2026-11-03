@@ -1,0 +1,1 @@
+import{aQ as o}from"./index-BY4nXiGP.js";const e="1.0.0",P="ce5b2a78",n=`Panel build: ${P}`,s=`${o} v${e}`;export{e as APP_VERSION,P as PANEL_BUILD_STAMP,n as panelBuildLabel,s as webPosVersionLabel};
