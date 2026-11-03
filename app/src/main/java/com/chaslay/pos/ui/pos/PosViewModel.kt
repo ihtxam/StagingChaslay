@@ -4435,7 +4435,11 @@ class PosViewModel @Inject constructor(
             loyaltyPointsEarned = if (adyenFromMemory) extrasSnapshot.lastLoyaltyPointsEarned else null,
             loyaltyPointsBalance = if (adyenFromMemory) extrasSnapshot.lastLoyaltyPointsBalance else null,
             usePayloadCache = true
-        ).onFailure {
+        ).onSuccess {
+            if (adyenFromMemory && transactionId == extrasSnapshot.completedTransaction?.id) {
+                updateExtras { it.copy(receiptPrintedForOrder = true) }
+            }
+        }.onFailure {
             if (adyenFromMemory) {
                 updateExtras {
                     it.copy(orderCompleteNotice = PrinterUserMessages.fromPrintFailure(appContext))
@@ -4659,6 +4663,15 @@ class PosViewModel @Inject constructor(
             )
             val receiptItems = transactionRepository.getTransaction(transaction.id)?.second.orEmpty()
             val fallbackUrl = receiptRepository.buildPublicUrl(transaction.id, settings)
+            viewModelScope.launch(Dispatchers.IO) {
+                warmOrderCompleteReceiptCache(
+                    transaction = transaction,
+                    receiptItems = receiptItems,
+                    settings = settings,
+                    loyaltyPointsEarned = _uiExtras.value.lastLoyaltyPointsEarned,
+                    loyaltyPointsBalance = _uiExtras.value.lastLoyaltyPointsBalance
+                )
+            }
             cartManager.removeItemsAfterPayment(paidIds)
             decrementStockForCartItems(payable.items)
             if (cartManager.snapshot().items.isEmpty()) {
@@ -4674,6 +4687,7 @@ class PosViewModel @Inject constructor(
                     showOrderComplete = true,
                     completedTransaction = transaction.copy(receiptUrl = fallbackUrl),
                     receiptPublicUrl = fallbackUrl,
+                    receiptPrintedForOrder = false,
                     orderCompleteNotice = null,
                     selectedCartItemId = null,
                     keypadBuffer = "",
@@ -5256,6 +5270,17 @@ class PosViewModel @Inject constructor(
                     )
                     val receiptItems = transactionRepository.getTransaction(transaction.id)?.second.orEmpty()
                     val fallbackUrl = receiptRepository.buildPublicUrl(transaction.id, settings)
+                    viewModelScope.launch(Dispatchers.IO) {
+                        warmOrderCompleteReceiptCache(
+                            transaction = transaction,
+                            receiptItems = receiptItems,
+                            settings = settings,
+                            adyenCustomerReceipt = paymentResult.adyenCustomerReceipt,
+                            adyenCashierReceipt = paymentResult.adyenCashierReceipt,
+                            loyaltyPointsEarned = _uiExtras.value.lastLoyaltyPointsEarned,
+                            loyaltyPointsBalance = _uiExtras.value.lastLoyaltyPointsBalance
+                        )
+                    }
                     var equalSplitPaidAfterPayment = _uiExtras.value.equalSplitPaidCount
                     if (fullCart.splitByItems) {
                         cartManager.removeItemsAfterPayment(paidIds)
@@ -5359,6 +5384,7 @@ class PosViewModel @Inject constructor(
                             adyenCustomerReceipt = adyenCustomerReceipt,
                             adyenCashierReceipt = adyenCashierReceipt,
                             receiptPublicUrl = fallbackUrl,
+                            receiptPrintedForOrder = false,
                             orderCompleteNotice = null,
                             splitPaymentIndex = splitIndex,
                             splitPaymentTotal = splitTotal,
@@ -5965,6 +5991,7 @@ class PosViewModel @Inject constructor(
         if (!settings.autoPrintReceipt) return
         if (method == PaymentMethod.PAY_LATER || method == PaymentMethod.INVOICE) return
         val extras = _uiExtras.value
+        if (extras.receiptPrintedForOrder && extras.completedTransaction?.id == transaction.id) return
         val customerCopy = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
             .appendableForTransaction(
                 transaction,
@@ -5982,6 +6009,8 @@ class PosViewModel @Inject constructor(
                 loyaltyPointsBalance = extras.lastLoyaltyPointsBalance,
                 usePayloadCache = true
             )
+        }.onSuccess {
+            updateExtras { it.copy(receiptPrintedForOrder = true) }
         }.onFailure { e ->
             if (_uiExtras.value.completedTransaction?.id == transaction.id) {
                 updateExtras {

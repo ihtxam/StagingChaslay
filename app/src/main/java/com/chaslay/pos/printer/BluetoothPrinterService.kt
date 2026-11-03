@@ -2524,10 +2524,10 @@ class BluetoothPrinterService @Inject constructor(
             output.flush()
             offset = end
             if (payload.size > chunkSize) {
-                Thread.sleep(15)
+                Thread.sleep(8)
             }
         }
-        val waitMs = (payload.size / 512 * 45).coerceIn(50, 1200)
+        val waitMs = (payload.size / 512 * 30).coerceIn(35, 800)
         Thread.sleep(waitMs.toLong())
     }
 
@@ -2874,7 +2874,7 @@ class BluetoothPrinterService @Inject constructor(
         val SIMULATED_PRINTER = DiscoveredPrinter("Simulated (test)", SIMULATED_ADDRESS)
         private const val TAG = "PrinterService"
         private const val BT_CONNECT_TIMEOUT_MS = 8_000L
-        private const val BT_POST_SEND_SETTLE_MS = 60L
+        private const val BT_POST_SEND_SETTLE_MS = 40L
         private const val ESC_POS_RECEIPT_CACHE_TTL_MS = 30 * 60 * 1000L
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48

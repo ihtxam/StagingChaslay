@@ -146,8 +146,12 @@ fun SettingsScreen(
     }
 
     LaunchedEffect(state.selectedSection) {
-        if (state.selectedSection == SettingsSection.PRINTERS) {
-            viewModel.refreshPrinterConnectionState()
+        when (state.selectedSection) {
+            SettingsSection.RECEIPTS,
+            SettingsSection.APPEARANCE,
+            SettingsSection.LICENSE -> viewModel.selectSection(SettingsSection.GENERAL)
+            SettingsSection.PRINTERS -> viewModel.refreshPrinterConnectionState()
+            else -> Unit
         }
     }
 
@@ -176,6 +180,9 @@ fun SettingsScreen(
             )
             SettingsSection.entries.filter { section ->
                 when (section) {
+                    SettingsSection.RECEIPTS,
+                    SettingsSection.APPEARANCE,
+                    SettingsSection.LICENSE -> false
                     SettingsSection.USERS_ACCOUNTS -> userAccess.canManageUsers()
                     SettingsSection.TABLES -> state.posMode == PosMode.RESTAURANT
                     else -> true
