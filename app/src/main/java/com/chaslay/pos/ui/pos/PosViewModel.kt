@@ -5914,12 +5914,20 @@ class PosViewModel @Inject constructor(
                 val publishDeferred = async(Dispatchers.IO) {
                     publishAndPersistReceipt(transaction, receiptItems, settings)
                 }
+                val receiptPrintDeferred = async(Dispatchers.IO) {
+                    autoPrintCustomerReceiptAfterSale(
+                        transaction = transaction,
+                        items = receiptItems,
+                        settings = settings,
+                        method = method
+                    )
+                }
                 runCatching { printPendingKitchenForCurrentTable(kitchenCart) }
                     .onFailure { e ->
                         Log.w("POS", "Kitchen print after sale failed", e)
                         showPrinterUnavailable()
                     }
-                publishDeferred.await()
+                publishDeferred.await().also { receiptPrintDeferred.await() }
             }
             if (_uiExtras.value.completedTransaction?.id == transaction.id) {
                 updateExtras {
@@ -5973,12 +5981,6 @@ class PosViewModel @Inject constructor(
                     }
                 }
             }
-            autoPrintCustomerReceiptAfterSale(
-                transaction = publishedTx,
-                items = receiptItems,
-                settings = settings,
-                method = method
-            )
         }
     }
 
