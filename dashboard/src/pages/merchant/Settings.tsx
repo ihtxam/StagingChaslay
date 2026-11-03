@@ -2079,22 +2079,25 @@ export default function Settings() {
 
   if (hqSettingsBlocked) {
     return (
-      <div className="card mx-auto max-w-lg space-y-4 py-12 text-center">
+      <div className="p-3 sm:p-4">
+        <div className="card mx-auto max-w-lg space-y-4 py-12 text-center">
         <h1 className="text-xl font-semibold">{t('hqSettingsPickBranchTitle')}</h1>
         <p className="text-sm muted">{t('hqSettingsPickBranch')}</p>
         <Link to="/merchant/hq" className="btn-primary inline-flex">
           {t('navHq')}
         </Link>
+        </div>
       </div>
     );
   }
 
   if (loading && !settingsOptionalTab) {
-    return <div className="text-center py-12 muted text-sm">{t('loading')}</div>;
+    return <div className="p-3 sm:p-4 text-center py-12 muted text-sm">{t('loading')}</div>;
   }
   if (!settings && !settingsOptionalTab) {
     return (
-      <div className="card space-y-3 text-center py-8">
+      <div className="p-3 sm:p-4">
+        <div className="card space-y-3 text-center py-8">
         <p>{t('settingsLoadFailed')}</p>
         {loadError && loadError !== t('settingsLoadFailed') ? (
           <p className="text-sm muted">{loadError}</p>
@@ -2109,6 +2112,7 @@ export default function Settings() {
         >
           {t('settingsLoadRetry')}
         </button>
+        </div>
       </div>
     );
   }
@@ -2232,7 +2236,7 @@ export default function Settings() {
 
   return (
     <div
-      className="flex w-full max-w-[1400px] flex-1 min-h-0 flex-col gap-3 overflow-hidden sm:gap-4"
+      className="flex w-full max-w-[1400px] flex-1 min-h-0 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -2412,7 +2416,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-3 sm:p-4 [-webkit-overflow-scrolling:touch] lg:min-h-0"
+            className="min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-0 [-webkit-overflow-scrolling:touch] lg:min-h-0"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary
