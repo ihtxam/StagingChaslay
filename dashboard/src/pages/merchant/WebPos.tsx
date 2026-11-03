@@ -457,7 +457,6 @@ import WebPosRetailCategorySidebar from '@/components/webpos/WebPosRetailCategor
 import WebPosRetailProductCenter from '@/components/webpos/WebPosRetailProductCenter';
 import WebPosRetailCashPayModal from '@/components/webpos/WebPosRetailCashPayModal';
 import WebPosRetailSettingsDrawer from '@/components/webpos/WebPosRetailSettingsDrawer';
-import WebPosReceiptSettingsDrawer from '@/components/webpos/WebPosReceiptSettingsDrawer';
 import { productMatchesScan, looksLikeRetailBarcodeInput, tokenizedProductSearchMatch, sanitizeScanCode, stripScannerControlChars } from '@/lib/product-scan-codes';
 import {
   readDeviceRegisterProfileId,
@@ -1250,7 +1249,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [customAmountOpen, setCustomAmountOpen] = useState(false);
   const [scanCreateBarcode, setScanCreateBarcode] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [receiptDesignOpen, setReceiptDesignOpen] = useState(false);
   const [channelsSaving, setChannelsSaving] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(() => {
     const hasItems = (bootActive?.cart?.length || 0) > 0 || !!bootActive?.orderSent;
@@ -11523,14 +11521,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onOpenCustomerDisplay={
               cdsToken && cdsEnabled ? () => openCustomerDisplay() : undefined
             }
-            onOpenReceiptDesign={
-              canShowBackOffice && !hardwareGearOnly
-                ? () => {
-                    setSettingsOpen(false);
-                    setReceiptDesignOpen(true);
-                  }
-                : undefined
-            }
             autoOpenCashDrawer={shouldAutoOpenCashDrawer(printSettings)}
             onAutoOpenCashDrawerChange={(enabled) => void persistAutoOpenCashDrawer(enabled)}
             onSendLogs={() => {
@@ -12109,7 +12099,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             {/* Products (mobile default). Hidden on narrow viewports while cart page is open. */}
             {(!isNarrowViewport || !mobileCartOpen) ? (
             <div
-              className={`flex min-h-0 min-w-0 flex-1 flex-col lg:h-full lg:min-h-0 lg:self-stretch ${
+              className={`flex min-h-0 min-w-0 flex-1 flex-col ${
                 useRetailLayout
                   ? cartSide === 'right'
                     ? 'lg:order-2'
@@ -12407,17 +12397,6 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         }}
         onComplete={(tendered, changeDue) => void completeRetailCashPay(tendered, changeDue)}
       />
-      <WebPosReceiptSettingsDrawer
-        open={receiptDesignOpen}
-        onClose={() => setReceiptDesignOpen(false)}
-        merchant={merchant}
-        printSettings={printSettings}
-        onSaved={(next) => {
-          setPrintSettings(normalizeClientReceiptHeaderPrintSettings(next));
-          cacheMerchantAutoPrintSettings(next);
-        }}
-      />
-
       {useRetailLayout ? (
         <WebPosRetailSettingsDrawer
           open={retailTillSettingsOpen}

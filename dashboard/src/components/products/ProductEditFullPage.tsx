@@ -219,7 +219,7 @@ export default function ProductEditFullPage({
   const priceSuffix = soldByWeight && !isCombo ? 'CHF/kg' : 'CHF';
 
   return (
-    <div className="product-edit-page -mx-3 flex h-[calc(100dvh-7.5rem)] max-h-[calc(100dvh-7.5rem)] min-h-0 flex-col bg-[var(--bg)] text-[var(--text)] sm:-mx-4 md:-mx-6">
+    <div className="-mx-3 flex h-[calc(100dvh-7.5rem)] max-h-[calc(100dvh-7.5rem)] min-h-0 flex-col sm:-mx-4 md:-mx-6">
       <div className="shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-3 sm:px-4">
         <div className="mx-auto flex max-w-6xl flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start">
@@ -238,28 +238,7 @@ export default function ProductEditFullPage({
               <p className="mt-0.5 text-sm text-[var(--text-muted)]">{t('editProductPageSubtitle')}</p>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <span className="inline-flex max-w-[min(100%,14rem)] items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-muted)]/50 px-3 py-1.5 text-xs font-semibold text-[var(--text)]">
-              <span className="flex h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-[var(--bg-elevated)]">
-                {imageUrl ? (
-                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center">
-                    <Package size={16} className="text-[var(--text-muted)]" />
-                  </span>
-                )}
-              </span>
-              <span className="min-w-0 truncate">{productName.trim() || '—'}</span>
-              <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                  inStock
-                    ? 'bg-teal-600/15 text-teal-700 dark:text-teal-300'
-                    : 'bg-amber-500/15 text-amber-800 dark:text-amber-200'
-                }`}
-              >
-                {inStock ? t('inStock') : t('outOfStock')}
-              </span>
-            </span>
+          <div className="shrink-0">
             <LocationSwitcherChip />
           </div>
         </div>
@@ -268,7 +247,7 @@ export default function ProductEditFullPage({
       <div
         ref={scrollRef}
         data-product-editor-scroll
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] bg-[var(--bg)] px-3 py-4 sm:px-4"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] bg-[#F5F6F7] px-3 py-4 dark:bg-[var(--bg)] sm:px-4"
       >
         <form id={formId} onSubmit={onSubmit} noValidate className="mx-auto max-w-6xl space-y-4">
           {branchPicker}

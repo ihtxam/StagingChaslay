@@ -1,6 +1,8 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ChevronDown,
+  ChevronUp,
   ImagePlus,
   Loader2,
   Plus,
@@ -126,6 +128,7 @@ export default function Modifiers() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [otherOpen, setOtherOpen] = useState(true);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [optionUploadIdx, setOptionUploadIdx] = useState<number | null>(null);
@@ -269,6 +272,7 @@ export default function Modifiers() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm());
+    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -282,6 +286,7 @@ export default function Modifiers() {
       minSelectable: 0,
       maxSelectable: 10,
     });
+    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -334,6 +339,7 @@ export default function Modifiers() {
         : [emptyOption()],
       productIds: [...(group.productIds || [])],
     });
+    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -447,8 +453,8 @@ export default function Modifiers() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-[var(--text)]">{t('extrasNosTitle')}</h1>
-          <p className="mt-1 text-[var(--text-muted)]">{t('extrasNosPageHint')}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{t('extrasNosTitle')}</h1>
+          <p className="text-slate-600 mt-1">{t('extrasNosPageHint')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -463,12 +469,12 @@ export default function Modifiers() {
       </div>
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('searchModifiersPlaceholder')}
-          className="field-input w-full rounded-xl py-2.5 pl-10 pr-4 text-sm shadow-sm"
+          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         />
       </div>
 
@@ -488,8 +494,8 @@ export default function Modifiers() {
             onClick={() => setExtrasFilter(id)}
             className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
               extrasFilter === id
-                ? 'border-teal-600 bg-teal-600 text-white shadow-sm'
-                : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-teal-500/40 hover:text-[var(--text)]'
+                ? 'border-teal-600 bg-teal-50 text-teal-800'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-teal-200'
             }`}
           >
             {t(labelKey)} ({count})
@@ -506,7 +512,6 @@ export default function Modifiers() {
                 <th className="px-4 py-3">{t('extrasNosColPrice')}</th>
                 <th className="px-4 py-3">{t('extrasNosColRule')}</th>
                 <th className="px-4 py-3">{t('extrasNosColOptions')}</th>
-                <th className="px-4 py-3">{t('extrasNosColMax')}</th>
                 <th className="px-4 py-3">{t('extrasNosColLinked')}</th>
                 <th className="px-4 py-3">{t('status')}</th>
                 <th className="px-4 py-3 text-right">{t('edit')}</th>
@@ -516,24 +521,9 @@ export default function Modifiers() {
               {filtered.map((group) => (
                 <tr key={`table-${group.id}`} className="border-t border-[var(--border)]">
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      {group.options[0]?.imageUrl ? (
-                        <img
-                          src={group.options[0].imageUrl}
-                          alt=""
-                          className="h-9 w-9 shrink-0 rounded-full border border-[var(--border)] object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-bold text-teal-800">
-                          {group.title.slice(0, 1).toUpperCase()}
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <div className="font-semibold">{group.title}</div>
-                        <div className="text-xs text-[var(--text-muted)] line-clamp-1">
-                          {group.options.map((o) => o.name).join(', ') || '—'}
-                        </div>
-                      </div>
+                    <div className="font-semibold">{group.title}</div>
+                    <div className="text-xs text-[var(--text-muted)] line-clamp-1">
+                      {group.options.map((o) => o.name).join(', ') || '—'}
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -547,22 +537,9 @@ export default function Modifiers() {
                       {formatGroupPrice(group)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        group.selectionType === 'required'
-                          ? 'bg-teal-50 text-teal-800'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}
-                    >
-                      {group.selectionType === 'required' ? t('required') : t('optional')}
-                    </span>
-                  </td>
+                  <td className="px-4 py-3 text-sm">{formatSelectionRule(group)}</td>
                   <td className="px-4 py-3 tabular-nums">{group.options.length}</td>
-                  <td className="px-4 py-3 tabular-nums">{group.maxSelectable}</td>
-                  <td className="px-4 py-3 tabular-nums text-teal-700 font-medium">
-                    {group.products.length}
-                  </td>
+                  <td className="px-4 py-3 tabular-nums">{group.products.length}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -737,33 +714,29 @@ export default function Modifiers() {
       {editorOpen && typeof document !== 'undefined'
         ? createPortal(
         <div
-          className="modifier-drawer-backdrop fixed inset-0 z-[80] flex justify-end"
+          className="fixed inset-0 z-50 flex justify-end bg-black/40"
           onClick={closeEditor}
           role="presentation"
         >
           <form
             onSubmit={onSave}
-            className="modifier-drawer flex h-full flex-col"
             onClick={(e) => e.stopPropagation()}
+            className="flex h-full w-full max-w-3xl flex-col bg-[#f5f6f8] shadow-2xl"
           >
-            <div className="modifier-drawer__header flex items-center justify-between border-b px-5 py-4">
-              <h2 className="text-lg font-bold text-[var(--text)]">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+              <h2 className="text-xl font-bold text-slate-900">
                 {editingId ? t('editGroup') : t('extrasNosAddGroup')}
               </h2>
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
-              >
+              <button type="button" onClick={closeEditor} className="rounded-lg p-2 hover:bg-slate-100">
                 <X size={18} />
               </button>
             </div>
 
             <div
               ref={modifierEditorScrollRef}
-              className="modifier-drawer__scroll flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-4 [-webkit-overflow-scrolling:touch]"
+              className="flex-1 overflow-y-auto overscroll-y-contain px-6 py-5 space-y-4 [-webkit-overflow-scrolling:touch]"
             >
-              <section className="modifier-drawer__card p-5 space-y-5">
+              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
                 <Field label={t('title')} required>
                   <input
                     className="field"
@@ -774,10 +747,10 @@ export default function Modifiers() {
                 </Field>
 
                 <fieldset>
-                  <legend className="mb-2 text-sm font-medium text-[var(--text)]">
+                  <legend className="mb-2 text-sm font-medium text-slate-700">
                     {t('pricingType')} <span className="text-red-500">*</span>
                   </legend>
-                  <div className="modifier-drawer__segment">
+                  <div className="flex flex-wrap gap-5 text-sm">
                     {(
                       [
                         ['free', 'free'],
@@ -785,45 +758,45 @@ export default function Modifiers() {
                         ['toppings_by_size', 'toppingsBySize'],
                       ] as const
                     ).map(([value, labelKey]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setForm({ ...form, pricingType: value })}
-                        className={`modifier-drawer__segment-btn ${
-                          form.pricingType === value ? 'modifier-drawer__segment-btn--active' : ''
-                        }`}
-                      >
+                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="pricingType"
+                          checked={form.pricingType === value}
+                          onChange={() => setForm({ ...form, pricingType: value })}
+                          className="accent-teal-600"
+                        />
                         {t(labelKey)}
-                      </button>
+                      </label>
                     ))}
                   </div>
                 </fieldset>
 
                 <fieldset>
-                  <legend className="mb-2 text-sm font-medium text-[var(--text)]">
+                  <legend className="mb-2 text-sm font-medium text-slate-700">
                     {t('selectionType')} <span className="text-red-500">*</span>
                   </legend>
-                  <div className="modifier-drawer__segment mb-3 max-w-xs">
+                  <div className="flex flex-wrap gap-5 text-sm mb-3">
                     {(
                       [
                         ['optional', 'optional'],
                         ['required', 'required'],
                       ] as const
                     ).map(([value, labelKey]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setSelectionType(value)}
-                        className={`modifier-drawer__segment-btn ${
-                          form.selectionType === value ? 'modifier-drawer__segment-btn--active' : ''
-                        }`}
-                      >
+                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="selectionType"
+                          checked={form.selectionType === value}
+                          onChange={() => setSelectionType(value)}
+                          className="accent-teal-600"
+                        />
                         {t(labelKey)}
-                      </button>
+                      </label>
                     ))}
                   </div>
 
-                  <div className="modifier-drawer__card bg-[var(--bg-muted)]/30 p-4 space-y-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
                     {form.selectionType === 'required' && (
                       <Stepper
                         label={t('minimumRequired')}
@@ -1156,76 +1129,99 @@ export default function Modifiers() {
                 </div>
               </section>
 
-              <section className="modifier-drawer__card p-5 space-y-3">
-                <h3 className="font-semibold text-[var(--text)]">
-                  {t('linkProducts')} ({linkedProducts.length})
-                </h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input
-                    className="field pl-9"
-                    placeholder={t('searchModifierProductsPlaceholder')}
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    onFocus={() => setProductPickerOpen(true)}
-                  />
-                </div>
-                {linkedProducts.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
-                    {t('noDataYet')}
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {linkedProducts.map((p) => (
-                      <span
-                        key={p.id}
-                        className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 py-1 pl-3 pr-1.5 text-sm font-medium text-teal-900 ring-1 ring-teal-200/80"
+              <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-5 py-4 text-left font-semibold"
+                  onClick={() => setOtherOpen((v) => !v)}
+                >
+                  {t('otherSettings')}
+                  {otherOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+                {otherOpen && (
+                  <div className="border-t border-slate-100 px-5 py-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-slate-800">{t('linkProducts')}</h4>
+                      <button
+                        type="button"
+                        onClick={() => setProductPickerOpen(true)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-teal-600 text-white hover:bg-teal-700"
                       >
-                        <span className="truncate">{p.name}</span>
-                        <button
-                          type="button"
-                          className="rounded-full p-1 text-teal-700/70 hover:bg-teal-100 hover:text-red-600"
-                          aria-label={t('delete')}
-                          onClick={() =>
-                            setForm({
-                              ...form,
-                              productIds: form.productIds.filter((id) => id !== p.id),
-                            })
-                          }
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ))}
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                    {linkedProducts.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-400">
+                        {t('noDataYet')}
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {linkedProducts.map((p) => (
+                          <span
+                            key={p.id}
+                            className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-teal-50 py-1 pl-3 pr-1.5 text-sm font-medium text-teal-900 ring-1 ring-teal-200/80"
+                          >
+                            <span className="truncate">
+                              {p.name}
+                              {p.category?.name ? (
+                                <span className="ml-1 text-xs font-normal text-teal-700/80">
+                                  · {p.category.name}
+                                </span>
+                              ) : null}
+                            </span>
+                            <button
+                              type="button"
+                              className="rounded-full p-1 text-teal-700/70 hover:bg-teal-100 hover:text-red-600"
+                              aria-label={t('delete')}
+                              onClick={() =>
+                                setForm({
+                                  ...form,
+                                  productIds: form.productIds.filter((id) => id !== p.id),
+                                })
+                              }
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
             </div>
 
-            <div className="modifier-drawer__footer flex justify-end gap-3 border-t px-5 py-4">
-              <button type="button" onClick={closeEditor} className="btn-secondary px-5 py-2.5 text-sm">
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
                 {t('cancel')}
               </button>
-              <button type="submit" disabled={saving} className="btn-primary px-6 py-2.5 text-sm">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+              >
                 {saving ? t('saving') : t('save')}
               </button>
             </div>
           </form>
         </div>,
         document.body
-          )
+      )
         : null}
 
-      {productPickerOpen && typeof document !== 'undefined'
-        ? createPortal(
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
-          <div className="merchant-dialog-surface w-full max-w-lg rounded-2xl shadow-xl">
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-              <h3 className="font-bold text-[var(--text)]">{t('linkProducts')}</h3>
+      {productPickerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <h3 className="font-bold text-slate-900">{t('linkProducts')}</h3>
               <button
                 type="button"
                 onClick={() => setProductPickerOpen(false)}
-                className="rounded-lg p-2 hover:bg-[var(--bg-muted)]"
+                className="rounded-lg p-2 hover:bg-slate-100"
               >
                 <X size={18} />
               </button>
@@ -1271,10 +1267,8 @@ export default function Modifiers() {
               </button>
             </div>
           </div>
-        </div>,
-        document.body
-          )
-        : null}
+        </div>
+      )}
 
       <BulkDeleteConfirmModal
         open={bulkDeleteOpen}

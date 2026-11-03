@@ -1,3 +1,5 @@
+# Deploy 2026-11-03T07:45:00Z — fix(merchant): rollback mock UI; keep roles printers receipt, dashboard dist
+
 # Deploy 2026-11-03T06:30:00Z — fix merchant extras editor (setOtherOpen TDZ) + product edit scroll, dashboard dist
 
 # Deploy 2026-11-03T05:00:00Z — Merchant product full-page editor (ce5b2a78), dashboard dist dec37a9e (reborn-build ce5b2a78)

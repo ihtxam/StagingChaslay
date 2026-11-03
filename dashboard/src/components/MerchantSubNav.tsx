@@ -66,9 +66,9 @@ export default function MerchantSubNav({ menuItems }: { menuItems: SidebarNavEnt
             <Link
               key={child.path}
               to={child.path}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 active
-                  ? 'bg-teal-600 text-white shadow-sm'
+                  ? 'bg-[var(--bg-muted)] text-[var(--text)] ring-1 ring-[var(--border)]'
                   : 'text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)]'
               }`}
             >

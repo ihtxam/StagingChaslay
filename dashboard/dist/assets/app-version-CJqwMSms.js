@@ -1,1 +1,0 @@
-import{aQ as o}from"./index-LtgBgkcN.js";const P="1.0.0",a="4a78c758",n=`Panel build: ${a}`,s=`${o} v${P}`;export{P as APP_VERSION,a as PANEL_BUILD_STAMP,n as panelBuildLabel,s as webPosVersionLabel};

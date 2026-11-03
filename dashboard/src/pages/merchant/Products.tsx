@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronLeft,
@@ -375,15 +375,8 @@ const parseFreePoints = (raw: string): number | null | 'too_many_digits' | 'out_
 
 type ProductTypeUi = 'standard' | 'combo' | 'open_price' | 'weighed';
 
-function isComboProduct(product: Product): boolean {
-  return product.productType === 'combo' || !!(product.comboItems && product.comboItems.length);
-}
-
 export default function Products() {
   const { t } = useI18n();
-  const [searchParams] = useSearchParams();
-  const catalogIoView = searchParams.get('view') === 'catalog-io';
-  const combosOnly = searchParams.get('filter') === 'combos';
   const { locationId, isHqView, locations, limits } = useLocationStore();
   const panelScopeNavInput = {
     locationCount: locations.length,
@@ -719,7 +712,6 @@ export default function Products() {
     const q = search.trim().toLowerCase();
     const categoryById = new Map(categories.map((c) => [c.id, c]));
     return products.filter((product) => {
-      if (combosOnly && !isComboProduct(product)) return false;
       const category = product.categoryId ? categoryById.get(product.categoryId) : null;
       if (channelFilter && !productVisibleOnChannel(product, category, channelFilter)) {
         return false;
@@ -736,11 +728,11 @@ export default function Products() {
         categoryName(product.categoryId).toLowerCase().includes(q)
       );
     });
-  }, [products, selectedCategory, search, categories, channelFilter, combosOnly]);
+  }, [products, selectedCategory, search, categories, channelFilter]);
 
   useEffect(() => {
     setProductPage(1);
-  }, [search, selectedCategory, channelFilter, combosOnly]);
+  }, [search, selectedCategory, channelFilter]);
 
   const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PAGE_SIZE));
 
@@ -928,8 +920,7 @@ export default function Products() {
     setRecipeYield('1');
   };
 
-  /** Always use the full-page editor when editing an existing product (mock-aligned). */
-  const editFullPage = modalOpen && !!editingId;
+  const editFullPage = modalOpen && !!editingId && !form.isCombo;
 
   useLockPageScroll(modalOpen, productEditorScrollRef, {
     lockNestedScrollRoots: !editFullPage,
@@ -2209,37 +2200,9 @@ export default function Products() {
       {!editFullPage ? (
     <div className="space-y-3">
       <HqPendingCatalogBanner />
-      {catalogIoView ? (
-        <section className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 dark:border-teal-900/40 dark:bg-teal-950/20">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{t('menuHubImportExport')}</h2>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{t('productsHint')}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary inline-flex items-center gap-1.5" onClick={downloadTemplate}>
-              <Download size={14} />
-              {t('templateShort')}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary inline-flex items-center gap-1.5"
-              disabled={importing}
-              onClick={() => fileRef.current?.click()}
-            >
-              <FileSpreadsheet size={14} />
-              {importing ? t('importing') : t('importExcel')}
-            </button>
-            <button type="button" className="btn-secondary inline-flex items-center gap-1.5" onClick={() => void exportCatalog()}>
-              <Download size={14} />
-              {t('exportExcel')}
-            </button>
-          </div>
-        </section>
-      ) : null}
-      {combosOnly ? (
-        <p className="text-sm font-medium text-teal-800 dark:text-teal-200">{t('menuHubCombos')}</p>
-      ) : null}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="page-title">{combosOnly ? t('menuHubCombos') : t('products')}</h1>
+          <h1 className="page-title">{t('products')}</h1>
           <p className="page-sub">
             {t('productsHint')}
           </p>
@@ -2825,14 +2788,14 @@ export default function Products() {
           role="presentation"
         >
           <div
-            className="merchant-product-editor merchant-product-editor-modal flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-xl touch-auto"
+            className="flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl touch-auto"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
-              <h2 className="text-base font-semibold text-[var(--text)]">
-                {editingId ? t('editProductPageTitle') : t('addProduct')}
+              <h2 className="text-base font-semibold">
+                {editingId ? t('editProduct') : t('addProduct')}
               </h2>
               <button
                 type="button"

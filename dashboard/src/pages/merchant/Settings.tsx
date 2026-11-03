@@ -457,8 +457,6 @@ type TabId =
   | 'receipt'
   | 'printers'
   | 'scale'
-  | 'appearance'
-  | 'license'
   | 'kds'
   | 'ods'
   | 'customerDisplay'
@@ -488,8 +486,6 @@ const SETTINGS_TAB_IDS: TabId[] = [
   'receipt',
   'printers',
   'scale',
-  'appearance',
-  'license',
   'kds',
   'ods',
   'customerDisplay',
@@ -509,7 +505,7 @@ const SETTINGS_TAB_IDS: TabId[] = [
 /** SpotOn-style settings groups: Team / Tables / Service / Guest / Money / Add-ons */
 const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }> = [
   { id: 'business', labelKey: 'settingsGroupBusiness', ids: ['business'] },
-  { id: 'team', labelKey: 'settingsGroupTeam', ids: ['users', 'language', 'appearance'] },
+  { id: 'team', labelKey: 'settingsGroupTeam', ids: ['users', 'language'] },
   { id: 'tables', labelKey: 'settingsGroupTables', ids: ['tables', 'reservations'] },
   {
     id: 'service',
@@ -523,7 +519,7 @@ const SETTINGS_NAV_GROUPS: Array<{ id: string; labelKey: string; ids: TabId[] }>
     labelKey: 'settingsGroupAddons',
     ids: ['kiosk', 'signage', 'phone', 'fiscal', 'accounting', 'como', 'extra-modules'],
   },
-  { id: 'about', labelKey: 'settingsGroupAbout', ids: ['about', 'license'] },
+  { id: 'about', labelKey: 'settingsGroupAbout', ids: ['about'] },
 ];
 
 const TAX_RATE_MAX = 100;
@@ -551,6 +547,8 @@ function parseSettingsTabFromSearch(search: string): TabId {
     const q = params.get('tab');
     if (q === 'locations') return 'business';
     if (q === 'cds' || q === 'customer-display' || q === 'customerDisplay') return 'customerDisplay';
+    if (q === 'appearance') return 'language';
+    if (q === 'license') return 'about';
     if (q && SETTINGS_TAB_IDS.includes(q as TabId)) return q as TabId;
     if (q === 'payments') return 'payments';
     if (q === 'tables') return 'tables';
@@ -936,7 +934,6 @@ export default function Settings() {
         { id: 'email' as const, label: t('settingsEmail'), navLabel: t('settingsNavEmail'), icon: Mail },
         { id: 'users' as const, label: t('staffPageTitle'), navLabel: t('settingsNavStaff'), icon: Users },
         { id: 'language' as const, label: t('language'), navLabel: t('settingsNavLanguage'), icon: Languages },
-        { id: 'appearance' as const, label: t('settingsNavAppearance'), navLabel: t('settingsNavAppearance'), icon: SlidersHorizontal },
         {
           id: 'extra-modules' as const,
           label: t('settingsExtraModules'),
@@ -949,7 +946,6 @@ export default function Settings() {
           navLabel: t('settingsNavAbout'),
           icon: Shield,
         },
-        { id: 'license' as const, label: t('settingsNavLicense'), navLabel: t('settingsNavLicense'), icon: Info },
       ] as const,
     [t]
   );
@@ -6025,11 +6021,11 @@ export default function Settings() {
             <SettingsExtraModulesTab settings={settings} isRetailMerchant={isRetailMerchant} />
           ) : null}
 
-          {(tab === 'about' || tab === 'license') && settings ? (
+          {tab === 'about' && settings ? (
             <SettingsAboutTab settings={settings} isRetailMerchant={isRetailMerchant} />
           ) : null}
 
-          {(tab === 'language' || tab === 'appearance') && (
+          {tab === 'language' && (
             <div className="space-y-5">
               <SettingsPageHeader title={t('language')} subtitle={t('languageSettingsHint')} />
               <Section icon={Languages} accent={settingsDash.accent} title={t('language')} description={t('languageSettingsHint')}>
