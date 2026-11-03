@@ -7,13 +7,21 @@ type SavedScroller = {
   overscrollBehavior: string;
 };
 
+export type LockPageScrollOptions = {
+  /** When false, only lock document scroll; leave nested panel scroll roots alone (full-page editors). */
+  lockNestedScrollRoots?: boolean;
+};
+
 /** Lock window + nested merchant page scrollports while a modal is open. */
-export function lockPageScroll(): () => void {
+export function lockPageScroll(options?: LockPageScrollOptions): () => void {
   if (typeof document === 'undefined') return () => {};
 
+  const lockNestedScrollRoots = options?.lockNestedScrollRoots !== false;
   const html = document.documentElement;
   const body = document.body;
-  const scrollRoots = Array.from(document.querySelectorAll<HTMLElement>(PAGE_SCROLL_SELECTOR));
+  const scrollRoots = lockNestedScrollRoots
+    ? Array.from(document.querySelectorAll<HTMLElement>(PAGE_SCROLL_SELECTOR))
+    : [];
 
   const savedHtmlOverflow = html.style.overflow;
   const savedBodyOverflow = body.style.overflow;
@@ -51,12 +59,15 @@ function isNodeInside(el: HTMLElement | null, target: EventTarget | null): boole
  */
 export function useLockPageScroll(
   locked: boolean,
-  allowTouchScrollRef?: RefObject<HTMLElement | null>
+  allowTouchScrollRef?: RefObject<HTMLElement | null>,
+  options?: LockPageScrollOptions
 ) {
+  const lockNestedScrollRoots = options?.lockNestedScrollRoots !== false;
+
   useEffect(() => {
     if (!locked || typeof document === 'undefined') return;
 
-    const unlock = lockPageScroll();
+    const unlock = lockPageScroll({ lockNestedScrollRoots });
 
     const onTouchMove = (e: TouchEvent) => {
       if (isNodeInside(allowTouchScrollRef?.current ?? null, e.target)) return;
@@ -69,5 +80,5 @@ export function useLockPageScroll(
       document.removeEventListener('touchmove', onTouchMove);
       unlock();
     };
-  }, [locked, allowTouchScrollRef]);
+  }, [locked, allowTouchScrollRef, lockNestedScrollRoots]);
 }

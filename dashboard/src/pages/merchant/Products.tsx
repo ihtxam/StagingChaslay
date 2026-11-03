@@ -931,7 +931,9 @@ export default function Products() {
   /** Always use the full-page editor when editing an existing product (mock-aligned). */
   const editFullPage = modalOpen && !!editingId;
 
-  useLockPageScroll(modalOpen, productEditorScrollRef);
+  useLockPageScroll(modalOpen, productEditorScrollRef, {
+    lockNestedScrollRoots: !editFullPage,
+  });
 
   const linkedModifierGroups = useMemo(
     () =>
@@ -2104,6 +2106,7 @@ export default function Products() {
   return (
     <>
       {editFullPage ? (
+        <div className="merchant-product-editor-page flex min-h-0 flex-1 flex-col">
         <ProductEditFullPage
           formId={PRODUCT_EDITOR_FORM_ID}
           scrollRef={productEditorScrollRef}
@@ -2201,6 +2204,7 @@ export default function Products() {
           morePanel={moreOpen ? renderMoreEditor({ hideBuyingPrice: true }) : null}
           formExtension={renderRecipeEditor()}
         />
+        </div>
       ) : null}
       {!editFullPage ? (
     <div className="space-y-3">

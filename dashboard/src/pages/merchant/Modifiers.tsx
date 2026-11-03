@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ImagePlus,
   Loader2,
@@ -16,6 +17,7 @@ import { DragHandle, SortableContainer, SortableRow } from '@/components/Sortabl
 import BulkDeleteConfirmModal from '@/components/BulkDeleteConfirmModal';
 import { bulkDeleteByIds } from '@/lib/bulk-delete';
 import { isExtrasModifierGroup, isNosModifierGroup } from '@/components/shop/shop-modifier-utils';
+import { useLockPageScroll } from '@/lib/useLockPageScroll';
 
 type PricingType = 'free' | 'fixed' | 'toppings_by_size';
 type SelectionType = 'optional' | 'required';
@@ -128,6 +130,7 @@ export default function Modifiers() {
   const [productSearch, setProductSearch] = useState('');
   const [optionUploadIdx, setOptionUploadIdx] = useState<number | null>(null);
   const optionFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const modifierEditorScrollRef = useRef<HTMLDivElement>(null);
   const [inventoryOn, setInventoryOn] = useState(false);
   const [invItems, setInvItems] = useState<Array<{ id: string; name: string; unit: string }>>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -169,6 +172,8 @@ export default function Modifiers() {
   useEffect(() => {
     void load();
   }, []);
+
+  useLockPageScroll(editorOpen, modifierEditorScrollRef);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -264,7 +269,6 @@ export default function Modifiers() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm());
-    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -278,7 +282,6 @@ export default function Modifiers() {
       minSelectable: 0,
       maxSelectable: 10,
     });
-    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -331,7 +334,6 @@ export default function Modifiers() {
         : [emptyOption()],
       productIds: [...(group.productIds || [])],
     });
-    setOtherOpen(true);
     setEditorOpen(true);
   };
 
@@ -732,11 +734,17 @@ export default function Modifiers() {
         </SortableContainer>
       </div>
 
-      {editorOpen && (
-        <div className="modifier-drawer-backdrop fixed inset-0 z-50 flex justify-end">
+      {editorOpen && typeof document !== 'undefined'
+        ? createPortal(
+        <div
+          className="modifier-drawer-backdrop fixed inset-0 z-[80] flex justify-end"
+          onClick={closeEditor}
+          role="presentation"
+        >
           <form
             onSubmit={onSave}
             className="modifier-drawer flex h-full flex-col"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="modifier-drawer__header flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-lg font-bold text-[var(--text)]">
@@ -751,7 +759,10 @@ export default function Modifiers() {
               </button>
             </div>
 
-            <div className="modifier-drawer__scroll flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <div
+              ref={modifierEditorScrollRef}
+              className="modifier-drawer__scroll flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-4 [-webkit-overflow-scrolling:touch]"
+            >
               <section className="modifier-drawer__card p-5 space-y-5">
                 <Field label={t('title')} required>
                   <input
@@ -1200,11 +1211,14 @@ export default function Modifiers() {
               </button>
             </div>
           </form>
-        </div>
-      )}
+        </div>,
+        document.body
+          )
+        : null}
 
-      {productPickerOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+      {productPickerOpen && typeof document !== 'undefined'
+        ? createPortal(
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
           <div className="merchant-dialog-surface w-full max-w-lg rounded-2xl shadow-xl">
             <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
               <h3 className="font-bold text-[var(--text)]">{t('linkProducts')}</h3>
@@ -1257,8 +1271,10 @@ export default function Modifiers() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+          )
+        : null}
 
       <BulkDeleteConfirmModal
         open={bulkDeleteOpen}
