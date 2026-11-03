@@ -217,8 +217,21 @@ class PrintBridgeService : Service() {
             .onFailure { error -> Log.w(TAG, "record granted USB devices failed", error) }
         runCatching { registry.refresh(applicationContext) }
             .onFailure { error -> Log.w(TAG, "printer discovery failed", error) }
+        scheduleBluetoothWarmup()
         runCatching { UsbBootPermissionNotifier.onDiscoveryFinished(applicationContext) }
             .onFailure { error -> Log.w(TAG, "USB permission notifier failed", error) }
+    }
+
+    /** Non-blocking SPP probe for the default paired BT printer (RebornPOS startup warmup). */
+    private fun scheduleBluetoothWarmup() {
+        if (!foregroundStarted) return
+        val worker = Thread {
+            runCatching { registry.warmupDefaultBluetoothPrinter(applicationContext) }
+                .onFailure { error -> Log.w(TAG, "Bluetooth warmup failed", error) }
+        }
+        worker.name = "print-bridge-bt-warmup"
+        worker.isDaemon = true
+        worker.start()
     }
 
     override fun onDestroy() {
