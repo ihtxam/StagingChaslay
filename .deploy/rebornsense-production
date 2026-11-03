@@ -1,3 +1,5 @@
+# Deploy 2026-11-03T03:05:00Z — fix(webpos): 60s print agent /print timeout (9b578ab1, index-Cx-4BCvq.js, WebPos-eNlcliGV.js)
+
 # Deploy 2026-11-03T08:10:00Z — emergency restore 3300ead8 register dock (index-NgP1jFc1.js, WebPos-CQ32t-gb.js; purge index-CdhE9BjN)
 
 # Deploy 2026-11-03T02:45:00Z — EMERGENCY rollback prod bundle to 3300ead8 (index-NgP1jFc1.js, WebPos-CQ32t-gb.js, reborn-build f86e5e5f); revert 7ff28bd2/48dc8261 regression
