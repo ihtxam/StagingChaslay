@@ -1,0 +1,1 @@
+import{aN as e}from"./index-Cn6D_uyo.js";const o="1.0.0",P="5beca5e9",n=`Panel build: ${P}`,s=`${e} v${o}`;export{o as APP_VERSION,P as PANEL_BUILD_STAMP,n as panelBuildLabel,s as webPosVersionLabel};
