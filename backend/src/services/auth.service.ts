@@ -42,19 +42,22 @@ async function findAuthMerchantByEmail(email: string): Promise<AuthMerchantRow |
   );
   if (rows[0]) return rows[0];
 
-  const { demoMerchantSlug, isDemoMerchantOwnerEmail } = await import(
+  const { demoMerchantSlugs, isDemoMerchantOwnerEmail } = await import(
     "@/lib/demo-merchant-login"
   );
   if (!isDemoMerchantOwnerEmail(normalized)) return null;
 
-  const bySlug = await queryRaw<AuthMerchantRow>(
-    `SELECT ${AUTH_MERCHANT_SELECT}
-     FROM merchants
-     WHERE lower(slug) = $1
-     LIMIT 1`,
-    [demoMerchantSlug()]
-  );
-  return bySlug[0] ?? null;
+  for (const slug of demoMerchantSlugs()) {
+    const bySlug = await queryRaw<AuthMerchantRow>(
+      `SELECT ${AUTH_MERCHANT_SELECT}
+       FROM merchants
+       WHERE lower(slug) = $1
+       LIMIT 1`,
+      [slug]
+    );
+    if (bySlug[0]) return bySlug[0];
+  }
+  return null;
 }
 
 async function findAuthMerchantById(merchantId: string): Promise<Omit<AuthMerchantRow, "password_hash"> | null> {
@@ -270,12 +273,20 @@ export class AuthService {
    * Login merchant owner or staff with panel access
    */
   static async loginMerchant(email: string, password: string) {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const { isDemoMerchantOwnerEmail } = await import("@/lib/demo-merchant-login");
+    const demoOwnerEmail = isDemoMerchantOwnerEmail(normalizedEmail);
     try {
       return await this.loginMerchantOwner(email, password);
     } catch (ownerError) {
       const ownerMessage = ownerError instanceof Error ? ownerError.message : "";
       if (ownerMessage.startsWith("Merchant account is")) {
         throw ownerError;
+      }
+      if (demoOwnerEmail) {
+        throw new Error(
+          "Invalid email or password. Demo login is for the shop owner — use the owner password (not a staff account)."
+        );
       }
       try {
         return await this.loginMerchantStaff(email, password);
@@ -292,6 +303,12 @@ export class AuthService {
 
   static async loginMerchantOwner(email: string, password: string) {
     const normalizedEmail = String(email || "").trim().toLowerCase();
+    const { isDemoMerchantOwnerEmail } = await import("@/lib/demo-merchant-login");
+    if (isDemoMerchantOwnerEmail(normalizedEmail)) {
+      const { ensureDemoOwnerLoginReady } = await import("@/lib/demo-merchant-heal");
+      await ensureDemoOwnerLoginReady(normalizedEmail).catch(() => undefined);
+    }
+
     const merchant = await findAuthMerchantByEmail(normalizedEmail);
 
     if (!merchant) {

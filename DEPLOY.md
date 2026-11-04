@@ -227,6 +227,24 @@ docker compose run --rm migrate
 
 Set `SEED_DEMO_RESET_PASSWORD=false` in secrets to keep a custom demo password across deploys.
 
+### Production demo login (`app.rebornsense.com`, Pola Cafe showcase)
+
+| Field | Value |
+|-------|--------|
+| URL | https://app.rebornsense.com |
+| Email | `demo@chaslay.com` (alias: `demo@rebornsense.com`) |
+| Password | `DemoShop123!` (reset when heal runs with default env) |
+| Merchant slug | usually `polacafe` (also resolves slug `demo` when configured) |
+
+If the header shows a **staff** name (e.g. waiter) instead of **Owner**, a staff row is still using the demo email — owner login lost the race. On the production host (SSH alias `production-reborn`):
+
+```bash
+cd /root/rebornSense   # or your DEPLOY_PATH
+bash scripts/heal-production-demo-login.sh
+```
+
+This deactivates staff rows with demo alias emails, clears `panel_nav_hidden` for settings, and resets the owner password when `SEED_DEMO_RESET_PASSWORD=true`.
+
 Schema-drift login failures (HTTP 500, logs mention missing columns such as `adyen_store_reference`) are healed on deploy via `backend/sql/ensure-merchant-columns-drift.sql`.
 
 If deploy logs show **`tables can have at most 1600 columns`**, the staging `merchants` table is corrupted (too many columns from repeated failed migrations). Reset the staging database:

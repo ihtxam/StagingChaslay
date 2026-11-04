@@ -2358,7 +2358,7 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="card !p-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           <aside className="sticky top-0 z-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] lg:static lg:z-auto lg:flex lg:w-56 lg:flex-col lg:border-b-0 lg:border-r">
             <nav

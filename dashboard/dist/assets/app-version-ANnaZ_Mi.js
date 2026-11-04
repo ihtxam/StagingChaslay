@@ -1,1 +1,0 @@
-import{aO as o}from"./index-C1EyC8NC.js";const a="1.0.0",P="b66393aa",n=`Panel build: ${P}`,s=`${o} v${a}`;export{a as APP_VERSION,P as PANEL_BUILD_STAMP,n as panelBuildLabel,s as webPosVersionLabel};

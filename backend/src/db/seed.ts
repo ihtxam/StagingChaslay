@@ -5,8 +5,11 @@ import { AuthService } from "../services/auth.service";
 import { generateSyncApiKey } from "../services/chaslay-compat.service";
 import { SubscriptionPlansService } from "../services/subscription-plans.service";
 import { resolveShopPublicHost } from "../lib/brand";
-import { demoMerchantOwnerEmailAliases } from "../lib/demo-merchant-login";
-import { normalizePanelNavHidden } from "../lib/panel-nav-hidden";
+import { demoMerchantSlugs } from "../lib/demo-merchant-login";
+import {
+  healDemoMerchantLogin,
+  healDemoPanelNavSettings,
+} from "../lib/demo-merchant-heal";
 
 dotenv.config();
 
@@ -106,13 +109,18 @@ async function seedDemoShop() {
   const email = process.env.SEED_DEMO_MERCHANT_EMAIL || "demo@rebornsense.com";
   const password = process.env.SEED_DEMO_MERCHANT_PASSWORD || "DemoShop123!";
   const slug = process.env.SEED_DEMO_SLUG || "demo";
+  const demoSlugs = demoMerchantSlugs();
   // Keep Android BuildConfig SYNC_API_KEY working when present
   const syncApiKey =
     process.env.SEED_DEMO_SYNC_API_KEY || "ihtsham_76875hgf755rjgkjh7zrzrhvjhv";
 
-  let merchant = await db.query.merchants.findFirst({
-    where: eq(schema.merchants.slug, slug),
-  });
+  let merchant = null as Awaited<ReturnType<typeof db.query.merchants.findFirst>>;
+  for (const demoSlug of demoSlugs) {
+    merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.slug, demoSlug),
+    });
+    if (merchant) break;
+  }
 
   if (!merchant) {
     const byEmail = await db.query.merchants.findFirst({
@@ -157,9 +165,11 @@ async function seedDemoShop() {
     console.log(`  Shop: https://${resolveShopPublicHost()}/${slug} or /shop/${slug}`);
     console.log(`  Sync API key: ${merchant.syncApiKey}`);
   } else {
+    const slugKey = String(merchant.slug || slug).toLowerCase();
     const healDemoPassword =
       process.env.SEED_DEMO_RESET_PASSWORD !== "false" &&
-      String(merchant.email || "").toLowerCase() === email.toLowerCase();
+      (String(merchant.email || "").toLowerCase() === email.toLowerCase() ||
+        demoSlugs.includes(slugKey));
     const passwordHash = healDemoPassword
       ? await AuthService.hashPassword(password)
       : undefined;
@@ -187,7 +197,18 @@ async function seedDemoShop() {
   }
 
   await healDemoPanelNavSettings(merchant.id);
-  await healDemoOwnerLogin(merchant.id, email);
+  const healSummary = await healDemoMerchantLogin({
+    merchantId: merchant.id,
+    resetPassword: process.env.SEED_DEMO_RESET_PASSWORD !== "false",
+  });
+  if (healSummary?.staffDeactivated) {
+    console.log(
+      `Demo merchant: deactivated ${healSummary.staffDeactivated} staff alias login(s) — owner ${email}`
+    );
+  }
+  if (healSummary?.panelNavCleared) {
+    console.log("Demo merchant: restored settings gear in panel nav (cleared panel_nav_hidden settings key)");
+  }
 
   const existingCats = await db.query.categories.findMany({
     where: eq(schema.categories.merchantId, merchant.id),
@@ -277,65 +298,6 @@ async function seedDemoShop() {
     } else {
       console.log("Demo catering showcase already present");
     }
-  }
-}
-
-/** Demo showcase account must keep the settings gear for owner/manager walkthroughs. */
-async function healDemoPanelNavSettings(merchantId: string) {
-  const db = getDb();
-  const row = await db.query.merchants.findFirst({
-    where: eq(schema.merchants.id, merchantId),
-    columns: { panelNavHidden: true },
-  });
-  if (!row) return;
-  const hidden = normalizePanelNavHidden(row.panelNavHidden);
-  if (!hidden.includes("/merchant/settings")) return;
-  const next = hidden.filter((key) => key !== "/merchant/settings");
-  await db
-    .update(schema.merchants)
-    .set({
-      panelNavHidden: next.length ? next : null,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.merchants.id, merchantId));
-  console.log("Demo merchant: restored settings gear in panel nav (cleared panel_nav_hidden settings key)");
-}
-
-/**
- * Owner email login must win over a staff row sharing demo@chaslay.com / demo@rebornsense.com.
- * Re-sync password via SEED_DEMO_RESET_PASSWORD and canonicalize merchant.email.
- */
-async function healDemoOwnerLogin(merchantId: string, canonicalEmail: string) {
-  const db = getDb();
-  const aliases = demoMerchantOwnerEmailAliases();
-  const normalizedCanonical = String(canonicalEmail || "").trim().toLowerCase();
-  if (!normalizedCanonical) return;
-
-  await db
-    .update(schema.merchants)
-    .set({
-      email: normalizedCanonical,
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.merchants.id, merchantId));
-
-  const staffRows = await db.query.merchantStaff.findMany({
-    where: eq(schema.merchantStaff.merchantId, merchantId),
-    columns: { id: true, email: true, isActive: true },
-  });
-  for (const row of staffRows) {
-    const staffEmail = String(row.email || "")
-      .trim()
-      .toLowerCase();
-    if (!staffEmail || !aliases.includes(staffEmail)) continue;
-    if (!row.isActive) continue;
-    await db
-      .update(schema.merchantStaff)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(schema.merchantStaff.id, row.id));
-    console.log(
-      `Demo merchant: deactivated staff email login ${row.email} (use owner ${normalizedCanonical} for panel demo)`
-    );
   }
 }
 

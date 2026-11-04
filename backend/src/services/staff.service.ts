@@ -1107,6 +1107,12 @@ export class StaffService {
   static async loginStaff(email: string, password: string) {
     const db = getDb();
     const normalized = email.trim().toLowerCase();
+    const { isDemoMerchantOwnerEmail } = await import("@/lib/demo-merchant-login");
+    if (isDemoMerchantOwnerEmail(normalized)) {
+      throw new Error(
+        "This email is reserved for the shop owner demo login. Sign in as owner, not staff."
+      );
+    }
     const rows = await db
       .select()
       .from(schema.merchantStaff)
