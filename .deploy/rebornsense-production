@@ -1,3 +1,5 @@
+# Deploy 2026-11-04T21:35:57Z — feat(pos): settings shell, Adyen fixes, license activation, retail weigh v57 (bd88b0a)
+
 # Deploy 2026-11-03T08:22:00Z — fix(dashboard): restore dist public assets after rollback bundle (index-fPPya6pk.js, WebPos-OBjnAmVu.js)
 
 # Deploy 2026-11-03T08:18:00Z — fix(merchant): rollback mock UI; keep roles/printers/receipt; dashboard dist (index-BlDXIdg8.js, WebPos-BpOnYqv6.js, reborn-build f86e5e5f)
