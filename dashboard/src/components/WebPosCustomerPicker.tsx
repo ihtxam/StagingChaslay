@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Search, X } from 'lucide-react';
 import api from '@/lib/api';
@@ -59,13 +59,26 @@ export default function WebPosCustomerPicker({ open, onClose, onSelect, pendingR
     city: '',
   });
 
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (!open) return;
-    closeKeyboard();
-    setQ('');
-    setShowCreate(!!pendingRfidUid);
-    setForm({ name: '', phone: '', email: '', address: '', zip: '', city: '' });
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+    if (justOpened) {
+      closeKeyboard();
+      setQ('');
+      setShowCreate(!!pendingRfidUid);
+      setForm({ name: '', phone: '', email: '', address: '', zip: '', city: '' });
+    }
   }, [open, pendingRfidUid, closeKeyboard]);
+
+  useEffect(() => {
+    if (!open || !pendingRfidUid) return;
+    setShowCreate(true);
+  }, [open, pendingRfidUid]);
 
   useEffect(() => {
     if (!open || !keyboardActive || !showCreate) return;

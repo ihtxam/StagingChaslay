@@ -11,7 +11,7 @@ const GROUPS: Array<{ titleKey: string; items: LinkItem[] }> = [
   {
     titleKey: 'invNavGroupOps',
     items: [
-      { to: '/merchant/inventory', labelKey: 'invNavList' },
+      { to: '/merchant/inventory/home', labelKey: 'invNavList' },
       { to: '/merchant/inventory/list', labelKey: 'invNavStockTable' },
       { to: '/merchant/inventory/inbound', labelKey: 'invNavInbound' },
       { to: '/merchant/inventory/transfers', labelKey: 'invTransferTitle' },

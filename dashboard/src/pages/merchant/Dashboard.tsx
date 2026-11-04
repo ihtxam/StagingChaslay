@@ -1097,16 +1097,10 @@ function MerchantShell() {
       ].filter((item) => allow(item.path));
       const retailOpsLinks = !isRestaurantModule(businessModule)
         ? [
-            ...(allowInventory('/merchant/inventory')
-              ? [{ label: t('invTitle'), path: '/merchant/inventory', icon: '📦' }]
-              : []),
             ...(allowStorekeeper('/merchant/storekeeper')
               ? [{ label: t('storekeeperTitle'), path: '/merchant/storekeeper', icon: '📱' }]
               : []),
           ].filter((item) => {
-            if (item.path === '/merchant/inventory' || item.path.startsWith('/merchant/inventory')) {
-              return allowInventory(item.path);
-            }
             if (item.path === '/merchant/storekeeper') return allowStorekeeper(item.path);
             return allow(item.path);
           })
@@ -1168,7 +1162,7 @@ function MerchantShell() {
       children: allowInventory('/merchant/inventory')
         ? [
             { heading: true, label: t('invNavGroupOps') },
-            { label: t('invNavList'), path: '/merchant/inventory', icon: '📋' },
+            { label: t('invNavList'), path: '/merchant/inventory/home', icon: '📋' },
             { label: t('invNavStockTable'), path: '/merchant/inventory/list', icon: '📊' },
             { label: t('invNavInbound'), path: '/merchant/inventory/inbound', icon: '⬇️' },
             ...(allowStorekeeper('/merchant/storekeeper')
@@ -1537,7 +1531,7 @@ function MerchantShell() {
         <main
           className={
             isSettingsRoute
-              ? 'panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0'
+              ? 'panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4'
               : ((isPosLikeRoute || isOrderCenterRoute || isStorekeeperRoute) && !isKioskRoute && posAppMode) ||
                   isStorekeeperRoute
                 ? 'flex-1 overflow-hidden p-0 min-h-0'
@@ -1656,7 +1650,7 @@ function MerchantShell() {
                 </PanelRouteGuard>
               }
             >
-              <Route index element={<InventoryHomePage />} />
+              <Route index element={<Navigate to="list" replace />} />
               <Route path="home" element={<InventoryHomePage />} />
               <Route path="list" element={<InventoryListPage />} />
               <Route path="inbound" element={<InboundStockPage />} />

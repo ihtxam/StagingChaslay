@@ -262,7 +262,7 @@ export function backOfficeHomePath(
   if (hasPermission(permissions, 'STOREKEEPER_INTAKE', false)) return storekeeperHomePath();
   if (hasPermission(permissions, 'MANAGE_KIOSK', false)) return kioskHomePath();
   if (isOrderCenterOnlyStaff(permissions, isOwner)) return orderCenterHomePath();
-  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory';
+  if (hasPermission(permissions, 'MANAGE_INVENTORY', false)) return '/merchant/inventory/list';
   if (hasPermission(permissions, 'USE_WEBPOS', false)) return '/merchant/pos';
   if (hasPermission(permissions, 'VIEW_ORDER_HISTORY', false)) return '/merchant/orders';
   return '/merchant/pos';

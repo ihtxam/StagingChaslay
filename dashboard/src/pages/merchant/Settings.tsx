@@ -869,6 +869,7 @@ export default function Settings() {
   const [printAgentOk, setPrintAgentOk] = useState(false);
   const [desktopBundledSidecarOk, setDesktopBundledSidecarOk] = useState(false);
   const [printAgentHealthChecked, setPrintAgentHealthChecked] = useState(false);
+  const agentPrinterCatalogReady = printAgentHealthChecked && printAgentOk;
   const [printAgentOutdated, setPrintAgentOutdated] = useState(false);
   const [installedPrintCompanionVersion, setInstalledPrintCompanionVersion] = useState<string | null>(null);
   const [printBridgeManifest, setPrintBridgeManifest] = useState<DownloadManifest | null>(null);
@@ -2253,7 +2254,7 @@ export default function Settings() {
 
   return (
     <div
-      className="flex w-full max-w-[1400px] flex-1 min-h-0 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4"
+      className="flex w-full max-w-[1400px] flex-1 min-h-0 flex-col gap-3 overflow-hidden p-0 sm:gap-4"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -4615,17 +4616,6 @@ export default function Settings() {
                 }
               >
               <div className="space-y-5 min-w-0">
-              <SettingsPrintCompanionSection
-                printBridgeManifest={printBridgeManifest}
-                printAgentManifest={printAgentManifest}
-                printAgentOk={printAgentOk}
-                printAgentHealthChecked={printAgentHealthChecked}
-                installedPrintCompanionVersion={installedPrintCompanionVersion}
-                printAgentOutdated={printAgentOutdated}
-                desktopBundledSidecarOk={desktopBundledSidecarOk}
-                onRefresh={() => void refreshPrintAgentPrinters()}
-                refreshing={refreshingPrinters}
-              />
               {tab === 'receipt' && (
               <Section icon={ScrollText} accent={settingsDash.accent} title={t('settingsReceiptDesign')} description={t('settingsReceiptDesignHint')}>
                 <Field label={t('receiptLanguage')}>
@@ -5146,6 +5136,386 @@ export default function Settings() {
               )}
 
               {tab === 'printers' && (
+              <>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--text)] m-0">{t('settingsPrintersSummaryTitle')}</p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1 m-0">
+                      {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length}{' '}
+                      {t('settingsPrintersConfigured')}
+                      {' · '}
+                      {printAgentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary text-sm"
+                    onClick={() => {
+                      const printers = [
+                        ...(settings.posPrintSettings?.printers || []),
+                        {
+                          id: `p-${Date.now()}`,
+                          name: '',
+                          enabled: true,
+                          paperWidthMm: 80 as const,
+                          printReceipts: true,
+                          printKitchenTickets: false,
+                          printEndOfDayReports: false,
+                          printLabels: false,
+                          printAllProducts: true,
+                        },
+                      ];
+                      setSettings({
+                        ...settings,
+                        posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                      });
+                    }}
+                  >
+                    {t('addPrinterProfile')}
+                  </button>
+                </div>
+              </div>
+
+              <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')}>
+                <div id="settings-printers">
+                {(() => {
+                  const configured = (settings.posPrintSettings?.printers || []).filter((p) =>
+                    p.name?.trim()
+                  );
+                  let connected = 0;
+                  let attention = 0;
+                  for (const p of configured) {
+                    const missing = isConfiguredPrinterMissing(p.name, agentPrinters, {
+                      agentOk: printAgentOk,
+                      printersReady: agentPrinterCatalogReady,
+                      portName: p.portName,
+                      matchHint: p.matchHint,
+                    });
+                    if (missing) attention += 1;
+                    else connected += 1;
+                  }
+                  if (!configured.length) return null;
+                  return (
+                    <p className="mb-3 text-sm font-medium text-[var(--text-muted)] m-0">
+                      {t('settingsPrintersStatusSummary')
+                        .replace('{connected}', String(connected))
+                        .replace('{attention}', String(attention))}
+                    </p>
+                  );
+                })()}
+                {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length ===
+                0 ? (
+                  <div className="mb-4 space-y-3">
+                    <p className="text-sm text-[var(--text-muted)] m-0">{t('settingsPrinterDemoHint')}</p>
+                    {SETTINGS_DEMO_PRINTER_ROWS.map((row) => (
+                      <SettingsDemoPrinterRow key={row.id} row={row} />
+                    ))}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <button
+                    type="button"
+                    className="btn-secondary inline-flex items-center gap-2 text-sm"
+                    onClick={() => void refreshPrintAgentPrinters()}
+                    disabled={refreshingPrinters}
+                  >
+                    <RefreshCw size={14} className={refreshingPrinters ? 'animate-spin' : ''} />
+                    {t('webPosRefreshPrinters')}
+                  </button>
+                  <p
+                    className={`text-sm m-0 ${
+                      !printAgentOk
+                        ? 'text-[var(--text-muted)]'
+                        : printAgentOutdated ||
+                            (settings.posPrintSettings?.printers || []).some(
+                              (p) =>
+                                isConfiguredPrinterMissing(p.name, agentPrinters, {
+                                  agentOk: printAgentOk,
+                                  printersReady: agentPrinterCatalogReady,
+                                  portName: p.portName,
+                                  matchHint: p.matchHint,
+                                })
+                            )
+                          ? 'text-amber-800'
+                          : 'text-emerald-700'
+                    }`}
+                  >
+                    {!printAgentOk
+                      ? t('webPosAgentOffline')
+                      : (settings.posPrintSettings?.printers || []).some((p) =>
+                            isConfiguredPrinterMissing(p.name, agentPrinters, {
+                              agentOk: printAgentOk,
+                              printersReady: agentPrinterCatalogReady,
+                              portName: p.portName,
+                              matchHint: p.matchHint,
+                            })
+                          )
+                        ? t('webPosPrinterDisconnectedShort')
+                        : printAgentOutdated
+                          ? t('webPosPrintAgentOutdatedHint')
+                          : t('webPosAgentOnline')}
+                  </p>
+                </div>
+                {(settings.posPrintSettings?.printers || []).map((p, idx) => {
+                  const savedNameMissing = isConfiguredPrinterMissing(p.name, agentPrinters, {
+                    agentOk: printAgentOk,
+                    printersReady: agentPrinterCatalogReady,
+                    portName: p.portName,
+                    matchHint: p.matchHint,
+                  });
+                  const healCandidates = savedNameMissing
+                    ? findPrinterHealCandidates(p.name, agentPrinters)
+                    : [];
+                  const useDropdown = printAgentOk && agentPrinters.length > 0;
+                  const savedPrinterName = String(p.name || '').trim();
+                  const selectValue =
+                    savedNameMissing || !savedPrinterName
+                      ? ''
+                      : resolveAgentPrinterSelectValue(p.name, p.matchHint, agentPrintersForPick);
+                  const conn = inferPrinterConnectionMeta(p.name, p.portName);
+                  return (
+                  <div key={p.id} className="space-y-2">
+                    <SettingsPrinterProfileRow
+                      profile={p}
+                      connectionDetail={conn.detail}
+                      connectionKind={conn.kind}
+                      status={
+                        !agentPrinterCatalogReady
+                          ? 'attention'
+                          : savedNameMissing
+                            ? 'attention'
+                            : 'connected'
+                      }
+                      testing={testingPrinterId === p.id}
+                      expanded={expandedPrinterId === p.id}
+                      onTest={() => void testPrinterProfile(p)}
+                      onEdit={() =>
+                        setExpandedPrinterId((id) => (id === p.id ? null : p.id))
+                      }
+                      onDelete={() => {
+                        const printers = (settings.posPrintSettings?.printers || []).filter(
+                          (_, i) => i !== idx
+                        );
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                        });
+                        if (expandedPrinterId === p.id) setExpandedPrinterId(null);
+                      }}
+                    />
+                    {expandedPrinterId === p.id ? (
+                    <div className="rounded-xl border border-[var(--border)] p-3 space-y-2 bg-[var(--bg-muted)]/40">
+                    <Field
+                      label={t('printerName')}
+                      hint={
+                        useDropdown
+                          ? selectValue
+                            ? undefined
+                            : t('settingsPrinterBridgeDefaultHint')
+                          : t('settingsPrinterManualEntry')
+                      }
+                    >
+                      {useDropdown ? (
+                        <select
+                          className="input"
+                          value={selectValue}
+                          onChange={(e) => {
+                            const printers = [...(settings.posPrintSettings?.printers || [])];
+                            const raw = e.target.value;
+                            if (!raw) {
+                              printers[idx] = {
+                                ...p,
+                                name: '',
+                                portName: null,
+                                matchHint: null,
+                              };
+                            } else {
+                              const picked = agentPrinters.find(
+                                (ap) =>
+                                  ap.name === raw || (ap.id && ap.id === raw)
+                              );
+                              printers[idx] = {
+                                ...p,
+                                name: picked?.name || raw,
+                                portName: picked?.portName || null,
+                                matchHint:
+                                  picked?.id ||
+                                  (picked?.connectionType === 'bluetooth' && picked?.address
+                                    ? picked.address
+                                    : picked?.matchHint || picked?.driverName || null),
+                              };
+                            }
+                            const nextSettings = {
+                              ...settings,
+                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            };
+                            setSettings(nextSettings);
+                            // Save the queue immediately. The page Save button is easy to
+                            // miss, and a later refresh used to write the old printer back.
+                            void persistPosPrintSettings(nextSettings, '').catch((error: unknown) => {
+                              const msg =
+                                error && typeof error === 'object' && 'response' in error
+                                  ? String(
+                                      (error as { response?: { data?: { error?: string } } }).response?.data
+                                        ?.error || ''
+                                    )
+                                  : '';
+                              toast.error(msg || t('failedSaveReceipt'));
+                            });
+                          }}
+                        >
+                          <option value="">{t('webPosDefaultPrinter')}</option>
+                          {savedPrinterName &&
+                          selectValue === savedPrinterName &&
+                          !agentPrintersForPick.some((ap) => agentPrinterOptionValue(ap) === selectValue) ? (
+                            <option value={savedPrinterName}>{savedPrinterName}</option>
+                          ) : null}
+                          {agentPrintersForPick.map((ap) => {
+                            const bad = isUnsuitableRawPrinter(ap.name);
+                            const optionValue = agentPrinterOptionValue(ap);
+                            return (
+                              <option key={optionValue} value={optionValue}>
+                                {formatAgentPrinterOptionLabel(ap)}
+                                {ap.portName ? ` · ${ap.portName}` : ''}
+                                {ap.isDefault ? t('webPosDefaultSuffix') : ''}
+                                {bad ? t('webPosPrinterNotThermal') : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <input
+                          className="input"
+                          value={p.name}
+                          onChange={(e) => {
+                            const printers = [...(settings.posPrintSettings?.printers || [])];
+                            printers[idx] = { ...p, name: e.target.value };
+                            setSettings({
+                              ...settings,
+                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            });
+                          }}
+                          placeholder={t('printerName')}
+                        />
+                      )}
+                    </Field>
+                    {p.name && isUnsuitableRawPrinter(p.name) ? (
+                      <p className="text-xs leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
+                    ) : null}
+                    {p.name && isTsplLabelPrinterName(p.name) ? (
+                      <p className="text-xs leading-snug text-[var(--muted)] m-0">{t('barcodeTsplPrinterHint')}</p>
+                    ) : null}
+                    {savedNameMissing ? (
+                      <div className="space-y-1.5">
+                        <p className="text-xs leading-snug text-amber-800 m-0">
+                          {t('webPosPrinterDisconnectedShort')}
+                        </p>
+                        <p className="text-xs leading-snug text-amber-800 m-0">
+                          {t('webPosPrinterRenamedHint')}
+                        </p>
+                        {healCandidates.map((ap) => (
+                          <button
+                            key={ap.name}
+                            type="button"
+                            className="inline-flex items-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                            onClick={() => {
+                              const printers = [...(settings.posPrintSettings?.printers || [])];
+                              printers[idx] = {
+                                ...p,
+                                name: ap.name,
+                                portName: ap.portName || null,
+                                matchHint: ap.matchHint || ap.driverName || null,
+                              };
+                              setSettings({
+                                ...settings,
+                                posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                              });
+                            }}
+                          >
+                            {t('webPosUsePrinter').replace('{name}', ap.name)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-3 text-sm">
+                      {(
+                        [
+                          ['printReceipts', t('printRoleReceipts')],
+                          ['printKitchenTickets', t('printRoleKitchen')],
+                          ['printEndOfDayReports', t('printRoleEod')],
+                          ['printLabels', t('printRoleLabels')],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <label key={key} className="inline-flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={!!p[key]}
+                            onChange={(e) => {
+                              const printers = [...(settings.posPrintSettings?.printers || [])];
+                              printers[idx] = { ...p, [key]: e.target.checked };
+                              setSettings({
+                                ...settings,
+                                posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                              });
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    {p.printKitchenTickets ? (
+                      <div className="space-y-2 rounded-lg border border-dashed border-[var(--border)] p-3">
+                        <PrinterKitchenRoutingPicker
+                          profile={p}
+                          categories={productCategories}
+                          products={catalogProducts}
+                          onChange={(next) => {
+                            const printers = [...(settings.posPrintSettings?.printers || [])];
+                            printers[idx] = { ...p, ...next };
+                            setSettings({
+                              ...settings,
+                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                            });
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    </div>
+                    ) : null}
+                  </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    const printers = [
+                      ...(settings.posPrintSettings?.printers || []),
+                      {
+                        id: `p-${Date.now()}`,
+                        name: '',
+                        enabled: true,
+                        paperWidthMm: 80 as const,
+                        printReceipts: false,
+                        printKitchenTickets: true,
+                        printEndOfDayReports: false,
+                        printLabels: false,
+                        printAllProducts: true,
+                      },
+                    ];
+                    setSettings({
+                      ...settings,
+                      posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
+                    });
+                  }}
+                >
+                  {t('addPrinterProfile')}
+                </button>
+                </div>
+              </Section>
+
+              {tab === 'printers' && (
               <Section icon={Printer} accent={settingsDash.accent} title={t('settingsPrintRoutingTitle')} description={t('settingsReceiptSubtitleShort')}>
                 <Field label={t('kitchenTicketHeader')}>
                   <textarea
@@ -5435,379 +5805,19 @@ export default function Settings() {
               </Section>
               )}
 
-              {tab === 'printers' && (
-              <>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--text)] m-0">{t('settingsPrintersSummaryTitle')}</p>
-                    <p className="text-sm text-[var(--text-muted)] mt-1 m-0">
-                      {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length}{' '}
-                      {t('settingsPrintersConfigured')}
-                      {' · '}
-                      {printAgentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-primary text-sm"
-                    onClick={() => {
-                      const printers = [
-                        ...(settings.posPrintSettings?.printers || []),
-                        {
-                          id: `p-${Date.now()}`,
-                          name: '',
-                          enabled: true,
-                          paperWidthMm: 80 as const,
-                          printReceipts: true,
-                          printKitchenTickets: false,
-                          printEndOfDayReports: false,
-                          printLabels: false,
-                          printAllProducts: true,
-                        },
-                      ];
-                      setSettings({
-                        ...settings,
-                        posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                      });
-                    }}
-                  >
-                    {t('addPrinterProfile')}
-                  </button>
-                </div>
-              </div>
-
-              <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')}>
-                <div id="settings-printers">
-                {(() => {
-                  const configured = (settings.posPrintSettings?.printers || []).filter((p) =>
-                    p.name?.trim()
-                  );
-                  let connected = 0;
-                  let attention = 0;
-                  for (const p of configured) {
-                    const missing = isConfiguredPrinterMissing(p.name, agentPrinters, {
-                      agentOk: printAgentOk,
-                      printersReady: agentPrinters.length > 0,
-                      portName: p.portName,
-                      matchHint: p.matchHint,
-                    });
-                    if (missing) attention += 1;
-                    else connected += 1;
-                  }
-                  if (!configured.length) return null;
-                  return (
-                    <p className="mb-3 text-sm font-medium text-[var(--text-muted)] m-0">
-                      {t('settingsPrintersStatusSummary')
-                        .replace('{connected}', String(connected))
-                        .replace('{attention}', String(attention))}
-                    </p>
-                  );
-                })()}
-                {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length ===
-                0 ? (
-                  <div className="mb-4 space-y-3">
-                    <p className="text-sm text-[var(--text-muted)] m-0">{t('settingsPrinterDemoHint')}</p>
-                    {SETTINGS_DEMO_PRINTER_ROWS.map((row) => (
-                      <SettingsDemoPrinterRow key={row.id} row={row} />
-                    ))}
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap items-center gap-3 mb-3">
-                  <button
-                    type="button"
-                    className="btn-secondary inline-flex items-center gap-2 text-sm"
-                    onClick={() => void refreshPrintAgentPrinters()}
-                    disabled={refreshingPrinters}
-                  >
-                    <RefreshCw size={14} className={refreshingPrinters ? 'animate-spin' : ''} />
-                    {t('webPosRefreshPrinters')}
-                  </button>
-                  <p
-                    className={`text-sm m-0 ${
-                      !printAgentOk
-                        ? 'text-[var(--text-muted)]'
-                        : printAgentOutdated ||
-                            (settings.posPrintSettings?.printers || []).some(
-                              (p) =>
-                                isConfiguredPrinterMissing(p.name, agentPrinters, {
-                                  agentOk: printAgentOk,
-                                  printersReady: agentPrinters.length > 0,
-                                  portName: p.portName,
-                                  matchHint: p.matchHint,
-                                })
-                            )
-                          ? 'text-amber-800'
-                          : 'text-emerald-700'
-                    }`}
-                  >
-                    {!printAgentOk
-                      ? t('webPosAgentOffline')
-                      : (settings.posPrintSettings?.printers || []).some((p) =>
-                            isConfiguredPrinterMissing(p.name, agentPrinters, {
-                              agentOk: printAgentOk,
-                              printersReady: agentPrinters.length > 0,
-                              portName: p.portName,
-                              matchHint: p.matchHint,
-                            })
-                          )
-                        ? t('webPosPrinterDisconnectedShort')
-                        : printAgentOutdated
-                          ? t('webPosPrintAgentOutdatedHint')
-                          : t('webPosAgentOnline')}
-                  </p>
-                </div>
-                {(settings.posPrintSettings?.printers || []).map((p, idx) => {
-                  const savedNameMissing = isConfiguredPrinterMissing(p.name, agentPrinters, {
-                    agentOk: printAgentOk,
-                    printersReady: agentPrinters.length > 0,
-                    portName: p.portName,
-                    matchHint: p.matchHint,
-                  });
-                  const healCandidates = savedNameMissing
-                    ? findPrinterHealCandidates(p.name, agentPrinters)
-                    : [];
-                  const useDropdown = printAgentOk && agentPrinters.length > 0;
-                  const savedPrinterName = String(p.name || '').trim();
-                  const selectValue =
-                    savedNameMissing || !savedPrinterName
-                      ? ''
-                      : resolveAgentPrinterSelectValue(p.name, p.matchHint, agentPrintersForPick);
-                  const conn = inferPrinterConnectionMeta(p.name, p.portName);
-                  return (
-                  <div key={p.id} className="space-y-2">
-                    <SettingsPrinterProfileRow
-                      profile={p}
-                      connectionDetail={conn.detail}
-                      connectionKind={conn.kind}
-                      status={savedNameMissing ? 'attention' : 'connected'}
-                      testing={testingPrinterId === p.id}
-                      expanded={expandedPrinterId === p.id}
-                      onTest={() => void testPrinterProfile(p)}
-                      onEdit={() =>
-                        setExpandedPrinterId((id) => (id === p.id ? null : p.id))
-                      }
-                      onDelete={() => {
-                        const printers = (settings.posPrintSettings?.printers || []).filter(
-                          (_, i) => i !== idx
-                        );
-                        setSettings({
-                          ...settings,
-                          posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                        });
-                        if (expandedPrinterId === p.id) setExpandedPrinterId(null);
-                      }}
-                    />
-                    {expandedPrinterId === p.id ? (
-                    <div className="rounded-xl border border-[var(--border)] p-3 space-y-2 bg-[var(--bg-muted)]/40">
-                    <Field
-                      label={t('printerName')}
-                      hint={
-                        useDropdown
-                          ? selectValue
-                            ? undefined
-                            : t('settingsPrinterBridgeDefaultHint')
-                          : t('settingsPrinterManualEntry')
-                      }
-                    >
-                      {useDropdown ? (
-                        <select
-                          className="input"
-                          value={selectValue}
-                          onChange={(e) => {
-                            const printers = [...(settings.posPrintSettings?.printers || [])];
-                            const raw = e.target.value;
-                            if (!raw) {
-                              printers[idx] = {
-                                ...p,
-                                name: '',
-                                portName: null,
-                                matchHint: null,
-                              };
-                            } else {
-                              const picked = agentPrinters.find(
-                                (ap) =>
-                                  ap.name === raw || (ap.id && ap.id === raw)
-                              );
-                              printers[idx] = {
-                                ...p,
-                                name: picked?.name || raw,
-                                portName: picked?.portName || null,
-                                matchHint:
-                                  picked?.id ||
-                                  (picked?.connectionType === 'bluetooth' && picked?.address
-                                    ? picked.address
-                                    : picked?.matchHint || picked?.driverName || null),
-                              };
-                            }
-                            const nextSettings = {
-                              ...settings,
-                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                            };
-                            setSettings(nextSettings);
-                            // Save the queue immediately. The page Save button is easy to
-                            // miss, and a later refresh used to write the old printer back.
-                            void persistPosPrintSettings(nextSettings, '').catch((error: unknown) => {
-                              const msg =
-                                error && typeof error === 'object' && 'response' in error
-                                  ? String(
-                                      (error as { response?: { data?: { error?: string } } }).response?.data
-                                        ?.error || ''
-                                    )
-                                  : '';
-                              toast.error(msg || t('failedSaveReceipt'));
-                            });
-                          }}
-                        >
-                          <option value="">{t('webPosDefaultPrinter')}</option>
-                          {savedPrinterName &&
-                          selectValue === savedPrinterName &&
-                          !agentPrintersForPick.some((ap) => agentPrinterOptionValue(ap) === selectValue) ? (
-                            <option value={savedPrinterName}>{savedPrinterName}</option>
-                          ) : null}
-                          {agentPrintersForPick.map((ap) => {
-                            const bad = isUnsuitableRawPrinter(ap.name);
-                            const optionValue = agentPrinterOptionValue(ap);
-                            return (
-                              <option key={optionValue} value={optionValue}>
-                                {formatAgentPrinterOptionLabel(ap)}
-                                {ap.portName ? ` · ${ap.portName}` : ''}
-                                {ap.isDefault ? t('webPosDefaultSuffix') : ''}
-                                {bad ? t('webPosPrinterNotThermal') : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      ) : (
-                        <input
-                          className="input"
-                          value={p.name}
-                          onChange={(e) => {
-                            const printers = [...(settings.posPrintSettings?.printers || [])];
-                            printers[idx] = { ...p, name: e.target.value };
-                            setSettings({
-                              ...settings,
-                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                            });
-                          }}
-                          placeholder={t('printerName')}
-                        />
-                      )}
-                    </Field>
-                    {p.name && isUnsuitableRawPrinter(p.name) ? (
-                      <p className="text-xs leading-snug text-amber-700">{t('webPosUnsuitablePrinter')}</p>
-                    ) : null}
-                    {p.name && isTsplLabelPrinterName(p.name) ? (
-                      <p className="text-xs leading-snug text-[var(--muted)] m-0">{t('barcodeTsplPrinterHint')}</p>
-                    ) : null}
-                    {savedNameMissing ? (
-                      <div className="space-y-1.5">
-                        <p className="text-xs leading-snug text-amber-800 m-0">
-                          {t('webPosPrinterDisconnectedShort')}
-                        </p>
-                        <p className="text-xs leading-snug text-amber-800 m-0">
-                          {t('webPosPrinterRenamedHint')}
-                        </p>
-                        {healCandidates.map((ap) => (
-                          <button
-                            key={ap.name}
-                            type="button"
-                            className="inline-flex items-center rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-                            onClick={() => {
-                              const printers = [...(settings.posPrintSettings?.printers || [])];
-                              printers[idx] = {
-                                ...p,
-                                name: ap.name,
-                                portName: ap.portName || null,
-                                matchHint: ap.matchHint || ap.driverName || null,
-                              };
-                              setSettings({
-                                ...settings,
-                                posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                              });
-                            }}
-                          >
-                            {t('webPosUsePrinter').replace('{name}', ap.name)}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="flex flex-wrap gap-3 text-sm">
-                      {(
-                        [
-                          ['printReceipts', t('printRoleReceipts')],
-                          ['printKitchenTickets', t('printRoleKitchen')],
-                          ['printEndOfDayReports', t('printRoleEod')],
-                          ['printLabels', t('printRoleLabels')],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <label key={key} className="inline-flex items-center gap-1.5">
-                          <input
-                            type="checkbox"
-                            checked={!!p[key]}
-                            onChange={(e) => {
-                              const printers = [...(settings.posPrintSettings?.printers || [])];
-                              printers[idx] = { ...p, [key]: e.target.checked };
-                              setSettings({
-                                ...settings,
-                                posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                              });
-                            }}
-                          />
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                    {p.printKitchenTickets ? (
-                      <div className="space-y-2 rounded-lg border border-dashed border-[var(--border)] p-3">
-                        <PrinterKitchenRoutingPicker
-                          profile={p}
-                          categories={productCategories}
-                          products={catalogProducts}
-                          onChange={(next) => {
-                            const printers = [...(settings.posPrintSettings?.printers || [])];
-                            printers[idx] = { ...p, ...next };
-                            setSettings({
-                              ...settings,
-                              posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                            });
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                    </div>
-                    ) : null}
-                  </div>
-                  );
-                })}
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    const printers = [
-                      ...(settings.posPrintSettings?.printers || []),
-                      {
-                        id: `p-${Date.now()}`,
-                        name: '',
-                        enabled: true,
-                        paperWidthMm: 80 as const,
-                        printReceipts: false,
-                        printKitchenTickets: true,
-                        printEndOfDayReports: false,
-                        printLabels: false,
-                        printAllProducts: true,
-                      },
-                    ];
-                    setSettings({
-                      ...settings,
-                      posPrintSettings: { ...(settings.posPrintSettings || {}), printers },
-                    });
-                  }}
-                >
-                  {t('addPrinterProfile')}
-                </button>
-                </div>
-              </Section>
+              {tab === 'printers' ? (
+                <SettingsPrintCompanionSection
+                  printBridgeManifest={printBridgeManifest}
+                  printAgentManifest={printAgentManifest}
+                  printAgentOk={printAgentOk}
+                  printAgentHealthChecked={printAgentHealthChecked}
+                  installedPrintCompanionVersion={installedPrintCompanionVersion}
+                  printAgentOutdated={printAgentOutdated}
+                  desktopBundledSidecarOk={desktopBundledSidecarOk}
+                  onRefresh={() => void refreshPrintAgentPrinters()}
+                  refreshing={refreshingPrinters}
+                />
+              ) : null}
 
               <Section
                 id="order-labels"

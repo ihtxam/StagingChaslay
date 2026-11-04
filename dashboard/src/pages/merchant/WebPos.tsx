@@ -1210,6 +1210,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [pendingRfidUid, setPendingRfidUid] = useState<string | null>(null);
+  const customerOpenRef = useRef(false);
+  const pendingRfidUidRef = useRef<string | null>(null);
+  useEffect(() => {
+    customerOpenRef.current = customerOpen;
+  }, [customerOpen]);
+  useEffect(() => {
+    pendingRfidUidRef.current = pendingRfidUid;
+  }, [pendingRfidUid]);
   const [customerProfileOpen, setCustomerProfileOpen] = useState(false);
   const [provisionalPrinted, setProvisionalPrinted] = useState(false);
   const [cancelModal, setCancelModal] = useState<{
@@ -7382,6 +7390,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   const promptUnknownRfidCustomer = (rawCode: string) => {
     const rfid = normalizeRfidUid(rawCode);
     if (!rfid) return;
+    if (customerOpenRef.current && pendingRfidUidRef.current === rfid) return;
     setPendingPayMethod(null);
     setPendingRfidUid(rfid);
     setCustomerOpen(true);
