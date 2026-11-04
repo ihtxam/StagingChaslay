@@ -1219,6 +1219,14 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     pendingRfidUidRef.current = pendingRfidUid;
   }, [pendingRfidUid]);
   const [customerProfileOpen, setCustomerProfileOpen] = useState(false);
+  const customerProfileOpenRef = useRef(false);
+  const customerProfileCustomerIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    customerProfileOpenRef.current = customerProfileOpen;
+    if (!customerProfileOpen) {
+      customerProfileCustomerIdRef.current = null;
+    }
+  }, [customerProfileOpen]);
   const [provisionalPrinted, setProvisionalPrinted] = useState(false);
   const [cancelModal, setCancelModal] = useState<{
     scope: CancelScope;
@@ -7252,6 +7260,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
 
   const openCustomerProfile = () => {
     if (selectedCustomer?.id && !String(selectedCustomer.id).startsWith('collect-')) {
+      const id = selectedCustomer.id;
+      if (customerProfileOpenRef.current && customerProfileCustomerIdRef.current === id) {
+        return;
+      }
+      customerProfileCustomerIdRef.current = id;
       setCustomerProfileOpen(true);
       return;
     }

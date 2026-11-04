@@ -19,7 +19,7 @@ import {
   STAFF_PIN_MAX_LENGTH,
   STAFF_PIN_MIN_LENGTH,
 } from '@/lib/staff-pin';
-import { apiTryAgainMessage, isDeployBlip } from '@/lib/deploy-blip';
+import { isDeployBlip, systemUpdateMessage } from '@/lib/deploy-blip';
 import { isNetworkError } from '@/lib/webpos-offline/network';
 import WebPosBlockingAlert from '@/components/WebPosBlockingAlert';
 
@@ -122,6 +122,7 @@ export default function WebPosPinModal({
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [errorTone, setErrorTone] = useState<'invalid' | 'transient'>('invalid');
   const [shake, setShake] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [merchantLogoFailed, setMerchantLogoFailed] = useState(false);
@@ -143,6 +144,7 @@ export default function WebPosPinModal({
       clearAutoTimer();
       setPin('');
       setError('');
+      setErrorTone('invalid');
       setShake(false);
       setMenuOpen(false);
       setMerchantLogoFailed(false);
@@ -161,26 +163,27 @@ export default function WebPosPinModal({
 
   if (!open) return null;
 
-  const failPin = (message: string) => {
+  const failPin = (message: string, tone: 'invalid' | 'transient' = 'invalid') => {
+    setErrorTone(tone);
     setError(message);
     setPin('');
     setShake(true);
     window.setTimeout(() => setShake(false), 420);
   };
 
-  const pinErrorMessage = (error: unknown): string => {
-    if (!navigator.onLine || isNetworkError(error)) {
-      return t('webPosPinNoInternet');
-    }
-    if (isDeployBlip(error)) {
-      return apiTryAgainMessage(locale);
+  const pinErrorMessage = (error: unknown): { message: string; tone: 'invalid' | 'transient' } => {
+    if (!navigator.onLine || isNetworkError(error) || isDeployBlip(error)) {
+      return { message: systemUpdateMessage(locale), tone: 'transient' };
     }
     const err = error as { response?: { data?: { error?: string }; status?: number } };
     const status = err.response?.status;
     if (status != null && status >= 500) {
-      return apiTryAgainMessage(locale);
+      return { message: systemUpdateMessage(locale), tone: 'transient' };
     }
-    return err.response?.data?.error || t('webPosPinInvalid');
+    return {
+      message: err.response?.data?.error || t('webPosPinInvalid'),
+      tone: 'invalid',
+    };
   };
 
   const releaseBusy = () => {
@@ -196,7 +199,7 @@ export default function WebPosPinModal({
       return;
     }
     if (!navigator.onLine) {
-      failPin(t('webPosPinNoInternet'));
+      failPin(systemUpdateMessage(locale), 'transient');
       return;
     }
     verifyAbortRef.current?.abort();
@@ -221,7 +224,8 @@ export default function WebPosPinModal({
       if (controller.signal.aborted) return;
       const err = e as { code?: string; name?: string };
       if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') return;
-      failPin(pinErrorMessage(e));
+      const pinErr = pinErrorMessage(e);
+      failPin(pinErr.message, pinErr.tone);
     } finally {
       if (verifyAbortRef.current === controller) {
         verifyAbortRef.current = null;
@@ -405,10 +409,14 @@ export default function WebPosPinModal({
       >
         <WebPosBlockingAlert
           open={!!error}
-          title={t('webPosPinErrorTitle')}
+          title={errorTone === 'transient' ? undefined : t('webPosPinErrorTitle')}
           message={error}
-          onDismiss={() => setError('')}
-          minMs={6000}
+          variant={errorTone === 'transient' ? 'warning' : 'error'}
+          onDismiss={() => {
+            setError('');
+            setErrorTone('invalid');
+          }}
+          minMs={errorTone === 'transient' ? 4000 : 6000}
         />
 
         {showMerchantLogo || merchantInitials ? (
@@ -576,10 +584,14 @@ export default function WebPosPinModal({
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <WebPosBlockingAlert
         open={!!error}
-        title={t('webPosPinErrorTitle')}
+        title={errorTone === 'transient' ? undefined : t('webPosPinErrorTitle')}
         message={error}
-        onDismiss={() => setError('')}
-        minMs={5000}
+        variant={errorTone === 'transient' ? 'warning' : 'error'}
+        onDismiss={() => {
+          setError('');
+          setErrorTone('invalid');
+        }}
+        minMs={errorTone === 'transient' ? 4000 : 5000}
       />
       <div
         className={`w-full max-w-xs rounded-2xl border border-[var(--webpos-border,var(--border))] bg-[var(--webpos-surface,var(--bg-elevated))] p-5 text-[var(--webpos-text,var(--text))] shadow-2xl ${
@@ -610,8 +622,20 @@ export default function WebPosPinModal({
         <div className="mb-4">{pinDots}</div>
 
         {error ? (
-          <div className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-center">
-            <p className="text-sm font-semibold text-red-800">{error}</p>
+          <div
+            className={`mb-3 rounded-lg border px-3 py-2 text-center ${
+              errorTone === 'transient'
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-red-300 bg-red-50'
+            }`}
+          >
+            <p
+              className={`text-sm font-semibold ${
+                errorTone === 'transient' ? 'text-amber-900' : 'text-red-800'
+              }`}
+            >
+              {error}
+            </p>
           </div>
         ) : null}
 
