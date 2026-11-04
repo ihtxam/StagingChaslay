@@ -19,13 +19,13 @@ run_heal() {
 }
 
 if docker compose ps api 2>/dev/null | grep -q Up; then
-  docker compose run --rm \
+  docker compose exec -T \
     -e SEED_DEMO_MERCHANT_EMAIL \
     -e SEED_DEMO_MERCHANT_PASSWORD \
     -e SEED_DEMO_SLUG \
     -e SEED_DEMO_SLUG_ALIASES \
     -e SEED_DEMO_RESET_PASSWORD \
-    migrate sh -c "npx tsx src/scripts/heal-demo-login.ts"
+    api npx tsx src/scripts/heal-demo-login.ts
 else
   (cd backend && run_heal)
 fi
