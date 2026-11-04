@@ -5,6 +5,7 @@ import { toastLoadError } from '@/lib/deploy-blip';
 import { useI18n } from '@/lib/i18n';
 import GuestCrmPanel from '@/components/customers/GuestCrmPanel';
 import SmartSegmentsPanel from '@/components/growth/SmartSegmentsPanel';
+import type { MembershipPlan } from '@/lib/membership-plans';
 
 interface Customer {
   id: string;
@@ -14,6 +15,9 @@ interface Customer {
   phone?: string | null;
   loyaltyPoints?: number | null;
   totalSpent?: string | null;
+  allergies?: string | null;
+  habits?: string | null;
+  membershipPlanId?: string | null;
 }
 
 const MAX_PHONE_DIGITS = 15;
@@ -36,6 +40,13 @@ export default function Customers() {
   const [editLastName, setEditLastName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [membershipPlanId, setMembershipPlanId] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [habits, setHabits] = useState('');
+  const [editMembershipPlanId, setEditMembershipPlanId] = useState('');
+  const [editAllergies, setEditAllergies] = useState('');
+  const [editHabits, setEditHabits] = useState('');
+  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([]);
   const [guestCrmLicensed, setGuestCrmLicensed] = useState(false);
   const [smartSegmentsLicensed, setSmartSegmentsLicensed] = useState(false);
 
@@ -59,6 +70,13 @@ export default function Customers() {
         setSmartSegmentsLicensed(res.data.settings?.smartSegmentsAddonEnabled === true);
       } catch {
         setGuestCrmLicensed(false);
+      }
+      try {
+        const gc = await api.get('/gift-cards/settings');
+        const plans = gc.data?.settings?.membershipPlans || gc.data?.membershipPlans;
+        setMembershipPlans(Array.isArray(plans) ? plans.filter((p: MembershipPlan) => p.active) : []);
+      } catch {
+        setMembershipPlans([]);
       }
     })();
   }, []);
@@ -102,12 +120,18 @@ export default function Customers() {
         lastName: last || undefined,
         email: mail || undefined,
         phone: tel || undefined,
+        membershipPlanId: membershipPlanId || undefined,
+        allergies: allergies.trim() || undefined,
+        habits: habits.trim() || undefined,
       });
       toast.success(t('customersToastCreated'));
       setFirstName('');
       setLastName('');
       setEmail('');
       setPhone('');
+      setMembershipPlanId('');
+      setAllergies('');
+      setHabits('');
       await load();
     } catch (error: any) {
       toast.error(error.response?.data?.error || t('customersToastSaveFailed'));
@@ -122,6 +146,9 @@ export default function Customers() {
     setEditLastName(customer.lastName || '');
     setEditEmail(customer.email || '');
     setEditPhone(customer.phone || '');
+    setEditMembershipPlanId(customer.membershipPlanId || '');
+    setEditAllergies(customer.allergies || '');
+    setEditHabits(customer.habits || '');
   };
 
   const cancelEdit = () => {
@@ -130,6 +157,9 @@ export default function Customers() {
     setEditLastName('');
     setEditEmail('');
     setEditPhone('');
+    setEditMembershipPlanId('');
+    setEditAllergies('');
+    setEditHabits('');
   };
 
   const onUpdate = async (customerId: string) => {
@@ -145,6 +175,9 @@ export default function Customers() {
         lastName: last || undefined,
         email: mail || undefined,
         phone: tel || undefined,
+        membershipPlanId: editMembershipPlanId || null,
+        allergies: editAllergies.trim() || null,
+        habits: editHabits.trim() || null,
       });
       toast.success(t('customersToastUpdated'));
       cancelEdit();
@@ -232,6 +265,30 @@ export default function Customers() {
             />
             <p className="text-[11px] muted mt-1">{t('customersPhoneHint')}</p>
           </div>
+          <select
+            className="input"
+            value={membershipPlanId}
+            onChange={(e) => setMembershipPlanId(e.target.value)}
+          >
+            <option value="">{t('webPosCustomerNoLevel')}</option>
+            {membershipPlans.map((plan) => (
+              <option key={plan.id} value={plan.id}>
+                {plan.label}
+              </option>
+            ))}
+          </select>
+          <input
+            className="input md:col-span-2"
+            placeholder={t('customersAllergies')}
+            value={allergies}
+            onChange={(e) => setAllergies(e.target.value)}
+          />
+          <input
+            className="input md:col-span-2"
+            placeholder={t('customersHabits')}
+            value={habits}
+            onChange={(e) => setHabits(e.target.value)}
+          />
           <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? t('saving') : t('customersAdd')}
           </button>
@@ -245,6 +302,7 @@ export default function Customers() {
               <th className="px-3 py-2">{t('name')}</th>
               <th className="px-3 py-2">{t('customersEmail')}</th>
               <th className="px-3 py-2">{t('customersPhone')}</th>
+              <th className="px-3 py-2">{t('customersLevel')}</th>
               <th className="px-3 py-2">{t('customersPoints')}</th>
               <th className="px-3 py-2">{t('customersSpent')}</th>
               <th className="px-3 py-2 w-40">{t('actions')}</th>
@@ -253,7 +311,7 @@ export default function Customers() {
           <tbody>
             {customers.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-gray-500">
+                <td colSpan={7} className="px-3 py-6 text-gray-500">
                   {t('customersEmpty')}
                 </td>
               </tr>
@@ -314,6 +372,44 @@ export default function Customers() {
                     ) : (
                       customer.phone || '-'
                     )}
+                  </td>
+                  <td className="px-3 py-3">
+                    {isEditing ? (
+                      <select
+                        className="input w-full"
+                        value={editMembershipPlanId}
+                        onChange={(e) => setEditMembershipPlanId(e.target.value)}
+                      >
+                        <option value="">{t('webPosCustomerNoLevel')}</option>
+                        {membershipPlans.map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      membershipPlans.find((p) => p.id === customer.membershipPlanId)?.label ||
+                      customer.membershipPlanId ||
+                      '—'
+                    )}
+                    {isEditing ? (
+                      <div className="grid gap-2 mt-2">
+                        <input
+                          className="input"
+                          placeholder={t('customersAllergies')}
+                          value={editAllergies}
+                          onChange={(e) => setEditAllergies(e.target.value)}
+                        />
+                        <input
+                          className="input"
+                          placeholder={t('customersHabits')}
+                          value={editHabits}
+                          onChange={(e) => setEditHabits(e.target.value)}
+                        />
+                      </div>
+                    ) : customer.allergies ? (
+                      <p className="mt-1 text-[11px] text-rose-700">{customer.allergies}</p>
+                    ) : null}
                   </td>
                   <td className="px-3 py-3">{customer.loyaltyPoints ?? 0}</td>
                   <td className="px-3 py-3 whitespace-nowrap">

@@ -301,6 +301,11 @@ const EXTRA_COLUMN_PATCHES: Record<string, string> = {
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS marketing_sms_opt_in boolean NOT NULL DEFAULT false",
   customers_phone_verified_at:
     "ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone_verified_at timestamp",
+  customers_allergies: "ALTER TABLE customers ADD COLUMN IF NOT EXISTS allergies text",
+  customers_habits: "ALTER TABLE customers ADD COLUMN IF NOT EXISTS habits text",
+  customers_membership_plan_id:
+    "ALTER TABLE customers ADD COLUMN IF NOT EXISTS membership_plan_id varchar(80)",
+  customers_photo_url: "ALTER TABLE customers ADD COLUMN IF NOT EXISTS photo_url varchar(500)",
   sms_usage_segments_billed:
     "ALTER TABLE sms_usage ADD COLUMN IF NOT EXISTS segments_billed integer NOT NULL DEFAULT 0",
   sms_usage_billable_cents:
@@ -1767,6 +1772,12 @@ export async function ensureCustomerCrmTagsColumn(): Promise<void> {
 /** Ensure optional customers columns (Guest CRM tags, etc.). */
 export async function ensureCustomersColumnsSchema(): Promise<void> {
   await ensureCustomerCrmTagsColumn();
+  await runPatch("customers_allergies");
+  await runPatch("customers_habits");
+  await runPatch("customers_membership_plan_id");
+  await runPatch("customers_photo_url");
+  await runPatch("customers_marketing_sms_opt_in");
+  await runPatch("customers_phone_verified_at");
 }
 
 export async function ensureVouchersColumnsSchema(): Promise<void> {

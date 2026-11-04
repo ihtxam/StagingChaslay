@@ -1464,8 +1464,7 @@ export const customers = pgTable(
     /** Last automatic reorder-reminder email sent */
     lastReorderReminderAt: timestamp("last_reorder_reminder_at"),
     crmTags: jsonb("crm_tags").$type<string[]>().default([]).notNull(),
-    /** Guest CRM profile fields — added live via column patches, declared here so
-     *  the generated schema matches the database. */
+    /** Guest CRM / POS profile fields (also patched on live merchants). */
     allergies: text("allergies"),
     habits: text("habits"),
     membershipPlanId: varchar("membership_plan_id", { length: 80 }),

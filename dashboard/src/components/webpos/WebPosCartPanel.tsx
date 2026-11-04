@@ -58,6 +58,8 @@ type Props = {
   /** Counter-style dine-in ticket (D-001) when no table. */
   ticketDisplay?: string | null;
   customerLabel?: string | null;
+  /** When set, tapping the customer name opens the profile popup. */
+  onCustomerProfile?: () => void;
   membershipName?: string | null;
   membershipPointsBalance?: number | null;
   onClearMembership?: () => void;
@@ -205,6 +207,7 @@ export default function WebPosCartPanel({
   tabNumber,
   ticketDisplay,
   customerLabel,
+  onCustomerProfile,
   membershipName,
   membershipPointsBalance,
   onClearMembership,
@@ -562,12 +565,14 @@ export default function WebPosCartPanel({
                   </span>
                 ) : null}
                 {customerLabel ? (
-                  <span
-                    className="min-w-0 truncate text-[11px] font-semibold text-violet-900"
+                  <button
+                    type="button"
+                    className="min-w-0 truncate text-[11px] font-semibold text-violet-900 underline-offset-2 hover:underline"
                     title={customerLabel}
+                    onClick={onCustomerProfile || onCustomer}
                   >
                     {customerLabel}
-                  </span>
+                  </button>
                 ) : null}
               </span>
             ) : !isRetail && !showChannelTabs ? (
@@ -587,12 +592,14 @@ export default function WebPosCartPanel({
                 {tableLabel ? `${t('table')} ${tableLabel}` : ticketDisplay}
               </span>
             ) : !isRetail && customerLabel ? (
-              <span
-                className="min-w-0 truncate text-[11px] font-semibold text-violet-900"
+              <button
+                type="button"
+                className="min-w-0 truncate text-[11px] font-semibold text-violet-900 underline-offset-2 hover:underline"
                 title={customerLabel}
+                onClick={onCustomerProfile || onCustomer}
               >
                 {customerLabel}
-              </span>
+              </button>
             ) : !isRetail ? (
               <button
                 type="button"
@@ -779,12 +786,16 @@ export default function WebPosCartPanel({
         <div className="shrink-0 flex flex-wrap items-center gap-1.5 border-b border-stone-100 px-3 py-1.5 text-[11px] text-stone-500">
           {membershipName ? (
             <span className="inline-flex max-w-full items-center gap-1 rounded bg-teal-100 px-1.5 py-0.5 font-semibold text-teal-900">
-              <span className="truncate">
+              <button
+                type="button"
+                className="min-w-0 truncate text-left"
+                onClick={onCustomerProfile || onCustomer}
+              >
                 {membershipName}
                 {membershipPointsBalance != null
                   ? ` · ${t('webPosPointsBalance').replace('{n}', String(membershipPointsBalance))}`
                   : ''}
-              </span>
+              </button>
               {onClearMembership ? (
                 <button
                   type="button"

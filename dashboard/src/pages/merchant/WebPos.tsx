@@ -83,6 +83,9 @@ import WebPosFulfillmentModal, {
 import WebPosCustomerPicker, {
   type WebPosCustomer,
 } from '@/components/WebPosCustomerPicker';
+import WebPosCustomerProfileModal, {
+  type PosCustomerOrder,
+} from '@/components/webpos/WebPosCustomerProfileModal';
 import WebPosCheckoutModal, {
   type CheckoutResult,
 } from '@/components/WebPosCheckoutModal';
@@ -289,6 +292,8 @@ const WEBPOS_GRID_MOBILE_COLS_KEY = 'webpos.grid.mobileCols';
 type MobileGridLayoutStep = 0 | 1 | 2;
 const WEBPOS_GRID_SORT_KEY = 'webpos.grid.sort';
 const WEBPOS_SET_PIN_HINT_KEY = 'webpos_set_pin_hint_dismissed';
+/** RFID tapped on PIN screen — processed after staff logs in. */
+const WEBPOS_PENDING_RFID_SCAN_KEY = 'webpos_pending_rfid_scan';
 const WEBPOS_TERMINAL_KEY = 'manupos_webpos_terminal';
 
 function terminalStorageKey(staffId?: string | null) {
@@ -500,6 +505,7 @@ import {
   maxRedeemablePoints,
   normalizeLoyaltyProgram,
   normalizeRfidUid,
+  looksLikeRfidUid,
   redeemThresholdPoints,
   type AttachedGiftCard,
   type AttachedMembership,
@@ -1203,6 +1209,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [pendingRfidUid, setPendingRfidUid] = useState<string | null>(null);
+  const [customerProfileOpen, setCustomerProfileOpen] = useState(false);
   const [provisionalPrinted, setProvisionalPrinted] = useState(false);
   const [cancelModal, setCancelModal] = useState<{
     scope: CancelScope;
@@ -7169,26 +7177,25 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     lastGiftInjectRef.current = null;
   };
 
+  const selectCustomerFromCard = (membership: AttachedMembership) => {
+    if (!membership.customerId) return;
+    const displayName = membership.customerName?.trim() || '';
+    const parts = displayName.split(/\s+/).filter(Boolean);
+    setSelectedCustomer((prev) => {
+      if (prev?.id === membership.customerId) return prev;
+      return {
+        id: membership.customerId,
+        firstName: parts[0] || displayName || t('webPosCustomer'),
+        lastName: parts.slice(1).join(' ') || '',
+        email: null,
+        phone: null,
+      } as WebPosCustomer;
+    });
+  };
+
   const attachMembershipCard = (membership: AttachedMembership) => {
     const displayName = membership.customerName?.trim();
-    if (displayName) {
-      setSelectedCustomer((prev) => {
-        if (prev?.id && membership.customerId && prev.id === membership.customerId) {
-          return prev;
-        }
-        if (membership.customerId) {
-          const parts = displayName.split(/\s+/);
-          return {
-            id: membership.customerId,
-            firstName: parts[0] || displayName,
-            lastName: parts.slice(1).join(' ') || '',
-            email: null,
-            phone: null,
-          } as WebPosCustomer;
-        }
-        return prev;
-      });
-    }
+    selectCustomerFromCard(membership);
     const disc = membershipDiscountPercent(membership);
     if (disc > 0) {
       setBillDiscount((prev) =>
@@ -7197,6 +7204,62 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     }
     setAttachedMembership(membership);
     toast.success(displayName || membership.cardNumber || t('webPosMembershipAttached'));
+    if (membership.customerId) {
+      void applyCustomerMembershipFromProfile(membership.customerId);
+    }
+  };
+
+  const applyMembershipPercent = (disc: number) => {
+    if (disc > 0) {
+      setBillDiscount((prev) => (prev.percent >= disc ? prev : { percent: disc, amount: 0 }));
+    }
+  };
+
+  const applyCustomerMembershipFromProfile = async (customerId: string) => {
+    if (!customerId || customerId.startsWith('collect-')) return;
+    try {
+      const res = await api.get(`/merchant/customers/${customerId}/pos-profile`);
+      const customer = res.data?.customer;
+      if (!customer?.id) return;
+      setSelectedCustomer((prev) => ({
+        ...(prev && prev.id === customer.id ? prev : {}),
+        id: customer.id,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+        email: customer.email,
+        defaultAddress: customer.defaultAddress,
+        defaultZip: customer.defaultZip,
+        defaultCity: customer.defaultCity,
+        allergies: customer.allergies,
+        habits: customer.habits,
+        membershipPlanId: customer.membershipPlanId,
+        loyaltyPoints: customer.loyaltyPoints,
+      }));
+      applyMembershipPercent(Number(customer.membershipDiscountPercent) || 0);
+    } catch {
+      /* picker/scan still works without the extra profile */
+    }
+  };
+
+  const openCustomerProfile = () => {
+    if (selectedCustomer?.id && !String(selectedCustomer.id).startsWith('collect-')) {
+      setCustomerProfileOpen(true);
+      return;
+    }
+    setCustomerOpen(true);
+  };
+
+  const addPreviousOrderToCart = (order: PosCustomerOrder) => {
+    const lines = orderItemsToCartLines(order.items || []).map((line, index) => ({
+      ...line,
+      lineId: `reorder-${order.id}-${index}-${Date.now()}`,
+      sentToKitchen: false,
+    }));
+    if (!lines.length) return;
+    setCart((prev) => [...prev, ...lines]);
+    toast.success(t('webPosOrderAddedToCart'));
+    setCustomerProfileOpen(false);
   };
 
   const cardFromLookup = (c: Record<string, unknown>, fallbackNumber: string): AttachedMembership => {
@@ -7271,6 +7334,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   };
 
   const applyScannedGiftCard = (card: AttachedMembership) => {
+    selectCustomerFromCard(card);
     const next: AttachedGiftCard = {
       cardId: card.cardId,
       cardNumber: card.cardNumber,
@@ -7286,6 +7350,57 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       t('webPosGiftCardAttached').replace('{amount}', next.balance.toFixed(2))
     );
   };
+
+  const bindRfidToCustomer = async (rawUid: string, customer: WebPosCustomer) => {
+    const rfid = normalizeRfidUid(rawUid);
+    if (!rfid || !customer.id) return false;
+    const holder =
+      [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim() || undefined;
+    try {
+      await api.post('/gift-cards', {
+        cardNumber: rfid,
+        cardMediaType: 'physical',
+        membershipEnabled: true,
+        customerId: customer.id,
+        holderName: holder,
+        holderEmail: customer.email || undefined,
+        holderPhone: customer.phone || undefined,
+      });
+      toast.success(t('webPosRfidBound'));
+      return true;
+    } catch (e: any) {
+      const status = e.response?.status;
+      if (status === 403) {
+        toast.error(t('webPosRfidBindFailed'));
+        return false;
+      }
+      toast.error(e.response?.data?.error || e.message || t('webPosRfidBindFailed'));
+      return false;
+    }
+  };
+
+  const promptUnknownRfidCustomer = (rawCode: string) => {
+    const rfid = normalizeRfidUid(rawCode);
+    if (!rfid) return;
+    setPendingPayMethod(null);
+    setPendingRfidUid(rfid);
+    setCustomerOpen(true);
+  };
+
+  const handlePinGateRfidScan = useCallback(
+    (rawCode: string) => {
+      const code = sanitizeScanCode(rawCode);
+      if (!code || !looksLikeRfidUid(code)) return;
+      const rfid = normalizeRfidUid(code) || code;
+      try {
+        sessionStorage.setItem(WEBPOS_PENDING_RFID_SCAN_KEY, rfid);
+      } catch {
+        /* ignore quota / private mode */
+      }
+      toast.success(t('webPosRfidTapAfterPin'));
+    },
+    [t]
+  );
 
   const saleMerchandiseTotal = (lines: CartLine[]) => {
     const merchLines = lines.filter(
@@ -10716,6 +10831,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         paymentModalOpen ||
         giftCardOpsOpen ||
         giftCardPayOpen ||
+        membershipSellOpen ||
+        customerProfileOpen ||
         splitOpen ||
         scheduleOpen ||
         customerOpen ||
@@ -10730,7 +10847,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       ) {
         return;
       }
-      if (!isWebPosCurrentlyOffline()) {
+      if (!isWebPosCurrentlyOffline() && giftCardsEditionOk) {
         try {
           const found = await lookupPosCard(code);
           if (found) {
@@ -10743,13 +10860,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             return;
           }
         } catch (e: any) {
-          if (e.response?.status !== 404) {
+          const status = e.response?.status;
+          if (status !== 404 && status !== 403) {
             toast.error(e.response?.data?.error || e.message || t('webPosMembershipLookupFailed'));
             return;
           }
         }
       }
       if (onCheckout) {
+        if (looksLikeRfidUid(code)) {
+          promptUnknownRfidCustomer(code);
+          setSearch('');
+          return;
+        }
         toast.error(t('webPosBarcodeNotFound').replace('{code}', code));
         setSearch('');
         return;
@@ -10758,6 +10881,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (product) {
         setSearch('');
         onProductClick(product, { fromScan: true });
+        return;
+      }
+      if (looksLikeRfidUid(code)) {
+        promptUnknownRfidCustomer(code);
+        setSearch('');
         return;
       }
       const tableQr = parseTableQrPayload(code);
@@ -10798,6 +10926,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       paymentModalOpen,
       giftCardOpsOpen,
       giftCardPayOpen,
+      membershipSellOpen,
+      customerProfileOpen,
       splitOpen,
       scheduleOpen,
       customerOpen,
@@ -10811,6 +10941,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       scanCreateBarcode,
       findProductByScanCode,
       tablesUiEnabled,
+      giftCardsEditionOk,
       switchToTableOrder,
       t,
     ]
@@ -10831,6 +10962,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     !checkoutOpen &&
     !giftCardOpsOpen &&
     !giftCardPayOpen &&
+    !membershipSellOpen &&
+    !customerProfileOpen &&
     !splitOpen &&
     !scheduleOpen &&
     !customerOpen &&
@@ -10847,6 +10980,29 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       enabled: barcodeWedgeEnabled,
       onScan: handlePosScan,
     });
+
+  const pinGateWedgeEnabled = pinGateRequired && !isWebPosCurrentlyOffline();
+  const {
+    onCaptureInput: onPinGateCaptureInput,
+    onCaptureKeyDown: onPinGateCaptureKeyDown,
+  } = useBarcodeWedge({
+    enabled: pinGateWedgeEnabled,
+    onScan: handlePinGateRfidScan,
+  });
+
+  useEffect(() => {
+    if (pinGateRequired || loading) return;
+    let pending: string | null = null;
+    try {
+      pending = sessionStorage.getItem(WEBPOS_PENDING_RFID_SCAN_KEY);
+      if (pending) sessionStorage.removeItem(WEBPOS_PENDING_RFID_SCAN_KEY);
+    } catch {
+      pending = null;
+    }
+    if (!pending?.trim()) return;
+    const id = window.setTimeout(() => void handlePosScan(pending), 150);
+    return () => window.clearTimeout(id);
+  }, [pinGateRequired, loading, handlePosScan]);
 
   useEffect(() => {
     if (!barcodeWedgeEnabled || !retailPreferScannerWedge || posView !== 'register') return;
@@ -10907,7 +11063,9 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const code = mergeRetailScanBuffer(retailScanBufferRef.current, cleaned).trim();
       const isScanInput =
         code.length >= BARCODE_WEDGE_MIN_LENGTH &&
-        (looksLikeRetailBarcodeInput(code) || !!findProductByScanCode(code));
+        (looksLikeRetailBarcodeInput(code) ||
+          looksLikeRfidUid(code) ||
+          !!findProductByScanCode(code));
       if (isScanInput) {
         // Keep the grid on the current category; submit after the scanner finishes typing.
         retailScanBufferRef.current = code;
@@ -11161,6 +11319,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           </div>
         ) : (
           <>
+            <BarcodeWedgeCapture
+              active={pinGateWedgeEnabled}
+              onInput={onPinGateCaptureInput}
+              onKeyDown={onPinGateCaptureKeyDown}
+            />
             <WebPosBlockingAlert
               open={!!posAuthAlert}
               title={posAuthAlert?.title}
@@ -11659,7 +11822,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             onTogglePayWithPoints={setPayWithPoints}
             pointsRedeemed={membershipCheckout.pointsRedeemed}
             pointsDiscount={membershipCheckout.pointsDiscount}
-            onCustomer={collectOrderRef ? undefined : () => setCustomerOpen(true)}
+            onCustomer={collectOrderRef ? undefined : openCustomerProfile}
             onComo={
               !collectOrderRef && comoEnabled ? () => setComoOpen(true) : undefined
             }
@@ -11974,6 +12137,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
                 showNewOrder={showNewOrderButton}
                 sendLabel={sendLabel}
                 onCustomer={() => setCustomerOpen(true)}
+                onCustomerProfile={openCustomerProfile}
                 onSwitchToDineIn={switchToDineIn}
                 onCourse={advanceCourse}
                 onKitchenMessage={() => setKitchenMsgOpen(true)}
@@ -13195,15 +13359,43 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         onActivated={() => void refreshAgent()}
       />
 
+      <WebPosCustomerProfileModal
+        open={customerProfileOpen}
+        customerId={
+          selectedCustomer?.id && !String(selectedCustomer.id).startsWith('collect-')
+            ? selectedCustomer.id
+            : null
+        }
+        onClose={() => setCustomerProfileOpen(false)}
+        onSaved={(c) => {
+          setSelectedCustomer(c);
+          void applyCustomerMembershipFromProfile(c.id);
+        }}
+        onAddOrderToCart={addPreviousOrderToCart}
+        onChangeCustomer={() => {
+          setCustomerProfileOpen(false);
+          setCustomerOpen(true);
+        }}
+        money={money}
+      />
+
       <WebPosCustomerPicker
         open={customerOpen}
+        pendingRfidUid={pendingRfidUid}
         onClose={() => {
           setCustomerOpen(false);
+          setPendingRfidUid(null);
           setPendingPayMethod(null);
         }}
         onSelect={(c) => {
+          const rfid = pendingRfidUid;
           setSelectedCustomer(c);
           setCustomerOpen(false);
+          setPendingRfidUid(null);
+          if (rfid && giftCardsEditionOk) {
+            void bindRfidToCustomer(rfid, c);
+          }
+          void applyCustomerMembershipFromProfile(c.id);
           if (pendingPayMethod) {
             const m = pendingPayMethod;
             setPendingPayMethod(null);

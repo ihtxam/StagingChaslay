@@ -140,3 +140,8 @@ export function requirePermission(...required: string[]) {
     return res.status(403).json({ error: "Authentication required" });
   };
 }
+
+/** POS + panel customer directory (list, create, POS profile). Deletes stay MANAGE_CUSTOMERS-only. */
+export function requireCustomerDirectoryAccess() {
+  return requirePermission("MANAGE_CUSTOMERS", "USE_POS", "USE_WEBPOS");
+}

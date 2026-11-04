@@ -384,7 +384,7 @@ button {
     width: min(92vw, 22rem) !important;
     transform: translateX(-50%) !important;
     height: auto !important;
-    z-index: 60 !important;
+    z-index: 300 !important;
     pointer-events: none;
   }
 
@@ -406,7 +406,7 @@ button {
     width: min(92vw, 22rem) !important;
     transform: translateX(-50%) !important;
     height: auto !important;
-    z-index: 60 !important;
+    z-index: 300 !important;
     pointer-events: none;
   }
 

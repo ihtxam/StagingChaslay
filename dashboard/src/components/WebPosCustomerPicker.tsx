@@ -16,6 +16,10 @@ export type WebPosCustomer = {
   defaultAddress?: string | null;
   defaultZip?: string | null;
   defaultCity?: string | null;
+  allergies?: string | null;
+  habits?: string | null;
+  membershipPlanId?: string | null;
+  loyaltyPoints?: number | null;
 };
 
 type Props = {

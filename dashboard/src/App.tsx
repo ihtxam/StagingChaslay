@@ -144,7 +144,7 @@ function AppToaster() {
               right: 'auto',
               width: 'min(92vw, 22rem)',
               transform: 'translateX(-50%)',
-              zIndex: 60,
+              zIndex: 300,
             }
           : shopCheckout
             ? {
@@ -154,7 +154,7 @@ function AppToaster() {
                 right: 'auto',
                 width: 'min(92vw, 22rem)',
                 transform: 'translateX(-50%)',
-                zIndex: 60,
+                zIndex: 300,
                 pointerEvents: 'none',
               }
             : undefined

@@ -454,6 +454,7 @@ export default function Loyalty() {
                         <option value="stamp_card">{t('membershipPlanStamp')}</option>
                       </select>
                       {plan.type === 'discount' ? (
+                        <>
                         <input
                           className="input"
                           type="number"
@@ -470,6 +471,23 @@ export default function Loyalty() {
                           }}
                           placeholder={t('membershipDiscountPercent')}
                         />
+                        <input
+                          className="input"
+                          type="number"
+                          min={0}
+                          value={plan.minPoints ?? 0}
+                          onChange={(e) => {
+                            const next = [...(gcSettings.membershipPlans || [])];
+                            next[idx] = {
+                              ...plan,
+                              minPoints: Number(e.target.value) || 0,
+                            };
+                            setGcSettings({ ...gcSettings, membershipPlans: next });
+                          }}
+                          placeholder={t('membershipMinPoints')}
+                        />
+                        <p className="text-[11px] text-slate-500">{t('membershipMinPointsHint')}</p>
+                        </>
                       ) : (
                         <input
                           className="input"
@@ -506,6 +524,29 @@ export default function Loyalty() {
                       />
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    className="btn-secondary text-sm"
+                    onClick={() => {
+                      const id = `plan-${Date.now()}`;
+                      setGcSettings({
+                        ...gcSettings,
+                        membershipPlans: [
+                          ...(gcSettings.membershipPlans || []),
+                          {
+                            id,
+                            label: '',
+                            type: 'discount',
+                            discountPercent: 10,
+                            minPoints: 0,
+                            active: true,
+                          },
+                        ],
+                      });
+                    }}
+                  >
+                    {t('membershipAddPlan')}
+                  </button>
                 </div>
               ) : null}
 

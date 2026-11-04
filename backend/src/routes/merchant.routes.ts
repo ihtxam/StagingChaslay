@@ -6,6 +6,7 @@ import {
   requireMerchant,
   setMerchantContext,
   requirePermission,
+  requireCustomerDirectoryAccess,
 } from "@/middleware/auth.middleware";
 import { requireRetailModule } from "@/middleware/business-module.middleware";
 import { normalizeCatalogVisibility } from "@/lib/catalog-visibility";
@@ -1772,7 +1773,7 @@ router.post("/orders/:orderId/cancel", async (req: Request, res: Response) => {
  * GET /api/merchant/customers
  * Get all customers
  */
-router.get("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
+router.get("/customers", requireCustomerDirectoryAccess(), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const page = parseInt(req.query.page as string) || 1;
@@ -1800,11 +1801,22 @@ router.get("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Requ
  * POST /api/merchant/customers
  * Create customer
  */
-router.post("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
+router.post("/customers", requireCustomerDirectoryAccess(), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
-    const { email, phone, firstName, lastName, defaultAddress, defaultZip, defaultCity, name } =
-      req.body;
+    const {
+      email,
+      phone,
+      firstName,
+      lastName,
+      defaultAddress,
+      defaultZip,
+      defaultCity,
+      name,
+      allergies,
+      habits,
+      membershipPlanId,
+    } = req.body;
 
     if (!merchantId) {
       return res.status(400).json({ error: "Merchant ID is required" });
@@ -1833,6 +1845,9 @@ router.post("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Req
       defaultAddress,
       defaultZip,
       defaultCity,
+      allergies,
+      habits,
+      membershipPlanId,
     });
 
     res.status(201).json({
@@ -1847,10 +1862,33 @@ router.post("/customers", requirePermission("MANAGE_CUSTOMERS"), async (req: Req
 });
 
 /**
+ * GET /api/merchant/customers/:customerId/pos-profile
+ * POS customer popup: history, membership, allergies, recent orders.
+ */
+router.get(
+  "/customers/:customerId/pos-profile",
+  requireCustomerDirectoryAccess(),
+  async (req: Request, res: Response) => {
+    try {
+      const merchantId = req.merchantId;
+      const { customerId } = req.params;
+      if (!merchantId) {
+        return res.status(400).json({ error: "Merchant ID is required" });
+      }
+      const profile = await CustomerService.getPosProfile(merchantId, customerId);
+      res.json({ success: true, ...profile });
+    } catch (error) {
+      console.error("Error getting POS customer profile:", error);
+      res.status(404).json({ error: error instanceof Error ? error.message : "Customer not found" });
+    }
+  }
+);
+
+/**
  * GET /api/merchant/customers/:customerId
  * Get customer details
  */
-router.get("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
+router.get("/customers/:customerId", requireCustomerDirectoryAccess(), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const { customerId } = req.params;
@@ -1875,17 +1913,11 @@ router.get("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), asyn
  * PATCH /api/merchant/customers/:customerId
  * Update customer
  */
-router.patch("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), async (req: Request, res: Response) => {
+router.patch("/customers/:customerId", requireCustomerDirectoryAccess(), async (req: Request, res: Response) => {
   try {
     const merchantId = req.merchantId;
     const { customerId } = req.params;
-    const { email, phone, firstName, lastName, defaultAddress, defaultZip, defaultCity } = req.body;
-
-    if (!merchantId) {
-      return res.status(400).json({ error: "Merchant ID is required" });
-    }
-
-    const customer = await CustomerService.updateCustomer(merchantId, customerId, {
+    const {
       email,
       phone,
       firstName,
@@ -1893,6 +1925,26 @@ router.patch("/customers/:customerId", requirePermission("MANAGE_CUSTOMERS"), as
       defaultAddress,
       defaultZip,
       defaultCity,
+      allergies,
+      habits,
+      membershipPlanId,
+    } = req.body;
+
+    if (!merchantId) {
+      return res.status(400).json({ error: "Merchant ID is required" });
+    }
+
+    const customer = await CustomerService.updateCustomer(merchantId, customerId, {
+      ...(email !== undefined ? { email } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+      ...(firstName !== undefined ? { firstName } : {}),
+      ...(lastName !== undefined ? { lastName } : {}),
+      ...(defaultAddress !== undefined ? { defaultAddress } : {}),
+      ...(defaultZip !== undefined ? { defaultZip } : {}),
+      ...(defaultCity !== undefined ? { defaultCity } : {}),
+      ...(allergies !== undefined ? { allergies } : {}),
+      ...(habits !== undefined ? { habits } : {}),
+      ...(membershipPlanId !== undefined ? { membershipPlanId } : {}),
     });
 
     res.json({
@@ -2657,7 +2709,7 @@ router.get(
  */
 router.get(
   "/guest-crm/profiles",
-  requirePermission("MANAGE_CUSTOMERS"),
+  requireCustomerDirectoryAccess(),
   async (req: Request, res: Response) => {
     try {
       const merchantId = req.merchantId;
@@ -2687,7 +2739,7 @@ router.get(
 
 router.get(
   "/guest-crm/profiles/:customerId",
-  requirePermission("MANAGE_CUSTOMERS"),
+  requireCustomerDirectoryAccess(),
   async (req: Request, res: Response) => {
     try {
       const merchantId = req.merchantId;
@@ -2713,7 +2765,7 @@ router.get(
 
 router.patch(
   "/guest-crm/profiles/:customerId/tags",
-  requirePermission("MANAGE_CUSTOMERS"),
+  requireCustomerDirectoryAccess(),
   async (req: Request, res: Response) => {
     try {
       const merchantId = req.merchantId;

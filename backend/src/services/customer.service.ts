@@ -161,6 +161,9 @@ export class CustomerService {
       defaultAddress?: string | null;
       defaultZip?: string | null;
       defaultCity?: string | null;
+      allergies?: string | null;
+      habits?: string | null;
+      membershipPlanId?: string | null;
     }
   ) {
     const db = getDb();
@@ -194,6 +197,9 @@ export class CustomerService {
           defaultAddress: cleanOptional(extra?.defaultAddress),
           defaultZip: cleanOptional(extra?.defaultZip),
           defaultCity: cleanOptional(extra?.defaultCity),
+          allergies: cleanOptional(extra?.allergies),
+          habits: cleanOptional(extra?.habits),
+          membershipPlanId: cleanOptional(extra?.membershipPlanId),
           loyaltyPoints: 0,
           totalSpent: "0",
         })
@@ -490,6 +496,58 @@ export class CustomerService {
       console.error("Error getting purchase history:", error);
       throw error;
     }
+  }
+
+  /** POS popup: customer + resolved membership + recent orders. */
+  static async getPosProfile(merchantId: string, customerId: string) {
+    const { normalizeGiftCardSettings } = await import("@/lib/gift-card-settings");
+    const {
+      resolveEffectiveMembershipPlan,
+      membershipDiscountPercentFromPlan,
+    } = await import("@/lib/membership-plans");
+    const history = await this.getCustomerPurchaseHistory(merchantId, customerId);
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: { giftCardSettings: true },
+    });
+    const settings = normalizeGiftCardSettings(merchant?.giftCardSettings);
+    const customer = history.customer as typeof schema.customers.$inferSelect;
+    const membershipPlan = resolveEffectiveMembershipPlan(
+      settings.membershipPlans || [],
+      customer.membershipPlanId,
+      Number(customer.loyaltyPoints) || 0
+    );
+    const orders = (history.orders || []).slice(0, 25).map((order) => ({
+      id: order.id,
+      createdAt: order.createdAt,
+      total: order.total,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      notes: order.notes,
+      items: (order.items || []).map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        productName: item.productName || item.product?.name || null,
+        name: item.productName || item.product?.name || null,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        selectedExtras: item.selectedExtras || [],
+        comboSelections: item.comboSelections || [],
+      })),
+    }));
+    return {
+      customer: {
+        ...customer,
+        membershipPlan,
+        membershipLabel: membershipPlan?.label || null,
+        membershipDiscountPercent: membershipDiscountPercentFromPlan(membershipPlan),
+      },
+      orders,
+      statistics: history.statistics,
+      membershipPlans: (settings.membershipPlans || []).filter((p) => p.active),
+    };
   }
 
   /**
