@@ -22,6 +22,8 @@ export type SettingsTabId =
   | 'kiosk'
   | 'email'
   | 'language'
+  | 'appearance'
+  | 'license'
   | 'users'
   | 'extra-modules'
   | 'about';
@@ -178,6 +180,9 @@ export function nextTabForHiddenRetailSettings(
   if (isSettingsSearchQueryActive(ctx.query)) return null;
   if (tab === 'tables' && !ctx.showTablesSettings) return 'pos';
   if (tab === 'shop' && ctx.showShopSettings === false) return 'business';
+  if (tab === 'appearance') return 'business';
+  if (tab === 'language' && ctx.showShopSettings === false) return 'business';
+  if (tab === 'license' && ctx.showShopSettings === false) return 'business';
   if (tab === 'reservations' && (ctx.isRetailMerchant || ctx.reservationsLicensed === false)) {
     return 'business';
   }

@@ -7,6 +7,9 @@ import {
   shouldShowOnlineReservationsToggle,
   shouldShowPosOptionChooser,
   shouldShowReservationsSettings,
+  shouldShowSettingsAppearanceTab,
+  shouldShowSettingsLanguageTab,
+  shouldShowSettingsLicenseTab,
   shouldShowShopSettings,
 } from './pos-hub-visibility';
 
@@ -83,6 +86,12 @@ assert.equal(
 assert.equal(shouldShowShopSettings(['pos_retail', 'reports']), false, 'POS-only edition hides shop settings');
 assert.equal(shouldShowShopSettings(null), true, 'legacy full catalog keeps shop settings');
 assert.equal(shouldShowShopSettings(['online_shop', 'pos_retail']), true);
+
+assert.equal(shouldShowSettingsAppearanceTab(), false);
+assert.equal(shouldShowSettingsLanguageTab(['pos_retail']), false);
+assert.equal(shouldShowSettingsLanguageTab(null), true);
+assert.equal(shouldShowSettingsLicenseTab(['pos_retail']), false);
+assert.equal(shouldShowSettingsLicenseTab(['online_shop']), true);
 
 assert.equal(shouldShowPosOptionChooser(0), false);
 assert.equal(shouldShowPosOptionChooser(1), false);

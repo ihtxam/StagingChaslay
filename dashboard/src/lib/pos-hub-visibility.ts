@@ -42,6 +42,25 @@ export function shouldShowShopSettings(
   );
 }
 
+/** Panel Language tab — full back-office only; POS-only uses WebPOS gear / desktop-settings. */
+export function shouldShowSettingsLanguageTab(
+  editionFeatures?: readonly string[] | null
+): boolean {
+  return shouldShowShopSettings(editionFeatures);
+}
+
+/** SaaS / device license tab — same gate as Language for lean POS packages. */
+export function shouldShowSettingsLicenseTab(
+  editionFeatures?: readonly string[] | null
+): boolean {
+  return shouldShowShopSettings(editionFeatures);
+}
+
+/** Appearance duplicated Language with no unique panel fields — hide from nav everywhere. */
+export function shouldShowSettingsAppearanceTab(): boolean {
+  return false;
+}
+
 /** Hide location / till / terminal / POS-post pickers when there is nothing to choose. */
 export function shouldShowPosOptionChooser(
   optionCount: number,
