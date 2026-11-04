@@ -21,7 +21,7 @@ export async function resolveLabelPrinterForAgent(
   const configured = String(preferred?.name || '').trim();
   if (!configured) {
     throw new Error(
-      'No label printer configured. Open Settings → Receipts & printers, add your label printer, and enable Labels.'
+      'No label printer configured. Open Settings → Printers, add your label printer, and enable Labels.'
     );
   }
   let livePrinters: AgentPrinter[] = [];

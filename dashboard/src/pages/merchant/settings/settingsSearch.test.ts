@@ -39,6 +39,8 @@ const allTabs = new Set(
     'pos',
     'payments',
     'receipt',
+    'printers',
+    'scale',
     'kds',
     'ods',
     'customerDisplay',
@@ -87,7 +89,7 @@ test('tokenizeSettingsSearchQuery drops empty second word and trailing space', (
 test('matchSettingsSearch two words matches across separate keywords (not phrase-only)', () => {
   const index = buildSettingsSearchIndex(t);
   const matches = matchSettingsSearch(index, 'kitchen printer');
-  assert.ok(matches.some((entry) => entry.id === 'receipt-print'));
+  assert.ok(matches.some((entry) => entry.id === 'printers-setup'));
 });
 
 test('matchSettingsSearch trailing space and empty second token still returns first-word hits', () => {
@@ -152,7 +154,7 @@ test('pickSettingsSearchMatch prefers current tab when it has a hit', () => {
   const index = buildSettingsSearchIndex(t);
   const matches = matchSettingsSearch(index, 'terminal');
   const picked = pickSettingsSearchMatch(matches, 'pos');
-  assert.equal(picked?.id, 'pos-payments');
+  assert.equal(picked?.id, 'pos-checkout');
 });
 
 test('signage addon stays on pos tab in search index', () => {
@@ -188,7 +190,7 @@ test('second word that matches another tab still keeps current tab (kitchen prin
     openContext()
   );
   assert.ok(first.some((entry) => entry.tab === 'pos'));
-  assert.ok(second.some((entry) => entry.tab === 'receipt'));
+  assert.ok(second.some((entry) => entry.tab === 'printers'));
   assert.ok(!second.some((entry) => entry.id === 'pos-courses'));
   assert.equal(resolveSettingsContentTab('pos', 'kitchen', first), 'pos');
   assert.equal(resolveSettingsContentTab('pos', 'kitchen printer', second), 'pos');
@@ -204,9 +206,9 @@ test('resolveSettingsContentTab stays on pos when match is on pos', () => {
 
 test('hasSettingsSearchMatchesOnTab detects cross-tab matches', () => {
   const index = buildSettingsSearchIndex(t);
-  const matches = filterAccessibleSettingsSearch(matchSettingsSearch(index, 'adyen'), openContext());
+  const matches = filterAccessibleSettingsSearch(matchSettingsSearch(index, 'smtp'), openContext());
   assert.equal(hasSettingsSearchMatchesOnTab(matches, 'pos'), false);
-  assert.equal(hasSettingsSearchMatchesOnTab(matches, 'payments'), true);
+  assert.equal(hasSettingsSearchMatchesOnTab(matches, 'email'), true);
 });
 
 test('shouldDimSettingsSectionDuringSearch is always false (no blank panel regression)', () => {

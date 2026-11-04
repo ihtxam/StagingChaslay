@@ -11,6 +11,8 @@ export type SettingsTabId =
   | 'pos'
   | 'payments'
   | 'receipt'
+  | 'printers'
+  | 'scale'
   | 'kds'
   | 'ods'
   | 'customerDisplay'
@@ -616,7 +618,7 @@ export function buildSettingsSearchIndex(
     },
     {
       id: 'print-bridge-download',
-      tab: 'receipt',
+      tab: 'printers',
       keywords: [
         'bridge',
         'print bridge',
@@ -624,9 +626,11 @@ export function buildSettingsSearchIndex(
         'apk',
         'download',
         'rebornprint',
+        'printer',
         t('downloadPrintBridge'),
         t('installPrintBridge'),
         t('kioskPrintBridgeTitle'),
+        t('settingsNavPrinters'),
       ],
     },
     {
@@ -634,13 +638,29 @@ export function buildSettingsSearchIndex(
       tab: 'receipt',
       keywords: [
         'receipt',
-        'printer',
         'kitchen',
         'ticket',
         'desktop',
         'rebornpos',
-        t('settingsReceipt'),
+        t('settingsNavReceipt'),
+        t('settingsReceiptDesign'),
         t('desktopAppDownload'),
+      ],
+    },
+    {
+      id: 'printers-setup',
+      tab: 'printers',
+      keywords: [
+        'printer',
+        'printers',
+        'kitchen',
+        'routing',
+        'bridge',
+        'thermal',
+        'label',
+        t('settingsNavPrinters'),
+        t('settingsPrintersSubtitle'),
+        t('downloadPrintBridge'),
       ],
     },
     {

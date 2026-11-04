@@ -915,7 +915,7 @@ export default function Settings() {
         { id: 'reservations' as const, label: t('settingsReservations'), navLabel: t('settingsNavReservations'), icon: CalendarClock },
         { id: 'pos' as const, label: t('settingsPos'), navLabel: t('settingsNavPos'), icon: Monitor },
         { id: 'payments' as const, label: t('settingsPayments'), navLabel: t('settingsNavPayments'), icon: CreditCard },
-        { id: 'receipt' as const, label: t('settingsReceipt'), navLabel: t('settingsNavReceipt'), icon: ScrollText },
+        { id: 'receipt' as const, label: t('settingsNavReceipt'), navLabel: t('settingsNavReceipt'), icon: ScrollText },
         { id: 'printers' as const, label: t('settingsNavPrinters'), navLabel: t('settingsNavPrinters'), icon: Printer },
         { id: 'scale' as const, label: t('settingsNavScale'), navLabel: t('settingsNavScale'), icon: Weight },
         { id: 'kds' as const, label: t('kdsSettingsTitle'), navLabel: t('settingsNavKds'), icon: ChefHat },
@@ -5571,7 +5571,7 @@ export default function Settings() {
               </Section>
 
               {tab === 'printers' && (
-              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsPrintRoutingTitle')} description={t('settingsReceiptSubtitleShort')}>
+              <Section icon={Printer} accent={settingsDash.accent} title={t('settingsPrintRoutingTitle')} description={t('settingsPrintersSubtitle')}>
                 <Field label={t('kitchenTicketHeader')}>
                   <textarea
                     className="input min-h-[3rem]"

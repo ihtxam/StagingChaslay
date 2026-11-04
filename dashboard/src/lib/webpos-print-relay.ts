@@ -247,7 +247,7 @@ export async function printViaAgentOrQueue(opts: {
     printerName = await retargetEscPosPrinter(opts.printerName);
     if (!printerName || looksLikeLabelPrinterName(printerName)) {
       throw new Error(
-        'Kitchen/receipt tickets cannot print on a label printer. Assign a receipt or kitchen printer in Settings → Receipts & printers.'
+        'Kitchen/receipt tickets cannot print on a label printer. Assign a receipt or kitchen printer in Settings → Printers.'
       );
     }
   }

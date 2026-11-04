@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Copy, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Copy, QrCode, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import KioskPromoSlidesPanel from '@/components/merchant/KioskPromoSlidesPanel';
 import { cdsPublicUrl } from '@/lib/customer-display-sync';
 import type { KioskPromoSlide } from '@/lib/kiosk-api';
 import { useI18n } from '@/lib/i18n';
+import { qrImageUrl } from '@/lib/qr';
 
 type CdsSettings = {
   accessToken?: string;
@@ -25,6 +26,7 @@ export default function CdsSettingsPanel() {
   const [merchantSlug, setMerchantSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +52,14 @@ export default function CdsSettingsPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const resolvedUrl = useMemo(() => {
+    const url =
+      displayUrl ||
+      cdsPublicUrl({ merchantSlug, shortCode: settings?.shortCode });
+    if (!url || url.endsWith('/cds/')) return '';
+    return url;
+  }, [displayUrl, merchantSlug, settings?.shortCode]);
 
   const save = async (patch: Partial<CdsSettings>) => {
     if (!settings) return;
@@ -83,15 +93,12 @@ export default function CdsSettingsPanel() {
   };
 
   const copyUrl = async () => {
-    const url =
-      displayUrl ||
-      cdsPublicUrl({ merchantSlug, shortCode: settings?.shortCode });
-    if (!url || url.endsWith('/cds/')) return;
+    if (!resolvedUrl) return;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(resolvedUrl);
       toast.success(t('cdsUrlCopied'));
     } catch {
-      toast.error(url);
+      toast.error(resolvedUrl);
     }
   };
 
@@ -108,6 +115,7 @@ export default function CdsSettingsPanel() {
   }
 
   const slides = settings.promoSlides ?? [];
+  const shortLabel = (settings.shortCode || '').trim() || merchantSlug || '—';
 
   return (
     <div className="space-y-4">
@@ -135,15 +143,26 @@ export default function CdsSettingsPanel() {
           <p className="text-sm font-medium">{t('cdsDisplayUrl')}</p>
           <div className="flex flex-wrap items-center gap-2">
             <code className="flex-1 break-all rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] px-3 py-2 text-xs">
-              {displayUrl || (merchantSlug || settings.shortCode ? cdsPublicUrl({ merchantSlug, shortCode: settings.shortCode }) : '—')}
+              {resolvedUrl || '—'}
             </code>
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--bg-muted)]"
               onClick={() => void copyUrl()}
+              disabled={!resolvedUrl}
             >
               <Copy className="h-4 w-4" />
               {t('copy')}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--bg-muted)] disabled:opacity-50"
+              title={t('cdsPreviewQr')}
+              disabled={!resolvedUrl}
+              onClick={() => setQrOpen(true)}
+            >
+              <QrCode className="h-4 w-4" />
+              {t('cdsPreviewQr')}
             </button>
             <button
               type="button"
@@ -204,6 +223,25 @@ export default function CdsSettingsPanel() {
           onPersist={(promoSlides) => void save({ promoSlides })}
         />
       </div>
+
+      {qrOpen && resolvedUrl ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5 text-center space-y-3">
+            <h2 className="font-bold">{t('cdsPreviewQr')}</h2>
+            <img src={qrImageUrl(resolvedUrl, 240)} alt="" className="mx-auto h-56 w-56" />
+            <p className="font-mono text-2xl font-bold text-teal-700">{shortLabel}</p>
+            <p className="break-all font-mono text-xs text-[var(--text-muted)]">{resolvedUrl}</p>
+            <div className="flex justify-center gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={() => void copyUrl()}>
+                {t('copy')}
+              </button>
+              <button type="button" className="btn-primary text-sm" onClick={() => setQrOpen(false)}>
+                {t('close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

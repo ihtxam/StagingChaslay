@@ -1043,7 +1043,7 @@ export function formatNiimbotLabelError(opts: {
     (opts.health?.ok === true && ver && !hasNiimbot);
 
   if (missingRoute) {
-    return `Label print failed: Print Agent ${ver || 'on this till'} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings → Receipts & printers.`;
+    return `Label print failed: Print Agent ${ver || 'on this till'} is too old (need v${MIN_NIIMBOT_AGENT_VERSION}+). Open http://127.0.0.1:9101/health and reinstall from Settings → Printers.`;
   }
 
   const raw = String(opts.agentMessage || '').trim();

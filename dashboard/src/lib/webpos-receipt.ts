@@ -4201,7 +4201,7 @@ export function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-/** Short ESC/POS ticket used by Settings → Receipts & printers → Test printer. */
+/** Short ESC/POS ticket used by Settings → Printers → Test printer. */
 export function buildPrinterTestEscPos(opts?: {
   merchantName?: string | null;
   printerName?: string | null;
