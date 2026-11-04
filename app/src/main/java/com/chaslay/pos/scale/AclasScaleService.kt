@@ -78,6 +78,22 @@ class AclasScaleService @Inject constructor(
 
     fun hasPermission(address: String): Boolean = usbPrinterManager.hasPermission(address)
 
+    /** Opens the serial port briefly — confirms USB scale responds like a live printer probe. */
+    suspend fun probeReachable(address: String): Boolean = withContext(Dispatchers.IO) {
+        val normalized = usbPrinterManager.normalizeStoredAddress(address.trim())
+        if (normalized.isBlank()) return@withContext false
+        if (usbPrinterManager.resolveDevice(normalized) == null) return@withContext false
+        if (!usbPrinterManager.hasPermission(normalized)) return@withContext false
+        runCatching {
+            val port = openPort(normalized).getOrThrow()
+            try {
+                true
+            } finally {
+                runCatching { port.close() }
+            }
+        }.getOrDefault(false)
+    }
+
     fun requestPermission(address: String, onResult: (Boolean) -> Unit) {
         usbPrinterManager.requestPermission(address, onResult)
     }

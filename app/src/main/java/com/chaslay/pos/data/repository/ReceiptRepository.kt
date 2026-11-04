@@ -160,13 +160,32 @@ class ReceiptRepository @Inject constructor(
         customerPhone: String?,
         customerAddress: String?
     ): ReceiptPublishResponse {
-        val txnNumber = orderNumber.trim().takeIf { it.isNotEmpty() }?.let { raw ->
-            if (raw.startsWith("#") || raw.startsWith("D-", ignoreCase = true)) {
-                "WP-${clientId.replace("-", "").take(16).uppercase()}"
+        val txnNumber = opaqueReceiptOrderNumber(orderNumber, clientId)
+        val lineItems = cart.items.map { item ->
+            ReceiptItemDto(
+                productName = item.productName,
+                variantName = item.variantName,
+                quantity = item.quantity,
+                lineTotal = item.lineTotal,
+                lineSubtotal = item.lineSubtotal,
+                lineDiscount = item.lineDiscount,
+                unitPrice = item.unitPrice
+            )
+        }
+        val items =
+            if (lineItems.isEmpty() && total > 0.001) {
+                listOf(
+                    ReceiptItemDto(
+                        productName = "Sale",
+                        quantity = 1,
+                        lineTotal = total,
+                        lineSubtotal = cart.subtotal.coerceAtLeast(0.0),
+                        unitPrice = total
+                    )
+                )
             } else {
-                raw
+                lineItems
             }
-        } ?: clientId
         return receiptApi.publishReceipt(
             ReceiptPublishRequest(
                 id = clientId,
@@ -174,6 +193,8 @@ class ReceiptRepository @Inject constructor(
                 total = total,
                 currency = currency,
                 paymentMethod = "invoice",
+                paymentStatus = "awaiting_payment",
+                status = "preparing",
                 businessName = settings.businessName,
                 createdAt = System.currentTimeMillis(),
                 fulfillmentChannel = channelFromFulfillment(cart.fulfillmentType, cart.serviceType),
@@ -183,17 +204,7 @@ class ReceiptRepository @Inject constructor(
                 discountAmount = discountAmount,
                 itemDiscountTotal = cart.itemDiscountTotal,
                 tipAmount = tipAmount.takeIf { it > 0.0 },
-                items = cart.items.map { item ->
-                    ReceiptItemDto(
-                        productName = item.productName,
-                        variantName = item.variantName,
-                        quantity = item.quantity,
-                        lineTotal = item.lineTotal,
-                        lineSubtotal = item.lineSubtotal,
-                        lineDiscount = item.lineDiscount,
-                        unitPrice = item.unitPrice
-                    )
-                },
+                items = items,
                 customerName = customerName,
                 customerPhone = customerPhone,
                 shippingAddress = customerAddress
@@ -338,6 +349,16 @@ class ReceiptRepository @Inject constructor(
                 unitPrice = roundMoney(item.unitPrice * scale)
             )
         }
+    }
+
+    /** Guest shouts (#4821, D-001) must not be stored as order_number — backend expects opaque WP-… ids. */
+    private fun opaqueReceiptOrderNumber(orderNumber: String, clientId: String): String {
+        val raw = orderNumber.trim()
+        if (raw.isEmpty()) return clientId
+        if (raw.startsWith("#") || raw.startsWith("D-", ignoreCase = true)) {
+            return "WP-${clientId.replace("-", "").take(16).uppercase()}"
+        }
+        return raw
     }
 
     private fun channelFromFulfillment(

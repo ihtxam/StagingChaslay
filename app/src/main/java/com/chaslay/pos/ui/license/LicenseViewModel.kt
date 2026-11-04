@@ -2,12 +2,14 @@ package com.chaslay.pos.ui.license
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.LicenseRepository
 import com.chaslay.pos.domain.model.LicenseUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +20,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class LicenseViewModel @Inject constructor(
-    private val licenseRepository: LicenseRepository
+    private val licenseRepository: LicenseRepository,
+    private val sessionManager: SessionManager,
 ) : ViewModel() {
 
     val licenseState: StateFlow<LicenseUiState> = licenseRepository.uiState
@@ -83,6 +86,12 @@ class LicenseViewModel @Inject constructor(
             licenseRepository.activate(code)
                 .onSuccess {
                     _formState.update { it.copy(isActivating = false, activationCode = "", errorMessage = null) }
+                    // Defer logout until after this frame so NavHost isn't disposed mid-compose
+                    // (Settings → Licence activate while POS NavHost is visible).
+                    viewModelScope.launch {
+                        yield()
+                        sessionManager.clearAuthSession()
+                    }
                 }
                 .onFailure { e ->
                     _formState.update {

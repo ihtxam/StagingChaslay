@@ -1,5 +1,4 @@
 package com.chaslay.pos.ui.license
-import com.chaslay.pos.ui.theme.posUiColors
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -31,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,10 +46,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.LinearProgressIndicator
+import com.chaslay.pos.BuildConfig
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.LicenseGateState
+import com.chaslay.pos.ui.settings.SettingsPageHeader
+import com.chaslay.pos.ui.settings.SettingsSectionCard
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.posBrandHeroBackground
+import com.chaslay.pos.ui.theme.posUiColors
 
 @Composable
 fun LicenseSettingsSection(
@@ -59,12 +64,11 @@ fun LicenseSettingsSection(
     val form by viewModel.formState.collectAsStateWithLifecycle()
     val dateFmt = remember { java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()) }
 
-    Text(
-        stringResource(R.string.license_settings_title),
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp
+    SettingsPageHeader(
+        title = stringResource(R.string.license_settings_title),
+        subtitle = stringResource(R.string.license_settings_subtitle),
     )
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(4.dp))
 
     val bannerBg = when (license.gateState) {
         LicenseGateState.TRIAL -> posUiColors().warningSubtle
@@ -85,23 +89,42 @@ fun LicenseSettingsSection(
         LicenseGateState.EXPIRED, LicenseGateState.NEEDS_ACTIVATION -> stringResource(R.string.license_status_expired)
         LicenseGateState.LOADING -> "..."
     }
-    Text(
-        text = statusText,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(bannerBg, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        color = bannerFg,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = stringResource(R.string.license_activate_early_body),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    SettingsSectionCard(title = stringResource(R.string.license_settings_title)) {
+        Text(
+            text = statusText,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(bannerBg, RoundedCornerShape(10.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            color = bannerFg,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+        )
+        if (license.gateState == LicenseGateState.TRIAL && BuildConfig.TRIAL_DAYS > 0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            val progress = (license.trialDaysRemaining.toFloat() / BuildConfig.TRIAL_DAYS.toFloat())
+                .coerceIn(0f, 1f)
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth(),
+                color = PosColors.Primary,
+            )
+            Text(
+                text = "${license.trialDaysRemaining}/${BuildConfig.TRIAL_DAYS}",
+                style = MaterialTheme.typography.bodySmall,
+                color = posUiColors().textSecondary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.license_activate_early_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     Spacer(modifier = Modifier.height(12.dp))
+    SettingsSectionCard(title = stringResource(R.string.license_activation_code)) {
     LicenseActivationForm(
         activationCode = form.activationCode,
         deviceId = form.liveDeviceId.ifBlank { license.snapshot.deviceId },
@@ -112,6 +135,7 @@ fun LicenseSettingsSection(
         onCodeChange = viewModel::updateActivationCode,
         onActivate = viewModel::activate
     )
+    }
 }
 
 @Composable
@@ -205,7 +229,11 @@ private fun LicenseActivationForm(
             )
         ) {
             if (isActivating) {
-                CircularProgressIndicator(modifier = Modifier.height(20.dp))
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = PosColors.TextOnPrimary,
+                    strokeWidth = 2.dp,
+                )
             } else {
                 Text(stringResource(R.string.license_activate_button))
             }
@@ -236,14 +264,18 @@ fun ActivationScreen(
         }
 
         val expired = license.gateState == LicenseGateState.EXPIRED
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             Spacer(modifier = Modifier.height(16.dp))
             Image(
                 painter = painterResource(R.drawable.reborn_logo_white),
@@ -293,6 +325,7 @@ fun ActivationScreen(
                     onCodeChange = viewModel::updateActivationCode,
                     onActivate = viewModel::activate
                 )
+            }
             }
         }
     }

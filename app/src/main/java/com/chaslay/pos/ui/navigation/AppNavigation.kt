@@ -1,11 +1,12 @@
 package com.chaslay.pos.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -84,65 +85,82 @@ fun ChaslayNavHost(
         )
     }
 
-    // System bar insets are applied once in MainActivity. Scaffold contentWindowInsets are
-    // cleared so we don't get a double status-bar gap under the demo banner.
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (isDemoMode) {
-            DemoModeBanner(
-                onGoLiveClick = demoModeViewModel::requestGoLive,
-                isPurging = demoUiState.isPurging
-            )
-        }
-
-        Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbarHostState) }
-        ) { padding ->
-            NavHost(
-                navController = navController,
-                startDestination = AppRoute.Pos.route,
+    // Plain Column + NavHost (no Scaffold subcompose — avoids measure crashes on first Pos compose).
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (isDemoMode) {
+                DemoModeBanner(
+                    onGoLiveClick = demoModeViewModel::requestGoLive,
+                    isPurging = demoUiState.isPurging
+                )
+            }
+            // NavHost must fill a bounded box — weight(1f) on NavHost alone crashes on IME
+            // inset / recompose (IllegalStateException in LocalOwnersProvider).
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
+                    .weight(1f)
+                    .fillMaxWidth(),
             ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = AppRoute.Pos.route,
+                    modifier = Modifier.fillMaxSize(),
+                    enterTransition = { EnterTransition.None },
+                    exitTransition = { ExitTransition.None },
+                    popEnterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None },
+                ) {
                 composable(AppRoute.Pos.route) {
-                    if (userAccess.isWaiterProfile()) {
-                        WaiterPosScreen(
-                            userAccess = userAccess,
-                            onLogout = { authViewModel.logout() }
-                        )
-                    } else {
-                        PosScreen(
-                            userAccess = userAccess,
-                            onNavigate = { route ->
-                                navController.navigate(route) {
-                                    launchSingleTop = true
-                                }
-                            },
-                            onBackToPos = {
-                                navController.popBackStack(AppRoute.Pos.route, inclusive = false)
-                            },
-                            onLogout = { authViewModel.logout() }
-                        )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (userAccess.isWaiterProfile()) {
+                            WaiterPosScreen(
+                                userAccess = userAccess,
+                                onLogout = { authViewModel.logout() }
+                            )
+                        } else {
+                            PosScreen(
+                                userAccess = userAccess,
+                                onNavigate = { route ->
+                                    navController.navigate(route) {
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onBackToPos = {
+                                    navController.popBackStack(AppRoute.Pos.route, inclusive = false)
+                                },
+                                onLogout = { authViewModel.logout() }
+                            )
+                        }
                     }
                 }
                 composable(AppRoute.OrderHistory.route) {
-                    if (userAccess.canViewOrderHistory()) {
-                        OrderHistoryScreen(onBack = { navController.popBackStack() })
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (userAccess.canViewOrderHistory()) {
+                            OrderHistoryScreen(onBack = { navController.popBackStack() })
+                        }
                     }
                 }
                 composable(AppRoute.OngoingOrders.route) {
-                    OngoingOrdersScreen(onBack = { navController.popBackStack() })
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        OngoingOrdersScreen(onBack = { navController.popBackStack() })
+                    }
                 }
                 if (userAccess.canAccessSettings() || userAccess.canManageProducts() || userAccess.canAccessReports()) {
                     composable(AppRoute.Admin.route) {
-                        AdminHubScreen(
-                            userAccess = userAccess,
-                            onBack = { navController.popBackStack() }
-                        )
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            AdminHubScreen(
+                                userAccess = userAccess,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
+                }
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
+        )
     }
 }

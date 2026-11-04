@@ -560,7 +560,7 @@ private fun RoleToggle(label: String, checked: Boolean, onCheckedChange: (Boolea
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        com.chaslay.pos.ui.theme.PosSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

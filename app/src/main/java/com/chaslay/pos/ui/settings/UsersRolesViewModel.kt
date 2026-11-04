@@ -2,15 +2,20 @@ package com.chaslay.pos.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.RoleEntity
 import com.chaslay.pos.data.local.entity.UserEntity
+import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.PosPermission
 import com.chaslay.pos.domain.model.isValidStaffPin
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,12 +40,16 @@ data class UsersRolesUiState(
     val formActive: Boolean = true,
     val formRoleName: String = "",
     val formPermissions: Set<PosPermission> = emptySet(),
-    val message: String? = null
+    val message: String? = null,
+    val showDeleteUserDialog: Boolean = false,
+    val pendingDeleteUser: UserEntity? = null,
 )
 
 @HiltViewModel
 class UsersRolesViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    @ApplicationContext private val appContext: Context,
+    private val authRepository: AuthRepository,
+    private val sessionManager: SessionManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UsersRolesUiState())
@@ -220,6 +229,48 @@ class UsersRolesViewModel @Inject constructor(
                 .onSuccess { _uiState.update { it.copy(message = "Role deleted") } }
                 .onFailure { e -> _uiState.update { it.copy(message = e.message ?: "Cannot delete role") } }
             refresh()
+        }
+    }
+
+    fun requestDeleteUser(user: UserEntity) {
+        _uiState.update { it.copy(showDeleteUserDialog = true, pendingDeleteUser = user) }
+    }
+
+    fun dismissDeleteUserDialog() {
+        _uiState.update { it.copy(showDeleteUserDialog = false, pendingDeleteUser = null) }
+    }
+
+    fun confirmDeleteUser() {
+        viewModelScope.launch {
+            val pending = _uiState.value.pendingDeleteUser ?: return@launch
+            val actingUserId = sessionManager.currentUserId.first()
+            authRepository.deleteUser(pending.id, actingUserId)
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            showDeleteUserDialog = false,
+                            pendingDeleteUser = null,
+                            message = appContext.getString(R.string.user_deleted),
+                        )
+                    }
+                    refresh()
+                }
+                .onFailure { e ->
+                    val msg = when (e.message) {
+                        AuthRepository.DELETE_USER_SELF ->
+                            appContext.getString(R.string.user_delete_error_self)
+                        AuthRepository.DELETE_USER_LAST ->
+                            appContext.getString(R.string.user_delete_error_last_user)
+                        AuthRepository.DELETE_USER_LAST_OWNER ->
+                            appContext.getString(R.string.user_delete_error_last_owner)
+                        AuthRepository.DELETE_USER_NOT_FOUND ->
+                            appContext.getString(R.string.user_delete_error_generic)
+                        else -> e.message ?: appContext.getString(R.string.user_delete_error_generic)
+                    }
+                    _uiState.update {
+                        it.copy(showDeleteUserDialog = false, pendingDeleteUser = null, message = msg)
+                    }
+                }
         }
     }
 

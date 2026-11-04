@@ -302,6 +302,8 @@
     <string name="search_orders">Cerca</string>
     <string name="auto_print_receipt">Stampa automatica scontrino dopo vendita</string>
     <string name="auto_print_receipt_hint">Stampa lo scontrino cliente al completamento del pagamento. Puoi comunque stampare dalla schermata di successo.</string>
+    <string name="auto_print_kitchen">Stampa automatica ticket cucina alla vendita</string>
+    <string name="auto_print_kitchen_hint">Stampa in cucina gli articoli non inviati al completamento del pagamento. Con opzione disattivata, usa Invia in cucina quando serve.</string>
     <string name="hold_order">Sospendi</string>
     <string name="hold_short">Maintenir</string>
     <string name="hold_and_send">SANTÉ ET SÉCURITÉ</string>
@@ -442,6 +444,8 @@
     <string name="pos_tables_enabled_hint">Mostra la scheda Tavoli e il selettore per il servizio al tavolo.</string>
     <string name="pos_retail_dine_in">Abilita consumo sul posto nel retail</string>
     <string name="pos_retail_dine_in_hint">Stile bistro: sul posto e asporto al bancone senza scelta del tavolo.</string>
+    <string name="pos_retail_weighed_custom_entry">Inserimento peso personalizzato per prodotti a peso</string>
+    <string name="pos_retail_weighed_custom_entry_hint">Off: importo totale per Divers e articoli a peso (senza attendere la bilancia). On: peso e prezzo CHF/kg.</string>
     <string name="pos_retail_takeaway">Abilita asporto nel retail</string>
     <string name="pos_retail_delivery">Abilita consegna nel retail</string>
     <string name="pos_require_table_dine_in">Tavolo obbligatorio per consumo sul posto</string>

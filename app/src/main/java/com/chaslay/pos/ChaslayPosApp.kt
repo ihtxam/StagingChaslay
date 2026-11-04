@@ -1,72 +1,20 @@
 package com.chaslay.pos
 
-import android.app.Application
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.multidex.MultiDexApplication
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
-import com.chaslay.pos.data.preferences.SessionManager
-import com.chaslay.pos.data.preferences.sessionDataStore
-import com.chaslay.pos.debug.CrashLogger
-import com.chaslay.pos.domain.model.AppLanguage
-import com.chaslay.pos.payment.taptopay.TapToPayEngine
-import com.chaslay.pos.printer.PrinterConnectionManager
-import com.chaslay.pos.printer.UsbBootAttachGrace
-import com.chaslay.pos.printer.UsbPrinterManager
-import com.chaslay.pos.sync.BackgroundSyncScheduler
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-
-private val startupLanguageKey = stringPreferencesKey("app_language")
 
 @HiltAndroidApp
-class ChaslayPosApp : Application(), Configuration.Provider {
+class ChaslayPosApp : MultiDexApplication(), Configuration.Provider {
 
-    @Inject lateinit var crashLogger: CrashLogger
-    @Inject lateinit var printerConnectionManager: PrinterConnectionManager
-    @Inject lateinit var usbPrinterManager: UsbPrinterManager
-    @Inject lateinit var backgroundSyncScheduler: BackgroundSyncScheduler
     @Inject lateinit var workerFactory: HiltWorkerFactory
-    @Inject lateinit var tapToPayEngine: TapToPayEngine
-    @Inject lateinit var sessionManager: SessionManager
+    @Inject lateinit var appStartup: AppStartup
 
     override fun onCreate() {
         super.onCreate()
-        runBlocking { sessionManager.clearAuthSession() }
-        applySavedLocale()
-        crashLogger.installGlobalHandler()
-        crashLogger.flushPendingUploads()
-        UsbBootAttachGrace.ensureBootAnchorIfUnset(this)
-        printerConnectionManager.warmupOnStartup()
-        usbPrinterManager.startMonitoring()
-        backgroundSyncScheduler.schedule(this)
-
-        // Bring Tap to Pay up before any Activity invokes it. The
-        // MerchantAuthenticationService is auto-detected from the manifest <service>.
-        // Inert in builds without the Adyen SDK.
-        tapToPayEngine.initialize(this)
-    }
-
-    private fun applySavedLocale() {
-        val languageCode = runBlocking {
-            sessionDataStore.data.first()[startupLanguageKey]?.trim()?.takeIf { it.isNotEmpty() }
-                ?: AppCompatDelegate.getApplicationLocales().let { locales ->
-                    if (locales.isEmpty) null else locales[0]?.toLanguageTag()?.substringBefore('-')
-                }
-                ?: AppLanguage.ENGLISH.code
-        }
-        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(languageCode))
-        val persisted = runBlocking {
-            sessionDataStore.data.first()[startupLanguageKey]?.trim()?.takeIf { it.isNotEmpty() }
-        }
-        if (persisted == null) {
-            runBlocking {
-                sessionManager.setLanguage(AppLanguage.fromCode(languageCode))
-            }
-        }
+        appStartup.run()
     }
 
     override val workManagerConfiguration: Configuration

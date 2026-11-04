@@ -1,6 +1,7 @@
 package com.chaslay.pos.data.remote
 
 import com.chaslay.pos.data.remote.dto.AckResponse
+import com.chaslay.pos.data.remote.dto.CdsPushRequest
 import com.chaslay.pos.data.remote.dto.DiagnosticReportRequest
 import com.chaslay.pos.data.remote.dto.ProfitMarginReportResponse
 import com.chaslay.pos.data.remote.dto.IncomingOrdersResponse
@@ -32,6 +33,9 @@ interface SyncApi {
 
     @GET("v1/sync/payment-config")
     suspend fun paymentConfig(): PaymentConfigResponse
+
+    @POST("v1/sync/cds/push")
+    suspend fun pushCustomerDisplayState(@Body body: CdsPushRequest): AckResponse
 
     @POST("v1/sync/terminals")
     suspend fun pushTerminals(@Body body: PushTerminalsRequest): PushTerminalsResponse

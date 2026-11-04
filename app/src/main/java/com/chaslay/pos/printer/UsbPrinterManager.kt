@@ -549,12 +549,92 @@ class UsbPrinterManager @Inject constructor(
     }
 
     private fun isLikelyPrinter(device: UsbDevice): Boolean {
+        if (isUsbNetworkAdapter(device)) return false
+        if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
+        if (hasPrinterInterface(device)) return true
+        if (device.vendorId in KNOWN_PRINTER_VENDOR_IDS && hasEscPosBulkOut(device)) return true
+        if (device.vendorId in SERIAL_ADAPTER_VENDOR_IDS) {
+            val classes = interfaceClasses(device)
+            if (UsbConstants.USB_CLASS_HID !in classes && hasEscPosBulkOut(device, allowCdcData = true)) {
+                return true
+            }
+        }
+        return hasEscPosBulkOut(device)
+    }
+
+    private fun hasPrinterInterface(device: UsbDevice): Boolean =
+        (0 until device.interfaceCount).any { index ->
+            val usbInterface = device.getInterface(index)
+            usbInterface.interfaceClass == UsbConstants.USB_CLASS_PRINTER && hasBulkOut(usbInterface)
+        }
+
+    private fun hasPrinterClass(device: UsbDevice): Boolean {
         if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
         return (0 until device.interfaceCount).any { index ->
-            val usbInterface = device.getInterface(index)
-            usbInterface.interfaceClass == UsbConstants.USB_CLASS_PRINTER ||
-                (hasBulkOut(usbInterface) && usbInterface.interfaceClass !in NON_PRINTER_USB_CLASSES)
+            device.getInterface(index).interfaceClass == UsbConstants.USB_CLASS_PRINTER
         }
+    }
+
+    /** USB ethernet / Realtek dongles (e.g. 0x0BDA:0x8152) are not ESC/POS printers. */
+    private fun isUsbNetworkAdapter(device: UsbDevice): Boolean {
+        if (hasPrinterClass(device)) return false
+        if (device.vendorId == REALTEK_VENDOR_ID) return true
+        if (hasUsbNetworkInterface(device)) return true
+        val name = runCatching { device.productName?.trim() }.getOrNull().orEmpty()
+        if (name.isNotBlank() && NETWORK_PRODUCT_NAME.containsMatchIn(name)) return true
+        return false
+    }
+
+    private fun hasUsbNetworkInterface(device: UsbDevice): Boolean {
+        if (device.deviceClass == UsbConstants.USB_CLASS_COMM &&
+            device.deviceSubclass in CDC_NETWORK_SUBCLASSES
+        ) {
+            return true
+        }
+        if (device.deviceClass == USB_CLASS_WIRELESS_CONTROLLER &&
+            device.deviceSubclass == 0x01 &&
+            device.deviceProtocol == 0x03
+        ) {
+            return true
+        }
+        for (index in 0 until device.interfaceCount) {
+            val iface = device.getInterface(index)
+            val sub = iface.interfaceSubclass
+            val proto = iface.interfaceProtocol
+            when (iface.interfaceClass) {
+                UsbConstants.USB_CLASS_COMM -> {
+                    if (sub in CDC_NETWORK_SUBCLASSES) return true
+                    if (sub == 0x02 && proto == 0xFF) return true
+                }
+                USB_CLASS_WIRELESS_CONTROLLER -> {
+                    if (sub == 0x01 && proto == 0x03) return true
+                }
+            }
+        }
+        return false
+    }
+
+    private fun interfaceClasses(device: UsbDevice): List<Int> =
+        (0 until device.interfaceCount).map { device.getInterface(it).interfaceClass }
+
+    private fun hasEscPosBulkOut(device: UsbDevice, allowCdcData: Boolean = true): Boolean {
+        val allowCdc = allowCdcData &&
+            (
+                device.vendorId in KNOWN_PRINTER_VENDOR_IDS ||
+                    hasPrinterClass(device) ||
+                    hasPrinterInterface(device)
+                )
+        for (index in 0 until device.interfaceCount) {
+            val usbInterface = device.getInterface(index)
+            when (usbInterface.interfaceClass) {
+                UsbConstants.USB_CLASS_PRINTER,
+                UsbConstants.USB_CLASS_VENDOR_SPEC -> if (hasBulkOut(usbInterface)) return true
+                UsbConstants.USB_CLASS_CDC_DATA -> if (allowCdc && hasBulkOut(usbInterface)) return true
+                in NON_PRINTER_USB_CLASSES -> continue
+                else -> if (hasBulkOut(usbInterface)) return true
+            }
+        }
+        return false
     }
 
     private fun hasBulkOut(usbInterface: UsbInterface): Boolean =
@@ -735,7 +815,27 @@ class UsbPrinterManager @Inject constructor(
             UsbConstants.USB_CLASS_HID,
             UsbConstants.USB_CLASS_HUB,
             UsbConstants.USB_CLASS_CDC_DATA,
-            UsbConstants.USB_CLASS_COMM
+            UsbConstants.USB_CLASS_COMM,
+            UsbConstants.USB_CLASS_MASS_STORAGE,
+            UsbConstants.USB_CLASS_AUDIO,
+            UsbConstants.USB_CLASS_VIDEO,
+        )
+
+        private const val REALTEK_VENDOR_ID = 0x0BDA
+        private const val USB_CLASS_WIRELESS_CONTROLLER = 0xE0
+        private val CDC_NETWORK_SUBCLASSES = setOf(0x06, 0x0C, 0x0D, 0x0E)
+        private val NETWORK_PRODUCT_NAME = Regex(
+            """ethernet|802\.11|wi-?fi|rndis|usb\s*network|(^|[^a-z0-9])lan([^a-z0-9]|$)""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        private val KNOWN_PRINTER_VENDOR_IDS = setOf(
+            0x0355, 0x0416, 0x0418, 0x04B8, 0x0519, 0x0FE6, 0x0483, 0x1504,
+            0x0DD4, 0x154F, 0x28E9, 0x6868,
+        )
+
+        private val SERIAL_ADAPTER_VENDOR_IDS = setOf(
+            0x1A86, 0x067B, 0x10C4, 0x0403, 0x05E0, 0x0C2E, 0x05F9, 0x0536,
         )
     }
 }

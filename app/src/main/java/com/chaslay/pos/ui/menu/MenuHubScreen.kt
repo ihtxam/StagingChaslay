@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -41,12 +36,18 @@ import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.ui.catalog.CatalogScreen
+import com.chaslay.pos.ui.components.PosVectorIcon
+import com.chaslay.pos.ui.components.menuSectionIconRes
+import com.chaslay.pos.ui.components.menuSectionMaterialIcon
 import com.chaslay.pos.ui.theme.posUiColors
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.vectronColors
+
 @Composable
 fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val posMenuDesign by viewModel.posMenuDesign.collectAsStateWithLifecycle()
+    val useModernNavIcons = posMenuDesign.isModern
     val colors = vectronColors()
     val ui = posUiColors()
 
@@ -81,14 +82,8 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                 color = ui.textPrimary,
                 modifier = Modifier.padding(8.dp),
             )
-            MenuSection.entries.forEach { section ->
+            MenuSection.sidebarOrder.forEach { section ->
                 val selected = state.section == section
-                val icon = when (section) {
-                    MenuSection.PRODUCT_LIST -> Icons.AutoMirrored.Filled.List
-                    MenuSection.IMPORT_EXPORT -> Icons.Default.CloudUpload
-                    MenuSection.EXTRAS_AND_NOS -> Icons.Default.Sell
-                    MenuSection.COMBOS -> Icons.Default.Layers
-                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -99,12 +94,22 @@ fun MenuHubScreen(viewModel: MenuViewModel = hiltViewModel()) {
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = if (selected) Color.White else colors.textPrimary,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    val navIconTint = if (selected) Color.White else colors.textPrimary
+                    if (useModernNavIcons) {
+                        PosVectorIcon(
+                            resId = menuSectionIconRes(section),
+                            contentDescription = null,
+                            tint = navIconTint,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    } else {
+                        Icon(
+                            imageVector = menuSectionMaterialIcon(section),
+                            contentDescription = null,
+                            tint = navIconTint,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                     Text(
                         stringResource(
                             when (section) {

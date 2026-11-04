@@ -143,14 +143,16 @@ fun EndOfDayReportScreen(
                     sym = currencySymbol,
                 )
             }
-            item {
-                ReportBreakdownCard(
-                    title = "Order Types",
-                    icon = Icons.Outlined.PointOfSale,
-                    accent = reportDashColors().Success,
-                    rows = orderTypeRows,
-                    sym = currencySymbol,
-                )
+            if (orderTypeRows.isNotEmpty()) {
+                item {
+                    ReportBreakdownCard(
+                        title = stringResource(R.string.eod_order_types_title),
+                        icon = Icons.Outlined.PointOfSale,
+                        accent = reportDashColors().Success,
+                        rows = orderTypeRows,
+                        sym = currencySymbol,
+                    )
+                }
             }
             if (report.refundTotal > 0.0) {
                 item {
@@ -224,7 +226,7 @@ private fun EodPrintSwitch(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 2.dp),
     ) {
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        com.chaslay.pos.ui.theme.PosSwitch(checked = checked, onCheckedChange = onCheckedChange)
         Text(
             label,
             fontSize = 13.sp,

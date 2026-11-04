@@ -42,6 +42,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -85,6 +86,7 @@ import com.chaslay.pos.ui.scanner.BarcodeScannerDialog
 import com.chaslay.pos.ui.theme.categoryColor
 import com.chaslay.pos.ui.theme.posUiColors
 import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosSwitch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -499,7 +501,7 @@ private fun CatalogToggleRow(
                     Text(help, fontSize = 10.sp, color = ui.textSecondary)
                 }
             }
-            Switch(
+            PosSwitch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 modifier = Modifier.height(28.dp)
@@ -677,7 +679,7 @@ private fun ProductDialog(
                                     focusedLabelColor = PosColors.Primary
                                 )
                             )
-                            ExposedDropdownMenu(
+                            DropdownMenu(
                                 expanded = categoryExpanded,
                                 onDismissRequest = { categoryExpanded = false }
                             ) {

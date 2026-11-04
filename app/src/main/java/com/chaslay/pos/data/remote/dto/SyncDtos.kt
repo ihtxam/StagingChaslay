@@ -161,6 +161,7 @@ data class SyncFloorPlanDto(
 
 data class MenuBootstrapResponse(
     val serverTime: Long,
+    @SerializedName("platform_about_html") val platformAboutHtml: String? = null,
     val business: SyncBusinessDto? = null,
     val categories: List<SyncCategoryDto> = emptyList(),
     val products: List<SyncProductDto> = emptyList(),
@@ -240,7 +241,8 @@ data class SyncPaymentMethodsDto(
     val card: Boolean = true,
     val terminal: Boolean = false,
     @SerializedName("tap_to_pay") val tapToPay: Boolean = false,
-    @SerializedName("giftCard") val giftCard: Boolean = false
+    @SerializedName("giftCard") val giftCard: Boolean = false,
+    val invoice: Boolean = true,
 )
 
 data class SyncFeaturesDto(
@@ -314,6 +316,14 @@ data class SyncPrintDto(
     @SerializedName("receipt_body_text_scale") val receiptBodyTextScale: Int = 1
 )
 
+data class SyncCustomerDisplayDto(
+    val enabled: Boolean = true,
+    @SerializedName("access_token") val accessToken: String? = null,
+    @SerializedName("short_code") val shortCode: String? = null,
+    @SerializedName("merchant_slug") val merchantSlug: String? = null,
+    @SerializedName("display_url") val displayUrl: String? = null,
+)
+
 data class PaymentConfigResponse(
     val serverTime: Long = 0L,
     val adyen: SyncAdyenConfigDto? = null,
@@ -328,7 +338,33 @@ data class PaymentConfigResponse(
     @SerializedName("receipt_base_url") val receiptBaseUrl: String? = null,
     val scale: SyncScaleDto? = null,
     val print: SyncPrintDto? = null,
-    val loyalty: SyncLoyaltyDto? = null
+    val loyalty: SyncLoyaltyDto? = null,
+    @SerializedName("customer_display") val customerDisplay: SyncCustomerDisplayDto? = null,
+)
+
+data class CdsLiveLineDto(
+    val name: String,
+    val qty: Double,
+    val lineTotal: Double,
+    val modifiers: String? = null,
+)
+
+data class CdsPushStateDto(
+    val merchantName: String? = null,
+    val currency: String = "CHF",
+    val lines: List<CdsLiveLineDto> = emptyList(),
+    val subtotal: Double = 0.0,
+    val discount: Double = 0.0,
+    val tax: Double = 0.0,
+    val total: Double = 0.0,
+    val phase: String,
+    val receiptUrl: String? = null,
+    val locale: String? = null,
+    val updatedAt: Long = System.currentTimeMillis(),
+)
+
+data class CdsPushRequest(
+    val state: CdsPushStateDto,
 )
 
 data class SyncLoyaltyDto(

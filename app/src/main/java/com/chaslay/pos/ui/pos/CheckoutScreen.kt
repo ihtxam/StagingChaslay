@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Redeem
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -71,8 +71,12 @@ import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.DiscountPreset
 import com.chaslay.pos.domain.model.LoyaltyMath
 import com.chaslay.pos.domain.model.PaymentMethod
+import com.chaslay.pos.domain.model.PaymentTender
 import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.applyCashRounding
+import com.chaslay.pos.ui.components.PosVectorIcon
+import com.chaslay.pos.ui.components.checkoutGiftCardIconRes
+import com.chaslay.pos.ui.components.checkoutPaymentMethodIconRes
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosDimens
 import com.chaslay.pos.ui.theme.PosShapes
@@ -95,6 +99,8 @@ data class CheckoutState(
     val roundingStep: Double = 0.05,
     val tenderAmount: Double = 0.0,
     val cardTenderAmount: Double = 0.0,
+    /** Committed partial tenders (multi-tender checkout). */
+    val appliedTenders: List<PaymentTender> = emptyList(),
     val printReceipt: Boolean = false,
     val showTipPanel: Boolean = false,
     val showDiscountPanel: Boolean = false,
@@ -135,11 +141,13 @@ fun CheckoutScreen(
     membershipPointsBalance: Int? = null,
     membershipGiftBalance: Double? = null,
     giftCardsEnabled: Boolean = false,
+    invoiceEnabled: Boolean = true,
     redeemThresholdPoints: Int = LoyaltyMath.REDEEM_THRESHOLD_POINTS,
     onBack: () -> Unit,
     onSelectMethod: (PaymentMethod) -> Unit,
     onDeselectMethod: () -> Unit = {},
     onApplyCardRemainder: (Double) -> Unit = {},
+    onSwitchToCardTender: (PaymentMethod) -> Unit = {},
     onTipAmount: (Double) -> Unit,
     onTipPercent: (Double) -> Unit,
     onDiscountPercent: (Double) -> Unit,
@@ -169,20 +177,19 @@ fun CheckoutScreen(
     var showTipDialog by remember { mutableStateOf(false) }
     var showDiscountDialog by remember { mutableStateOf(false) }
     var tenderBuffer by remember { mutableStateOf("") }
-    val typedTender = tenderBuffer.toDoubleOrNull()
+    val committedPaid = checkoutCommittedPaid(checkoutState)
+    val pendingLine = checkoutPendingLineAmount(checkoutState, tenderBuffer)
     val cashApplied = when {
-        typedTender != null && typedTender > 0 -> typedTender
-        checkoutState.tenderAmount > 0 -> checkoutState.tenderAmount
-        else -> 0.0
+        checkoutState.method == PaymentMethod.CASH -> pendingLine
+        else -> checkoutState.appliedTenders.filter { it.method == PaymentMethod.CASH }.sumOf { it.amount }
     }
-    val cardApplied = checkoutState.cardTenderAmount
-    val covered = cashApplied + cardApplied
-    val remaining = (totals.roundedTotal - covered).coerceAtLeast(0.0)
-    val changeDue = if (cardApplied < 0.001 && cashApplied > totals.roundedTotal) {
-        cashApplied - totals.roundedTotal
-    } else {
-        0.0
+    val cardApplied = when {
+        isCheckoutCardMethod(checkoutState.method) -> pendingLine
+        checkoutState.cardTenderAmount > 0.001 -> checkoutState.cardTenderAmount
+        else -> checkoutState.appliedTenders.filter { isCheckoutCardMethod(it.method) }.sumOf { it.amount }
     }
+    val remaining = checkoutRemainingDue(totals.roundedTotal, checkoutState, tenderBuffer)
+    val changeDue = checkoutChangeDue(totals.roundedTotal, checkoutState, tenderBuffer)
     val kitchenRefLabel = stringResource(R.string.checkout_kitchen_ref_label)
     val checkoutOrderRef = com.chaslay.pos.util.OrderNumberFormat.formatCheckoutOrderRef(
         cart.orderNumber,
@@ -190,19 +197,30 @@ fun CheckoutScreen(
         null,
         kitchenRefLabel
     )
-    val exactCash = checkoutState.method == PaymentMethod.CASH && cashApplied < 0.001 && cardApplied < 0.001
-    val methodChargesRemaining = checkoutState.method == PaymentMethod.CARD ||
-        checkoutState.method == PaymentMethod.ADYEN_TERMINAL ||
-        checkoutState.method == PaymentMethod.TAP_TO_PAY ||
-        checkoutState.method == PaymentMethod.PAY_LATER ||
+    val exactCash = checkoutState.method == PaymentMethod.CASH &&
+        pendingLine < 0.001 &&
+        checkoutState.appliedTenders.isEmpty()
+    val deferredOrInvoice = checkoutState.method == PaymentMethod.PAY_LATER ||
         checkoutState.method == PaymentMethod.INVOICE
+    val cardPaysFullBalance = (
+        checkoutState.method == PaymentMethod.CARD ||
+            checkoutState.method == PaymentMethod.ADYEN_TERMINAL ||
+            checkoutState.method == PaymentMethod.TAP_TO_PAY
+        ) &&
+        checkoutState.appliedTenders.isEmpty()
     val canComplete = !isProcessing && cart.items.isNotEmpty() &&
-        (remaining <= 0.001 || exactCash || methodChargesRemaining)
+        (remaining <= 0.001 || exactCash || deferredOrInvoice || cardPaysFullBalance)
 
-    fun applyTender(amount: Double) {
+    fun applyTender(amount: Double, autoCompleteIfCovered: Boolean = false) {
         tenderBuffer = formatTenderBuffer(amount)
         onSelectMethod(PaymentMethod.CASH)
         onTenderAmount(amount)
+        if (autoCompleteIfCovered) {
+            val covered = committedPaid + amount
+            if (covered + 0.001 >= totals.roundedTotal) {
+                onComplete()
+            }
+        }
     }
 
     fun appendTenderKey(key: String) {
@@ -222,8 +240,16 @@ fun CheckoutScreen(
     }
 
     fun selectCardOrSplit() {
-        if (cashApplied > 0.001 && remaining > 0.001) {
-            onApplyCardRemainder(remaining)
+        if (
+            checkoutState.method == PaymentMethod.CASH &&
+            pendingLine > 0.001 &&
+            remaining > 0.001
+        ) {
+            onSwitchToCardTender(PaymentMethod.CARD)
+            tenderBuffer = ""
+        } else if (committedPaid > 0.001 && remaining > 0.001) {
+            onSwitchToCardTender(PaymentMethod.CARD)
+            tenderBuffer = ""
         } else {
             tenderBuffer = ""
             onTenderAmount(0.0)
@@ -307,6 +333,7 @@ fun CheckoutScreen(
             equalSplitPaidCount = equalSplitPaidCount,
             equalSplitCount = equalSplitCount,
             giftCardsEnabled = giftCardsEnabled,
+            invoiceEnabled = invoiceEnabled,
             membershipPointsBalance = membershipPointsBalance,
             membershipGiftBalance = membershipGiftBalance,
             redeemThresholdPoints = redeemThresholdPoints,
@@ -316,12 +343,14 @@ fun CheckoutScreen(
             cashApplied = cashApplied,
             cardApplied = cardApplied,
             remaining = remaining,
+            pendingLine = pendingLine,
             changeDue = changeDue,
             canComplete = canComplete,
             onBack = onBack,
             onSelectMethod = onSelectMethod,
             onDeselectMethod = onDeselectMethod,
             onApplyCardRemainder = onApplyCardRemainder,
+            onSwitchToCardTender = onSwitchToCardTender,
             onTenderAmount = onTenderAmount,
             onComplete = onComplete,
             onSplitClick = onSplitClick,
@@ -335,7 +364,7 @@ fun CheckoutScreen(
             onNextSplitBill = onNextSplitBill,
             onShowTipDialog = { showTipDialog = true },
             onShowDiscountDialog = { showDiscountDialog = true },
-            applyTender = ::applyTender,
+            applyTender = { amount, auto -> applyTender(amount, autoCompleteIfCovered = auto) },
             appendTenderKey = ::appendTenderKey,
             selectCardOrSplit = ::selectCardOrSplit,
             clearTender = {
@@ -438,17 +467,19 @@ fun CheckoutScreen(
                     },
                     modifier = Modifier.weight(1f)
                 )
-                CheckoutMethodButton(
-                    title = stringResource(R.string.invoice),
-                    icon = Icons.Default.Description,
-                    selected = checkoutState.method == PaymentMethod.INVOICE,
-                    onClick = {
-                        tenderBuffer = ""
-                        onTenderAmount(0.0)
-                        onSelectMethod(PaymentMethod.INVOICE)
-                    },
-                    modifier = Modifier.weight(1f)
-                )
+                if (invoiceEnabled) {
+                    CheckoutMethodButton(
+                        title = stringResource(R.string.invoice),
+                        icon = Icons.Default.Description,
+                        selected = checkoutState.method == PaymentMethod.INVOICE,
+                        onClick = {
+                            tenderBuffer = ""
+                            onTenderAmount(0.0)
+                            onSelectMethod(PaymentMethod.INVOICE)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
             if (giftCardsEnabled) {
                 CheckoutMethodButton(
@@ -534,17 +565,21 @@ fun CheckoutScreen(
                 .padding(PosDimens.PagePaddingCompact)
                 .clickableWithoutRipple { onDeselectMethod() }
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clip(PosShapes.ExtraLarge)
-                    .background(posUiColors().surface)
-                    .border(1.dp, posUiColors().border, PosShapes.ExtraLarge)
-                    .padding(PosDimens.PagePaddingCompact)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(PosShapes.ExtraLarge)
+                        .background(posUiColors().surface)
+                        .border(1.dp, posUiColors().border, PosShapes.ExtraLarge)
+                        .padding(PosDimens.PagePaddingCompact)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                 if (!isModernCheckout) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -749,6 +784,7 @@ fun CheckoutScreen(
                         "-${formatMoney(checkoutState.giftCardRedeemAmount, currencySymbol)}"
                     )
                 }
+            }
             }
         }
 
@@ -1181,6 +1217,7 @@ private fun ModernCheckoutBody(
     equalSplitPaidCount: Int,
     equalSplitCount: Int,
     giftCardsEnabled: Boolean,
+    invoiceEnabled: Boolean,
     membershipPointsBalance: Int?,
     membershipGiftBalance: Double?,
     redeemThresholdPoints: Int,
@@ -1190,12 +1227,14 @@ private fun ModernCheckoutBody(
     cashApplied: Double,
     cardApplied: Double,
     remaining: Double,
+    pendingLine: Double,
     changeDue: Double,
     canComplete: Boolean,
     onBack: () -> Unit,
     onSelectMethod: (PaymentMethod) -> Unit,
     onDeselectMethod: () -> Unit,
     onApplyCardRemainder: (Double) -> Unit,
+    onSwitchToCardTender: (PaymentMethod) -> Unit,
     onTenderAmount: (Double) -> Unit,
     onComplete: () -> Unit,
     onSplitClick: () -> Unit,
@@ -1209,7 +1248,7 @@ private fun ModernCheckoutBody(
     onNextSplitBill: () -> Unit,
     onShowTipDialog: () -> Unit,
     onShowDiscountDialog: () -> Unit,
-    applyTender: (Double) -> Unit,
+    applyTender: (Double, Boolean) -> Unit,
     appendTenderKey: (String) -> Unit,
     selectCardOrSplit: () -> Unit,
     clearTender: () -> Unit,
@@ -1242,10 +1281,16 @@ private fun ModernCheckoutBody(
                     fontWeight = FontWeight.Bold,
                     color = ui.textPrimary,
                 )
+                Text(
+                    stringResource(R.string.checkout_payment_methods_hint),
+                    fontSize = 12.sp,
+                    color = ui.textSecondary,
+                )
                 if (cashEnabled) {
                     ModernCheckoutMethodCard(
                         title = stringResource(R.string.cash),
-                        icon = Icons.Default.AttachMoney,
+                        subtitle = stringResource(R.string.checkout_cash_subtitle),
+                        iconRes = checkoutPaymentMethodIconRes(PaymentMethod.CASH),
                         selected = checkoutState.method == PaymentMethod.CASH,
                         onClick = { onSelectMethod(PaymentMethod.CASH) },
                     )
@@ -1253,7 +1298,8 @@ private fun ModernCheckoutBody(
                 if (cardEnabled) {
                     ModernCheckoutMethodCard(
                         title = stringResource(R.string.card),
-                        icon = Icons.Default.CreditCard,
+                        subtitle = stringResource(R.string.checkout_card_subtitle),
+                        iconRes = checkoutPaymentMethodIconRes(PaymentMethod.CARD),
                         selected = checkoutState.method == PaymentMethod.CARD,
                         onClick = selectCardOrSplit,
                     )
@@ -1261,7 +1307,8 @@ private fun ModernCheckoutBody(
                 if (terminalEnabled) {
                     ModernCheckoutMethodCard(
                         title = stringResource(R.string.adyen_terminal),
-                        icon = Icons.Default.PointOfSale,
+                        subtitle = stringResource(R.string.checkout_terminal_subtitle),
+                        iconRes = checkoutPaymentMethodIconRes(PaymentMethod.ADYEN_TERMINAL),
                         selected = checkoutState.method == PaymentMethod.ADYEN_TERMINAL,
                         onClick = {
                             if (cashApplied > 0.001 && remaining > 0.001) {
@@ -1277,7 +1324,7 @@ private fun ModernCheckoutBody(
                 if (tapToPayEnabled) {
                     ModernCheckoutMethodCard(
                         title = stringResource(R.string.tap_to_pay_method),
-                        icon = Icons.Default.Contactless,
+                        iconRes = checkoutPaymentMethodIconRes(PaymentMethod.TAP_TO_PAY),
                         selected = checkoutState.method == PaymentMethod.TAP_TO_PAY,
                         enabled = tapToPayReady,
                         subtitle = tapToPayStatus?.takeIf { !tapToPayReady },
@@ -1295,26 +1342,29 @@ private fun ModernCheckoutBody(
                 ModernCheckoutMethodCard(
                     title = stringResource(R.string.checkout_deferred_payment),
                     subtitle = stringResource(R.string.checkout_deferred_account),
-                    icon = Icons.Default.Schedule,
+                    iconRes = checkoutPaymentMethodIconRes(PaymentMethod.PAY_LATER),
                     selected = checkoutState.method == PaymentMethod.PAY_LATER,
                     onClick = {
                         clearTender()
                         onSelectMethod(PaymentMethod.PAY_LATER)
                     },
                 )
-                ModernCheckoutMethodCard(
-                    title = stringResource(R.string.invoice),
-                    icon = Icons.Default.Description,
-                    selected = checkoutState.method == PaymentMethod.INVOICE,
-                    onClick = {
-                        clearTender()
-                        onSelectMethod(PaymentMethod.INVOICE)
-                    },
-                )
+                if (invoiceEnabled) {
+                    ModernCheckoutMethodCard(
+                        title = stringResource(R.string.invoice),
+                        subtitle = stringResource(R.string.checkout_invoice_subtitle),
+                        iconRes = checkoutPaymentMethodIconRes(PaymentMethod.INVOICE),
+                        selected = checkoutState.method == PaymentMethod.INVOICE,
+                        onClick = {
+                            clearTender()
+                            onSelectMethod(PaymentMethod.INVOICE)
+                        },
+                    )
+                }
                 if (giftCardsEnabled) {
                     ModernCheckoutMethodCard(
                         title = stringResource(R.string.gift_card_pay),
-                        icon = Icons.Default.Redeem,
+                        iconRes = checkoutGiftCardIconRes(),
                         selected = checkoutState.payWithGiftCard && checkoutState.giftCardRedeemAmount > 0.001,
                         onClick = onGiftCardPay,
                     )
@@ -1457,8 +1507,13 @@ private fun ModernCheckoutBody(
                         }
                         SummaryLine(taxLabel, formatMoney(taxShare, currencySymbol))
                         Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(PosShapes.Large)
+                                .background(ui.primarySubtle)
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -1471,8 +1526,8 @@ private fun ModernCheckoutBody(
                             Text(
                                 formatMoney(totals.roundedTotal, currencySymbol),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp,
-                                color = ui.textPrimary,
+                                fontSize = 24.sp,
+                                color = PosColors.Primary,
                             )
                         }
                         if (checkoutEurDisplayEnabled) {
@@ -1485,6 +1540,41 @@ private fun ModernCheckoutBody(
                                     fontSize = 13.sp,
                                     color = ui.textSecondary,
                                     modifier = Modifier.align(Alignment.End),
+                                )
+                            }
+                        }
+                        if (checkoutState.appliedTenders.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            checkoutState.appliedTenders.forEach { tender ->
+                                val label = when (tender.method) {
+                                    PaymentMethod.CASH -> stringResource(
+                                        R.string.checkout_cash_applied,
+                                        formatMoney(tender.amount, currencySymbol),
+                                    )
+                                    PaymentMethod.CARD -> stringResource(
+                                        R.string.checkout_card_applied,
+                                        formatMoney(tender.amount, currencySymbol),
+                                    )
+                                    PaymentMethod.ADYEN_TERMINAL,
+                                    PaymentMethod.TAP_TO_PAY -> stringResource(
+                                        R.string.checkout_card_applied,
+                                        formatMoney(tender.amount, currencySymbol),
+                                    )
+                                    else -> formatMoney(tender.amount, currencySymbol)
+                                }
+                                Text(
+                                    label,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ui.textSecondary,
+                                )
+                            }
+                            if (remaining > 0.001) {
+                                Text(
+                                    stringResource(R.string.checkout_remaining, formatMoney(remaining, currencySymbol)),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = PosColors.Warning,
                                 )
                             }
                         }
@@ -1509,38 +1599,43 @@ private fun ModernCheckoutBody(
                     fontWeight = FontWeight.Bold,
                     color = ui.textPrimary,
                 )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(PosShapes.Large)
-                        .background(PosColors.Primary.copy(alpha = 0.08f))
-                        .border(1.dp, PosColors.Primary.copy(alpha = 0.25f), PosShapes.Large)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.checkout_amount_due),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ui.textSecondary,
-                    )
-                    Text(
-                        formatMoney(totals.roundedTotal, currencySymbol),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ui.textPrimary,
-                    )
-                }
+                Text(
+                    stringResource(R.string.checkout_settlement_hint),
+                    fontSize = 12.sp,
+                    color = ui.textSecondary,
+                )
                 if (cashEnabled) {
-                    Text(
-                        stringResource(R.string.checkout_amount_received),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ui.textSecondary,
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(PosShapes.Large)
+                            .background(ui.surfaceSubtle)
+                            .border(1.dp, ui.border, PosShapes.Large)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.checkout_amount_received),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = ui.textSecondary,
+                        )
+                        Text(
+                            formatMoney(
+                                if (pendingLine > 0.001) pendingLine else 0.0,
+                                currencySymbol,
+                            ),
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ui.textPrimary,
+                        )
+                    }
                 }
                 if (quickCashEnabled && cashEnabled) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        buildQuickCashAmounts(totals.roundedTotal, currencyCode).forEach { amount ->
+                        buildQuickCashAmounts(
+                            if (checkoutState.appliedTenders.isNotEmpty()) remaining else totals.roundedTotal,
+                            currencyCode,
+                        ).forEach { amount ->
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -1548,7 +1643,7 @@ private fun ModernCheckoutBody(
                                     .clip(PosShapes.Card)
                                     .background(ui.surfaceSubtle)
                                     .border(1.dp, ui.border, PosShapes.Card)
-                                    .clickable { applyTender(amount) }
+                                    .clickable { applyTender(amount, true) }
                                     .padding(horizontal = 4.dp, vertical = 8.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -1573,7 +1668,7 @@ private fun ModernCheckoutBody(
                         onClear = clearTender,
                         onEnter = {
                             val amount = tenderBuffer.toDoubleOrNull() ?: 0.0
-                            if (amount > 0) applyTender(amount) else onSelectMethod(PaymentMethod.CASH)
+                            if (amount > 0) applyTender(amount, false) else onSelectMethod(PaymentMethod.CASH)
                         },
                     )
                 }
@@ -1599,6 +1694,26 @@ private fun ModernCheckoutBody(
                             color = PosColors.Warning,
                         )
                     }
+                } else if (
+                    remaining > 0.001 &&
+                    checkoutState.method == PaymentMethod.CASH &&
+                    cashApplied > 0.001
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(PosShapes.Large)
+                            .background(ui.dangerSubtle)
+                            .border(1.dp, PosColors.Danger.copy(alpha = 0.28f), PosShapes.Large)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.checkout_remaining, formatMoney(remaining, currencySymbol)),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PosColors.Danger,
+                        )
+                    }
                 }
             }
         }
@@ -1608,33 +1723,18 @@ private fun ModernCheckoutBody(
                 .fillMaxWidth()
                 .background(ui.surface)
                 .border(1.dp, ui.border)
-                .padding(horizontal = PosDimens.PagePaddingCompact, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = PosDimens.PagePaddingCompact, vertical = PosDimens.Space2),
+            horizontalArrangement = Arrangement.spacedBy(PosDimens.Space2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(
                 onClick = onBack,
                 shape = PosShapes.Large,
-                modifier = Modifier.height(52.dp),
+                modifier = Modifier.height(PosDimens.ControlHeightMd),
                 border = androidx.compose.foundation.BorderStroke(1.dp, ui.border),
             ) {
                 Text(
                     stringResource(R.string.checkout_back),
-                    color = ui.textPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                )
-            }
-            OutlinedButton(
-                onClick = onBack,
-                shape = PosShapes.Large,
-                modifier = Modifier.height(52.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, ui.border),
-            ) {
-                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = ui.textPrimary)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    stringResource(R.string.checkout_edit_order),
                     color = ui.textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
@@ -1645,7 +1745,7 @@ private fun ModernCheckoutBody(
                 enabled = canComplete,
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp),
+                    .height(PosDimens.ControlHeightMd),
                 shape = PosShapes.Large,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = PosColors.Primary,
@@ -1674,7 +1774,7 @@ private fun ModernCheckoutBody(
 @Composable
 private fun ModernCheckoutMethodCard(
     title: String,
-    icon: ImageVector,
+    @DrawableRes iconRes: Int,
     selected: Boolean,
     onClick: () -> Unit,
     enabled: Boolean = true,
@@ -1691,24 +1791,38 @@ private fun ModernCheckoutMethodCard(
         selected -> ui.primarySubtle
         else -> ui.surface
     }
+    val iconTint = when {
+        !enabled -> ui.textMuted
+        selected -> CheckoutTeal
+        else -> ui.textSecondary
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 58.dp)
             .clip(PosShapes.Card)
             .background(bg)
-            .border(if (selected) 2.dp else 1.dp, border, PosShapes.Card)
+            .border(if (selected) 2.dp else 1.5.dp, border, PosShapes.Card)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (selected) CheckoutTeal else ui.textSecondary,
-            modifier = Modifier.size(24.dp),
-        )
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(PosShapes.Medium)
+                .background(if (selected) Color.White else ui.surfaceMuted)
+                .border(1.dp, if (selected) CheckoutTeal.copy(alpha = 0.35f) else ui.border, PosShapes.Medium),
+            contentAlignment = Alignment.Center,
+        ) {
+            PosVectorIcon(
+                resId = iconRes,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = ui.textPrimary)
             subtitle?.let {
@@ -1754,24 +1868,6 @@ private fun ModernCheckoutLineItem(item: CartItem, currencySymbol: String) {
 }
 
 @Composable
-private fun ModernCheckoutMetaPill(text: String) {
-    val ui = posUiColors()
-    Text(
-        text,
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(ui.surfaceSubtle)
-            .border(1.dp, ui.border, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        color = ui.textSecondary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-@Composable
 private fun ModernCheckoutOrderHeader(
     orderRef: String,
     contextLine: String?,
@@ -1781,9 +1877,16 @@ private fun ModernCheckoutOrderHeader(
     val timeLabel = remember {
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
     }
+    val metaLine = remember(contextLine, tableName, timeLabel) {
+        buildList {
+            contextLine?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
+            tableName?.trim()?.takeIf { it.isNotBlank() }?.let { add(it) }
+            add(timeLabel)
+        }.joinToString(" · ")
+    }
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(PosDimens.Space2),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1811,25 +1914,24 @@ private fun ModernCheckoutOrderHeader(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(PosColors.Success),
+                        .background(PosColors.Warning),
                 )
                 Text(
                     stringResource(R.string.checkout_status_unpaid),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = PosColors.Success,
+                    color = PosColors.Warning,
                 )
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            contextLine?.takeIf { it.isNotBlank() }?.let { ModernCheckoutMetaPill(it) }
-            tableName?.takeIf { it.isNotBlank() }?.let { ModernCheckoutMetaPill(it) }
-            ModernCheckoutMetaPill(timeLabel)
-        }
+        Text(
+            metaLine,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = ui.textSecondary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

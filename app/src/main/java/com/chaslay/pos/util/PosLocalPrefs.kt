@@ -7,6 +7,8 @@ private const val KEY_VAT_USER_SET = "vat_included_user_set"
 private const val KEY_VAT_VALUE = "vat_included_value"
 private const val KEY_AUTO_PRINT_USER_SET = "auto_print_receipt_user_set"
 private const val KEY_AUTO_PRINT_VALUE = "auto_print_receipt_value"
+private const val KEY_AUTO_PRINT_KITCHEN_USER_SET = "auto_print_kitchen_user_set"
+private const val KEY_AUTO_PRINT_KITCHEN_VALUE = "auto_print_kitchen_value"
 private const val KEY_TABLES_USER_SET = "tables_enabled_user_set"
 private const val KEY_TABLES_VALUE = "tables_enabled_value"
 private const val KEY_EOD_INCLUDE_PRODUCTS = "eod_include_products_sold"
@@ -30,6 +32,8 @@ private const val KEY_EXPRESS_ENABLED_USER_SET = "express_checkout_enabled_user_
 private const val KEY_EXPRESS_ENABLED_VALUE = "express_checkout_enabled_value"
 private const val KEY_RETAIL_CASH_DIALOG_USER_SET = "retail_cash_tender_dialog_user_set"
 private const val KEY_RETAIL_CASH_DIALOG_VALUE = "retail_cash_tender_dialog_value"
+private const val KEY_RETAIL_WEIGHED_ENTRY_USER_SET = "retail_weighed_custom_entry_user_set"
+private const val KEY_RETAIL_WEIGHED_ENTRY_VALUE = "retail_weighed_custom_entry_value"
 private const val KEY_COURSE_SEND_MODE_USER_SET = "course_send_mode_user_set"
 private const val KEY_COURSE_SEND_MODE_VALUE = "course_send_mode_value"
 private const val KEY_AFTER_SALE_GO_TO_ORDERS = "after_sale_go_to_orders"
@@ -69,6 +73,22 @@ object PosLocalPrefs {
         val p = prefs(context)
         if (!p.getBoolean(KEY_AUTO_PRINT_USER_SET, false)) return current
         return p.getBoolean(KEY_AUTO_PRINT_VALUE, current)
+    }
+
+    fun saveAutoPrintKitchen(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_AUTO_PRINT_KITCHEN_USER_SET, true)
+            .putBoolean(KEY_AUTO_PRINT_KITCHEN_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetAutoPrintKitchen(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_PRINT_KITCHEN_USER_SET, false)
+
+    fun applyAutoPrintKitchenIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_AUTO_PRINT_KITCHEN_USER_SET, false)) return current
+        return p.getBoolean(KEY_AUTO_PRINT_KITCHEN_VALUE, current)
     }
 
     fun saveTablesEnabled(context: Context, value: Boolean) {
@@ -181,6 +201,22 @@ object PosLocalPrefs {
         val p = prefs(context)
         if (!p.getBoolean(KEY_RETAIL_CASH_DIALOG_USER_SET, false)) return current
         return p.getBoolean(KEY_RETAIL_CASH_DIALOG_VALUE, current)
+    }
+
+    fun saveRetailWeighedCustomEntryEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_RETAIL_WEIGHED_ENTRY_USER_SET, true)
+            .putBoolean(KEY_RETAIL_WEIGHED_ENTRY_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetRetailWeighedCustomEntryEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_RETAIL_WEIGHED_ENTRY_USER_SET, false)
+
+    fun applyRetailWeighedCustomEntryEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_RETAIL_WEIGHED_ENTRY_USER_SET, false)) return current
+        return p.getBoolean(KEY_RETAIL_WEIGHED_ENTRY_VALUE, current)
     }
 
     fun saveCourseSendMode(context: Context, mode: String) {

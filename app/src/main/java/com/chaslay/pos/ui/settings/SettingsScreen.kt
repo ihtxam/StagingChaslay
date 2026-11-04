@@ -88,16 +88,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.MonitorWeight
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
 import com.chaslay.pos.ui.license.LicenseSettingsSection
+import com.chaslay.pos.ui.components.PosVectorIcon
+import com.chaslay.pos.ui.components.settingsSectionIconRes
+import com.chaslay.pos.ui.components.settingsSectionMaterialIcon
 import com.chaslay.pos.ui.tableplan.TablePlanDesignerContent
 import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosSwitch
 import com.chaslay.pos.ui.theme.PosShapes
 import androidx.compose.foundation.BorderStroke
 
@@ -105,6 +111,7 @@ import androidx.compose.foundation.BorderStroke
 @Composable
 fun SettingsScreen(
     userAccess: UserAccess = UserAccess.FULL_ACCESS,
+    onCancel: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -134,7 +141,12 @@ fun SettingsScreen(
 
     LaunchedEffect(state.message) {
         state.message?.let { msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+            val duration = if (msg.length > 72 || msg.contains('\n')) {
+                android.widget.Toast.LENGTH_LONG
+            } else {
+                android.widget.Toast.LENGTH_SHORT
+            }
+            android.widget.Toast.makeText(context, msg, duration).show()
             viewModel.clearMessage()
         }
     }
@@ -147,10 +159,9 @@ fun SettingsScreen(
 
     LaunchedEffect(state.selectedSection) {
         when (state.selectedSection) {
-            SettingsSection.RECEIPTS,
-            SettingsSection.APPEARANCE,
-            SettingsSection.LICENSE -> viewModel.selectSection(SettingsSection.GENERAL)
             SettingsSection.PRINTERS -> viewModel.refreshPrinterConnectionState()
+            SettingsSection.SCALE -> viewModel.refreshScaleConnectionState()
+            SettingsSection.GENERAL -> viewModel.refreshPlatformAboutFromCloud()
             else -> Unit
         }
     }
@@ -165,12 +176,11 @@ fun SettingsScreen(
     ) {
         Column(
             modifier = Modifier
-                .width(200.dp)
+                .width(248.dp)
                 .fillMaxHeight()
                 .background(posUiColors().surface)
                 .border(1.dp, posUiColors().border)
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(8.dp)
         ) {
             Text(
                 stringResource(R.string.nav_settings),
@@ -178,16 +188,22 @@ fun SettingsScreen(
                 color = ui.textPrimary,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
             )
-            SettingsSection.entries.filter { section ->
-                when (section) {
-                    SettingsSection.RECEIPTS,
-                    SettingsSection.APPEARANCE,
-                    SettingsSection.LICENSE -> false
-                    SettingsSection.USERS_ACCOUNTS -> userAccess.canManageUsers()
-                    SettingsSection.TABLES -> state.posMode == PosMode.RESTAURANT
-                    else -> true
-                }
-            }.forEach { section ->
+            val navScroll = rememberScrollState()
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(navScroll),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+            SettingsSection.visibleNavSections(
+                canManageUsers = userAccess.canManageUsers(),
+                restaurantMode = state.posMode == PosMode.RESTAURANT,
+            ).forEach { section ->
                 val selected = state.selectedSection == section
                 Box(
                     modifier = Modifier
@@ -206,18 +222,25 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val sectionIcon = when (section) {
-                            SettingsSection.PRINTERS -> Icons.Outlined.Print
-                            SettingsSection.SCALE -> Icons.Outlined.MonitorWeight
-                            else -> null
-                        }
-                        sectionIcon?.let { icon ->
-                            Icon(
-                                icon,
-                                contentDescription = null,
-                                tint = if (selected) PosColors.Primary else ui.textPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
+                        val navIconTint = if (selected) PosColors.Primary else ui.textPrimary
+                        if (state.posMenuDesign.isModern) {
+                            settingsSectionIconRes(section)?.let { iconRes ->
+                                PosVectorIcon(
+                                    resId = iconRes,
+                                    contentDescription = null,
+                                    tint = navIconTint,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        } else {
+                            settingsSectionMaterialIcon(section)?.let { icon ->
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = navIconTint,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
                         }
                         Text(
                             stringResource(section.titleRes),
@@ -232,6 +255,8 @@ fun SettingsScreen(
                     }
                 }
             }
+            }
+        }
         }
         if (showTablesDesigner) {
             Column(
@@ -259,7 +284,7 @@ fun SettingsScreen(
                             fontSize = 11.sp
                         )
                     }
-                    Switch(
+                    PosSwitch(
                         checked = state.trackCoversFromSeatingPlan,
                         onCheckedChange = {
                             viewModel.updateTrackCoversFromSeatingPlan(it)
@@ -280,15 +305,28 @@ fun SettingsScreen(
                 .fillMaxHeight()
                 .imePadding()
         ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+            SettingsShellHeader(
+                onCancel = onCancel,
+                onSave = viewModel::saveSettings,
+            )
+            HorizontalDivider(color = posUiColors().border)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
         if (state.selectedSection == SettingsSection.GENERAL) {
-        SettingsPageHeader(title = stringResource(R.string.general_settings))
+        SettingsPageHeader(
+            title = stringResource(R.string.general_settings),
+            subtitle = stringResource(R.string.general_settings_subtitle),
+        )
 
         val session = state.posSession
         if (
@@ -490,6 +528,17 @@ fun SettingsScreen(
                 state.retailDeliveryEnabled,
                 viewModel::updateRetailDeliveryEnabled
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingSwitch(
+                stringResource(R.string.pos_retail_weighed_custom_entry),
+                state.retailWeighedCustomEntryEnabled,
+                viewModel::updateRetailWeighedCustomEntryEnabled
+            )
+            Text(
+                stringResource(R.string.pos_retail_weighed_custom_entry_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = ui.textSecondary
+            )
         }
         Spacer(modifier = Modifier.height(8.dp))
         SettingSwitch(
@@ -629,6 +678,29 @@ fun SettingsScreen(
             Text(stringResource(R.string.add_preset))
         }
         }
+
+        SettingsSectionCard(
+            title = stringResource(R.string.license_app_info_title),
+            icon = Icons.Outlined.Info,
+        ) {
+            SettingsReadOnlyRow(
+                label = stringResource(R.string.app_version),
+                value = stringResource(
+                    R.string.app_version_format,
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE,
+                ),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.license_company_info_title),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = ui.textPrimary,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            SettingsRichHtmlBlock(html = state.platformAboutHtml)
+        }
         }
 
         if (state.selectedSection == SettingsSection.VAT) {
@@ -675,235 +747,7 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.PAYMENTS) {
-        Text(
-            stringResource(R.string.payment_settings),
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            color = ui.textPrimary
-        )
-        // Cash / Card / Terminal first — always editable on the POS device.
-        Text(
-            stringResource(R.string.payment_methods),
-            fontWeight = FontWeight.SemiBold,
-            color = ui.textPrimary
-        )
-        SettingSwitch(stringResource(R.string.payment_cash), state.cashEnabled, viewModel::updateCashEnabled)
-        SettingSwitch(stringResource(R.string.payment_card), state.cardEnabled, viewModel::updateCardEnabled)
-        SettingSwitch(stringResource(R.string.payment_terminal), state.terminalEnabled, viewModel::updateTerminalEnabled)
-        SettingSwitch(stringResource(R.string.payment_express), state.expressEnabled, viewModel::updateExpressEnabled)
-        Text(
-            stringResource(R.string.express_pay_placement),
-            fontWeight = FontWeight.SemiBold,
-            color = ui.textPrimary
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.expressPayPlacement == ExpressPayPlacement.PRODUCT_GRID,
-                onClick = { viewModel.updateExpressPayPlacement(ExpressPayPlacement.PRODUCT_GRID) },
-                label = { Text(stringResource(R.string.express_pay_placement_grid)) }
-            )
-            FilterChip(
-                selected = state.expressPayPlacement == ExpressPayPlacement.CART,
-                onClick = { viewModel.updateExpressPayPlacement(ExpressPayPlacement.CART) },
-                label = { Text(stringResource(R.string.express_pay_placement_cart)) }
-            )
-        }
-        Text(
-            stringResource(R.string.express_pay_placement_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = ui.textSecondary
-        )
-        Text(
-            stringResource(R.string.after_sale_destination),
-            fontWeight = FontWeight.SemiBold,
-            color = ui.textPrimary
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = !state.afterSaleGoToOrders,
-                onClick = { viewModel.updateAfterSaleGoToOrders(false) },
-                label = { Text(stringResource(R.string.pos_register)) }
-            )
-            FilterChip(
-                selected = state.afterSaleGoToOrders,
-                onClick = { viewModel.updateAfterSaleGoToOrders(true) },
-                label = { Text(stringResource(R.string.pos_orders)) }
-            )
-        }
-        Text(
-            stringResource(R.string.after_sale_destination_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = ui.textSecondary
-        )
-        SettingSwitch(
-            stringResource(R.string.retail_cash_tender_dialog),
-            state.retailCashTenderDialogEnabled,
-            viewModel::updateRetailCashTenderDialogEnabled
-        )
-        Text(
-            stringResource(R.string.retail_cash_tender_dialog_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = ui.textSecondary
-        )
-        SettingSwitch(stringResource(R.string.payment_gift_cards), state.giftCardsEnabled, viewModel::updateGiftCardsEnabled)
-        if (state.paymentMethodsManagedByCloud) {
-            Text(
-                stringResource(R.string.payment_methods_managed_by_panel),
-                style = MaterialTheme.typography.bodySmall,
-                color = ui.textSecondary
-            )
-        }
-        SettingSwitch(
-            stringResource(R.string.payment_methods_manage_locally),
-            !state.paymentMethodsManagedByCloud,
-            viewModel::updatePaymentMethodsLocalOverride
-        )
-        Text(
-            stringResource(R.string.payment_methods_manage_locally_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = ui.textSecondary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(stringResource(R.string.default_rounding), color = ui.textPrimary)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("0" to "None", "0.05" to "0.05", "0.10" to "0.10", "0.50" to "0.50", "1.00" to "1.00").forEach { (value, label) ->
-                FilterChip(
-                    selected = state.roundingStep == value,
-                    onClick = { viewModel.updateRoundingStep(value) },
-                    label = { Text(label) }
-                )
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingSwitch(
-            stringResource(R.string.tap_to_pay_enabled),
-            state.tapToPayEnabled,
-            viewModel::updateTapToPay,
-            enabled = !state.paymentMethodsManagedByCloud
-        )
-        if (state.paymentMethodsManagedByCloud) {
-            Text(
-                stringResource(R.string.tap_to_pay_managed_by_panel),
-                style = MaterialTheme.typography.bodySmall,
-                color = ui.textSecondary
-            )
-        }
-        if (state.tapToPayEnabled) {
-            Text(
-                stringResource(R.string.tap_to_pay_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = ui.textSecondary
-            )
-            LaunchedEffect(state.tapToPayEnabled) { viewModel.refreshTapToPayReadiness() }
-
-            val readiness = state.tapToPayReadiness
-            // Device attestation runs here rather than inside a sale: it is slow on
-            // first run and its failures are indistinguishable from a declined card.
-            val statusText = when {
-                state.isActivatingTapToPay -> stringResource(R.string.tap_to_pay_activating)
-                readiness == TapToPayReadiness.NO_SDK ->
-                    stringResource(R.string.tap_to_pay_status_no_sdk)
-                readiness == TapToPayReadiness.OS_TOO_OLD ->
-                    stringResource(R.string.tap_to_pay_status_os_too_old)
-                readiness == TapToPayReadiness.NO_NFC ->
-                    stringResource(R.string.tap_to_pay_status_no_nfc)
-                readiness == TapToPayReadiness.NOT_SIGNED_IN ->
-                    stringResource(R.string.tap_to_pay_status_not_signed_in)
-                readiness == TapToPayReadiness.NOT_REGISTERED ->
-                    stringResource(R.string.tap_to_pay_status_not_registered)
-                else -> stringResource(R.string.tap_to_pay_status_ready)
-            }
-            Text(
-                statusText,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (readiness == TapToPayReadiness.READY) ui.textPrimary
-                else ui.textSecondary
-            )
-            // Unavailable devices keep the button visible but disabled, so staff can
-            // read why tap payments will not work instead of guessing at checkout.
-            val canActivate = readiness == TapToPayReadiness.NOT_REGISTERED ||
-                readiness == TapToPayReadiness.READY
-            OutlinedButton(
-                onClick = viewModel::activateTapToPay,
-                enabled = canActivate && !state.isActivatingTapToPay,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    when {
-                        state.isActivatingTapToPay -> stringResource(R.string.tap_to_pay_activating)
-                        readiness == TapToPayReadiness.READY ->
-                            stringResource(R.string.tap_to_pay_reactivate)
-                        else -> stringResource(R.string.tap_to_pay_activate)
-                    }
-                )
-            }
-        }
-        SettingSwitch(stringResource(R.string.adyen_terminal), state.adyenTerminalEnabled, viewModel::updateAdyenEnabled)
-        if (state.adyenTerminalEnabled) {
-            Text(
-                stringResource(R.string.adyen_setup_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = ui.textSecondary
-            )
-            OutlinedTextField(
-                value = state.adyenApiKey,
-                onValueChange = viewModel::updateAdyenApiKey,
-                label = { Text(stringResource(R.string.adyen_api_key)) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = state.adyenMerchantAccount,
-                onValueChange = viewModel::updateAdyenMerchantAccount,
-                label = { Text(stringResource(R.string.adyen_merchant_account)) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = state.adyenTerminalId,
-                onValueChange = viewModel::updateAdyenTerminalId,
-                label = { Text(stringResource(R.string.adyen_terminal_id)) },
-                supportingText = { Text(stringResource(R.string.adyen_terminal_id_help)) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = state.adyenClientId,
-                onValueChange = viewModel::updateAdyenClientId,
-                label = { Text(stringResource(R.string.adyen_sale_id)) },
-                supportingText = { Text(stringResource(R.string.adyen_sale_id_help)) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            SettingSwitch(
-                stringResource(R.string.adyen_live_environment),
-                state.adyenLiveEnvironment,
-                viewModel::updateAdyenLiveEnvironment
-            )
-            if (state.adyenLiveEnvironment) {
-                Text(stringResource(R.string.adyen_live_region), fontSize = 12.sp, color = ui.textSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("EU", "US", "AU", "APSE").forEach { region ->
-                        FilterChip(
-                            selected = state.adyenLiveRegion.equals(region, ignoreCase = true),
-                            onClick = { viewModel.updateAdyenLiveRegion(region) },
-                            label = { Text(region) }
-                        )
-                    }
-                }
-            }
-            SettingSwitch(
-                stringResource(R.string.adyen_use_legacy),
-                state.adyenUseLegacyEndpoint,
-                viewModel::updateAdyenUseLegacyEndpoint
-            )
-            OutlinedButton(
-                onClick = viewModel::testAdyenConnection,
-                enabled = !state.isTestingAdyen,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    if (state.isTestingAdyen) stringResource(R.string.testing_adyen)
-                    else stringResource(R.string.test_adyen_connection)
-                )
-            }
-        }
+            SettingsPaymentsSection(state = state, viewModel = viewModel)
         }
 
         if (state.selectedSection == SettingsSection.PRINTERS) {
@@ -978,49 +822,6 @@ fun SettingsScreen(
                 modifier = Modifier.padding(vertical = 6.dp)
             )
         }
-
-        if (state.usbDevices.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(stringResource(R.string.usb_printer), fontWeight = FontWeight.SemiBold, color = posUiColors().textPrimary)
-            Text(stringResource(R.string.usb_printer_help), fontSize = 12.sp, color = posUiColors().textSecondary)
-        }
-        state.usbDevices.forEach { device ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = posUiColors().surface),
-                shape = PosShapes.Large,
-                border = BorderStroke(1.dp, posUiColors().border),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(device.displayName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = posUiColors().textPrimary)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Button(
-                            onClick = { viewModel.requestUsbPermission(device.stableAddress) },
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
-                            shape = PosShapes.Medium,
-                        ) {
-                            Text(
-                                if (device.hasPermission) stringResource(R.string.usb_printer_allowed) else stringResource(R.string.usb_printer_permission),
-                                fontSize = 11.sp
-                            )
-                        }
-                        Button(
-                            onClick = { viewModel.testUsbPrint(device.stableAddress) },
-                            enabled = !state.isPrinterBusy && device.hasPermission,
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = PosColors.Teal600),
-                            shape = PosShapes.Medium,
-                        ) {
-                            Text(stringResource(R.string.test_print), fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-        }
         }
 
         if (state.selectedSection == SettingsSection.SCALE) {
@@ -1036,11 +837,14 @@ fun SettingsScreen(
         )
         SettingSwitch(stringResource(R.string.scale_enabled), state.scaleEnabled, viewModel::updateScaleEnabled)
         state.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { selectedAddress ->
-            val connected = state.scaleUsbDeviceAttached && state.scaleUsbHasPermission
             val needsPermission = state.scaleUsbDeviceAttached && !state.scaleUsbHasPermission
+            val liveConnected = state.scaleReachability == true
+            val liveDisconnected = state.scaleReachability == false
             val cardBg = when {
-                connected -> posUiColors().successSubtle
+                state.isProbingScale -> posUiColors().surfaceMuted
+                liveConnected -> posUiColors().successSubtle
                 needsPermission -> posUiColors().warningSubtle
+                liveDisconnected || !state.scaleUsbDeviceAttached -> posUiColors().surfaceMuted
                 else -> posUiColors().surfaceMuted
             }
             Card(
@@ -1050,43 +854,69 @@ fun SettingsScreen(
                 border = BorderStroke(
                     1.dp,
                     when {
-                        connected -> PosColors.Success.copy(alpha = 0.35f)
+                        liveConnected -> PosColors.Success.copy(alpha = 0.35f)
                         needsPermission -> PosColors.Warning.copy(alpha = 0.35f)
+                        liveDisconnected -> PosColors.Warning.copy(alpha = 0.25f)
                         else -> posUiColors().border
                     }
                 ),
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(
-                                    when {
-                                        connected -> PosColors.Success
-                                        needsPermission -> PosColors.Warning
-                                        else -> posUiColors().textMuted
-                                    }
-                                )
-                        )
-                        Text(
-                            when {
-                                connected -> stringResource(R.string.scale_connected)
-                                needsPermission -> stringResource(R.string.scale_tap_to_allow_usb)
-                                else -> stringResource(R.string.scale_not_found)
-                            },
-                            color = when {
-                                connected -> PosColors.Teal700
-                                needsPermission -> PosColors.Warning
-                                else -> posUiColors().textSecondary
-                            },
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        when {
+                                            state.isProbingScale -> posUiColors().textMuted
+                                            liveConnected -> PosColors.Success
+                                            needsPermission -> PosColors.Warning
+                                            liveDisconnected || !state.scaleUsbDeviceAttached -> PosColors.Warning
+                                            else -> posUiColors().textMuted
+                                        }
+                                    )
+                            )
+                            Text(
+                                when {
+                                    state.isProbingScale -> stringResource(R.string.scale_status_checking)
+                                    liveConnected -> stringResource(R.string.scale_connected)
+                                    needsPermission -> stringResource(R.string.scale_tap_to_allow_usb)
+                                    !state.scaleUsbDeviceAttached -> stringResource(R.string.scale_not_found)
+                                    liveDisconnected -> stringResource(R.string.scale_disconnected)
+                                    else -> stringResource(R.string.scale_status_unknown)
+                                },
+                                color = when {
+                                    liveConnected -> PosColors.Teal700
+                                    needsPermission || liveDisconnected -> PosColors.Warning
+                                    else -> posUiColors().textSecondary
+                                },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = viewModel::refreshScaleConnectionState,
+                            enabled = !state.isProbingScale,
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(modifier = Modifier.size(4.dp))
+                            Text(stringResource(R.string.scale_refresh_status), fontSize = 11.sp)
+                        }
                     }
                     Text(
                         viewModel.displayScaleUsbAddress(selectedAddress),
@@ -1099,9 +929,20 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = posUiColors().textSecondary
                     )
+                    state.scaleLastProbeAtMs?.let { probedAt ->
+                        Text(
+                            stringResource(
+                                R.string.scale_last_checked,
+                                java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+                                    .format(java.util.Date(probedAt))
+                            ),
+                            fontSize = 11.sp,
+                            color = posUiColors().textMuted
+                        )
+                    }
                     Text(
                         when {
-                            connected -> stringResource(R.string.scale_selected_help)
+                            liveConnected -> stringResource(R.string.scale_selected_help)
                             needsPermission -> stringResource(R.string.scale_usb_permission_required)
                             else -> stringResource(R.string.scale_replug_hint)
                         },
@@ -1171,421 +1012,142 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.RECEIPTS) {
-        val receiptPreviewText = remember(
-            state.receiptHeader,
-            state.receiptFooter,
-            state.receiptShowVatTable,
-            state.receiptShowStaffLine,
-            state.businessName,
-            state.logoUri,
-        ) {
-            viewModel.previewReceiptText()
-        }
-        val logoPicker = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
-        ) { uri -> uri?.let(viewModel::importLogo) }
-        Text(stringResource(R.string.receipt_design), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(stringResource(R.string.receipt_logo_help), style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { logoPicker.launch("image/*") }) {
-                Text(stringResource(R.string.choose_receipt_logo))
-            }
-            if (!state.logoUri.isNullOrBlank()) {
-                OutlinedButton(onClick = viewModel::clearLogo) {
-                    Text(stringResource(R.string.remove_receipt_logo))
-                }
-            }
-        }
-        if (!state.logoUri.isNullOrBlank()) {
-            Text(stringResource(R.string.receipt_logo_set), style = MaterialTheme.typography.bodySmall)
-        }
-        OutlinedTextField(
-            value = state.receiptHeader,
-            onValueChange = viewModel::updateReceiptHeader,
-            label = { Text(stringResource(R.string.receipt_header)) },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 2
-        )
-        OutlinedTextField(
-            value = state.receiptFooter,
-            onValueChange = viewModel::updateReceiptFooter,
-            label = { Text(stringResource(R.string.receipt_footer)) },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 2
-        )
-        if (state.posMode == PosMode.RESTAURANT) {
-            OutlinedTextField(
-                value = state.kitchenTicketHeader,
-                onValueChange = viewModel::updateKitchenHeader,
-                label = { Text(stringResource(R.string.kitchen_header)) },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2
-            )
-            OutlinedTextField(
-                value = state.kitchenTicketFooter,
-                onValueChange = viewModel::updateKitchenFooter,
-                label = { Text(stringResource(R.string.kitchen_footer)) },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2
-            )
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text(stringResource(R.string.receipt_template), fontWeight = FontWeight.SemiBold)
-        OutlinedTextField(
-            value = state.receiptTemplateName,
-            onValueChange = viewModel::updateReceiptTemplateName,
-            label = { Text(stringResource(R.string.receipt_template)) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = state.receiptShowVatTable, onCheckedChange = viewModel::updateReceiptShowVatTable)
-            Text(stringResource(R.string.receipt_show_vat))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = state.receiptShowStaffLine, onCheckedChange = viewModel::updateReceiptShowStaffLine)
-            Text(stringResource(R.string.receipt_show_staff))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = state.receiptShowQrCode, onCheckedChange = viewModel::updateReceiptShowQrCode)
-            Text(stringResource(R.string.receipt_show_qr))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = state.receiptDeliveryDirectionsQr,
-                onCheckedChange = viewModel::updateReceiptDeliveryDirectionsQr
-            )
-            Text(stringResource(R.string.receipt_delivery_directions_qr))
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = state.autoPrintReceipt, onCheckedChange = viewModel::updateAutoPrintReceipt)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.auto_print_receipt))
-                Text(
-                    stringResource(R.string.auto_print_receipt_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = state.adyenReceiptDigitalOnly, onCheckedChange = viewModel::updateAdyenReceiptDigitalOnly)
-            Text("Adyen card receipt: digital only (QR)")
-        }
-        ReceiptThermalPreview(
-            previewText = receiptPreviewText,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        if (state.posMode == PosMode.RESTAURANT) {
-            Text(stringResource(R.string.kitchen_text_size), fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.kitchen_item_text_size), style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1 to R.string.kitchen_text_normal, 2 to R.string.kitchen_text_large, 3 to R.string.kitchen_text_extra)
-                    .forEach { (scale, labelRes) ->
-                        FilterChip(
-                            selected = state.kitchenItemTextScale == scale,
-                            onClick = { viewModel.updateKitchenItemTextScale(scale) },
-                            label = { Text(stringResource(labelRes)) }
-                        )
-                    }
-            }
-            Text(stringResource(R.string.kitchen_header_text_size), style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1 to R.string.kitchen_text_normal, 2 to R.string.kitchen_text_large, 3 to R.string.kitchen_text_extra)
-                    .forEach { (scale, labelRes) ->
-                        FilterChip(
-                            selected = state.kitchenHeaderTextScale == scale,
-                            onClick = { viewModel.updateKitchenHeaderTextScale(scale) },
-                            label = { Text(stringResource(labelRes)) }
-                        )
-                    }
-            }
-        }
+            ReceiptSettingsSection(state = state, viewModel = viewModel)
         }
 
         if (state.selectedSection == SettingsSection.FLOOR_DEVICES) {
-            Text(stringResource(R.string.floor_sync_settings), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text(stringResource(R.string.floor_sync_help), style = MaterialTheme.typography.bodySmall)
-            SettingSwitch(
-                label = stringResource(R.string.floor_sync_enabled),
-                checked = state.floorSyncEnabled,
-                onCheckedChange = viewModel::updateFloorSyncEnabled
-            )
-            if (state.floorSyncEnabled) {
-                Text(stringResource(R.string.floor_device_role), fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FloorDeviceRole.entries.forEach { role ->
-                        FilterChip(
-                            selected = state.floorDeviceRole == role,
-                            onClick = { viewModel.updateFloorDeviceRole(role) },
-                            label = {
-                                Text(
-                                    when (role) {
-                                        FloorDeviceRole.MAIN_POS -> stringResource(R.string.floor_role_main_pos)
-                                        FloorDeviceRole.WAITER -> stringResource(R.string.floor_role_waiter)
-                                        FloorDeviceRole.STANDARD -> stringResource(R.string.floor_role_standard)
-                                    }
-                                )
-                            }
-                        )
-                    }
-                }
-                if (state.floorDeviceRole == FloorDeviceRole.MAIN_POS) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(stringResource(R.string.local_lan_url), fontWeight = FontWeight.SemiBold)
-                    Text(
-                        state.localLanUrl ?: stringResource(R.string.local_lan_url_unknown),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(stringResource(R.string.local_lan_url_help), style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = viewModel::refreshLocalLanUrl) {
-                        Text(stringResource(R.string.refresh_lan_address))
-                    }
-                }
-                if (state.floorDeviceRole == FloorDeviceRole.WAITER) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(stringResource(R.string.floor_connection_mode), fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FloorConnectionMode.entries.forEach { mode ->
-                            FilterChip(
-                                selected = state.floorConnectionMode == mode,
-                                onClick = { viewModel.updateFloorConnectionMode(mode) },
-                                label = {
-                                    Text(
-                                        when (mode) {
-                                            FloorConnectionMode.AUTO -> stringResource(R.string.floor_connection_auto)
-                                            FloorConnectionMode.LAN_ONLY -> stringResource(R.string.floor_connection_lan)
-                                            FloorConnectionMode.CLOUD_ONLY -> stringResource(R.string.floor_connection_cloud)
-                                        }
-                                    )
-                                }
-                            )
-                        }
-                    }
-                    Text(stringResource(R.string.floor_connection_mode_help), style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = state.mainPosLanUrl,
-                        onValueChange = viewModel::updateMainPosLanUrl,
-                        label = { Text(stringResource(R.string.main_pos_lan_url)) },
-                        placeholder = { Text("http://192.168.1.50:8787") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { viewModel.commitMainPosLanUrl() })
-                    )
-                    Text(stringResource(R.string.main_pos_lan_url_help), style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(
-                        onClick = viewModel::commitMainPosLanUrl,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.save))
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = viewModel::discoverMainPos,
-                            enabled = !state.isDiscoveringMainPos,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                if (state.isDiscoveringMainPos) {
-                                    stringResource(R.string.discovering_main_pos)
-                                } else {
-                                    stringResource(R.string.discover_main_pos)
-                                }
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = viewModel::testMainPosConnection,
-                            enabled = !state.isTestingMainPos,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                if (state.isTestingMainPos) {
-                                    stringResource(R.string.testing_connection)
-                                } else {
-                                    stringResource(R.string.test_main_pos_connection)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+            SettingsFloorDevicesSection(state = state, viewModel = viewModel)
         }
 
         if (state.selectedSection == SettingsSection.USERS_ACCOUNTS) {
-            UsersRolesSection(canManageRoles = userAccess.canManageRoles())
+            UsersRolesSection(
+                canManageRoles = userAccess.canManageRoles(),
+                useModernVisuals = state.posMenuDesign.isModern,
+            )
         }
 
         if (state.selectedSection == SettingsSection.APPEARANCE) {
-        Text(
-            stringResource(R.string.appearance_settings),
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            color = scheme.onSurface,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.posThemeMode == PosThemeMode.LIGHT,
-                onClick = { viewModel.updatePosThemeMode(PosThemeMode.LIGHT) },
-                label = { Text(stringResource(R.string.theme_light)) },
-                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = scheme.primaryContainer,
-                    selectedLabelColor = scheme.onPrimaryContainer,
-                    containerColor = ui.surfaceMuted,
-                    labelColor = ui.textPrimary,
-                ),
+            SettingsPageHeader(
+                title = stringResource(R.string.appearance_settings),
+                subtitle = stringResource(R.string.pos_menu_design_help),
             )
-            FilterChip(
-                selected = state.posThemeMode == PosThemeMode.DARK,
-                onClick = { viewModel.updatePosThemeMode(PosThemeMode.DARK) },
-                label = { Text(stringResource(R.string.theme_dark)) },
-                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = scheme.primaryContainer,
-                    selectedLabelColor = scheme.onPrimaryContainer,
-                    containerColor = ui.surfaceMuted,
-                    labelColor = ui.textPrimary,
-                ),
-            )
-        }
-        Text(
-            stringResource(R.string.theme_help),
-            style = MaterialTheme.typography.bodySmall,
-            color = ui.textSecondary,
-        )
-        Text(
-            stringResource(R.string.pos_menu_design_title),
-            fontWeight = FontWeight.Medium,
-            color = scheme.onSurface,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.posMenuDesign == PosMenuDesign.CLASSIC,
-                onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.CLASSIC) },
-                label = { Text(stringResource(R.string.pos_menu_design_classic)) },
-                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = scheme.primaryContainer,
-                    selectedLabelColor = scheme.onPrimaryContainer,
-                    containerColor = ui.surfaceMuted,
-                    labelColor = ui.textPrimary,
-                ),
-            )
-            FilterChip(
-                selected = state.posMenuDesign == PosMenuDesign.MODERN_TOP,
-                onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.MODERN_TOP) },
-                label = { Text(stringResource(R.string.pos_menu_design_modern_top)) },
-                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = scheme.primaryContainer,
-                    selectedLabelColor = scheme.onPrimaryContainer,
-                    containerColor = ui.surfaceMuted,
-                    labelColor = ui.textPrimary,
-                ),
-            )
-            FilterChip(
-                selected = state.posMenuDesign == PosMenuDesign.MODERN_SIDE,
-                onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.MODERN_SIDE) },
-                label = { Text(stringResource(R.string.pos_menu_design_modern_side)) },
-                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = scheme.primaryContainer,
-                    selectedLabelColor = scheme.onPrimaryContainer,
-                    containerColor = ui.surfaceMuted,
-                    labelColor = ui.textPrimary,
-                ),
-            )
-        }
-        Text(
-            stringResource(R.string.pos_menu_design_help),
-            style = MaterialTheme.typography.bodySmall,
-            color = ui.textSecondary,
-        )
-        AppearanceScaleRow(
-            title = stringResource(R.string.pos_display_scale_title),
-            hint = stringResource(R.string.pos_display_scale_hint),
-            valueLabel = "${(state.posDisplayScale * 100).toInt()}%",
-            onDecrease = {
-                viewModel.updatePosDisplayScale(
-                    state.posDisplayScale - com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_STEP
+            SettingsSectionCard(
+                title = stringResource(R.string.appearance_settings),
+                subtitle = stringResource(R.string.theme_help),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.posThemeMode == PosThemeMode.LIGHT,
+                        onClick = { viewModel.updatePosThemeMode(PosThemeMode.LIGHT) },
+                        label = { Text(stringResource(R.string.theme_light)) },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = scheme.primaryContainer,
+                            selectedLabelColor = scheme.onPrimaryContainer,
+                            containerColor = ui.surfaceMuted,
+                            labelColor = ui.textPrimary,
+                        ),
+                    )
+                    FilterChip(
+                        selected = state.posThemeMode == PosThemeMode.DARK,
+                        onClick = { viewModel.updatePosThemeMode(PosThemeMode.DARK) },
+                        label = { Text(stringResource(R.string.theme_dark)) },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = scheme.primaryContainer,
+                            selectedLabelColor = scheme.onPrimaryContainer,
+                            containerColor = ui.surfaceMuted,
+                            labelColor = ui.textPrimary,
+                        ),
+                    )
+                }
+            }
+            SettingsSectionCard(
+                title = stringResource(R.string.pos_menu_design_title),
+                subtitle = stringResource(R.string.pos_menu_design_help),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.posMenuDesign == PosMenuDesign.CLASSIC,
+                        onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.CLASSIC) },
+                        label = { Text(stringResource(R.string.pos_menu_design_classic)) },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = scheme.primaryContainer,
+                            selectedLabelColor = scheme.onPrimaryContainer,
+                            containerColor = ui.surfaceMuted,
+                            labelColor = ui.textPrimary,
+                        ),
+                    )
+                    FilterChip(
+                        selected = state.posMenuDesign == PosMenuDesign.MODERN_TOP,
+                        onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.MODERN_TOP) },
+                        label = { Text(stringResource(R.string.pos_menu_design_modern_top)) },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = scheme.primaryContainer,
+                            selectedLabelColor = scheme.onPrimaryContainer,
+                            containerColor = ui.surfaceMuted,
+                            labelColor = ui.textPrimary,
+                        ),
+                    )
+                    FilterChip(
+                        selected = state.posMenuDesign == PosMenuDesign.MODERN_SIDE,
+                        onClick = { viewModel.updatePosMenuDesign(PosMenuDesign.MODERN_SIDE) },
+                        label = { Text(stringResource(R.string.pos_menu_design_modern_side)) },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = scheme.primaryContainer,
+                            selectedLabelColor = scheme.onPrimaryContainer,
+                            containerColor = ui.surfaceMuted,
+                            labelColor = ui.textPrimary,
+                        ),
+                    )
+                }
+            }
+            SettingsSectionCard(title = stringResource(R.string.pos_display_scale_title)) {
+                AppearanceScaleRow(
+                    title = stringResource(R.string.pos_display_scale_title),
+                    hint = stringResource(R.string.pos_display_scale_hint),
+                    valueLabel = "${(state.posDisplayScale * 100).toInt()}%",
+                    onDecrease = {
+                        viewModel.updatePosDisplayScale(
+                            state.posDisplayScale - com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_STEP
+                        )
+                    },
+                    onIncrease = {
+                        viewModel.updatePosDisplayScale(
+                            state.posDisplayScale + com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_STEP
+                        )
+                    },
+                    decreaseEnabled = state.posDisplayScale > com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_MIN + 0.001f,
+                    increaseEnabled = state.posDisplayScale < com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_MAX - 0.001f,
                 )
-            },
-            onIncrease = {
-                viewModel.updatePosDisplayScale(
-                    state.posDisplayScale + com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_STEP
-                )
-            },
-            decreaseEnabled = state.posDisplayScale > com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_MIN + 0.001f,
-            increaseEnabled = state.posDisplayScale < com.chaslay.pos.ui.theme.PosAppearanceLimits.DISPLAY_MAX - 0.001f,
-        )
-        AppearanceScaleRow(
-            title = stringResource(R.string.pos_text_scale_title),
-            hint = stringResource(R.string.pos_text_scale_hint),
-            valueLabel = "${(state.posTextScale * 100).toInt()}%",
-            onDecrease = {
-                viewModel.updatePosTextScale(
-                    state.posTextScale - com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_STEP
-                )
-            },
-            onIncrease = {
-                viewModel.updatePosTextScale(
-                    state.posTextScale + com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_STEP
-                )
-            },
-            decreaseEnabled = state.posTextScale > com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_MIN + 0.001f,
-            increaseEnabled = state.posTextScale < com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_MAX - 0.001f,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.kiosk_fullscreen_title),
-                    fontWeight = FontWeight.Medium,
-                    color = scheme.onSurface,
-                )
-                Text(
-                    stringResource(R.string.kiosk_fullscreen_help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = ui.textSecondary,
+                AppearanceScaleRow(
+                    title = stringResource(R.string.pos_text_scale_title),
+                    hint = stringResource(R.string.pos_text_scale_hint),
+                    valueLabel = "${(state.posTextScale * 100).toInt()}%",
+                    onDecrease = {
+                        viewModel.updatePosTextScale(
+                            state.posTextScale - com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_STEP
+                        )
+                    },
+                    onIncrease = {
+                        viewModel.updatePosTextScale(
+                            state.posTextScale + com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_STEP
+                        )
+                    },
+                    decreaseEnabled = state.posTextScale > com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_MIN + 0.001f,
+                    increaseEnabled = state.posTextScale < com.chaslay.pos.ui.theme.PosAppearanceLimits.TEXT_MAX - 0.001f,
                 )
             }
-            Switch(
-                checked = state.kioskFullscreenEnabled,
-                onCheckedChange = viewModel::updateKioskFullscreenEnabled
-            )
-        }
+            SettingsSectionCard(title = stringResource(R.string.kiosk_fullscreen_title)) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.kiosk_fullscreen_title),
+                    subtitle = stringResource(R.string.kiosk_fullscreen_help),
+                    checked = state.kioskFullscreenEnabled,
+                    onCheckedChange = viewModel::updateKioskFullscreenEnabled,
+                )
+            }
         }
 
         if (state.selectedSection == SettingsSection.LICENSE) {
             LicenseSettingsSection()
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    stringResource(R.string.app_version),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ui.textSecondary
-                )
-                Text(
-                    stringResource(
-                        R.string.app_version_format,
-                        BuildConfig.VERSION_NAME,
-                        BuildConfig.VERSION_CODE
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = ui.textPrimary
-                )
-            }
         }
 
         if (state.selectedSection == SettingsSection.GENERAL) {
@@ -1593,10 +1155,15 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
         } // end scrollable content
+        }
 
         // Sticky Save — always visible (not under system nav / not lost in scroll).
         if (state.selectedSection != SettingsSection.LICENSE &&
-            state.selectedSection != SettingsSection.PRINTERS
+            state.selectedSection != SettingsSection.PRINTERS &&
+            state.selectedSection != SettingsSection.RECEIPTS &&
+            state.selectedSection != SettingsSection.PAYMENTS &&
+            state.selectedSection != SettingsSection.FLOOR_DEVICES &&
+            state.selectedSection != SettingsSection.GENERAL
         ) {
             HorizontalDivider()
             Button(
@@ -1708,19 +1275,16 @@ private fun SettingSwitch(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    subtitle: String? = null,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            label,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface else posUiColors().textMuted,
-        )
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
+    SettingsSwitchRow(
+        title = label,
+        subtitle = subtitle,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

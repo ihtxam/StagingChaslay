@@ -39,6 +39,7 @@ import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosShapes
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,6 +91,7 @@ internal fun SettingsReadOnlyRow(label: String, value: String) {
 internal fun SettingsSectionCard(
     title: String,
     icon: ImageVector? = null,
+    subtitle: String? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -114,8 +116,155 @@ internal fun SettingsSectionCard(
                 fontWeight = FontWeight.ExtraBold,
             )
         }
+        subtitle?.let {
+            Text(
+                it,
+                color = ui.textSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         Spacer(Modifier.size(12.dp))
         content()
+    }
+}
+
+@Composable
+internal fun SettingsShellHeader(
+    onCancel: () -> Unit,
+    onSave: () -> Unit,
+) {
+    val ui = posUiColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            stringResource(R.string.nav_settings),
+            color = ui.textPrimary,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onCancel, shape = PosShapes.Large) {
+                Text(stringResource(R.string.cancel), fontSize = 13.sp)
+            }
+            Button(
+                onClick = onSave,
+                shape = PosShapes.Large,
+                colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
+            ) {
+                Text(stringResource(R.string.save), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SettingsSaveTopBar(onSave: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Button(
+            onClick = onSave,
+            shape = PosShapes.Large,
+            colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
+        ) {
+            Text(stringResource(R.string.save), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+internal fun SettingsSwitchRow(
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
+    val ui = posUiColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                title,
+                color = if (enabled) ui.textPrimary else ui.textMuted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            subtitle?.let {
+                Text(
+                    it,
+                    color = ui.textSecondary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+        com.chaslay.pos.ui.theme.PosSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            showStateLabel = true,
+        )
+    }
+}
+
+@Composable
+internal fun SettingsSegmentedTwoChoice(
+    optionA: String,
+    optionB: String,
+    selectedA: Boolean,
+    onSelectA: () -> Unit,
+    onSelectB: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ui = posUiColors()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(PosShapes.Large)
+            .background(ui.surfaceMuted)
+            .border(1.dp, ui.border, PosShapes.Large)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf(
+            optionA to onSelectA,
+            optionB to onSelectB,
+        ).forEachIndexed { index, (label, action) ->
+            val selected = if (index == 0) selectedA else !selectedA
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(PosShapes.Medium)
+                    .background(if (selected) PosColors.Primary else ui.surface)
+                    .clickable(onClick = action)
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    color = if (selected) PosColors.TextOnPrimary else ui.textPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 }
 

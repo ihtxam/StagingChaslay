@@ -3,6 +3,8 @@ import { and, eq, gte, lte, desc, or, isNull, inArray } from "drizzle-orm";
 import { loadMerchantRowById } from "@/lib/ensure-merchant-schema";
 import { addDaysYmd } from "@/lib/ymd";
 import { normalizePaymentMethod, paymentMethodLabelEn, netPaymentBucketsAfterRefund, refundBucketsFromCumulative, netTaxableSale } from "@/lib/payment-breakdown";
+import { normalizePosCheckoutSettings } from "@/lib/pos-checkout-settings";
+import { normalizeBusinessModule, posModeForModule } from "@/lib/business-module";
 
 export type ReportPreset =
   | "today"
@@ -90,6 +92,26 @@ function channelLabel(ch: string): string {
     default:
       return "Takeaway";
   }
+}
+
+function merchantReportsShowOrderTypes(merchant: {
+  posCheckoutSettings?: unknown;
+  floorPlanEnabled?: boolean;
+  tablesEnabled?: boolean;
+  businessCategory?: string | null;
+} | null): boolean {
+  if (!merchant) return true;
+  const checkout = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
+  const module = normalizeBusinessModule(merchant.businessCategory);
+  const mode = posModeForModule(module) ?? checkout.posMode;
+  if (mode === "retail") {
+    return (
+      checkout.retailDineInEnabled === true ||
+      checkout.retailTakeawayEnabled === true ||
+      checkout.retailDeliveryEnabled === true
+    );
+  }
+  return merchant.tablesEnabled === true || merchant.floorPlanEnabled === true;
 }
 
 export function resolveReportRange(
@@ -507,15 +529,17 @@ export class PosReportsService {
         otherTotal: round2(u.other),
       }));
 
-    const orderTypeRows = Object.entries(channels).map(([channel, v]) => ({
-      channel,
-      label: channelLabel(channel),
-      count: v.count,
-      percent: completed.length
-        ? round2((v.count / completed.length) * 100)
-        : 0,
-      total: round2(v.total),
-    }));
+    const orderTypeRows = merchantReportsShowOrderTypes(merchantRaw as Parameters<typeof merchantReportsShowOrderTypes>[0])
+      ? Object.entries(channels).map(([channel, v]) => ({
+          channel,
+          label: channelLabel(channel),
+          count: v.count,
+          percent: completed.length
+            ? round2((v.count / completed.length) * 100)
+            : 0,
+          total: round2(v.total),
+        }))
+      : [];
 
     // Closed shifts overlapping the report period (for opening float / fond de base on EOD).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

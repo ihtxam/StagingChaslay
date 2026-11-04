@@ -132,7 +132,8 @@ internal fun AddonEditorDialog(
     group: AddonGroupEntity?,
     viewModel: MenuViewModel,
     onDismiss: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
+    presentation: MenuEditorPresentation = MenuEditorPresentation.FULL_SCREEN,
 ) {
     var name by remember(group) { mutableStateOf(group?.name ?: "") }
     var limitQty by remember(group) { mutableStateOf((group?.limitQuantity ?: 1).coerceAtLeast(1)) }
@@ -168,7 +169,7 @@ internal fun AddonEditorDialog(
     }
 
     MenuEditorDialog(
-        title = if (group == null) stringResource(R.string.add_addon) else stringResource(R.string.edit_addon),
+        title = if (group == null) stringResource(R.string.add_addon) else stringResource(R.string.extras_edit_group_title),
         onDismiss = onDismiss,
         onSave = {
             val options = optionNames.indices.map { i ->
@@ -188,7 +189,8 @@ internal fun AddonEditorDialog(
             )
             viewModel.saveAddonGroup(entity, options, linkedProducts.toList())
             onSaved()
-        }
+        },
+        presentation = presentation,
     ) {
         MenuSectionCard {
             OutlinedTextField(
@@ -209,7 +211,7 @@ internal fun AddonEditorDialog(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.multiple_same_item), modifier = Modifier.weight(1f), fontSize = 13.sp)
-                Switch(checked = allowMultiple, onCheckedChange = { allowMultiple = it })
+                com.chaslay.pos.ui.theme.PosSwitch(checked = allowMultiple, onCheckedChange = { allowMultiple = it })
             }
             MenuQuantityStepper(
                 label = stringResource(R.string.limit_quantity),

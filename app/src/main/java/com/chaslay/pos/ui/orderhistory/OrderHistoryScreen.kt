@@ -122,8 +122,20 @@ fun OrderHistoryScreen(
             onPrintSplit = viewModel::printSplitOrder,
             onCancel = viewModel::showCancelDialog,
             onRefund = viewModel::showRefundDialog,
+            onChangePayment = viewModel::showPaymentEditDialog,
             onDelete = { viewModel.requestDeleteOrder(order) }
         )
+    }
+
+    if (state.showPaymentEditDialog) {
+        val order = state.selectedOrder
+        if (order != null) {
+            ChangePaymentMethodDialog(
+                currentMethod = order.paymentMethod,
+                onDismiss = viewModel::dismissPaymentEditDialog,
+                onConfirm = viewModel::updateSelectedOrderPaymentMethod
+            )
+        }
     }
 
     if (state.showCancelDialog) {
@@ -268,18 +280,6 @@ private fun OrderHistoryContent(
             .background(posUiColors().canvas)
             .padding(horizontal = PosDimens.PagePaddingCompact, vertical = PosDimens.Space2)
     ) {
-        if (compactLayout) {
-            Text(
-                stringResource(R.string.order_records),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = PosDimens.Space2),
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp,
-                color = posUiColors().textPrimary,
-                textAlign = TextAlign.Center
-            )
-        }
         if (showRefresh && !compactLayout) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

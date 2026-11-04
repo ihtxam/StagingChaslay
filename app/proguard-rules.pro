@@ -20,3 +20,7 @@
 -keep class fi.iki.elonen.** { *; }
 -keep class com.adyen.ipp.** { *; }
 -dontwarn com.adyen.ipp.**
+
+# OkHttp 5 App Startup (merged from okhttp-android); loaded via reflection by InitializationProvider.
+-keep class * implements androidx.startup.Initializer { *; }
+-keep class okhttp3.internal.platform.** { *; }

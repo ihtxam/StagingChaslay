@@ -27,6 +27,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.chaslay.pos.customerdisplay.CustomerDisplayCoordinator
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.LicenseRepository
 import com.chaslay.pos.payment.taptopay.TapToPayEngine
@@ -60,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var posSessionRepository: PosSessionRepository
     @Inject lateinit var tapToPayEngine: TapToPayEngine
     @Inject lateinit var usbPrinterManager: UsbPrinterManager
+    @Inject lateinit var customerDisplayCoordinator: CustomerDisplayCoordinator
 
     private var kioskFullscreenEnabled by mutableStateOf(true)
 
@@ -155,14 +157,16 @@ class MainActivity : AppCompatActivity() {
                                 ActivationScreen()
                             }
                             else -> {
-                                if (userAccess == null) {
-                                    com.chaslay.pos.ui.auth.LoginScreen(
-                                        onLoggedIn = { /* reactive via session flow */ }
-                                    )
-                                } else {
-                                    ChaslayNavHost(
-                                        userAccess = userAccess
-                                    )
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    if (userAccess == null) {
+                                        com.chaslay.pos.ui.auth.LoginScreen(
+                                            onLoggedIn = { /* reactive via session flow */ }
+                                        )
+                                    } else {
+                                        ChaslayNavHost(
+                                            userAccess = userAccess
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -196,6 +200,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        customerDisplayCoordinator.close()
         floorSyncCoordinator.stop()
         super.onDestroy()
     }

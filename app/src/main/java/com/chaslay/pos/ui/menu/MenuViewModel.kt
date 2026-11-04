@@ -15,9 +15,11 @@ import com.chaslay.pos.data.local.entity.ModifierGroupEntity
 import com.chaslay.pos.data.local.entity.ModifierOptionEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.data.repository.MenuRepository
+import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.domain.model.AddonGroupModel
 import com.chaslay.pos.domain.model.ComboMealModel
 import com.chaslay.pos.domain.model.ModifierGroupModel
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.util.PosLocalPrefs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -34,9 +36,19 @@ import javax.inject.Inject
 
 enum class MenuSection {
     PRODUCT_LIST,
-    IMPORT_EXPORT,
     EXTRAS_AND_NOS,
-    COMBOS
+    COMBOS,
+    IMPORT_EXPORT;
+
+    /** Sidebar order: Import / Export last (after product tools). */
+    companion object {
+        val sidebarOrder: List<MenuSection> = listOf(
+            PRODUCT_LIST,
+            EXTRAS_AND_NOS,
+            COMBOS,
+            IMPORT_EXPORT,
+        )
+    }
 }
 
 data class MenuUiState(
@@ -55,8 +67,12 @@ data class MenuUiState(
 class MenuViewModel @Inject constructor(
     private val menuRepository: MenuRepository,
     private val menuImportRepository: MenuImportRepository,
+    private val sessionManager: SessionManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    val posMenuDesign: StateFlow<PosMenuDesign> = sessionManager.posMenuDesign
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosMenuDesign.CLASSIC)
 
     private val _section = MutableStateFlow(MenuSection.PRODUCT_LIST)
     private val _message = MutableStateFlow<String?>(null)

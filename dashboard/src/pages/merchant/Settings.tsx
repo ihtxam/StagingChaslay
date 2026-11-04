@@ -4821,7 +4821,13 @@ export default function Settings() {
                                     {device.manufacturer}
                                   </span>
                                 ) : null}
-                                {selected ? ` · ${t('settingsScaleLiveConnected')}` : ''}
+                                {selected &&
+                                scalePortsScanned &&
+                                isSavedScaleConnected(settings.posPrintSettings, scalePorts)
+                                  ? ` · ${t('settingsScaleLiveConnected')}`
+                                  : selected
+                                    ? ` · ${t('settingsScaleRemembered')}`
+                                    : ''}
                               </button>
                             </li>
                           );
@@ -5131,6 +5137,55 @@ export default function Settings() {
                       {label}
                     </label>
                   ))}
+                </div>
+                <p className="text-sm font-semibold text-[var(--text)] m-0 pt-3">{t('receiptOptions')}</p>
+                <div className="flex flex-col gap-3 text-sm">
+                  <label className="inline-flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={settings.posPrintSettings?.autoPrintReceipt !== false}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          posPrintSettings: {
+                            ...(settings.posPrintSettings || {}),
+                            autoPrintReceipt: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{t('autoPrintReceipt')}</span>
+                      <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                        {t('autoPrintReceiptHint')}
+                      </span>
+                    </span>
+                  </label>
+                  {!isRetailMerchant ? (
+                    <label className="inline-flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={settings.posPrintSettings?.autoPrintKitchen !== false}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            posPrintSettings: {
+                              ...(settings.posPrintSettings || {}),
+                              autoPrintKitchen: e.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        <span className="font-medium">{t('autoPrintKitchen')}</span>
+                        <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                          {t('autoPrintKitchenHint')}
+                        </span>
+                      </span>
+                    </label>
+                  ) : null}
                 </div>
               </Section>
               )}
@@ -5646,8 +5701,6 @@ export default function Settings() {
                       ['receiptShowStaffLine', t('receiptShowStaff')],
                       ['receiptShowQrCode', t('receiptShowQr')],
                       ['receiptDeliveryDirectionsQr', t('receiptDeliveryDirectionsQr')],
-                      ['autoPrintReceipt', t('autoPrintReceipt')],
-                      ['autoPrintKitchen', t('autoPrintKitchen')],
                       ['autoPrintReservations', t('autoPrintReservations')],
                       ['autoOpenCashDrawer', t('autoOpenCashDrawer')],
                     ] as const

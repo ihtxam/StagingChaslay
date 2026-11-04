@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.chaslay.pos.data.preferences.SessionManager
 import com.chaslay.pos.data.repository.CartManager
 import com.chaslay.pos.data.repository.HeldOrderRepository
-import com.chaslay.pos.data.repository.ProductRepository
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.data.repository.TableOrderRepository
 import com.chaslay.pos.data.repository.TransactionRepository
@@ -17,6 +16,7 @@ import com.chaslay.pos.domain.model.FulfillmentType
 import com.chaslay.pos.domain.model.HeldOrderStatus
 import com.chaslay.pos.domain.model.OngoingOrderCard
 import com.chaslay.pos.domain.model.OngoingOrderSource
+import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
 import com.chaslay.pos.domain.model.ServiceType
@@ -34,9 +34,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
+import com.chaslay.pos.data.local.entity.TransactionEntity
+import com.chaslay.pos.data.local.entity.TransactionItemEntity
 
 enum class OrdersStatusFilter { ACTIVE, COMPLETED }
 
@@ -77,7 +82,9 @@ data class OngoingOrdersUiState(
     val searchQuery: String = "",
     val currencySymbol: String = "CHF",
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** "${source}-${id}" while a receipt print job is in flight (non-blocking UI). */
+    val printingReceiptKey: String? = null
 ) {
     val filteredOrders: List<OngoingOrderCard>
         get() {
@@ -101,8 +108,8 @@ class OngoingOrdersViewModel @Inject constructor(
     private val cartManager: CartManager,
     private val sessionManager: SessionManager,
     private val settingsRepository: SettingsRepository,
-    private val productRepository: ProductRepository,
     private val printerService: BluetoothPrinterService,
+    private val kitchenPrintDelivery: com.chaslay.pos.printer.KitchenPrintDelivery,
     private val crashLogger: CrashLogger,
     private val onlineOrderAlertCoordinator: OnlineOrderAlertCoordinator,
     private val invoiceRepository: com.chaslay.pos.data.repository.InvoiceRepository,
@@ -111,6 +118,9 @@ class OngoingOrdersViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(OngoingOrdersUiState())
     val uiState: StateFlow<OngoingOrdersUiState> = _uiState.asStateFlow()
+
+    val posMenuDesign: StateFlow<PosMenuDesign> = sessionManager.posMenuDesign
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosMenuDesign.CLASSIC)
 
     fun refresh() {
         viewModelScope.launch {
@@ -125,12 +135,14 @@ class OngoingOrdersViewModel @Inject constructor(
                     OrdersStatusFilter.ACTIVE -> loadActiveOrders()
                     OrdersStatusFilter.COMPLETED -> loadCompletedOrders()
                 }
+                val sorted = orders.sortedByDescending { it.updatedAt }
                 _uiState.value = previous.copy(
-                    orders = orders.sortedByDescending { it.updatedAt },
+                    orders = sorted,
                     currencySymbol = currency,
                     isLoading = false,
                     errorMessage = null
                 )
+                warmOrdersPageReceiptPrinting(sorted)
             }.onFailure { e ->
                 android.util.Log.e("ONGOING", "refresh failed", e)
                 crashLogger.logError("OngoingOrders", "Failed to load ongoing orders", e)
@@ -142,7 +154,27 @@ class OngoingOrdersViewModel @Inject constructor(
         }
     }
 
+    private suspend fun cartOrderCardTotal(
+        items: List<CartItem>,
+        discountPercent: Double = 0.0,
+        discountAmount: Double = 0.0,
+        settings: BusinessSettingsEntity
+    ): Double {
+        val vatIncluded = com.chaslay.pos.util.PosLocalPrefs.applyVatIncludedIfUserSet(
+            appContext,
+            settings.vatIncludedInPrice
+        )
+        return CartSummary(
+            items = items,
+            discountPercent = discountPercent,
+            discountAmount = discountAmount,
+            vatIncludedInPrice = vatIncluded,
+            vatAfterDiscount = settings.vatAfterDiscount
+        ).ongoingOrderCardTotal(discountPercent, discountAmount)
+    }
+
     private suspend fun loadActiveOrders(): List<OngoingOrderCard> {
+        val settings = settingsRepository.getSettings()
         val heldOrdersWithItems = heldOrderRepository.getOngoingHeldOrdersWithItems()
         android.util.Log.i(
             "ONGOING",
@@ -157,7 +189,16 @@ class OngoingOrdersViewModel @Inject constructor(
                 orderNumber = order.orderNumber,
                 serviceType = order.serviceType,
                 fulfillmentType = order.fulfillmentType,
-                total = if (items.isEmpty()) order.total else CartSummary(items.map { it.toCartItem() }).total,
+                total = if (items.isEmpty()) {
+                    order.total
+                } else {
+                    cartOrderCardTotal(
+                        items.map { it.toCartItem() },
+                        order.discountPercent,
+                        order.discountAmount,
+                        settings
+                    )
+                },
                 itemCount = items.sumOf { it.quantity },
                 statusLabel = when {
                     isPayLater -> "Awaiting payment"
@@ -183,7 +224,16 @@ class OngoingOrdersViewModel @Inject constructor(
                         orderNumber = tableEntity?.name ?: order.id.take(6).uppercase(),
                         serviceType = order.serviceType,
                         fulfillmentType = FulfillmentType.DINE_IN,
-                        total = if (cartItems.isEmpty()) 0.0 else CartSummary(cartItems).total,
+                        total = if (cartItems.isEmpty()) {
+                            0.0
+                        } else {
+                            cartOrderCardTotal(
+                                cartItems,
+                                order.discountPercent,
+                                order.discountAmount,
+                                settings
+                            )
+                        },
                         itemCount = items.sumOf { it.quantity },
                         statusLabel = when (order.status) {
                             TableOrderStatus.SENT -> appContext.getString(com.chaslay.pos.R.string.status_kitchen_sent)
@@ -240,7 +290,7 @@ class OngoingOrdersViewModel @Inject constructor(
         if (cart.tableId == null || cart.items.isEmpty()) return
         val userId = sessionManager.currentUserId.first() ?: 0L
         val userName = sessionManager.currentUserName.first() ?: "Cashier"
-        val orderId = tableOrderRepository.syncCartToTable(cart, userId, userName)
+        val orderId = tableOrderRepository.syncCartToTable(cart, userId, userName) ?: return
         cartManager.setTableOrderId(orderId)
         val sentFlags = tableOrderRepository.getOrderItemEntities(orderId)
             .associate { it.id to (it.sentToKitchenAt != null) }
@@ -257,7 +307,7 @@ class OngoingOrdersViewModel @Inject constructor(
             orderNumber = cart.tableName ?: existing?.orderNumber.orEmpty(),
             serviceType = cart.serviceType,
             fulfillmentType = cart.fulfillmentType,
-            total = cart.total,
+            total = cart.ongoingOrderCardTotal(cart.discountPercent, cart.discountAmount),
             itemCount = cart.items.sumOf { it.quantity },
             statusLabel = existing?.statusLabel ?: "Open",
             source = OngoingOrderSource.TABLE,
@@ -307,63 +357,132 @@ class OngoingOrdersViewModel @Inject constructor(
     }
 
     fun printReceiptForOrder(card: OngoingOrderCard) {
+        val printKey = "${card.source}-${card.id}"
+        if (_uiState.value.printingReceiptKey == printKey) return
         viewModelScope.launch {
-            val settings = settingsRepository.getSettings()
-            when (card.source) {
-                OngoingOrderSource.TRANSACTION -> {
-                    val detail = transactionRepository.getTransaction(card.id) ?: return@launch
-                    withContext(Dispatchers.IO) {
-                        val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
-                            .appendableForTransaction(detail.first)
-                        printerService.routeReceipt(
-                            settings,
-                            detail.first,
-                            detail.second,
-                            customerCopy,
-                            cashierCopy
-                        )
-                    }.onFailure {
-                        _uiState.value = _uiState.value.copy(
-                            errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
-                        )
-                    }
+            _uiState.value = _uiState.value.copy(printingReceiptKey = printKey, errorMessage = null)
+            try {
+                when (card.source) {
+                    OngoingOrderSource.TRANSACTION -> printStoredOrderReceipt(card.id)
+                    else -> printProvisionalOrderReceipt(card)
                 }
-                else -> {
-                    val cart = loadCartSummaryForReceipt(card) ?: run {
-                        _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
-                        return@launch
-                    }
-                    if (cart.isEmpty) {
-                        _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
-                        return@launch
-                    }
-                    val staffName = sessionManager.currentUserName.first() ?: "Staff"
-                    val total = applyCashRounding(cart.merchandiseTotal(), settings.roundingStep)
-                    val context = ReceiptPrintContext(
-                        orderNumber = cart.orderNumber,
-                        serviceType = cart.serviceType,
-                        fulfillmentType = cart.fulfillmentType,
-                        tableName = cart.tableName,
-                        paymentMethod = null,
-                        staffName = staffName,
-                        isProvisional = true
-                    )
-                    withContext(Dispatchers.IO) {
-                        printerService.routeCartReceipt(
-                            settings = settings,
-                            cart = cart,
-                            context = context,
-                            discountAmount = cart.discountValue,
-                            tipAmount = 0.0,
-                            total = total
-                        )
-                    }.onFailure {
-                        _uiState.value = _uiState.value.copy(
-                            errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
-                        )
-                    }
+            } finally {
+                if (_uiState.value.printingReceiptKey == printKey) {
+                    _uiState.value = _uiState.value.copy(printingReceiptKey = null)
                 }
             }
+        }
+    }
+
+    /** Pre-hold BT and warm ESC/POS for recent completed orders (express-success parity). */
+    private fun warmOrdersPageReceiptPrinting(orders: List<OngoingOrderCard>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val settings = settingsRepository.getSettings()
+                printerService.holdReceiptPrinterBluetoothConnections(settings)
+                orders
+                    .asSequence()
+                    .filter { it.source == OngoingOrderSource.TRANSACTION }
+                    .take(6)
+                    .forEach { card ->
+                        val detail = transactionRepository.getTransaction(card.id) ?: return@forEach
+                        val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+                            .appendableForTransaction(detail.first)
+                        warmStoredReceiptEscPos(
+                            settings = settings,
+                            transaction = detail.first,
+                            items = detail.second,
+                            customerCopy = customerCopy,
+                            cashierCopy = cashierCopy
+                        )
+                    }
+            }.onFailure { e ->
+                android.util.Log.w("ONGOING", "Receipt warm on orders page failed", e)
+            }
+        }
+    }
+
+    private suspend fun printStoredOrderReceipt(transactionId: String) = withContext(Dispatchers.IO) {
+        val detail = transactionRepository.getTransaction(transactionId) ?: return@withContext
+        val settings = settingsRepository.getSettings()
+        val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+            .appendableForTransaction(detail.first)
+        warmStoredReceiptEscPos(
+            settings = settings,
+            transaction = detail.first,
+            items = detail.second,
+            customerCopy = customerCopy,
+            cashierCopy = cashierCopy
+        )
+        printerService.routeReceipt(
+            settings,
+            detail.first,
+            detail.second,
+            customerCopy,
+            cashierCopy,
+            usePayloadCache = true
+        ).onFailure {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
+            )
+        }
+    }
+
+    private suspend fun printProvisionalOrderReceipt(card: OngoingOrderCard) {
+        val settings = settingsRepository.getSettings()
+        val cart = loadCartSummaryForReceipt(card) ?: run {
+            _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
+            return
+        }
+        if (cart.isEmpty) {
+            _uiState.value = _uiState.value.copy(errorMessage = "No items to print")
+            return
+        }
+        val staffName = sessionManager.currentUserName.first() ?: "Staff"
+        val total = applyCashRounding(cart.merchandiseTotal(), settings.roundingStep)
+        val context = ReceiptPrintContext(
+            orderNumber = cart.orderNumber,
+            serviceType = cart.serviceType,
+            fulfillmentType = cart.fulfillmentType,
+            tableName = cart.tableName,
+            paymentMethod = null,
+            staffName = staffName,
+            isProvisional = true
+        )
+        withContext(Dispatchers.IO) {
+            printerService.holdReceiptPrinterBluetoothConnections(settings)
+            printerService.routeCartReceipt(
+                settings = settings,
+                cart = cart,
+                context = context,
+                discountAmount = cart.discountValue,
+                tipAmount = 0.0,
+                total = total
+            )
+        }.onFailure {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
+            )
+        }
+    }
+
+    private suspend fun warmStoredReceiptEscPos(
+        settings: BusinessSettingsEntity,
+        transaction: TransactionEntity,
+        items: List<TransactionItemEntity>,
+        customerCopy: com.chaslay.pos.payment.AdyenTerminalReceipt?,
+        cashierCopy: com.chaslay.pos.payment.AdyenTerminalReceipt?
+    ) {
+        runCatching {
+            printerService.warmEscPosReceiptPayload(
+                settings = settings,
+                transaction = transaction,
+                items = items,
+                appendAdyenCustomerReceipt = customerCopy,
+                appendAdyenCashierReceipt = cashierCopy
+            )
+        }.onFailure { e ->
+            android.util.Log.w("ONGOING", "Receipt ESC/POS warm failed for ${transaction.id}", e)
         }
     }
 
@@ -371,27 +490,25 @@ class OngoingOrdersViewModel @Inject constructor(
         if (card.source == OngoingOrderSource.TRANSACTION) return
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            val categories = productRepository.getAllCategories()
-            val products = productRepository.getAllProducts()
             val userName = sessionManager.currentUserName.first() ?: "Cashier"
             val payload = loadKitchenPayload(card, userName) ?: run {
-                _uiState.value = _uiState.value.copy(errorMessage = "No items to send")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = appContext.getString(com.chaslay.pos.R.string.kitchen_no_new_items)
+                )
                 return@launch
             }
-            val printResult = withContext(Dispatchers.IO) {
-                printerService.routeKitchen(
-                    settings = settings,
-                    tableName = payload.tableName,
-                    serviceType = payload.serviceType,
-                    round = payload.round,
-                    items = payload.items,
-                    isFollowUp = false,
-                    message = null,
-                    categories = categories,
-                    products = products,
-                    meta = payload.meta
-                )
+            if (card.source == OngoingOrderSource.TABLE) {
+                tableOrderRepository.clearSentFlags(card.id, payload.items.map { it.id }.toSet())
             }
+            val printResult = kitchenPrintDelivery.deliver(
+                settings = settings,
+                orderId = card.id,
+                tableName = payload.tableName,
+                serviceType = payload.serviceType,
+                round = payload.round,
+                items = payload.items,
+                meta = payload.meta
+            )
             printResult.onFailure {
                 _uiState.value = _uiState.value.copy(
                     errorMessage = PrinterUserMessages.fromPrintFailure(appContext)
@@ -543,11 +660,8 @@ class OngoingOrdersViewModel @Inject constructor(
             }
             OngoingOrderSource.TABLE -> {
                 val order = tableOrderRepository.getOrder(card.id) ?: return null
-                var items = tableOrderRepository.getOrderItemEntities(card.id)
+                val items = tableOrderRepository.getOrderItemEntities(card.id)
                     .filter { it.sentToKitchenAt == null }
-                if (items.isEmpty()) {
-                    items = tableOrderRepository.getOrderItemEntities(card.id)
-                }
                 if (items.isEmpty()) return null
                 val table = tableOrderRepository.getTable(order.tableId)
                 KitchenPayload(

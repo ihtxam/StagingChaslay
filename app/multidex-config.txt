@@ -1,0 +1,2 @@
+com/chaslay/pos/ChaslayPosApp.class
+com/chaslay/pos/Hilt_ChaslayPosApp.class

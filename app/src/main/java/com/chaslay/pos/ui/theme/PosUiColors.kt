@@ -35,24 +35,45 @@ data class PosUiColors(
 fun posUiColors(): PosUiColors {
     val scheme = MaterialTheme.colorScheme
     val isLight = scheme.background.luminance() > 0.5f
-    return PosUiColors(
-        canvas = scheme.background,
-        surface = scheme.surface,
-        surfaceSubtle = scheme.surfaceVariant.copy(alpha = 1f),
-        surfaceMuted = scheme.surfaceVariant,
-        surfaceSelected = scheme.primaryContainer,
-        border = scheme.outline,
-        borderStrong = scheme.outlineVariant,
-        textPrimary = scheme.onSurface,
-        textSecondary = scheme.onSurfaceVariant,
-        textMuted = scheme.onSurfaceVariant.copy(alpha = 0.72f),
-        primarySubtle = scheme.primaryContainer,
-        primaryBorder = if (isLight) PosColors.PrimaryBorder else scheme.outline,
-        successSubtle = if (isLight) PosColors.SuccessSubtle else Color(0xFF1A3324),
-        warningSubtle = if (isLight) PosColors.WarningSubtle else Color(0xFF3D3010),
-        dangerSubtle = if (isLight) PosColors.DangerSubtle else scheme.errorContainer,
-        infoSubtle = if (isLight) PosColors.InfoSubtle else Color(0xFF1A2838),
-    )
+    return if (isLight) {
+        PosUiColors(
+            canvas = PosColors.Canvas,
+            surface = PosColors.Surface,
+            surfaceSubtle = PosColors.SurfaceSubtle,
+            surfaceMuted = PosColors.SurfaceMuted,
+            surfaceSelected = PosColors.SurfaceSelected,
+            border = PosColors.Border,
+            borderStrong = PosColors.BorderStrong,
+            textPrimary = PosColors.TextPrimary,
+            textSecondary = PosColors.TextSecondary,
+            textMuted = PosColors.TextMuted,
+            primarySubtle = PosColors.PrimarySubtle,
+            primaryBorder = PosColors.PrimaryBorder,
+            successSubtle = PosColors.SuccessSubtle,
+            warningSubtle = PosColors.WarningSubtle,
+            dangerSubtle = PosColors.DangerSubtle,
+            infoSubtle = PosColors.InfoSubtle,
+        )
+    } else {
+        PosUiColors(
+            canvas = scheme.background,
+            surface = scheme.surface,
+            surfaceSubtle = scheme.surfaceVariant.copy(alpha = 1f),
+            surfaceMuted = scheme.surfaceVariant,
+            surfaceSelected = scheme.primaryContainer,
+            border = scheme.outline,
+            borderStrong = scheme.outlineVariant,
+            textPrimary = scheme.onSurface,
+            textSecondary = scheme.onSurfaceVariant,
+            textMuted = scheme.onSurfaceVariant.copy(alpha = 0.72f),
+            primarySubtle = scheme.primaryContainer,
+            primaryBorder = scheme.outline,
+            successSubtle = Color(0xFF1A3324),
+            warningSubtle = Color(0xFF3D3010),
+            dangerSubtle = scheme.errorContainer,
+            infoSubtle = Color(0xFF1A2838),
+        )
+    }
 }
 
 private fun Color.luminance(): Float {

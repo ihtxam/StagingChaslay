@@ -2764,7 +2764,12 @@ const en: Dict = {
   webPosGoodwillSubmitted: 'Goodwill compensation recorded',
   webPosGoodwillFailed: 'Goodwill compensation failed',
   autoPrintReceipt: 'Auto-print customer receipt',
-  autoPrintKitchen: 'Auto-print kitchen ticket',
+  autoPrintReceiptHint:
+    'Prints the customer receipt when checkout completes. You can still print manually from the order screen.',
+  autoPrintKitchen: 'Auto-print kitchen ticket on sale',
+  autoPrintKitchenHint:
+    'Prints unsent items to the kitchen when checkout completes. Send to kitchen manually anytime while this is off.',
+  receiptOptions: 'Receipt options',
   autoOpenCashDrawer: 'Open cash drawer automatically',
   autoOpenCashDrawerHint:
     'On cash payments, pulse the receipt printer to open the drawer. Off: use Open cash drawer when you need it.',
@@ -8100,7 +8105,12 @@ const fr: Dict = {
   webPosGoodwillSubmitted: 'Geste commercial enregistré',
   webPosGoodwillFailed: 'Échec du geste commercial',
   autoPrintReceipt: 'Impression auto du reçu',
-  autoPrintKitchen: 'Impression auto cuisine',
+  autoPrintReceiptHint:
+    'Imprime le reçu client à la fin de l’encaissement. Vous pouvez toujours imprimer manuellement depuis la commande.',
+  autoPrintKitchen: 'Impression auto du ticket cuisine à la vente',
+  autoPrintKitchenHint:
+    'Imprime les articles non envoyés en cuisine à la fin de l’encaissement. Utilisez Envoyer en cuisine à tout moment si cette option est désactivée.',
+  receiptOptions: 'Options de reçu',
   autoOpenCashDrawer: 'Ouvrir le tiroir automatiquement',
   autoOpenCashDrawerHint:
     'À chaque paiement en espèces, ouvre le tiroir via l’imprimante ticket. Désactivé : utilisez Ouvrir le tiroir-caisse au besoin.',
@@ -13319,7 +13329,12 @@ const de: Dict = {
   webPosGoodwillSubmitted: 'Kulanz erfasst',
   webPosGoodwillFailed: 'Kulanz fehlgeschlagen',
   autoPrintReceipt: 'Kundenbeleg automatisch drucken',
-  autoPrintKitchen: 'Küchenticket automatisch drucken',
+  autoPrintReceiptHint:
+    'Druckt den Kundenbeleg nach dem Checkout. Manuelles Drucken ist weiterhin möglich.',
+  autoPrintKitchen: 'Küchenticket beim Verkauf automatisch drucken',
+  autoPrintKitchenHint:
+    'Druckt nicht gesendete Artikel nach dem Checkout in die Küche. Bei Aus jederzeit „An Küche senden“ nutzen.',
+  receiptOptions: 'Belegoptionen',
   autoOpenCashDrawer: 'Kassenschublade automatisch öffnen',
   autoOpenCashDrawerHint:
     'Bei Barzahlung öffnet ein Impuls über den Bondrucker die Schublade. Aus: manuell über Kassenschublade öffnen.',

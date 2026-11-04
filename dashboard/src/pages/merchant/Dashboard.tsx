@@ -126,6 +126,7 @@ import {
   isReportsPanelPath,
   isStaffJwt,
   hasPermission,
+  clearWebPosStaffSession,
   loadWebPosStaffSession,
   notifyWebPosStaffSessionChanged,
   resolveWebPosStaffSession,
@@ -1375,8 +1376,19 @@ function MerchantShell() {
   );
 
   const handlePanelPinLogout = useCallback(() => {
-    logout();
-    navigate('/login', { replace: true });
+    void (async () => {
+      try {
+        const { revokePosSession, clearPosSessionLocal } = await import('@/lib/pos-session');
+        await revokePosSession();
+        clearPosSessionLocal();
+      } catch {
+        /* best effort */
+      }
+      clearWebPosStaffSession();
+      notifyWebPosStaffSessionChanged();
+      logout();
+      navigate('/login', { replace: true });
+    })();
   }, [logout, navigate]);
 
   if (panelPinGatePending) {

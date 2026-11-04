@@ -34,9 +34,11 @@ import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -70,7 +72,10 @@ import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.TransactionEntity
 import com.chaslay.pos.data.local.entity.TransactionItemEntity
+import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.PaymentStatus
+import com.chaslay.pos.data.repository.canEditOrderPayment
+import com.chaslay.pos.data.repository.editablePaymentMethodsForHistory
 import com.chaslay.pos.domain.model.RefundReasonLabels
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.payment.AdyenPaymentReceiptStorage
@@ -99,6 +104,7 @@ fun OrderDetailDialog(
     onPrintSplit: (String) -> Unit,
     onCancel: () -> Unit,
     onRefund: () -> Unit,
+    onChangePayment: () -> Unit,
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
@@ -109,6 +115,7 @@ fun OrderDetailDialog(
     val refundTotal = order.refundAmount.coerceAtLeast(0.0)
     val netTotal = (order.total - refundTotal).coerceAtLeast(0.0)
     var overflowOpen by remember { mutableStateOf(false) }
+    val canEditPayment = canEditOrderPayment(order)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -116,8 +123,8 @@ fun OrderDetailDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .widthIn(max = 720.dp),
+                .fillMaxWidth(0.6f)
+                .widthIn(max = 640.dp),
             shape = PosShapes.Dialog,
             color = posUiColors().surface,
             border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
@@ -136,7 +143,9 @@ fun OrderDetailDialog(
                         Text(
                             stringResource(
                                 R.string.order_detail_title,
-                                shortOrderId(order.transactionNumber, order.notes)
+                                com.chaslay.pos.util.OrderNumberFormat.displayForTransaction(order)
+                                    .removePrefix("#")
+                                    .trim(),
                             ),
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
@@ -200,7 +209,8 @@ fun OrderDetailDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.Top
                 ) {
                     Column(
                         modifier = Modifier
@@ -226,11 +236,24 @@ fun OrderDetailDialog(
                                 )
                             }
                         } else {
-                            items.forEach { item ->
+                            items.forEachIndexed { index, item ->
                                 ProductTimelineRow(item, currencySymbol)
+                                if (index < items.lastIndex) {
+                                    HorizontalDivider(
+                                        color = posUiColors().border.copy(alpha = 0.65f),
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
                     }
+
+                    VerticalDivider(
+                        modifier = Modifier
+                            .height(280.dp)
+                            .align(Alignment.Top),
+                        color = posUiColors().border.copy(alpha = 0.65f)
+                    )
 
                     Column(
                         modifier = Modifier
@@ -283,7 +306,28 @@ fun OrderDetailDialog(
 
                         Spacer(Modifier.height(8.dp))
                         SectionTitle(stringResource(R.string.order_detail_transaction))
-                        BillLine(stringResource(R.string.payment_method), orderHistoryPaymentMethodDetailLabel(order.paymentMethod))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                BillLine(
+                                    stringResource(R.string.payment_method),
+                                    orderHistoryPaymentMethodDetailLabel(order.paymentMethod)
+                                )
+                            }
+                            if (canEditPayment) {
+                                TextButton(onClick = onChangePayment) {
+                                    Text(
+                                        stringResource(R.string.order_change_payment_method),
+                                        fontSize = 12.sp,
+                                        color = PosColors.Primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
                         BillLine(stringResource(R.string.staff), order.userName)
                         if (hasCustomerCard || hasMerchantCard) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -331,7 +375,7 @@ fun OrderDetailDialog(
                         OutlinedButton(onClick = onPrintAllSplits, modifier = Modifier.weight(1f), shape = PosShapes.Medium) {
                             Icon(Icons.Default.Print, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.print_receipt))
+                            Text(stringResource(R.string.order_history_print))
                         }
                     } else {
                         Button(
@@ -342,10 +386,29 @@ fun OrderDetailDialog(
                         ) {
                             Icon(Icons.Default.Print, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.print_receipt))
+                            Text(stringResource(R.string.order_history_print))
                         }
                     }
-                    if (canRefund || canCancel || canDelete) {
+                    if (canRefund) {
+                        OutlinedButton(
+                            onClick = onRefund,
+                            shape = PosShapes.Medium,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, PosColors.Danger.copy(alpha = 0.45f))
+                        ) {
+                            Text(
+                                stringResource(R.string.order_history_refund),
+                                color = PosColors.Danger,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    if (canCancel) {
+                        OutlinedButton(onClick = onCancel, shape = PosShapes.Medium) {
+                            Text(stringResource(R.string.order_history_cancel), fontSize = 12.sp)
+                        }
+                    }
+                    if (canDelete) {
                         Box {
                             OutlinedButton(
                                 onClick = { overflowOpen = true },
@@ -359,46 +422,83 @@ fun OrderDetailDialog(
                                 expanded = overflowOpen,
                                 onDismissRequest = { overflowOpen = false }
                             ) {
-                                if (canRefund) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                stringResource(R.string.refund_order),
-                                                color = PosColors.Danger,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        },
-                                        onClick = {
-                                            overflowOpen = false
-                                            onRefund()
-                                        }
-                                    )
-                                }
-                                if (canCancel) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.cancel_order)) },
-                                        onClick = {
-                                            overflowOpen = false
-                                            onCancel()
-                                        }
-                                    )
-                                }
-                                if (canDelete) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                stringResource(R.string.delete_order_permanently),
-                                                color = PosColors.Danger
-                                            )
-                                        },
-                                        onClick = {
-                                            overflowOpen = false
-                                            onDelete()
-                                        }
-                                    )
-                                }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(R.string.delete_order_permanently),
+                                            color = PosColors.Danger
+                                        )
+                                    },
+                                    onClick = {
+                                        overflowOpen = false
+                                        onDelete()
+                                    }
+                                )
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChangePaymentMethodDialog(
+    currentMethod: PaymentMethod,
+    onDismiss: () -> Unit,
+    onConfirm: (PaymentMethod) -> Unit,
+) {
+    var draft by remember(currentMethod) { mutableStateOf(currentMethod) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.42f)
+                .widthIn(max = 360.dp),
+            shape = PosShapes.Dialog,
+            color = posUiColors().surface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    stringResource(R.string.order_change_payment_method),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Text(
+                    stringResource(R.string.order_edit_payment_hint),
+                    fontSize = 13.sp,
+                    color = posUiColors().textSecondary
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    editablePaymentMethodsForHistory.forEach { method ->
+                        val selected = draft == method
+                        OutlinedButton(
+                            onClick = { draft = method },
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (selected) PosColors.Primary else posUiColors().border
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (selected) posUiColors().primarySubtle else posUiColors().surface,
+                                contentColor = if (selected) PosColors.Primary else posUiColors().textPrimary
+                            )
+                        ) {
+                            Text(orderHistoryPaymentMethodDetailLabel(method), fontSize = 12.sp)
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                    Button(
+                        onClick = { onConfirm(draft) },
+                        modifier = Modifier.weight(1f),
+                        enabled = draft != currentMethod,
+                        colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
+                    ) {
+                        Text(stringResource(R.string.confirm))
                     }
                 }
             }
@@ -603,7 +703,11 @@ fun RefundWizardDialog(
                                                 checked = checked,
                                                 onCheckedChange = { on ->
                                                     selectedQty[item.id] = if (on) 1 else 0
-                                                }
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = PosColors.Primary,
+                                                    checkmarkColor = PosColors.TextOnPrimary,
+                                                )
                                             )
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(item.productName, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)

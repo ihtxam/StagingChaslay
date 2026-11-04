@@ -3,10 +3,14 @@ import com.chaslay.pos.ui.theme.posUiColors
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,7 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CreditCard
@@ -108,16 +111,19 @@ fun OrderCompleteDialog(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth(0.68f)
-                .heightIn(max = 620.dp)
+                .fillMaxHeight(0.92f)
                 .padding(vertical = 4.dp, horizontal = 8.dp)
         ) {
+            val dialogHeight = minOf(maxHeight, 620.dp)
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(dialogHeight),
                 shape = PosShapes.Dialog,
                 colors = CardDefaults.cardColors(containerColor = posUiColors().surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxSize()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -155,14 +161,20 @@ fun OrderCompleteDialog(
                     }
 
                     val bodyScroll = rememberScrollState()
-                    Row(
+                    val ui = posUiColors()
+                    Box(
                         modifier = Modifier
+                            .weight(1f)
                             .fillMaxWidth()
-                            .verticalScroll(bodyScroll)
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.Top
                     ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(bodyScroll)
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
                         val orderNumber = com.chaslay.pos.util.OrderNumberFormat.displayForTransaction(transaction)
                         val paymentLabel = paymentMethodLabel(transaction.paymentMethod)
                         Column(
@@ -199,7 +211,7 @@ fun OrderCompleteDialog(
                                         ),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = PosColors.Primary,
+                                        color = PosColors.Warning,
                                         modifier = Modifier.padding(top = 6.dp)
                                     )
                                 }
@@ -244,56 +256,12 @@ fun OrderCompleteDialog(
                         }
                         if (showMultiSplitReceiptPrint) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                stringResource(R.string.order_complete_split_receipts_title),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = posUiColors().textSecondary,
-                                modifier = Modifier.fillMaxWidth()
+                            OrderCompleteSplitReceiptBadges(
+                                completedSplitOrders = completedSplitOrders,
+                                currencySymbol = currencySymbol,
+                                onPrintSplitReceipt = onPrintSplitReceipt,
+                                onPrintAllSplitReceipts = onPrintAllSplitReceipts,
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            completedSplitOrders.forEachIndexed { index, split ->
-                                val splitLabel = split.splitCheckNumber ?: (index + 1)
-                                OutlinedButton(
-                                    onClick = { onPrintSplitReceipt(split.id) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 2.dp),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Print,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        stringResource(R.string.print_split_n, splitLabel),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
-                            Button(
-                                onClick = onPrintAllSplitReceipts,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 2.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary)
-                            ) {
-                                Icon(
-                                    Icons.Default.Print,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    stringResource(R.string.print_all_split_receipts),
-                                    color = Color.White,
-                                    fontSize = 12.sp
-                                )
-                            }
                         }
                         if (showAdyenPaymentReceipt || showAdyenCashierReceipt) {
                             Spacer(modifier = Modifier.height(8.dp))
@@ -374,66 +342,192 @@ fun OrderCompleteDialog(
                         }
                     }
                     }
+                    }
 
-                    HorizontalDivider(color = posUiColors().border)
+                    HorizontalDivider(color = ui.border)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(posUiColors().surface)
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            .background(ui.surface)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        TextButton(
+                            onClick = onDone,
+                            modifier = Modifier.weight(0.85f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.cancel),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = ui.textSecondary
+                            )
+                        }
                         OutlinedButton(
                             onClick = onPrintReceipt,
                             enabled = !isPrintingReceipt,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1.15f),
                             shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                         ) {
                             Icon(
                                 Icons.Default.Print,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = posUiColors().textPrimary
+                                modifier = Modifier.size(16.dp),
+                                tint = ui.textPrimary
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 if (isPrintingReceipt) {
                                     stringResource(R.string.print_receipt_in_progress)
                                 } else {
                                     stringResource(R.string.print_receipt)
                                 },
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = posUiColors().textPrimary
+                                color = ui.textPrimary,
+                                maxLines = 1
                             )
                         }
                         Button(
                             onClick = onDone,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(0.85f),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                         ) {
                             Text(
-                                stringResource(R.string.continue_action),
+                                stringResource(R.string.ok),
                                 color = PosColors.TextOnPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = PosColors.TextOnPrimary,
-                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+private const val OrderCompleteSplitReceiptColumns = 3
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OrderCompleteSplitReceiptBadges(
+    completedSplitOrders: List<TransactionEntity>,
+    currencySymbol: String,
+    onPrintSplitReceipt: (String) -> Unit,
+    onPrintAllSplitReceipts: () -> Unit,
+) {
+    val ui = posUiColors()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            stringResource(R.string.order_complete_split_receipts_title),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = ui.textSecondary,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        completedSplitOrders.chunked(OrderCompleteSplitReceiptColumns).forEach { rowSplits ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                rowSplits.forEach { split ->
+                    val globalIndex = completedSplitOrders.indexOf(split)
+                    val splitLabel = split.splitCheckNumber ?: (globalIndex + 1)
+                    OrderCompleteSplitReceiptBadge(
+                        splitLabel = splitLabel,
+                        amountLabel = formatMoney(split.total, currencySymbol),
+                        modifier = Modifier.weight(1f),
+                        onClick = { onPrintSplitReceipt(split.id) },
+                    )
+                }
+                repeat(OrderCompleteSplitReceiptColumns - rowSplits.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Surface(
+                onClick = onPrintAllSplitReceipts,
+                shape = PosShapes.Pill,
+                color = PosColors.Primary,
+                modifier = Modifier.heightIn(min = 32.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Print,
+                        contentDescription = null,
+                        tint = PosColors.TextOnPrimary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        stringResource(R.string.print_all_split_receipts),
+                        color = PosColors.TextOnPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderCompleteSplitReceiptBadge(
+    splitLabel: Int,
+    amountLabel: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val ui = posUiColors()
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(ui.primarySubtle)
+            .border(1.dp, ui.primaryBorder, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Icon(
+                Icons.Default.Print,
+                contentDescription = null,
+                tint = PosColors.Primary,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                stringResource(R.string.print_split_n, splitLabel),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = ui.textSecondary,
+                maxLines = 1,
+            )
+        }
+        Text(
+            amountLabel,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            color = ui.textPrimary,
+            maxLines = 1,
+        )
     }
 }
 

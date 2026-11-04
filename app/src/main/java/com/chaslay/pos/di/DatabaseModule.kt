@@ -6,6 +6,10 @@ import com.chaslay.pos.data.local.AppDatabase
 import com.chaslay.pos.data.local.MIGRATION_50_51
 import com.chaslay.pos.data.local.MIGRATION_51_52
 import com.chaslay.pos.data.local.MIGRATION_52_53
+import com.chaslay.pos.data.local.MIGRATION_53_54
+import com.chaslay.pos.data.local.MIGRATION_54_55
+import com.chaslay.pos.data.local.MIGRATION_55_56
+import com.chaslay.pos.data.local.MIGRATION_56_57
 import com.chaslay.pos.data.local.DatabaseCallback
 import com.chaslay.pos.data.local.dao.BusinessSettingsDao
 import com.chaslay.pos.data.local.dao.CategoryDao
@@ -42,7 +46,15 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "food_truck_pos.db")
             .addCallback(DatabaseCallback(context))
-            .addMigrations(MIGRATION_50_51, MIGRATION_51_52, MIGRATION_52_53)
+            .addMigrations(
+                MIGRATION_50_51,
+                MIGRATION_51_52,
+                MIGRATION_52_53,
+                MIGRATION_53_54,
+                MIGRATION_54_55,
+                MIGRATION_55_56,
+                MIGRATION_56_57,
+            )
             .fallbackToDestructiveMigration()
             .build()
 

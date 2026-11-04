@@ -65,6 +65,7 @@ fun AdminHubScreen(
         return
     }
     if (selectedTab >= tabIds.size) selectedTab = 0
+    val currentTab = tabIds[selectedTab]
 
     Column(
         modifier = Modifier
@@ -113,8 +114,11 @@ fun AdminHubScreen(
                 )
             }
         }
-        when (tabIds[selectedTab]) {
-            AdminTabId.SETTINGS -> SettingsScreen(userAccess = userAccess)
+        when (currentTab) {
+            AdminTabId.SETTINGS -> SettingsScreen(
+                userAccess = userAccess,
+                onCancel = onBack,
+            )
             AdminTabId.PRODUCTS -> MenuHubScreen()
             AdminTabId.REPORTS -> ReportsScreen()
         }

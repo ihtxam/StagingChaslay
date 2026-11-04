@@ -9199,8 +9199,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
           : {}),
       }))
       .filter((p) => p.amount > 0);
-    const resolvedMethod =
-      tenders.length > 1 ? 'mixed' : tenders.length === 1 ? tenders[0]!.method : method;
+    const resolvedMethod = payLater
+      ? method
+      : tenders.length > 1
+        ? 'mixed'
+        : tenders.length === 1
+          ? tenders[0]!.method
+          : method;
     const fulfillmentStatus = posSaleFulfillmentStatus({
       channel: effectiveChannel,
       payLater,
@@ -9228,10 +9233,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       stationId: webposStaff?.stationId || undefined,
       orderNumber,
       paymentMethod: resolvedMethod,
-      paymentBreakdown:
-        tenders.length > 0
+      paymentBreakdown: payLater
+        ? undefined
+        : tenders.length > 0
           ? tenders
-          : !payLater && saleTotal > 0.001
+          : saleTotal > 0.001
             ? [
                 {
                   method:

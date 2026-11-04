@@ -257,6 +257,8 @@ data class BusinessSettingsEntity(
     val paymentMethodsManagedByCloud: Boolean = false,
     /** Gift card sell/reload/pay — synced from merchant panel; can be overridden locally. */
     val giftCardsEnabled: Boolean = false,
+    /** Issue invoice / pay by bank transfer at checkout. */
+    val invoiceEnabled: Boolean = true,
     val printerPrintReceipts: Boolean = true,
     val printerPrintReports: Boolean = true,
     val printerPrintKitchen: Boolean = false,
@@ -291,6 +293,11 @@ data class BusinessSettingsEntity(
     val retailTakeawayEnabled: Boolean = false,
     /** Retail only — show delivery channel. */
     val retailDeliveryEnabled: Boolean = false,
+    /**
+     * Retail only — manual weight × CHF/kg for weighed catalog items and Divers misc entry.
+     * When false (default), enter a line total (open-price style) with no scale session.
+     */
+    val retailWeighedCustomEntryEnabled: Boolean = false,
     /** When true, dine-in must pick a table; when false, counter ticket (D-001) with dine-in VAT. */
     val requireTableForDineIn: Boolean = true,
     /** Synced from merchant panel — multi-course firing on dine-in tables. */
@@ -327,7 +334,15 @@ data class BusinessSettingsEntity(
     /** LAN URL of main POS, e.g. http://192.168.1.50:8787 */
     val mainPosLanUrl: String = "",
     /** AUTO, LAN, or CLOUD — how floor sync routes when this device is a waiter tablet. */
-    val floorConnectionMode: String = "AUTO"
+    val floorConnectionMode: String = "AUTO",
+    /** Superadmin platform about HTML — synced from /v1/sync/bootstrap (platform_about_html). */
+    val platformAboutHtml: String = "",
+    /** Customer display (CDS) — synced from payment-config customer_display. */
+    val cdsEnabled: Boolean = true,
+    val cdsAccessToken: String = "",
+    val cdsShortCode: String = "",
+    val cdsMerchantSlug: String = "",
+    val cdsDisplayUrl: String = "",
 )
 
 /** Adyen terminal checkout when enabled in settings and credentials are configured. */

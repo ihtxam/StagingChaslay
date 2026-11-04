@@ -45,6 +45,18 @@ router.get("/payment-config", async (req: Request, res: Response) => {
   }
 });
 
+/** Live cart state for native POS customer display (Sunmi rear screen polls cloud). */
+router.post("/cds/push", async (req: Request, res: Response) => {
+  try {
+    const { CdsService } = await import("@/services/cds.service");
+    const raw = req.body?.state ?? req.body;
+    const state = await CdsService.pushLiveState(req.chaslayMerchantId!, raw);
+    res.json({ ok: true, state });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "CDS push failed" });
+  }
+});
+
 router.post("/terminals", async (req: Request, res: Response) => {
   try {
     const data = await ChaslayCompatService.pushTerminalsFromDevice(req.chaslayMerchantId!, req.body || {});

@@ -78,6 +78,7 @@ private val MiscConfirmWidth = 72.dp
 fun MiscDiversDialog(
     currencySymbol: String,
     scaleEnabled: Boolean,
+    scaleConfigured: Boolean = false,
     reading: AclasScaleReading?,
     scaleConnectionMessage: String? = null,
     onConfirm: (MiscDiversResult) -> Unit,
@@ -89,8 +90,10 @@ fun MiscDiversDialog(
     var weightEntryUnit by remember { mutableStateOf(MiscWeightUnit.KG) }
     var activeField by remember { mutableStateOf(MiscField.RATE) }
     var weightManualOverride by remember { mutableStateOf(false) }
-    val scaleWeighingActive = scaleEnabled && reading.hasValidWeighingWeight()
-    val flatAmountMode = scaleEnabled && !scaleWeighingActive
+    val scaleCheckoutActive = scaleEnabled && scaleConfigured
+    val scaleWeighingActive = scaleCheckoutActive && reading.hasValidWeighingWeight()
+    // Match WebPOS: flat CHF until USB scale delivers weight; manual rate×weight when scale is off.
+    val flatAmountMode = scaleCheckoutActive && !scaleWeighingActive
     val weightLockedFromScale = scaleWeighingActive
 
     LaunchedEffect(reading, weightEntryUnit, weightLockedFromScale) {

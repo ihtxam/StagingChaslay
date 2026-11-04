@@ -109,7 +109,10 @@ class MenuSyncRepository @Inject constructor(
             }
             if (syncBusinessInfo) {
                 bootstrap?.business?.let { dto ->
-                    applyBusinessInfo(dto)
+                    applyBusinessInfo(dto, bootstrap.platformAboutHtml)
+                    businessSynced = true
+                } ?: bootstrap?.platformAboutHtml?.let { html ->
+                    applyPlatformAbout(html)
                     businessSynced = true
                 }
             }
@@ -223,9 +226,24 @@ class MenuSyncRepository @Inject constructor(
         )
     }
 
-    private suspend fun applyBusinessInfo(dto: SyncBusinessDto) {
+    suspend fun refreshPlatformAboutHtml(): String? = withContext(Dispatchers.IO) {
+        if (!syncApiKeyStore.hasKey()) return@withContext null
+        val html = runCatching { syncApi.bootstrap().platformAboutHtml }.getOrNull()
+        applyPlatformAbout(html)
+        settingsRepository.getSettings().platformAboutHtml
+    }
+
+    private suspend fun applyPlatformAbout(html: String?) {
+        val trimmed = html?.trim().orEmpty()
+        val current = settingsRepository.getSettings()
+        if (current.platformAboutHtml == trimmed) return
+        settingsRepository.saveSettings(current.copy(platformAboutHtml = trimmed))
+    }
+
+    private suspend fun applyBusinessInfo(dto: SyncBusinessDto, platformAboutHtml: String? = null) {
         val current = settingsRepository.getSettings()
         val hours = parseStoreHours(dto.storeHours)
+        val aboutHtml = platformAboutHtml?.trim()?.takeIf { it.isNotEmpty() }
         val merged = current.copy(
             businessName = dto.name?.takeIf { it.isNotBlank() } ?: current.businessName,
             phone = dto.phone?.takeIf { it.isNotBlank() } ?: current.phone,
@@ -245,7 +263,8 @@ class MenuSyncRepository @Inject constructor(
             openHour = hours?.getOrNull(0) ?: current.openHour,
             openMinute = hours?.getOrNull(1) ?: current.openMinute,
             closeHour = hours?.getOrNull(2) ?: current.closeHour,
-            closeMinute = hours?.getOrNull(3) ?: current.closeMinute
+            closeMinute = hours?.getOrNull(3) ?: current.closeMinute,
+            platformAboutHtml = aboutHtml ?: current.platformAboutHtml,
         )
         settingsRepository.saveSettings(merged)
     }

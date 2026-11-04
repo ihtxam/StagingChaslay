@@ -2,13 +2,16 @@ package com.chaslay.pos.ui.menu
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,10 +52,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 
-internal val MenuTeal = Color(0xFF0D9488)
+internal val MenuTeal = Color(0xFF079B8F)
 private val MenuBorder = Color(0xFFE2E8F0)
 private val MenuMuted = Color(0xFF64748B)
-private val MenuSurface = Color(0xFFF5F6F8)
+private val MenuSurface = Color(0xFFF5F6F7)
+
+internal enum class MenuEditorPresentation { FULL_SCREEN, END_DRAWER }
 
 @Composable
 internal fun MenuSearchField(
@@ -207,53 +212,88 @@ internal fun MenuEditorDialog(
     title: String,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
+    presentation: MenuEditorPresentation = MenuEditorPresentation.FULL_SCREEN,
     content: @Composable () -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MenuSurface
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = null)
-                    }
+        when (presentation) {
+            MenuEditorPresentation.FULL_SCREEN -> {
+                Surface(modifier = Modifier.fillMaxSize(), color = MenuSurface) {
+                    MenuEditorShell(title, onDismiss, onSave, content)
                 }
-                Column(
+            }
+            MenuEditorPresentation.END_DRAWER -> {
+                Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .fillMaxSize()
+                        .background(Color(0x6B0F172A))
+                        .clickable(onClick = onDismiss),
                 ) {
-                    content()
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White)
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
-                ) {
-                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-                    Button(
-                        onClick = onSave,
-                        colors = ButtonDefaults.buttonColors(containerColor = MenuTeal)
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .widthIn(min = 380.dp, max = 520.dp)
+                            .fillMaxWidth(0.42f),
+                        color = MenuSurface,
+                        shadowElevation = 12.dp,
                     ) {
-                        Text(stringResource(R.string.save))
+                        MenuEditorShell(title, onDismiss, onSave, content)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuEditorShell(
+    title: String,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = null)
+            }
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            content()
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+        ) {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
+                Text(stringResource(R.string.cancel))
+            }
+            Button(
+                onClick = onSave,
+                colors = ButtonDefaults.buttonColors(containerColor = MenuTeal),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(stringResource(R.string.save))
             }
         }
     }
@@ -343,7 +383,7 @@ internal fun MenuOptionEditorRow(
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(stringResource(R.string.in_stock), fontSize = 9.sp, color = MenuMuted)
-            Switch(checked = inStock, onCheckedChange = onInStockChange)
+            com.chaslay.pos.ui.theme.PosSwitch(checked = inStock, onCheckedChange = onInStockChange)
         }
         IconButton(onClick = onDelete, enabled = canDelete) {
             Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFDC2626))

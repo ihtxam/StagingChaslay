@@ -1,10 +1,12 @@
 package com.chaslay.pos.payment
 
 import android.app.Activity
+import android.content.Context
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.payment.taptopay.TapToPayEngine
 import com.chaslay.pos.payment.taptopay.TapToPayReadiness
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -97,6 +99,7 @@ class TapToPayService @Inject constructor(
 
 @Singleton
 class AdyenTerminalService @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val adyenTerminalClient: AdyenTerminalClient
 ) {
     suspend fun processPayment(
@@ -122,7 +125,7 @@ class AdyenTerminalService @Inject constructor(
 
     suspend fun testConnection(settings: BusinessSettingsEntity): String {
         val result = adyenTerminalClient.testConnection(settings)
-        return result.message
+        return result.toDisplayMessage(appContext)
     }
 
     fun cancelActivePayment() {

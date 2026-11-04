@@ -12,7 +12,6 @@ import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { clearWebPosStaffSession } from '@/lib/permissions';
-import { bootstrapStaffRegisterSessionAfterEmailLogin } from '@/lib/staff-email-login-bootstrap';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
 import { OnScreenKeyboardToggle } from '@/components/OnScreenKeyboardToggle';
@@ -261,9 +260,8 @@ export default function LoginPage() {
           localStorage.removeItem('manupos_panel_scope');
           const { useLocationStore } = await import('@/store/location');
           await useLocationStore.getState().load();
-          await bootstrapStaffRegisterSessionAfterEmailLogin(hit.user, hit.token);
         } catch {
-          /* branch bind / register session is best-effort */
+          /* branch bind is best-effort */
         }
       }
       toast.success(t('loginWelcome'));

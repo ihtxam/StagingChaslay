@@ -177,7 +177,12 @@ enum class PosThemeMode(val displayName: String) {
     }
 }
 
-/** POS register catalog layout (Réglages → Apparence). */
+/**
+ * POS register catalog layout (Réglages → Apparence → Classic / Moderne).
+ *
+ * [CLASSIC] — lightweight POS path: Vectron grid/checkout, Material icons, minimal drawables (2 GB RAM).
+ * [MODERN_TOP] / [MODERN_SIDE] — full mockup UI, product photos, cart thumbnails, PosVectorIcon / ic_pos_* assets.
+ */
 enum class PosMenuDesign {
     CLASSIC,
     MODERN_TOP,
@@ -516,6 +521,23 @@ data class CartSummary(
         } else {
             roundMoney((netSubtotal + tax - discount).coerceAtLeast(0.0))
         }
+    }
+
+    /**
+     * Ongoing-order card amount: merchandise due only (no tip/rounding).
+     * When [vatIncludedInPrice], menu prices already embed VAT — use [merchandiseTotal] (same as checkout),
+     * not net HT + tax stacked on top.
+     * When prices are ex-VAT, show net merchandise before the tax line.
+     */
+    fun ongoingOrderCardTotal(
+        checkoutDiscountPercent: Double = discountPercent,
+        checkoutDiscountAmount: Double = discountAmount,
+    ): Double {
+        if (vatIncludedInPrice) {
+            return merchandiseTotal(checkoutDiscountPercent, checkoutDiscountAmount)
+        }
+        val discount = resolveBillDiscountAmount(this, checkoutDiscountPercent, checkoutDiscountAmount)
+        return roundMoney((netSubtotal - discount).coerceAtLeast(0.0))
     }
 }
 

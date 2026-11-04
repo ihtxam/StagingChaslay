@@ -29,6 +29,7 @@ import com.chaslay.pos.domain.model.roundMoney
 import com.chaslay.pos.data.repository.ReceiptPublicUrls
 import com.chaslay.pos.receipt.ReceiptQrGenerator
 import com.chaslay.pos.util.TextEncoding
+import com.chaslay.pos.util.reportsShowOrderTypes
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -74,6 +75,14 @@ class BluetoothPrinterService @Inject constructor(
 
     /** ESC/POS bytes for order-complete reprints (logo/QR raster is expensive to rebuild). */
     private val escPosReceiptPayloadCache = ConcurrentHashMap<String, CachedEscPosPayload>()
+
+    private data class HeldBluetoothSession(
+        val socket: android.bluetooth.BluetoothSocket,
+        @Volatile var lastUsedAtMs: Long,
+    )
+
+    /** Keeps BT open briefly so kitchen → receipt jobs avoid a second 8s connect. */
+    private val heldBluetoothByMac = ConcurrentHashMap<String, HeldBluetoothSession>()
 
     private fun receiptLanguageCode(settings: BusinessSettingsEntity): String =
         ReceiptPrintLanguage.codeFor(context, settings)
@@ -467,7 +476,7 @@ class BluetoothPrinterService @Inject constructor(
         val ticketItems = when {
             isFollowUp -> emptyList()
             kitchenItems.isNotEmpty() -> kitchenItems
-            else -> items
+            else -> emptyList()
         }
         var lastResult: Result<Unit> = Result.success(Unit)
         if (ticketItems.isNotEmpty() || isFollowUp) {
@@ -537,6 +546,8 @@ class BluetoothPrinterService @Inject constructor(
         }
         if (printedAny) {
             last
+        } else if (kitchenPrinters.isNotEmpty()) {
+            Result.success(Unit)
         } else {
             printKitchenTicket(
                 settings, tableName, serviceType, round, items, isFollowUp, message, categories, products, meta,
@@ -757,8 +768,7 @@ class BluetoothPrinterService @Inject constructor(
         loyaltyPointsEarned: Int? = null,
         loyaltyPointsBalance: Int? = null
     ) = withContext(Dispatchers.IO) {
-        val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
-            .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
+        val receiptPrinters = enabledReceiptPrinters()
         if (receiptPrinters.isEmpty()) {
             val lineWidth = lineWidthFor(80)
             cachedOrBuildEscPosReceipt(
@@ -774,23 +784,58 @@ class BluetoothPrinterService @Inject constructor(
                 loyaltyPointsEarned = loyaltyPointsEarned,
                 loyaltyPointsBalance = loyaltyPointsBalance
             )
-            return@withContext
+        } else {
+            for (printer in receiptPrinters) {
+                val lineWidth = lineWidthFor(printer.paperWidthMm)
+                cachedOrBuildEscPosReceipt(
+                    useCache = true,
+                    transactionId = transaction.id,
+                    printerAddress = printer.address,
+                    lineWidth = lineWidth,
+                    settings = settings,
+                    transaction = transaction,
+                    items = items,
+                    appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
+                    appendAdyenCashierReceipt = appendAdyenCashierReceipt,
+                    loyaltyPointsEarned = loyaltyPointsEarned,
+                    loyaltyPointsBalance = loyaltyPointsBalance
+                )
+            }
         }
-        for (printer in receiptPrinters) {
-            val lineWidth = lineWidthFor(printer.paperWidthMm)
-            cachedOrBuildEscPosReceipt(
-                useCache = true,
-                transactionId = transaction.id,
-                printerAddress = printer.address,
-                lineWidth = lineWidth,
-                settings = settings,
-                transaction = transaction,
-                items = items,
-                appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
-                appendAdyenCashierReceipt = appendAdyenCashierReceipt,
-                loyaltyPointsEarned = loyaltyPointsEarned,
-                loyaltyPointsBalance = loyaltyPointsBalance
-            )
+        holdReceiptPrinterBluetoothConnections(settings)
+    }
+
+    /** Pre-opens held BT sockets for receipt printers (express retail skips kitchen warm-up). */
+    suspend fun holdReceiptPrinterBluetoothConnections(settings: BusinessSettingsEntity) =
+        withContext(Dispatchers.IO) {
+            receiptPrinterAddresses(settings).forEach { address ->
+                holdBluetoothConnectionQuietly(address)
+            }
+        }
+
+    private suspend fun enabledReceiptPrinters() =
+        runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
+            .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
+
+    private suspend fun receiptPrinterAddresses(settings: BusinessSettingsEntity): List<String> {
+        val configured = enabledReceiptPrinters().map { it.address.trim() }.filter { it.isNotEmpty() }
+        if (configured.isNotEmpty()) return configured
+        return settings.printerMacAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { listOf(it) }.orEmpty()
+    }
+
+    private fun holdBluetoothConnectionQuietly(mac: String) {
+        if (mac.isBlank() || isSimulated(mac) || isUsbAddress(mac) || isNetworkAddress(mac)) return
+        if (!printerReachabilityCache.shouldAttemptPrint(mac)) return
+        val lockKey = printerReachabilityCache.keyForAddress(mac)
+        val lock = sendLocksByAddress.getOrPut(lockKey) { Any() }
+        synchronized(lock) {
+            runCatching { acquireHeldBluetoothSocket(mac) }
+                .onSuccess { printerReachabilityCache.markReachable(mac) }
+                .onFailure { e ->
+                    Log.w(TAG, "Receipt printer BT pre-hold failed for $mac: ${e.message}")
+                    closeHeldBluetooth(lockKey)
+                    printerReachabilityCache.markUnreachable(mac)
+                }
         }
     }
 
@@ -1290,7 +1335,11 @@ class BluetoothPrinterService @Inject constructor(
             appendReceiptVatSection(sb, vatRows, labels, lineWidth, cart.vatIncludedInPrice)
         }
 
-        val orderType = labels.fulfillmentLabel(context.fulfillmentType, context.serviceType)
+        val orderType = if (settings.reportsShowOrderTypes()) {
+            labels.fulfillmentLabel(context.fulfillmentType, context.serviceType)
+        } else {
+            null
+        }
         appendReceiptMetaFooter(
             sb = sb,
             dateTime = dateTimeFmt.format(Date()),
@@ -1480,10 +1529,14 @@ class BluetoothPrinterService @Inject constructor(
         }
 
         val serviceType = transaction.serviceType ?: com.chaslay.pos.domain.model.ServiceType.TAKEAWAY
-        val orderType = labels.fulfillmentLabel(
-            com.chaslay.pos.domain.model.FulfillmentType.WALK_IN,
-            serviceType
-        )
+        val orderType = if (settings.reportsShowOrderTypes()) {
+            labels.fulfillmentLabel(
+                com.chaslay.pos.domain.model.FulfillmentType.WALK_IN,
+                serviceType
+            )
+        } else {
+            null
+        }
         val orderMeta = com.chaslay.pos.util.parseOrderMetaFromNotes(transaction.notes)
         appendReceiptMetaFooter(
             sb = sb,
@@ -1652,22 +1705,24 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(leftRight("Total", formatMoney(report.paymentRows.sumOf { it.amount }, sym), lineWidth))
         sb.appendLine("")
 
-        sb.appendLine(dashes)
-        sb.appendLine(center("ORDER TYPES", lineWidth))
-        sb.appendLine(dashes)
-        report.orderTypeRows.forEach { row ->
-            sb.appendLine(
-                orderTypeRow(
-                    eodOrderTypeLabel(row.label, labels),
-                    row.count.toString(),
-                    "${"%.1f".format(row.percent)}%",
-                    formatMoney(row.amount, sym),
-                    lineWidth
+        if (report.orderTypeRows.isNotEmpty()) {
+            sb.appendLine(dashes)
+            sb.appendLine(center("ORDER TYPES", lineWidth))
+            sb.appendLine(dashes)
+            report.orderTypeRows.forEach { row ->
+                sb.appendLine(
+                    orderTypeRow(
+                        eodOrderTypeLabel(row.label, labels),
+                        row.count.toString(),
+                        "${"%.1f".format(row.percent)}%",
+                        formatMoney(row.amount, sym),
+                        lineWidth
+                    )
                 )
-            )
+            }
+            sb.appendLine(dashes)
+            sb.appendLine(leftRight("Total", formatMoney(report.orderTypeRows.sumOf { it.amount }, sym), lineWidth))
         }
-        sb.appendLine(dashes)
-        sb.appendLine(leftRight("Total", formatMoney(report.orderTypeRows.sumOf { it.amount }, sym), lineWidth))
 
         if (includeProductsSold && report.productsSold.isNotEmpty()) {
             sb.appendLine("")
@@ -2421,8 +2476,17 @@ class BluetoothPrinterService @Inject constructor(
             printerReachabilityCache.markReachable(mac)
         } else {
             printerReachabilityCache.markUnreachable(mac)
+            if (!isUsbAddress(mac) && !isNetworkAddress(mac)) {
+                closeHeldBluetooth(printerReachabilityCache.keyForAddress(mac))
+            }
         }
         return result
+    }
+
+    private fun closeHeldBluetooth(macKey: String) {
+        heldBluetoothByMac.remove(macKey)?.let { held ->
+            runCatching { held.socket.close() }
+        }
     }
 
     private fun escPosReceiptCacheKey(
@@ -2482,18 +2546,37 @@ class BluetoothPrinterService @Inject constructor(
         return payload
     }
 
-    private fun sendBytesOverBluetooth(mac: String, payload: ByteArray) {
+    private fun acquireHeldBluetoothSocket(mac: String): android.bluetooth.BluetoothSocket {
+        val macKey = printerReachabilityCache.keyForAddress(mac)
+        val now = System.currentTimeMillis()
+        heldBluetoothByMac[macKey]?.let { held ->
+            if (now - held.lastUsedAtMs <= BT_SOCKET_HOLD_MS &&
+                runCatching { held.socket.isConnected }.getOrDefault(false)
+            ) {
+                return held.socket
+            }
+            closeHeldBluetooth(macKey)
+        }
         val adapter = bluetoothAdapter() ?: error("Bluetooth not available")
         val device = adapter.getRemoteDevice(mac)
-        val socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+        val fresh = device.createRfcommSocketToServiceRecord(SPP_UUID)
+        connectBluetoothWithTimeout(fresh, BT_CONNECT_TIMEOUT_MS)
+        heldBluetoothByMac[macKey] = HeldBluetoothSession(fresh, now)
+        return fresh
+    }
+
+    private fun sendBytesOverBluetooth(mac: String, payload: ByteArray) {
+        val macKey = printerReachabilityCache.keyForAddress(mac)
+        val socket = acquireHeldBluetoothSocket(mac)
         try {
-            connectBluetoothWithTimeout(socket, BT_CONNECT_TIMEOUT_MS)
             val output = socket.getOutputStream()
             transmitPayload(output, payload)
             output.flush()
             Thread.sleep(BT_POST_SEND_SETTLE_MS)
-        } finally {
-            runCatching { socket.close() }
+            heldBluetoothByMac[macKey]?.lastUsedAtMs = System.currentTimeMillis()
+        } catch (e: Exception) {
+            closeHeldBluetooth(macKey)
+            throw e
         }
     }
 
@@ -2874,6 +2957,7 @@ class BluetoothPrinterService @Inject constructor(
         val SIMULATED_PRINTER = DiscoveredPrinter("Simulated (test)", SIMULATED_ADDRESS)
         private const val TAG = "PrinterService"
         private const val BT_CONNECT_TIMEOUT_MS = 8_000L
+        private const val BT_SOCKET_HOLD_MS = 12_000L
         private const val BT_POST_SEND_SETTLE_MS = 40L
         private const val ESC_POS_RECEIPT_CACHE_TTL_MS = 30 * 60 * 1000L
         private const val LINE_WIDTH_58 = 32

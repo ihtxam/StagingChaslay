@@ -46,6 +46,8 @@ android {
         versionName = "1.0.24"
 
         multiDexEnabled = true
+        multiDexKeepFile = file("multidex-config.txt")
+        multiDexKeepProguard = file("multidex-config.pro")
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
@@ -100,12 +102,22 @@ android {
     }
 
     buildTypes {
+        debug {
+            // R8 + multiDexKeepProguard: keep ChaslayPosApp/Hilt_* in classes.dex for OEM tablets
+            // that resolve the manifest Application only from the primary dex at cold start.
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules-debug.pro",
+            )
+        }
         release {
             isMinifyEnabled = true
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
+                "multidex-config.pro"
             )
         }
     }
@@ -174,7 +186,8 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.4.1")
     implementation("androidx.camera:camera-lifecycle:1.4.1")
     implementation("androidx.camera:camera-view:1.4.1")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Adyen (Ktor) pulls 5.x; align explicitly so manifest + runtime match.
+    implementation("com.squareup.okhttp3:okhttp:5.1.0")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
@@ -183,6 +196,7 @@ dependencies {
     implementation("com.fasterxml:aalto-xml:1.3.2")
     implementation("com.github.mik3y:usb-serial-for-android:3.9.0")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation("com.sunmi:printerlibrary:1.0.23")
 
     // --- Adyen Tap to Pay (In-Person Payments SDK) ---
     // Artifacts are served from the credentialed Maven repos declared in

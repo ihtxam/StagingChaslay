@@ -26,7 +26,7 @@ import retrofit2.HttpException
 class LicenseRepository @Inject constructor(
     private val licenseManager: LicenseManager,
     private val deviceIdProvider: DeviceIdProvider,
-    private val licenseApi: LicenseApi
+    private val licenseApi: LicenseApi,
 ) {
     private val trialDays: Int get() = BuildConfig.TRIAL_DAYS
     private val renewalWarningDays: Int get() = BuildConfig.LICENSE_RENEWAL_WARNING_DAYS

@@ -86,6 +86,8 @@ fun WaiterPosScreen(
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val posMenuDesign by viewModel.posMenuDesign.collectAsStateWithLifecycle()
+    val useModernGuestDialog = posMenuDesign.isModern
     val context = LocalContext.current
     val activity = context as? Activity
     var tab by remember { mutableStateOf(WaiterTab.TABLES) }
@@ -110,6 +112,17 @@ fun WaiterPosScreen(
         if (state.activeTableName != null) tab = WaiterTab.ORDER
     }
 
+    if (state.showGuestCountDialog) {
+        GuestCountDialog(
+            tableName = state.guestCountTableName,
+            seatCapacity = state.guestCountSeatCapacity,
+            initialCount = state.guestCountDefault,
+            useModernVisuals = useModernGuestDialog,
+            onConfirm = viewModel::confirmGuestCount,
+            onDismiss = viewModel::dismissGuestCountDialog,
+        )
+    }
+
     if (state.showCheckoutScreen) {
         val checkoutCart = viewModel.checkoutDisplayCart(state.cart)
         CheckoutScreen(
@@ -128,6 +141,7 @@ fun WaiterPosScreen(
             onSelectMethod = viewModel::updateCheckoutMethod,
             onDeselectMethod = viewModel::deselectCheckoutMethod,
             onApplyCardRemainder = viewModel::applyCheckoutCardRemainder,
+            onSwitchToCardTender = viewModel::checkoutSwitchToCardTender,
             onTipAmount = viewModel::updateCheckoutTipAmount,
             onTipPercent = viewModel::updateCheckoutTipPercent,
             onDiscountPercent = viewModel::updateCheckoutDiscountPercent,
@@ -138,7 +152,8 @@ fun WaiterPosScreen(
             onOpenCashDrawer = {},
             onPrintReceipt = viewModel::printCheckoutPreview,
             onTenderAmount = viewModel::updateCheckoutTenderAmount,
-            onComplete = { viewModel.completeCheckout(activity) }
+            onComplete = { viewModel.completeCheckout(activity) },
+            posMenuDesign = posMenuDesign,
         )
         if (state.showOrderComplete && state.completedTransaction != null) {
             OrderCompleteDialog(
@@ -231,16 +246,6 @@ fun WaiterPosScreen(
                 label = { Text(stringResource(R.string.waiter_order)) }
             )
         }
-    }
-
-    if (state.showGuestCountDialog) {
-        GuestCountDialog(
-            tableName = state.guestCountTableName,
-            seatCapacity = state.guestCountSeatCapacity,
-            initialCount = state.guestCountDefault,
-            onConfirm = viewModel::confirmGuestCount,
-            onDismiss = viewModel::dismissGuestCountDialog
-        )
     }
 
     state.productCustomize?.let { customize ->

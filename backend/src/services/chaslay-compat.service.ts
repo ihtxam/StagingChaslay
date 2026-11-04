@@ -520,8 +520,11 @@ export class ChaslayCompatService {
     );
     const addressParts = [merchant.address, merchant.city, merchant.country].filter(Boolean);
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
+    const { PlatformSettingsService } = await import("@/services/platform-settings.service");
+    const platformAboutHtml = await PlatformSettingsService.getMerchantAboutHtml();
     return {
       serverTime: Date.now(),
+      platform_about_html: platformAboutHtml,
       tenant: {
         id: merchant.id,
         slug: merchant.slug,
@@ -617,6 +620,9 @@ export class ChaslayCompatService {
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
     const { receiptPublicBaseUrl } = await import("@/lib/receipt-public-url");
     const posPrintSettings = normalizePosPrintSettings(merchant.posPrintSettings);
+    const { CdsService } = await import("@/services/cds.service");
+    const { buildCdsPublicUrl } = await import("@/lib/customer-display-settings");
+    const cdsSettings = await CdsService.getSettings(merchantId);
     const { normalizeBusinessModule, posModeForModule } = await import("@/lib/business-module");
     let posCheckoutSettings = normalizePosCheckoutSettings(merchant.posCheckoutSettings);
     const lockedModule = normalizeBusinessModule(
@@ -694,6 +700,13 @@ export class ChaslayCompatService {
         receipt_show_staff_line: posPrintSettings.receiptShowStaffLine !== false,
         receipt_show_qr_code: posPrintSettings.receiptShowQrCode !== false,
         receipt_body_text_scale: posPrintSettings.receiptBodyTextScale ?? 1,
+      },
+      customer_display: {
+        enabled: cdsSettings.enabled !== false,
+        access_token: cdsSettings.accessToken || null,
+        short_code: cdsSettings.shortCode || null,
+        merchant_slug: merchant.slug || null,
+        display_url: buildCdsPublicUrl(merchant.slug, cdsSettings.shortCode),
       },
     };
   }

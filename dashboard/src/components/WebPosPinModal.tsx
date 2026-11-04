@@ -436,6 +436,28 @@ export default function WebPosPinModal({
 
         {hasMenu ? (
           <div className="absolute left-0 top-0 z-10 p-4 sm:p-6">
+            <nav
+              className="webpos-pin-gate-breadcrumb mb-2 flex flex-wrap items-center gap-1.5 text-xs font-medium text-white/55"
+              aria-label={t('webPosPinGateTitle')}
+            >
+              <span>{t('loginTitle')}</span>
+              <span aria-hidden className="text-white/35">
+                /
+              </span>
+              <span className="text-white/80">{t('webPosPinGateTitle')}</span>
+            </nav>
+            {onLogout ? (
+              <button
+                type="button"
+                className="mb-2 block text-left text-sm font-semibold text-white/70 underline-offset-2 hover:text-white hover:underline"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout();
+                }}
+              >
+                {t('logout')}
+              </button>
+            ) : null}
             <button
               type="button"
               className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-white/90 hover:bg-white/10"

@@ -54,6 +54,7 @@ data class OrderHistoryUiState(
     val cancelReasons: List<String> = emptyList(),
     val showCancelDialog: Boolean = false,
     val showRefundDialog: Boolean = false,
+    val showPaymentEditDialog: Boolean = false,
     val showDeleteDialog: Boolean = false,
     val showBulkDeleteDialog: Boolean = false,
     val bulkDeleteCount: Int = 0,
@@ -75,7 +76,8 @@ class OrderHistoryViewModel @Inject constructor(
     private val adyenTerminalService: com.chaslay.pos.payment.AdyenTerminalService,
     private val giftCardRepository: GiftCardRepository,
     private val tableDao: RestaurantTableDao,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val posOrdersRepository: com.chaslay.pos.data.repository.PosOrdersRepository,
 ) : ViewModel() {
 
     private data class PendingRefundPrint(
@@ -343,6 +345,40 @@ class OrderHistoryViewModel @Inject constructor(
 
     fun dismissRefundDialog() {
         _uiState.value = _uiState.value.copy(showRefundDialog = false)
+    }
+
+    fun showPaymentEditDialog() {
+        _uiState.value = _uiState.value.copy(showPaymentEditDialog = true)
+    }
+
+    fun dismissPaymentEditDialog() {
+        _uiState.value = _uiState.value.copy(showPaymentEditDialog = false)
+    }
+
+    fun updateSelectedOrderPaymentMethod(method: PaymentMethod) {
+        val orderId = _uiState.value.selectedOrder?.id ?: return
+        viewModelScope.launch {
+            posOrdersRepository.updatePaymentMethod(orderId, method)
+                .onSuccess {
+                    val detail = transactionRepository.getTransaction(orderId)
+                    _uiState.value = _uiState.value.copy(
+                        selectedOrder = detail?.first,
+                        selectedItems = detail?.second.orEmpty(),
+                        showPaymentEditDialog = false,
+                        message = appContext.getString(com.chaslay.pos.R.string.order_payment_method_updated),
+                    )
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        showPaymentEditDialog = false,
+                        message = com.chaslay.pos.util.parseApiErrorMessage(
+                            e,
+                            appContext.getString(com.chaslay.pos.R.string.order_payment_method_update_failed),
+                        ),
+                    )
+                }
+        }
     }
 
     fun cancelSelectedOrder(reason: String) {

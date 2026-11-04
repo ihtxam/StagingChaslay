@@ -2,6 +2,7 @@ package com.chaslay.pos.payment
 
 import android.util.Log
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
+import com.chaslay.pos.domain.model.roundMoney
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import java.io.IOException
@@ -36,8 +37,21 @@ sealed class AdyenTerminalResponse {
 
 data class AdyenConnectionTestResult(
     val success: Boolean,
-    val message: String
+    val code: AdyenTestMessageCode,
+    val terminalId: String? = null,
+    /** Human-readable detail for errors or config hints (never raw JSON). */
+    val detail: String? = null,
 )
+
+enum class AdyenTestMessageCode {
+    CONFIG_ERROR,
+    TERMINAL_ONLINE,
+    TERMINAL_OFFLINE,
+    CONNECTION_OK,
+    LEGACY_OK_CLOUD_403,
+    NETWORK_ERROR,
+    API_ERROR,
+}
 
 private data class AdyenApiError(
     val errorCode: String?,
@@ -70,7 +84,11 @@ class AdyenTerminalClient @Inject constructor() {
         withContext(Dispatchers.IO) {
             val validation = validateSettings(settings)
             if (validation != null) {
-                return@withContext AdyenConnectionTestResult(false, validation)
+                return@withContext AdyenConnectionTestResult(
+                    success = false,
+                    code = AdyenTestMessageCode.CONFIG_ERROR,
+                    detail = validation,
+                )
             }
 
             val merchantAccount = settings.adyenMerchantAccount.trim()
@@ -84,17 +102,13 @@ class AdyenTerminalClient @Inject constructor() {
             }
 
             val cloudResult = testCloudDeviceStatus(apiKey, live, settings.adyenLiveRegion, merchantAccount, terminalId)
-            if (!cloudResult.success && cloudResult.message.contains("00_403", ignoreCase = true)) {
+            if (!cloudResult.success && cloudResult.detail?.contains("00_403", ignoreCase = true) == true) {
                 val legacyResult = testLegacyConnection(apiKey, live, saleId, terminalId)
                 if (legacyResult.success) {
                     return@withContext AdyenConnectionTestResult(
                         success = true,
-                        message = buildString {
-                            append(legacyResult.message)
-                            append("\n\nCloud Device API returned 00_403 (missing POS ? Cloud Device API role). ")
-                            append("Payments will use the legacy Terminal API endpoint. ")
-                            append("Keep \"Use legacy Terminal API\" enabled, or add Cloud Device API to your Web service user for the newer endpoint.")
-                        }
+                        code = AdyenTestMessageCode.LEGACY_OK_CLOUD_403,
+                        terminalId = terminalId,
                     )
                 }
             }
@@ -123,7 +137,9 @@ class AdyenTerminalClient @Inject constructor() {
                     val apiError = parseAdyenApiError(body)
                     return AdyenConnectionTestResult(
                         success = false,
-                        message = formatHttpError(response.code, apiError, triedLegacy = false)
+                        code = AdyenTestMessageCode.API_ERROR,
+                        terminalId = terminalId,
+                        detail = formatHttpError(response.code, apiError, triedLegacy = false),
                     )
                 }
                 val status = runCatching {
@@ -132,20 +148,27 @@ class AdyenTerminalClient @Inject constructor() {
                 when (status?.uppercase()) {
                     "ONLINE" -> AdyenConnectionTestResult(
                         success = true,
-                        message = "Terminal $terminalId is ONLINE and reachable via Adyen cloud."
+                        code = AdyenTestMessageCode.TERMINAL_ONLINE,
+                        terminalId = terminalId,
                     )
                     "OFFLINE" -> AdyenConnectionTestResult(
                         success = false,
-                        message = "API key works, but terminal $terminalId is OFFLINE. Check terminal network/power."
+                        code = AdyenTestMessageCode.TERMINAL_OFFLINE,
+                        terminalId = terminalId,
                     )
                     else -> AdyenConnectionTestResult(
                         success = true,
-                        message = "Adyen API credentials accepted. Response: ${body.take(120)}"
+                        code = AdyenTestMessageCode.CONNECTION_OK,
+                        terminalId = terminalId,
                     )
                 }
             }
         }.getOrElse { e ->
-            AdyenConnectionTestResult(false, "Network error: ${e.message ?: "Could not reach Adyen"}")
+            AdyenConnectionTestResult(
+                success = false,
+                code = AdyenTestMessageCode.NETWORK_ERROR,
+                detail = e.message,
+            )
         }
     }
 
@@ -172,10 +195,12 @@ class AdyenTerminalClient @Inject constructor() {
                     val apiError = parseAdyenApiError(responseBody)
                     return AdyenConnectionTestResult(
                         success = false,
-                        message = formatHttpError(response.code, apiError, triedLegacy = true)
+                        code = AdyenTestMessageCode.API_ERROR,
+                        terminalId = terminalId,
+                        detail = formatHttpError(response.code, apiError, triedLegacy = true),
                     )
                 }
-                val result = runCatching {
+                val diagnosisResult = runCatching {
                     gson.fromJson(responseBody, JsonObject::class.java)
                         .getAsJsonObject("SaleToPOIResponse")
                         ?.getAsJsonObject("DiagnosisResponse")
@@ -183,20 +208,22 @@ class AdyenTerminalClient @Inject constructor() {
                         ?.get("Result")
                         ?.asString
                 }.getOrNull()
-                if (result.equals("Success", ignoreCase = true)) {
-                    AdyenConnectionTestResult(
-                        success = true,
-                        message = "Legacy Terminal API accepted your credentials. Terminal $terminalId responded to a diagnosis request."
-                    )
-                } else {
-                    AdyenConnectionTestResult(
-                        success = true,
-                        message = "Legacy Terminal API credentials accepted. Response: ${responseBody.take(120)}"
-                    )
-                }
+                Log.d(
+                    TAG,
+                    "Adyen legacy diagnosis result=${diagnosisResult ?: "n/a"} body=${responseBody.take(500)}",
+                )
+                AdyenConnectionTestResult(
+                    success = true,
+                    code = AdyenTestMessageCode.CONNECTION_OK,
+                    terminalId = terminalId,
+                )
             }
         }.getOrElse { e ->
-            AdyenConnectionTestResult(false, "Network error: ${e.message ?: "Could not reach Adyen"}")
+            AdyenConnectionTestResult(
+                success = false,
+                code = AdyenTestMessageCode.NETWORK_ERROR,
+                detail = e.message,
+            )
         }
     }
 
@@ -591,7 +618,7 @@ class AdyenTerminalClient @Inject constructor() {
         val serviceId = generateServiceId()
         val transactionId = UUID.randomUUID().toString().replace("-", "").take(16)
         val timestamp = OffsetDateTime.now(ZoneOffset.UTC).format(timestampFormatter)
-        val requestedAmount = "%.2f".format(amount).toDouble()
+        val requestedAmount = roundMoney(amount)
         val saleToAcquirerData = if (askGratuity) {
             "tenderOption=ReceiptHandler,AskGratuity"
         } else {
@@ -754,7 +781,7 @@ class AdyenTerminalClient @Inject constructor() {
         originalTimestamp: String
     ): String {
         val serviceId = generateServiceId()
-        val requestedAmount = "%.2f".format(amount).toDouble()
+        val requestedAmount = roundMoney(amount)
         val payload = mapOf(
             "SaleToPOIRequest" to mapOf(
                 "MessageHeader" to mapOf(
@@ -837,7 +864,7 @@ class AdyenTerminalClient @Inject constructor() {
         poiId: String
     ): String {
         val serviceId = generateServiceId()
-        val requestedAmount = "%.2f".format(amount).toDouble()
+        val requestedAmount = roundMoney(amount)
         val payload = mapOf(
             "SaleToPOIRequest" to mapOf(
                 "MessageHeader" to mapOf(

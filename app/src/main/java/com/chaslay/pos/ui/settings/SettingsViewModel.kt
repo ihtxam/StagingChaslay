@@ -83,7 +83,20 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
     FLOOR_DEVICES(R.string.settings_section_floor_devices),
     USERS_ACCOUNTS(R.string.settings_section_users),
     APPEARANCE(R.string.settings_section_appearance),
-    LICENSE(R.string.settings_section_license)
+    LICENSE(R.string.settings_section_license);
+
+    companion object {
+        fun visibleNavSections(
+            canManageUsers: Boolean,
+            restaurantMode: Boolean,
+        ): List<SettingsSection> = entries.filter { section ->
+            when (section) {
+                SettingsSection.USERS_ACCOUNTS -> canManageUsers
+                SettingsSection.TABLES -> restaurantMode
+                else -> true
+            }
+        }
+    }
 }
 
 data class SettingsUiState(
@@ -118,6 +131,7 @@ data class SettingsUiState(
     val afterSaleGoToOrders: Boolean = false,
     val retailCashTenderDialogEnabled: Boolean = true,
     val giftCardsEnabled: Boolean = false,
+    val invoiceEnabled: Boolean = true,
     val paymentMethodsManagedByCloud: Boolean = false,
     val printerPrintReceipts: Boolean = true,
     val printerPrintReports: Boolean = true,
@@ -145,6 +159,7 @@ data class SettingsUiState(
     val receiptDeliveryDirectionsQr: Boolean = true,
     val adyenReceiptDigitalOnly: Boolean = false,
     val autoPrintReceipt: Boolean = true,
+    val autoPrintKitchen: Boolean = true,
     val kitchenLargeItemText: Boolean = true,
     val kitchenLargeHeaderText: Boolean = true,
     val kitchenItemTextScale: Int = 2,
@@ -171,6 +186,10 @@ data class SettingsUiState(
     val scaleUsbDeviceAttached: Boolean = false,
     /** [android.hardware.usb.UsbManager.hasPermission] for [scaleUsbAddress]. */
     val scaleUsbHasPermission: Boolean = false,
+    /** Live serial probe result for [scaleUsbAddress]; null until first probe completes. */
+    val scaleReachability: Boolean? = null,
+    val isProbingScale: Boolean = false,
+    val scaleLastProbeAtMs: Long? = null,
     val message: String? = null,
     val isMenuSyncing: Boolean = false,
     val syncBusinessInfo: Boolean = true,
@@ -191,6 +210,7 @@ data class SettingsUiState(
     val retailDineInEnabled: Boolean = false,
     val retailTakeawayEnabled: Boolean = false,
     val retailDeliveryEnabled: Boolean = false,
+    val retailWeighedCustomEntryEnabled: Boolean = false,
     val requireTableForDineIn: Boolean = true,
     val openHour: String = "10",
     val openMinute: String = "0",
@@ -212,6 +232,8 @@ data class SettingsUiState(
     /** When set, POS mode follows merchant panel sync (retail vs restaurant). */
     val posModeManagedByCloud: Boolean = false,
     val posSession: PosSessionDisplay = PosSessionDisplay(),
+    /** Company / publisher blurb from superadmin (GET /api/merchant/platform-about via sync bootstrap). */
+    val platformAboutHtml: String = "",
 )
 
 @HiltViewModel
@@ -231,6 +253,7 @@ class SettingsViewModel @Inject constructor(
     private val floorSyncRepository: com.chaslay.pos.sync.FloorSyncRepository,
     private val terminalSyncRepository: com.chaslay.pos.sync.TerminalSyncRepository,
     private val syncService: com.chaslay.pos.sync.SyncService,
+    private val menuSyncRepository: com.chaslay.pos.sync.MenuSyncRepository,
     private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
     private val authRepository: AuthRepository,
     private val tapToPayEngine: com.chaslay.pos.payment.taptopay.TapToPayEngine
@@ -315,6 +338,7 @@ class SettingsViewModel @Inject constructor(
                     afterSaleGoToOrders = com.chaslay.pos.util.PosLocalPrefs.readAfterSaleGoToOrders(appContext),
                     retailCashTenderDialogEnabled = settings.retailCashTenderDialogEnabled,
                     giftCardsEnabled = settings.giftCardsEnabled,
+                    invoiceEnabled = settings.invoiceEnabled,
                     paymentMethodsManagedByCloud = settings.paymentMethodsManagedByCloud,
                     printerPrintReceipts = settings.printerPrintReceipts,
                     printerPrintReports = settings.printerPrintReports,
@@ -333,6 +357,7 @@ class SettingsViewModel @Inject constructor(
                     receiptDeliveryDirectionsQr = settings.receiptDeliveryDirectionsQr,
                     adyenReceiptDigitalOnly = settings.adyenReceiptDigitalOnly,
                     autoPrintReceipt = settings.autoPrintReceipt,
+                    autoPrintKitchen = settings.autoPrintKitchen,
                     kitchenLargeItemText = settings.kitchenLargeItemText,
                     kitchenLargeHeaderText = settings.kitchenLargeHeaderText,
                     kitchenItemTextScale = settings.kitchenItemTextScale.coerceIn(1, 3),
@@ -347,6 +372,7 @@ class SettingsViewModel @Inject constructor(
                     retailDineInEnabled = settings.retailDineInEnabled,
                     retailTakeawayEnabled = settings.retailTakeawayEnabled,
                     retailDeliveryEnabled = settings.retailDeliveryEnabled,
+                    retailWeighedCustomEntryEnabled = settings.retailWeighedCustomEntryEnabled,
                     requireTableForDineIn = settings.requireTableForDineIn,
                     trackCoversFromSeatingPlan = settings.trackCoversFromSeatingPlan,
                     floorSyncEnabled = settings.floorSyncEnabled,
@@ -365,7 +391,8 @@ class SettingsViewModel @Inject constructor(
                     printers = listOf(BluetoothPrinterService.SIMULATED_PRINTER),
                     categoryPrintSettings = categories.map { c ->
                         CategoryPrintSetting(c.id, c.name, c.printTarget)
-                    }
+                    },
+                    platformAboutHtml = settings.platformAboutHtml.orEmpty(),
                 )
             }
             loadTables()
@@ -397,7 +424,6 @@ class SettingsViewModel @Inject constructor(
     fun selectSection(section: SettingsSection) {
         _uiState.update { it.copy(selectedSection = section, message = null) }
         if (section == SettingsSection.PRINTERS) {
-            discoverUsbDevices()
             refreshPrinterConnectionState()
         }
         if (section == SettingsSection.SCALE) {
@@ -613,6 +639,16 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun refreshPlatformAboutFromCloud() {
+        viewModelScope.launch {
+            val html = withContext(Dispatchers.IO) {
+                menuSyncRepository.refreshPlatformAboutHtml()
+            }
+            val resolved = html ?: settingsRepository.getSettings().platformAboutHtml.orEmpty()
+            _uiState.update { it.copy(platformAboutHtml = resolved) }
+        }
+    }
+
     private fun syncMonitoredScaleUsbAddress() {
         val address = _uiState.value.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() }
         usbPrinterManager.setMonitoredScaleAddresses(
@@ -620,16 +656,41 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    private fun refreshScaleConnectionState() {
-        val address = _uiState.value.scaleUsbAddress?.trim().orEmpty()
-        if (address.isBlank()) {
-            _uiState.update { it.copy(scaleUsbDeviceAttached = false, scaleUsbHasPermission = false) }
-            return
-        }
-        val attached = usbPrinterManager.resolveDevice(address) != null
-        val permitted = scaleService.hasPermission(address)
-        _uiState.update {
-            it.copy(scaleUsbDeviceAttached = attached, scaleUsbHasPermission = permitted)
+    fun refreshScaleConnectionState() {
+        viewModelScope.launch {
+            val address = _uiState.value.scaleUsbAddress?.trim().orEmpty()
+            if (address.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        scaleUsbDeviceAttached = false,
+                        scaleUsbHasPermission = false,
+                        scaleReachability = null,
+                        isProbingScale = false,
+                        scaleLastProbeAtMs = null,
+                    )
+                }
+                return@launch
+            }
+            _uiState.update { it.copy(isProbingScale = true) }
+            usbPrinterManager.syncGrantedDevicesFromSystem()
+            val attached = usbPrinterManager.resolveDevice(address) != null
+            val permitted = scaleService.hasPermission(address)
+            val reachable = withContext(Dispatchers.IO) {
+                when {
+                    !attached || !permitted -> false
+                    else -> scaleService.probeReachable(address)
+                }
+            }
+            val probedAt = System.currentTimeMillis()
+            _uiState.update {
+                it.copy(
+                    scaleUsbDeviceAttached = attached,
+                    scaleUsbHasPermission = permitted,
+                    scaleReachability = reachable,
+                    isProbingScale = false,
+                    scaleLastProbeAtMs = probedAt,
+                )
+            }
         }
     }
 
@@ -651,7 +712,14 @@ class SettingsViewModel @Inject constructor(
 
     fun dismissAddPrinterDialog() {
         clearNetworkDiscovery()
-        _uiState.update { it.copy(showAddPrinterDialog = false, editingPrinter = null) }
+        _uiState.update {
+            it.copy(
+                showAddPrinterDialog = false,
+                editingPrinter = null,
+                usbDevices = emptyList(),
+                printerDiscoveryMessage = null,
+            )
+        }
     }
 
     fun editPrinter(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity) {
@@ -769,6 +837,9 @@ class SettingsViewModel @Inject constructor(
     fun updateCourseSendMode(mode: CourseSendMode) = _uiState.update { it.copy(courseSendMode = mode) }
     fun updateTablesEnabled(enabled: Boolean) = _uiState.update { it.copy(tablesEnabled = enabled) }
     fun updateRetailDineInEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDineInEnabled = enabled) }
+
+    fun updateRetailWeighedCustomEntryEnabled(enabled: Boolean) =
+        _uiState.update { it.copy(retailWeighedCustomEntryEnabled = enabled) }
     fun updateRetailTakeawayEnabled(enabled: Boolean) = _uiState.update { it.copy(retailTakeawayEnabled = enabled) }
     fun updateRetailDeliveryEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDeliveryEnabled = enabled) }
     fun updateRequireTableForDineIn(enabled: Boolean) = _uiState.update { it.copy(requireTableForDineIn = enabled) }
@@ -820,7 +891,8 @@ class SettingsViewModel @Inject constructor(
                 openMinute = settings.openMinute.toString(),
                 closeHour = settings.closeHour.toString(),
                 closeMinute = settings.closeMinute.toString(),
-                language = AppLanguage.fromCode(settings.defaultLanguage)
+                language = AppLanguage.fromCode(settings.defaultLanguage),
+                platformAboutHtml = settings.platformAboutHtml.orEmpty(),
             )
         }
     }
@@ -1006,8 +1078,8 @@ class SettingsViewModel @Inject constructor(
     fun updateAddress(value: String) = _uiState.update { it.copy(address = value) }
     fun updatePhone(value: String) = _uiState.update { it.copy(phone = value) }
     fun updateEmail(value: String) = _uiState.update { it.copy(email = value) }
-    fun updateReceiptHeader(value: String) = _uiState.update { it.copy(receiptHeader = value) }
-    fun updateReceiptFooter(value: String) = _uiState.update { it.copy(receiptFooter = value) }
+    fun updateReceiptHeader(value: String) = _uiState.update { it.copy(receiptHeader = value.take(500)) }
+    fun updateReceiptFooter(value: String) = _uiState.update { it.copy(receiptFooter = value.take(500)) }
     fun updateKitchenHeader(value: String) = _uiState.update { it.copy(kitchenTicketHeader = value) }
     fun updateKitchenFooter(value: String) = _uiState.update { it.copy(kitchenTicketFooter = value) }
     fun updateReceiptShowVatTable(value: Boolean) = _uiState.update { it.copy(receiptShowVatTable = value) }
@@ -1018,6 +1090,7 @@ class SettingsViewModel @Inject constructor(
     fun updateAdyenReceiptDigitalOnly(value: Boolean) = _uiState.update { it.copy(adyenReceiptDigitalOnly = value) }
 
     fun updateAutoPrintReceipt(enabled: Boolean) = _uiState.update { it.copy(autoPrintReceipt = enabled) }
+    fun updateAutoPrintKitchen(enabled: Boolean) = _uiState.update { it.copy(autoPrintKitchen = enabled) }
     fun updateKitchenLargeItems(value: Boolean) = _uiState.update { it.copy(kitchenLargeItemText = value) }
     fun updateKitchenLargeHeader(value: Boolean) = _uiState.update { it.copy(kitchenLargeHeaderText = value) }
     fun updateKitchenItemTextScale(scale: Int) = _uiState.update {
@@ -1133,6 +1206,12 @@ class SettingsViewModel @Inject constructor(
     fun updateGiftCardsEnabled(enabled: Boolean) {
         _uiState.update {
             it.copy(giftCardsEnabled = enabled, paymentMethodsManagedByCloud = false)
+        }
+        saveSettings()
+    }
+    fun updateInvoiceEnabled(enabled: Boolean) {
+        _uiState.update {
+            it.copy(invoiceEnabled = enabled, paymentMethodsManagedByCloud = false)
         }
         saveSettings()
     }
@@ -1486,6 +1565,9 @@ class SettingsViewModel @Inject constructor(
             if (settings.autoPrintReceipt != previous.autoPrintReceipt) {
                 com.chaslay.pos.util.PosLocalPrefs.saveAutoPrintReceipt(appContext, settings.autoPrintReceipt)
             }
+            if (settings.autoPrintKitchen != previous.autoPrintKitchen) {
+                com.chaslay.pos.util.PosLocalPrefs.saveAutoPrintKitchen(appContext, settings.autoPrintKitchen)
+            }
             if (settings.tablesEnabled != previous.tablesEnabled) {
                 com.chaslay.pos.util.PosLocalPrefs.saveTablesEnabled(appContext, settings.tablesEnabled)
             }
@@ -1520,6 +1602,12 @@ class SettingsViewModel @Inject constructor(
                 com.chaslay.pos.util.PosLocalPrefs.saveRetailCashTenderDialogEnabled(
                     appContext,
                     settings.retailCashTenderDialogEnabled
+                )
+            }
+            if (settings.retailWeighedCustomEntryEnabled != previous.retailWeighedCustomEntryEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRetailWeighedCustomEntryEnabled(
+                    appContext,
+                    settings.retailWeighedCustomEntryEnabled
                 )
             }
             if (settings.courseSendMode != previous.courseSendMode) {
@@ -1580,6 +1668,7 @@ class SettingsViewModel @Inject constructor(
             expressPayPlacement = ExpressPayPlacement.toCheckoutValue(state.expressPayPlacement),
             retailCashTenderDialogEnabled = state.retailCashTenderDialogEnabled,
             giftCardsEnabled = state.giftCardsEnabled,
+            invoiceEnabled = state.invoiceEnabled,
             // POS Settings wins when staff change toggles locally.
             paymentMethodsManagedByCloud = state.paymentMethodsManagedByCloud,
             printerPrintReceipts = state.printerPrintReceipts,
@@ -1603,6 +1692,7 @@ class SettingsViewModel @Inject constructor(
             receiptDeliveryDirectionsQr = state.receiptDeliveryDirectionsQr,
             adyenReceiptDigitalOnly = state.adyenReceiptDigitalOnly,
             autoPrintReceipt = state.autoPrintReceipt,
+            autoPrintKitchen = state.autoPrintKitchen,
             kitchenLargeItemText = state.kitchenLargeItemText,
             kitchenLargeHeaderText = state.kitchenLargeHeaderText,
             kitchenItemTextScale = state.kitchenItemTextScale.coerceIn(1, 3),
@@ -1616,6 +1706,7 @@ class SettingsViewModel @Inject constructor(
             retailDineInEnabled = state.retailDineInEnabled,
             retailTakeawayEnabled = state.retailTakeawayEnabled,
             retailDeliveryEnabled = state.retailDeliveryEnabled,
+            retailWeighedCustomEntryEnabled = state.retailWeighedCustomEntryEnabled,
             requireTableForDineIn = state.requireTableForDineIn,
             trackCoversFromSeatingPlan = state.trackCoversFromSeatingPlan,
             floorSyncEnabled = state.floorSyncEnabled,
@@ -1722,6 +1813,8 @@ class SettingsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             scaleTestReading = com.chaslay.pos.scale.AclasScaleProtocol.formatWeight(reading.weightKg),
+                            scaleReachability = true,
+                            scaleLastProbeAtMs = System.currentTimeMillis(),
                             message = "Scale reading OK"
                         )
                     }
@@ -1730,6 +1823,8 @@ class SettingsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             scaleTestReading = null,
+                            scaleReachability = false,
+                            scaleLastProbeAtMs = System.currentTimeMillis(),
                             message = error.message ?: "Scale test failed"
                         )
                     }

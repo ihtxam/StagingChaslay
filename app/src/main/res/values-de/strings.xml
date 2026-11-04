@@ -315,6 +315,8 @@
     <string name="search_orders">Suchen</string>
     <string name="auto_print_receipt">Kundenbeleg nach Verkauf automatisch drucken</string>
     <string name="auto_print_receipt_hint">Druckt den Kundenbeleg nach Zahlung. Auf dem Erfolgsbildschirm können Sie weiterhin manuell drucken.</string>
+    <string name="auto_print_kitchen">Küchenticket beim Verkauf automatisch drucken</string>
+    <string name="auto_print_kitchen_hint">Druckt nicht gesendete Artikel nach Zahlung in die Küche. Bei Aus können Sie jederzeit „An Küche senden“ nutzen.</string>
     <string name="previous_page">Zurück</string>
     <string name="next_page">Weiter</string>
     <string name="hold_order">Halten</string>
@@ -512,6 +514,8 @@
     <string name="pos_tables_enabled_hint">Tables-Tab und Tischwahl für Vor-Ort-Service anzeigen.</string>
     <string name="pos_retail_dine_in">Vor-Ort im Retail aktivieren</string>
     <string name="pos_retail_dine_in_hint">Bistro-Stil: Vor Ort und Takeaway an der Theke ohne Tischwahl.</string>
+    <string name="pos_retail_weighed_custom_entry">Manuelle Gewichtseingabe für Wiegeartikel</string>
+    <string name="pos_retail_weighed_custom_entry_hint">Aus: Zeilenbetrag für Divers/Wiegeartikel (kein Warten auf Waage). An: Gewicht und CHF/kg eingeben.</string>
     <string name="pos_retail_takeaway">Takeaway im Retail aktivieren</string>
     <string name="pos_retail_delivery">Lieferung im Retail aktivieren</string>
     <string name="pos_require_table_dine_in">Tisch für Vor Ort erforderlich</string>

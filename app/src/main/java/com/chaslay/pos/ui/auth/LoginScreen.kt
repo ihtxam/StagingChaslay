@@ -182,11 +182,16 @@ fun LoginScreen(
                         .weight(1f)
                         .fillMaxHeight()
                         .posCanvasBackground()
-                        .imePadding()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 48.dp, vertical = 40.dp),
-                    contentAlignment = Alignment.Center
+                        .imePadding(),
+                    contentAlignment = Alignment.Center,
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 48.dp, vertical = 40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                     AuthCardContent(
                         showEmail = showEmailLogin,
                         pin = pin,
@@ -208,18 +213,23 @@ fun LoginScreen(
                         onShowPin = { showEmailLogin = false },
                         onBiometric = ::triggerBiometric
                     )
+                    }
                 }
             }
         } else {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .imePadding(),
+                contentAlignment = Alignment.Center,
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                 CompactHero()
                 Spacer(modifier = Modifier.height(12.dp))
                 AuthCardContent(
@@ -243,6 +253,7 @@ fun LoginScreen(
                     onShowPin = { showEmailLogin = false },
                     onBiometric = ::triggerBiometric
                 )
+                }
             }
         }
     }

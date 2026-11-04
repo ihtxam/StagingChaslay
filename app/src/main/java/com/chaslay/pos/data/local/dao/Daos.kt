@@ -76,6 +76,9 @@ interface UserDao {
 
     @Update
     suspend fun update(user: UserEntity)
+
+    @Query("DELETE FROM users WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }
 
 @Dao
@@ -407,6 +410,9 @@ interface TransactionDao {
         reason: String?,
         refundedAt: Long
     )
+
+    @Query("UPDATE transactions SET paymentMethod = :method, syncStatus = 'PENDING' WHERE id = :id")
+    suspend fun updatePaymentMethod(id: String, method: PaymentMethod)
 
     @Query(
         """

@@ -139,7 +139,8 @@ internal fun ModifierEditorDialog(
     group: ModifierGroupEntity?,
     viewModel: MenuViewModel,
     onDismiss: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
+    presentation: MenuEditorPresentation = MenuEditorPresentation.FULL_SCREEN,
 ) {
     var name by remember(group) { mutableStateOf(group?.name ?: "") }
     var limitQty by remember(group) { mutableStateOf((group?.limitQuantity ?: 1).coerceAtLeast(1)) }
@@ -169,7 +170,7 @@ internal fun ModifierEditorDialog(
     }
 
     MenuEditorDialog(
-        title = if (group == null) stringResource(R.string.add_modifier) else stringResource(R.string.edit_modifier),
+        title = if (group == null) stringResource(R.string.add_modifier) else stringResource(R.string.extras_edit_group_title),
         onDismiss = onDismiss,
         onSave = {
             val entity = ModifierGroupEntity(
@@ -185,7 +186,8 @@ internal fun ModifierEditorDialog(
                 linkedProducts.toList()
             )
             onSaved()
-        }
+        },
+        presentation = presentation,
     ) {
         MenuSectionCard {
             OutlinedTextField(

@@ -64,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -78,6 +79,7 @@ import com.chaslay.pos.domain.model.OngoingOrderCard
 import com.chaslay.pos.domain.model.OngoingOrderSource
 import com.chaslay.pos.domain.model.PaymentMethod
 import com.chaslay.pos.domain.model.ServiceType
+import com.chaslay.pos.ui.components.PosVectorIcon
 import com.chaslay.pos.ui.components.ExpandableOrdersSearch
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosDimens
@@ -95,6 +97,8 @@ fun OngoingOrdersScreen(
     viewModel: OngoingOrdersViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val posMenuDesign by viewModel.posMenuDesign.collectAsStateWithLifecycle()
+    val useModernOrderIcons = posMenuDesign.isModern
     val orders = state.filteredOrders.let { list ->
         if (reservationOnly) list.filter { it.pickupTimeMs != null } else list
     }
@@ -132,11 +136,11 @@ fun OngoingOrdersScreen(
                 )
             }
 
-            OrderChannelLegendRibbon(
-                modifier = Modifier.padding(
-                    top = if (embeddedInPosTab) PosDimens.Space2 else PosDimens.Space3
+            if (!embeddedInPosTab) {
+                OrderChannelLegendRibbon(
+                    modifier = Modifier.padding(top = PosDimens.Space3)
                 )
-            )
+            }
 
             if (state.isLoading) {
                 Text(
@@ -170,6 +174,9 @@ fun OngoingOrdersScreen(
                         OngoingOrderCardView(
                             order = order,
                             currencySymbol = state.currencySymbol,
+                            compactGrid = embeddedInPosTab,
+                            useModernOrderIcons = useModernOrderIcons,
+                            isPrintingReceipt = state.printingReceiptKey == "${order.source}-${order.id}",
                             onOpen = {
                                 if (order.source != OngoingOrderSource.TRANSACTION) {
                                     viewModel.resumeOrder(order, onBack)
@@ -357,6 +364,9 @@ private fun StandaloneOrdersToolbar(
 private fun OngoingOrderCardView(
     order: OngoingOrderCard,
     currencySymbol: String,
+    compactGrid: Boolean = false,
+    useModernOrderIcons: Boolean = false,
+    isPrintingReceipt: Boolean = false,
     onOpen: () -> Unit,
     onPrint: () -> Unit,
     onSendKitchen: () -> Unit,
@@ -364,21 +374,28 @@ private fun OngoingOrderCardView(
     onRecordPayment: (() -> Unit)? = null
 ) {
     val isCompleted = order.source == OngoingOrderSource.TRANSACTION
+    val showOverflow = onOpenInvoice != null || onRecordPayment != null
+    val actionIconSize = if (compactGrid) 44.dp else PosDimens.ControlHeightMd
     val statusStyle = ongoingStatusStyle(order)
     var menuOpen by remember { mutableStateOf(false) }
-    val typeIcon = fulfillmentIcon(order)
+    val typeIconRes = if (compactGrid && useModernOrderIcons) fulfillmentIconRes(order) else null
+    val typeIcon = if (typeIconRes == null) fulfillmentIcon(order) else null
     val typeLabel = channelLabel(order)
     val clientLabel = order.customerLabel?.takeIf { it.isNotBlank() }
         ?: order.tableName?.takeIf { it.isNotBlank() }
         ?: "—"
 
-    val channelAccent = orderChannelAccentColor(order)
+    val cardBorder = if (compactGrid) {
+        posUiColors().border
+    } else {
+        orderChannelAccentColor(order).copy(alpha = 0.55f)
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = PosShapes.ExtraLarge,
+        shape = if (compactGrid) PosShapes.Large else PosShapes.ExtraLarge,
         color = posUiColors().surface,
-        shadowElevation = 1.dp,
-        border = androidx.compose.foundation.BorderStroke(2.dp, channelAccent)
+        shadowElevation = if (compactGrid) 2.dp else 1.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder)
     ) {
         Column(
             modifier = Modifier.padding(PosDimens.Space4),
@@ -410,7 +427,7 @@ private fun OngoingOrderCardView(
                     Text(
                         "#${order.orderNumber}",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = if (compactGrid) 18.sp else 15.sp,
                         color = posUiColors().textPrimary
                     )
                     Text(
@@ -431,7 +448,16 @@ private fun OngoingOrderCardView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(typeIcon, contentDescription = null, tint = posUiColors().textMuted, modifier = Modifier.size(14.dp))
+                        if (compactGrid && typeIconRes != null) {
+                            PosVectorIcon(
+                                resId = typeIconRes,
+                                contentDescription = null,
+                                tint = posUiColors().textMuted,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        } else if (typeIcon != null) {
+                            Icon(typeIcon, contentDescription = null, tint = posUiColors().textMuted, modifier = Modifier.size(14.dp))
+                        }
                         Text(typeLabel, fontSize = 11.sp, color = posUiColors().textSecondary, maxLines = 1)
                     }
                     Text(
@@ -457,53 +483,62 @@ private fun OngoingOrderCardView(
                 ) {
                     Text(stringResource(R.string.orders_open), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
+                if (!isCompleted) {
+                    OutlinedButton(
+                        onClick = onSendKitchen,
+                        modifier = Modifier.size(actionIconSize),
+                        shape = PosShapes.Medium,
+                        contentPadding = PaddingValues(0.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border),
+                    ) {
+                        Icon(
+                            Icons.Default.Restaurant,
+                            contentDescription = stringResource(R.string.send_to_kitchen),
+                            tint = posUiColors().textSecondary
+                        )
+                    }
+                }
                 OutlinedButton(
                     onClick = onPrint,
-                    modifier = Modifier.size(PosDimens.ControlHeightMd),
+                    enabled = !isPrintingReceipt,
+                    modifier = Modifier.size(actionIconSize),
                     shape = PosShapes.Medium,
-                    contentPadding = PaddingValues(0.dp)
+                    contentPadding = PaddingValues(0.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, posUiColors().border),
                 ) {
                     Icon(Icons.Default.Print, contentDescription = stringResource(R.string.print_receipt), tint = posUiColors().textSecondary)
                 }
-                Box {
-                    OutlinedButton(
-                        onClick = { menuOpen = true },
-                        modifier = Modifier.size(PosDimens.ControlHeightMd),
-                        shape = PosShapes.Medium,
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(Icons.Default.MoreHoriz, contentDescription = null, tint = posUiColors().textSecondary)
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        if (!isCompleted) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.send_to_kitchen)) },
-                                onClick = {
-                                    menuOpen = false
-                                    onSendKitchen()
-                                },
-                                leadingIcon = { Icon(Icons.Default.Restaurant, null) }
-                            )
+                if (showOverflow) {
+                    Box {
+                        OutlinedButton(
+                            onClick = { menuOpen = true },
+                            modifier = Modifier.size(actionIconSize),
+                            shape = PosShapes.Medium,
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.MoreHoriz, contentDescription = null, tint = posUiColors().textSecondary)
                         }
-                        onOpenInvoice?.let { open ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.invoice_open_pdf)) },
-                                onClick = {
-                                    menuOpen = false
-                                    open()
-                                },
-                                leadingIcon = { Icon(Icons.Default.Description, null) }
-                            )
-                        }
-                        onRecordPayment?.let { pay ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.invoice_record_payment)) },
-                                onClick = {
-                                    menuOpen = false
-                                    pay()
-                                },
-                                leadingIcon = { Icon(Icons.Default.Payments, null) }
-                            )
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            onOpenInvoice?.let { open ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.invoice_open_pdf)) },
+                                    onClick = {
+                                        menuOpen = false
+                                        open()
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Description, null) }
+                                )
+                            }
+                            onRecordPayment?.let { pay ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.invoice_record_payment)) },
+                                    onClick = {
+                                        menuOpen = false
+                                        pay()
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Payments, null) }
+                                )
+                            }
                         }
                     }
                 }
@@ -578,6 +613,17 @@ private fun fulfillmentIcon(order: OngoingOrderCard): ImageVector = when (order.
     FulfillmentType.WALK_IN -> when (order.serviceType) {
         ServiceType.DINE_IN -> Icons.Default.Restaurant
         ServiceType.TAKEAWAY -> Icons.Default.ShoppingBag
+    }
+}
+
+@DrawableRes
+private fun fulfillmentIconRes(order: OngoingOrderCard): Int = when (order.fulfillmentType) {
+    FulfillmentType.DELIVERY -> R.drawable.ic_pos_actions_delivery
+    FulfillmentType.PICKUP -> R.drawable.ic_pos_actions_emporter
+    FulfillmentType.DINE_IN -> R.drawable.ic_pos_settings_floor_waiters
+    FulfillmentType.WALK_IN -> when (order.serviceType) {
+        ServiceType.DINE_IN -> R.drawable.ic_pos_settings_floor_waiters
+        ServiceType.TAKEAWAY -> R.drawable.ic_pos_actions_emporter
     }
 }
 

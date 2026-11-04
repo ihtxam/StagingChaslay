@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
+import com.chaslay.pos.ui.components.PosVectorIcon
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosShapes
 import java.util.Locale
@@ -68,6 +69,7 @@ fun CashPaymentDialog(
     currencyCode: String,
     denominations: List<Double> = defaultCashDenominations(currencyCode),
     isProcessing: Boolean,
+    useModernVisuals: Boolean = false,
     onDismiss: () -> Unit,
     onConfirm: (enteredAmount: Double) -> Unit
 ) {
@@ -127,12 +129,21 @@ fun CashPaymentDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Outlined.AccountBalanceWallet,
-                        contentDescription = null,
-                        tint = PosColors.Primary,
-                        modifier = Modifier.size(28.dp),
-                    )
+                    if (useModernVisuals) {
+                        PosVectorIcon(
+                            resId = R.drawable.ic_pos_payment_cash,
+                            contentDescription = null,
+                            tint = PosColors.Primary,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    } else {
+                        Icon(
+                            Icons.Outlined.AccountBalanceWallet,
+                            contentDescription = null,
+                            tint = PosColors.Primary,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
                     Text(
                         stringResource(R.string.cash_payment_title),
                         modifier = Modifier
@@ -255,7 +266,11 @@ private fun CashPaymentSummaryColumn(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .clip(PosShapes.Large)
+            .background(posUiColors().surface)
+            .border(1.dp, posUiColors().border, PosShapes.Large)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         CashSummaryBlock(
@@ -282,9 +297,11 @@ private fun CashPaymentSummaryColumn(
         CashSummaryBlock(
             label = stringResource(R.string.cash_payment_change),
             amount = formatCashMoney(change, currencySymbol, moneyLocale),
-            amountColor = Color(0xFFB45309),
-            labelColor = Color(0xFFB45309),
+            amountColor = Color(0xFF92400E),
+            labelColor = Color(0xFF92400E),
             backgroundColor = posUiColors().warningSubtle,
+            borderColor = Color(0xFFFCD34D),
+            emphasizeAmount = true,
         )
     }
 }
@@ -341,7 +358,7 @@ private fun CashPaymentDenominationsColumn(
     Column(
         modifier = modifier
             .clip(PosShapes.Large)
-            .background(posUiColors().surfaceSubtle)
+            .background(posUiColors().surface)
             .border(1.dp, posUiColors().border, PosShapes.Large)
             .padding(14.dp),
     ) {
@@ -443,7 +460,7 @@ private fun CashPaymentKeypadColumn(
     Column(
         modifier = modifier
             .clip(PosShapes.Large)
-            .background(posUiColors().surfaceSubtle)
+            .background(posUiColors().surface)
             .border(1.dp, posUiColors().border, PosShapes.Large)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

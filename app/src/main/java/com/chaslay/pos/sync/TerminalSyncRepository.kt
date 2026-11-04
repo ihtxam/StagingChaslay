@@ -157,7 +157,8 @@ class TerminalSyncRepository @Inject constructor(
                     cashEnabled = methods.cash,
                     cardEnabled = methods.card,
                     terminalEnabled = methods.terminal,
-                    adyenTerminalEnabled = methods.terminal
+                    adyenTerminalEnabled = methods.terminal,
+                    invoiceEnabled = methods.invoice,
                 )
             }
             merged = merged.copy(tapToPayEnabled = config.tapToPayEnabled)
@@ -190,6 +191,16 @@ class TerminalSyncRepository @Inject constructor(
 
         config.print?.let { print ->
             merged = merged.mergePosPrintSettings(print, appContext)
+        }
+
+        config.customerDisplay?.let { cds ->
+            merged = merged.copy(
+                cdsEnabled = cds.enabled,
+                cdsAccessToken = cds.accessToken?.trim().orEmpty(),
+                cdsShortCode = cds.shortCode?.trim().orEmpty(),
+                cdsMerchantSlug = cds.merchantSlug?.trim().orEmpty(),
+                cdsDisplayUrl = cds.displayUrl?.trim().orEmpty(),
+            )
         }
 
         return merged

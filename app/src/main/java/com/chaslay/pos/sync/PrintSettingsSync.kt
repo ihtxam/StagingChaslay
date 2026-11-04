@@ -18,11 +18,16 @@ fun BusinessSettingsEntity.mergePosPrintSettings(
     } else {
         print.autoPrintReceipt
     }
+    val resolvedAutoPrintKitchen = if (context != null && PosLocalPrefs.hasUserSetAutoPrintKitchen(context)) {
+        this.autoPrintKitchen
+    } else {
+        print.autoPrintKitchen
+    }
     val template = print.receiptTemplateName.trim().ifBlank { "Default" }
     return copy(
         adyenReceiptDigitalOnly = print.adyenReceiptDigitalOnly,
         receiptDeliveryDirectionsQr = print.receiptDeliveryDirectionsQr,
-        autoPrintKitchen = print.autoPrintKitchen,
+        autoPrintKitchen = resolvedAutoPrintKitchen,
         autoPrintReceipt = resolvedAutoPrintReceipt,
         waiterTillBellEnabled = print.waiterTillBellEnabled,
         kitchenPrintRetryEnabled = print.kitchenPrintRetryEnabled,

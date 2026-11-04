@@ -53,6 +53,12 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
+            <!-- OkHttp 5 registers this via okhttp-android; R8/minify can drop the class while
+                 manifest merger still lists it, crashing InitializationProvider at cold start. -->
+            <meta-data
+                android:name="okhttp3.internal.platform.PlatformInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
             <!--
                 The Adyen InPersonPaymentsInitializer is deliberately NOT listed here.
                 It is absent from builds without the SDK, and InitializationProvider

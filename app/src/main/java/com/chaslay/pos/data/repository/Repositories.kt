@@ -34,6 +34,7 @@ import com.chaslay.pos.domain.model.DashboardStats
 import com.chaslay.pos.domain.EodPaymentBuckets
 import com.chaslay.pos.domain.model.EodStaffSummaryRow
 import com.chaslay.pos.domain.model.EndOfDayReport
+import com.chaslay.pos.util.reportsShowOrderTypes
 import com.chaslay.pos.domain.model.VatBreakdownRow
 import com.chaslay.pos.domain.model.PaymentMethodRow
 import com.chaslay.pos.domain.model.OrderTypeRow
@@ -109,6 +110,11 @@ class AuthRepository @Inject constructor(
             "MANAGE_STAFF" to PosPermission.MANAGE_USERS,
             "USE_WEBPOS" to PosPermission.USE_POS
         )
+
+        const val DELETE_USER_NOT_FOUND = "DELETE_USER_NOT_FOUND"
+        const val DELETE_USER_SELF = "DELETE_USER_SELF"
+        const val DELETE_USER_LAST = "DELETE_USER_LAST"
+        const val DELETE_USER_LAST_OWNER = "DELETE_USER_LAST_OWNER"
 
         /** Maps server UUID to a stable local Room user id. */
         fun cloudUserLocalId(cloudUserId: String): Long {
@@ -484,6 +490,33 @@ class AuthRepository @Inject constructor(
     suspend fun resetUserPassword(userId: Long, newPassword: String) {
         val user = userDao.getById(userId) ?: return
         userDao.update(user.copy(passwordHash = hash(newPassword)))
+    }
+
+    suspend fun deleteUser(userId: Long, actingUserId: Long?): Result<Unit> = runCatching {
+        val user = userDao.getById(userId) ?: throw IllegalArgumentException(DELETE_USER_NOT_FOUND)
+        if (actingUserId != null && actingUserId == userId) {
+            throw IllegalStateException(DELETE_USER_SELF)
+        }
+        val allUsers = userDao.getAll()
+        if (allUsers.size <= 1) {
+            throw IllegalStateException(DELETE_USER_LAST)
+        }
+        val rolesById = roleDao.getAll().associateBy { it.id }
+        val targetRoleName = rolesById[user.roleId]?.name.orEmpty()
+        if (isOwnerCapableRoleName(targetRoleName)) {
+            val ownerCount = allUsers.count { candidate ->
+                isOwnerCapableRoleName(rolesById[candidate.roleId]?.name.orEmpty())
+            }
+            if (ownerCount <= 1) {
+                throw IllegalStateException(DELETE_USER_LAST_OWNER)
+            }
+        }
+        userDao.deleteById(userId)
+    }
+
+    private fun isOwnerCapableRoleName(roleName: String): Boolean {
+        return roleName.equals("Owner", ignoreCase = true) ||
+            roleName.equals("Admin", ignoreCase = true)
     }
 
     fun hash(value: String): String {
@@ -955,32 +988,56 @@ class TransactionRepository @Inject constructor(
                 )
             }
 
-        val vatRows = paidSales
-            .groupBy { it.serviceType ?: ServiceType.TAKEAWAY }
-            .map { (serviceType, txs) ->
-                val brut = roundMoney(txs.sumOf { tx ->
-                    val refund = tx.refundAmount.coerceAtLeast(0.0)
-                    (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
-                })
-                val tva = roundMoney(txs.sumOf { tx ->
-                    val grossBefore = tx.total.coerceAtLeast(0.0001)
-                    val keepRatio = ((grossBefore - tx.refundAmount.coerceAtLeast(0.0)) / grossBefore)
-                        .coerceIn(0.0, 1.0)
-                    tx.taxTotal * keepRatio
-                })
-                val rate = when (serviceType) {
-                    ServiceType.DINE_IN -> settings.dineInVatRate
-                    ServiceType.TAKEAWAY -> settings.takeawayVatRate
-                }
+        val showOrderTypes = settings.reportsShowOrderTypes()
+        val vatRows = if (!showOrderTypes) {
+            val brut = roundMoney(paidSales.sumOf { tx ->
+                val refund = tx.refundAmount.coerceAtLeast(0.0)
+                (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+            })
+            val tva = roundMoney(paidSales.sumOf { tx ->
+                val grossBefore = tx.total.coerceAtLeast(0.0001)
+                val keepRatio = ((grossBefore - tx.refundAmount.coerceAtLeast(0.0)) / grossBefore)
+                    .coerceIn(0.0, 1.0)
+                tx.taxTotal * keepRatio
+            })
+            val rate = settings.takeawayVatRate
+            listOf(
                 VatBreakdownRow(
-                    label = "${serviceType.displayName} ${"%.1f".format(rate)}%",
+                    label = "TVA ${"%.1f".format(rate)}%",
                     rate = rate,
                     net = roundMoney(brut - tva),
                     tva = tva,
-                    brut = brut
+                    brut = brut,
                 )
-            }
-            .sortedByDescending { it.brut }
+            )
+        } else {
+            paidSales
+                .groupBy { it.serviceType ?: ServiceType.TAKEAWAY }
+                .map { (serviceType, txs) ->
+                    val brut = roundMoney(txs.sumOf { tx ->
+                        val refund = tx.refundAmount.coerceAtLeast(0.0)
+                        (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+                    })
+                    val tva = roundMoney(txs.sumOf { tx ->
+                        val grossBefore = tx.total.coerceAtLeast(0.0001)
+                        val keepRatio = ((grossBefore - tx.refundAmount.coerceAtLeast(0.0)) / grossBefore)
+                            .coerceIn(0.0, 1.0)
+                        tx.taxTotal * keepRatio
+                    })
+                    val rate = when (serviceType) {
+                        ServiceType.DINE_IN -> settings.dineInVatRate
+                        ServiceType.TAKEAWAY -> settings.takeawayVatRate
+                    }
+                    VatBreakdownRow(
+                        label = "${serviceType.displayName} ${"%.1f".format(rate)}%",
+                        rate = rate,
+                        net = roundMoney(brut - tva),
+                        tva = tva,
+                        brut = brut
+                    )
+                }
+                .sortedByDescending { it.brut }
+        }
 
         val brutTotal = roundMoney(vatRows.sumOf { it.brut })
         val tvaTotal = roundMoney(vatRows.sumOf { it.tva })
@@ -1008,18 +1065,22 @@ class TransactionRepository @Inject constructor(
             )
         }
 
-        val orderTypeRows = ServiceType.entries.map { serviceType ->
-            val txs = paidSales.filter { it.serviceType == serviceType }
-            val amount = roundMoney(txs.sumOf { tx ->
-                val refund = tx.refundAmount.coerceAtLeast(0.0)
-                (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
-            })
-            OrderTypeRow(
-                label = serviceType.displayName,
-                count = txs.size,
-                percent = if (paidSales.isNotEmpty()) roundMoney(txs.size.toDouble() / paidSales.size * 100.0) else 0.0,
-                amount = amount
-            )
+        val orderTypeRows = if (!showOrderTypes) {
+            emptyList()
+        } else {
+            ServiceType.entries.map { serviceType ->
+                val txs = paidSales.filter { it.serviceType == serviceType }
+                val amount = roundMoney(txs.sumOf { tx ->
+                    val refund = tx.refundAmount.coerceAtLeast(0.0)
+                    (brutOf(tx) - refund.coerceAtMost(brutOf(tx))).coerceAtLeast(0.0)
+                })
+                OrderTypeRow(
+                    label = serviceType.displayName,
+                    count = txs.size,
+                    percent = if (paidSales.isNotEmpty()) roundMoney(txs.size.toDouble() / paidSales.size * 100.0) else 0.0,
+                    amount = amount
+                )
+            }
         }
 
         val productsSold = transactionDao
@@ -1100,6 +1161,10 @@ class TransactionRepository @Inject constructor(
             reason = reason,
             cancelledAt = System.currentTimeMillis()
         )
+    }
+
+    suspend fun updatePaymentMethod(transactionId: String, method: PaymentMethod) {
+        transactionDao.updatePaymentMethod(transactionId, method)
     }
 
     /** Permanently removes an order and its line items from local history and reports. */
@@ -1338,6 +1403,10 @@ class SettingsRepository @Inject constructor(
                 appContext,
                 settings.autoPrintReceipt
             ),
+            autoPrintKitchen = com.chaslay.pos.util.PosLocalPrefs.applyAutoPrintKitchenIfUserSet(
+                appContext,
+                settings.autoPrintKitchen
+            ),
             tablesEnabled = tables,
             scaleEnabled = com.chaslay.pos.util.PosLocalPrefs.applyScaleEnabledIfUserSet(
                 appContext,
@@ -1371,6 +1440,10 @@ class SettingsRepository @Inject constructor(
                 appContext,
                 settings.retailCashTenderDialogEnabled
             ),
+            retailWeighedCustomEntryEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRetailWeighedCustomEntryEnabledIfUserSet(
+                appContext,
+                settings.retailWeighedCustomEntryEnabled
+            ),
             courseSendMode = com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(
                 appContext,
                 settings.courseSendMode
@@ -1394,6 +1467,11 @@ class SettingsRepository @Inject constructor(
             com.chaslay.pos.util.PosLocalPrefs.applyAutoPrintReceiptIfUserSet(appContext, settings.autoPrintReceipt)
         } else {
             settings.autoPrintReceipt
+        }
+        val autoPrintKitchen = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetAutoPrintKitchen(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyAutoPrintKitchenIfUserSet(appContext, settings.autoPrintKitchen)
+        } else {
+            settings.autoPrintKitchen
         }
         val tablesRaw = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetTablesEnabled(appContext)) {
             com.chaslay.pos.util.PosLocalPrefs.applyTablesEnabledIfUserSet(appContext, settings.tablesEnabled)
@@ -1444,6 +1522,14 @@ class SettingsRepository @Inject constructor(
         } else {
             settings.retailCashTenderDialogEnabled
         }
+        val retailWeighedEntry = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRetailWeighedCustomEntryEnabled(appContext)) {
+            com.chaslay.pos.util.PosLocalPrefs.applyRetailWeighedCustomEntryEnabledIfUserSet(
+                appContext,
+                settings.retailWeighedCustomEntryEnabled
+            )
+        } else {
+            settings.retailWeighedCustomEntryEnabled
+        }
         val courseSend = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetCourseSendMode(appContext)) {
             com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(appContext, settings.courseSendMode)
         } else {
@@ -1454,6 +1540,7 @@ class SettingsRepository @Inject constructor(
                 id = 1,
                 vatIncludedInPrice = vat,
                 autoPrintReceipt = autoPrint,
+                autoPrintKitchen = autoPrintKitchen,
                 tablesEnabled = tables,
                 scaleEnabled = scaleEnabled,
                 scaleUsbAddress = scaleUsb?.trim()?.takeIf { it.isNotEmpty() },
@@ -1463,6 +1550,7 @@ class SettingsRepository @Inject constructor(
                 expressPayPlacement = expressPlacement,
                 expressEnabled = expressCheckout,
                 retailCashTenderDialogEnabled = retailCashDialog,
+                retailWeighedCustomEntryEnabled = retailWeighedEntry,
                 courseSendMode = courseSend
             )
         )
@@ -1842,7 +1930,7 @@ class CartManager @Inject constructor(
         _cart.update { it.copy(guestCount = count.coerceIn(1, 99)) }
     }
 
-    fun setTableOrderId(orderId: String) {
+    fun setTableOrderId(orderId: String?) {
         _cart.update { it.copy(tableOrderId = orderId) }
     }
 
@@ -2157,10 +2245,15 @@ class TableOrderRepository @Inject constructor(
     suspend fun hasOpenOrder(tableId: Long): Boolean =
         orderDao.getOpenOrderForTable(tableId) != null
 
-    suspend fun syncCartToTable(cart: CartSummary, userId: Long, userName: String): String {
-        val tableId = cart.tableId ?: error("No table selected")
+    suspend fun syncCartToTable(cart: CartSummary, userId: Long, userName: String): String? {
+        val tableId = cart.tableId ?: return null
         val table = tableDao.getById(tableId) ?: error("Table not found")
-        val orderId = cart.tableOrderId ?: openTable(table, cart.serviceType, userId, userName).first.id
+        if (cart.items.isEmpty()) {
+            cart.tableOrderId?.let { id -> removeOpenTableOrder(id) }
+            orderDao.getOpenOrderForTable(tableId)?.let { open -> removeOpenTableOrder(open.id) }
+            return null
+        }
+        val orderId = resolveOpenOrderIdForCart(cart, table, userId, userName)
         val order = orderDao.getById(orderId) ?: error("Order not found")
         val existingItems = orderItemDao.getByOrder(orderId)
         val sentById = existingItems.filter { it.sentToKitchenAt != null }.associateBy { it.id }
@@ -2197,7 +2290,6 @@ class TableOrderRepository @Inject constructor(
                 notes = cart.cartNotes,
                 guestCount = cart.guestCount ?: order.guestCount,
                 status = when (order.status) {
-                    TableOrderStatus.PAID -> TableOrderStatus.OPEN
                     TableOrderStatus.HELD -> TableOrderStatus.OPEN
                     else -> order.status
                 },
@@ -2263,8 +2355,37 @@ class TableOrderRepository @Inject constructor(
         return entity
     }
 
+    /** Removes the open table order after payment — sale is stored on the transaction. */
     suspend fun closeOrder(orderId: String) {
-        orderDao.updateStatus(orderId, TableOrderStatus.PAID)
+        removeOpenTableOrder(orderId)
+    }
+
+    private suspend fun removeOpenTableOrder(orderId: String) {
+        val order = orderDao.getById(orderId) ?: return
+        if (order.status !in setOf(TableOrderStatus.OPEN, TableOrderStatus.SENT, TableOrderStatus.HELD)) {
+            return
+        }
+        orderItemDao.deleteByOrder(orderId)
+        orderDao.deleteById(orderId)
+    }
+
+    private suspend fun resolveOpenOrderIdForCart(
+        cart: CartSummary,
+        table: RestaurantTableEntity,
+        userId: Long,
+        userName: String
+    ): String {
+        cart.tableOrderId?.let { id ->
+            val existing = orderDao.getById(id)
+            if (existing != null &&
+                existing.tableId == table.id &&
+                existing.status in setOf(TableOrderStatus.OPEN, TableOrderStatus.SENT, TableOrderStatus.HELD)
+            ) {
+                return id
+            }
+        }
+        orderDao.getOpenOrderForTable(table.id)?.let { return it.id }
+        return openTable(table, cart.serviceType, userId, userName).first.id
     }
 
     suspend fun voidOpenOrder(orderId: String, reason: String) {

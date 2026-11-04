@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,10 +62,13 @@ import coil.request.ImageRequest
 import coil.size.Size
 import com.chaslay.pos.R
 import com.chaslay.pos.ui.components.ExpandableOrdersSearch
+import com.chaslay.pos.ui.components.PosVectorIcon
+import com.chaslay.pos.ui.components.posCategoryIconRes
 import com.chaslay.pos.data.local.entity.CategoryEntity
 import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
 import com.chaslay.pos.ui.theme.PosShapes
 import com.chaslay.pos.ui.theme.categoryColor
 import com.chaslay.pos.ui.theme.posUiColors
@@ -124,9 +128,9 @@ fun ModernPosCatalogPane(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = PosDimens.PagePaddingCompact, vertical = PosDimens.Space2),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(PosDimens.Space2),
         ) {
             ExpandableOrdersSearch(
                 query = searchQuery,
@@ -159,8 +163,10 @@ fun ModernPosCatalogPane(
                     emptyCatalogHint = emptyCatalogHint,
                     onCategorySelected = onCategorySelected,
                     modifier = Modifier
-                        .width(132.dp)
-                        .fillMaxHeight(),
+                        .width(148.dp)
+                        .fillMaxHeight()
+                        .background(ui.surface)
+                        .border(width = 1.dp, color = ui.border),
                 )
             }
 
@@ -197,11 +203,14 @@ fun ModernPosCatalogPane(
             cardEnabled = cardEnabled,
             terminalEnabled = terminalEnabled,
             expressEnabled = expressEnabled,
+            compact = true,
             onCash = onCash,
             onCard = onCard,
             onTerminal = onTerminal,
             onOpenCheckout = onOpenCheckout,
-            modifier = Modifier.background(ui.surfaceSubtle).padding(8.dp),
+            modifier = Modifier
+                .background(ui.surfaceSubtle)
+                .padding(horizontal = PosDimens.Space2, vertical = PosDimens.Space2),
         )
     }
 }
@@ -224,7 +233,7 @@ private fun ModernPosCatalogFilters(
         IconButton(
             onClick = { expanded = true },
             modifier = Modifier
-                .size(40.dp)
+                .size(PosDimens.TouchTargetMin)
                 .border(1.dp, if (activeFilters > 0) PosColors.Primary else ui.border, PosShapes.Medium)
                 .background(ui.surface, PosShapes.Medium),
         ) {
@@ -299,13 +308,13 @@ private fun ModernPosTopCategoryRow(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = PosDimens.PagePaddingCompact, vertical = PosDimens.Space1),
+        horizontalArrangement = Arrangement.spacedBy(PosDimens.Space2),
     ) {
         categories.forEach { category ->
             val selected = selectedCategoryId == category.id
             ModernPosCategoryChip(
-                label = category.name,
+                category = category,
                 accent = categoryColor(category.colorHex),
                 selected = selected,
                 onClick = { onCategorySelected(category.id) },
@@ -326,39 +335,58 @@ private fun ModernPosSideCategoryColumn(
     val ui = posUiColors()
     Column(
         modifier = modifier
+            .fillMaxHeight()
             .background(ui.surfaceSubtle)
-            .verticalScroll(rememberScrollState())
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(PosDimens.Space2),
+            verticalArrangement = Arrangement.spacedBy(PosDimens.Space1),
+        ) {
         categories.forEach { category ->
             val selected = selectedCategoryId == category.id
             val accent = categoryColor(category.colorHex)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (selected) ui.primarySubtle else ui.surface)
-                    .border(
-                        width = if (selected) 2.dp else 1.dp,
-                        color = if (selected) PosColors.Primary else ui.border,
-                        shape = RoundedCornerShape(10.dp),
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(PosShapes.Medium)
+                        .background(if (selected) ui.primarySubtle else ui.surface)
+                        .border(
+                            width = if (selected) 1.dp else 1.dp,
+                            color = if (selected) PosColors.PrimaryBorder else ui.border,
+                            shape = PosShapes.Medium,
+                        )
+                        .clickable { onCategorySelected(category.id) }
+                        .padding(start = if (selected) 10.dp else 8.dp, end = 8.dp)
+                        .heightIn(min = PosDimens.TouchTargetMin)
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(PosDimens.Space2),
+                ) {
+                    ModernPosCategoryIcon(category = category, accent = accent)
+                    Text(
+                        category.name,
+                        color = if (selected) PosColors.Teal700 else ui.textPrimary,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
-                    .clickable { onCategorySelected(category.id) }
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ModernPosCategoryIcon(accent = accent)
-                Text(
-                    category.name,
-                    color = ui.textPrimary,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                }
+                if (selected) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .width(4.dp)
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                            .background(PosColors.Primary),
+                    )
+                }
             }
         }
         if (!emptyCatalogHint.isNullOrBlank()) {
@@ -370,32 +398,35 @@ private fun ModernPosSideCategoryColumn(
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+        }
     }
 }
 
 @Composable
 private fun ModernPosCategoryChip(
-    label: String,
+    category: CategoryEntity,
     accent: Color,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val label = category.name
     val ui = posUiColors()
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .heightIn(min = PosDimens.TouchTargetMin)
+            .clip(PosShapes.Pill)
             .background(if (selected) ui.primarySubtle else ui.surface)
             .border(
                 1.dp,
                 if (selected) PosColors.Primary else ui.border,
-                RoundedCornerShape(20.dp),
+                PosShapes.Pill,
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = PosDimens.Space3, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        ModernPosCategoryIcon(accent = accent, small = true)
+        ModernPosCategoryIcon(category = category, accent = accent, small = true)
         Text(
             label,
             color = if (selected) PosColors.Primary else ui.textPrimary,
@@ -408,8 +439,16 @@ private fun ModernPosCategoryChip(
 }
 
 @Composable
-private fun ModernPosCategoryIcon(accent: Color, small: Boolean = false) {
+private fun ModernPosCategoryIcon(
+    category: CategoryEntity,
+    accent: Color,
+    small: Boolean = false,
+) {
     val size = if (small) 22.dp else 28.dp
+    val glyphSize = if (small) 14.dp else 16.dp
+    val iconRes = remember(category.name, category.remoteId) {
+        posCategoryIconRes(category.name, category.remoteId)
+    }
     Box(
         modifier = Modifier
             .size(size)
@@ -417,12 +456,21 @@ private fun ModernPosCategoryIcon(accent: Color, small: Boolean = false) {
             .background(accent.copy(alpha = 0.2f)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            Icons.Default.Category,
-            contentDescription = null,
-            tint = accent,
-            modifier = Modifier.size(if (small) 14.dp else 16.dp),
-        )
+        if (iconRes != null) {
+            PosVectorIcon(
+                resId = iconRes,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(glyphSize),
+            )
+        } else {
+            Icon(
+                Icons.Default.Category,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(glyphSize),
+            )
+        }
     }
 }
 
@@ -466,7 +514,7 @@ private fun ModernPosProductGrid(
                     onClick = onSellMembership,
                     modifier = Modifier.fillMaxWidth().height(120.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                    colors = ButtonDefaults.buttonColors(containerColor = PosColors.Teal600),
                 ) {
                     Text(
                         stringResource(R.string.membership_sell_title),
@@ -481,10 +529,10 @@ private fun ModernPosProductGrid(
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(gridColumns.coerceIn(2, 6)),
-        modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 8.dp),
+        modifier = modifier.padding(horizontal = PosDimens.Space3, vertical = PosDimens.Space1),
+        horizontalArrangement = Arrangement.spacedBy(PosDimens.GridGap),
+        verticalArrangement = Arrangement.spacedBy(PosDimens.GridGap),
+        contentPadding = PaddingValues(bottom = PosDimens.Space2),
     ) {
         if (showScanButton) {
             item(key = "scan") {
@@ -553,16 +601,16 @@ private fun ModernPosProductTile(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(132.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .height(136.dp)
+            .clip(PosShapes.Card)
             .background(ui.surface)
             .border(
                 width = if (highlighted) 2.dp else 1.dp,
                 color = if (highlighted) PosColors.Primary else ui.border,
-                shape = RoundedCornerShape(12.dp),
+                shape = PosShapes.Card,
             )
             .clickable(onClick = onClick)
-            .padding(8.dp),
+            .padding(PosDimens.Space2),
     ) {
         Box(
             modifier = Modifier

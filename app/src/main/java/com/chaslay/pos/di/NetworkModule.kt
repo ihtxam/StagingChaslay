@@ -90,4 +90,9 @@ object NetworkModule {
     @Singleton
     fun provideInvoiceApi(retrofit: Retrofit): com.chaslay.pos.data.remote.InvoiceApi =
         retrofit.create(com.chaslay.pos.data.remote.InvoiceApi::class.java)
+
+    @Provides
+    @Singleton
+    fun providePosOrdersApi(retrofit: Retrofit): com.chaslay.pos.data.remote.PosOrdersApi =
+        retrofit.create(com.chaslay.pos.data.remote.PosOrdersApi::class.java)
 }

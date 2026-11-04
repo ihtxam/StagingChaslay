@@ -1094,6 +1094,7 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
         mode={pinModalMode}
         onClose={() => setPinModalOpen(false)}
         onSuccess={onPinSuccess}
+        onLogout={() => void handleLogout()}
         productName={pinGateMerchantName(
           merchantShopName,
           pinGateSessionMerchantName(authUser)
