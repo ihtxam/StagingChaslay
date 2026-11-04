@@ -209,6 +209,11 @@ async function seedDemoShop() {
   if (healSummary?.panelNavCleared) {
     console.log("Demo merchant: restored settings gear in panel nav (cleared panel_nav_hidden settings key)");
   }
+  if (healSummary?.duplicatePinsCleared) {
+    console.log(
+      `Demo merchant: cleared default PIN 0000 from ${healSummary.duplicatePinsCleared} non-Manager staff (Manager keeps walkthrough PIN)`
+    );
+  }
 
   const existingCats = await db.query.categories.findMany({
     where: eq(schema.categories.merchantId, merchant.id),

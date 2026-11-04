@@ -961,6 +961,8 @@ export class StaffService {
   static async verifyPin(merchantId: string, pin: string) {
     const db = getDb();
     await this.ensureManagerPosPin(merchantId);
+    const { ensureDemoPinUnlockReady } = await import("@/lib/demo-merchant-heal");
+    await ensureDemoPinUnlockReady(merchantId).catch(() => undefined);
     const normalized = this.normalizePinInput(pin);
     if (!normalized) throw new Error("PIN is required");
     assertValidStaffPin(normalized);
@@ -979,12 +981,40 @@ export class StaffService {
       if (ok) matches.push(staff);
     }
 
+    let staff = matches[0];
     if (matches.length > 1) {
-      throw new Error("PIN is assigned to multiple users — ask your manager to give each person a unique PIN");
+      if (normalized === DEFAULT_MANAGER_PIN) {
+        const { isDemoShowcaseMerchantId } = await import("@/lib/demo-merchant-heal");
+        if (await isDemoShowcaseMerchantId(merchantId)) {
+          const managerRole = await db.query.merchantRoles.findFirst({
+            where: and(
+              eq(schema.merchantRoles.merchantId, merchantId),
+              sql`lower(trim(${schema.merchantRoles.name})) = 'manager'`
+            ),
+          });
+          const managerMatch = managerRole
+            ? matches.find((row) => row.roleId === managerRole.id)
+            : undefined;
+          if (managerMatch) {
+            staff = managerMatch;
+          } else {
+            throw new Error(
+              "PIN is assigned to multiple users — ask your manager to give each person a unique PIN"
+            );
+          }
+        } else {
+          throw new Error(
+            "PIN is assigned to multiple users — ask your manager to give each person a unique PIN"
+          );
+        }
+      } else {
+        throw new Error(
+          "PIN is assigned to multiple users — ask your manager to give each person a unique PIN"
+        );
+      }
     }
-    if (!matches.length) throw new Error("Invalid PIN");
+    if (!staff) throw new Error("Invalid PIN");
 
-    const staff = matches[0];
     const role = await db.query.merchantRoles.findFirst({
       where: eq(schema.merchantRoles.id, staff.roleId),
     });

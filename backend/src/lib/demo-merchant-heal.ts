@@ -1,6 +1,7 @@
 import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { AuthService } from "@/services/auth.service";
+import { normalizeStaffLoginHome } from "@/lib/staff-login-home";
 import {
   demoMerchantOwnerEmailAliases,
   demoMerchantSlugs,
@@ -13,9 +14,22 @@ export type DemoMerchantHealResult = {
   slug: string | null;
   email: string;
   staffDeactivated: number;
+  duplicatePinsCleared: number;
   passwordReset: boolean;
   panelNavCleared: boolean;
 };
+
+/** True when merchant slug is the seeded walkthrough shop (demo / polacafe). */
+export async function isDemoShowcaseMerchantId(merchantId: string): Promise<boolean> {
+  const db = getDb();
+  const row = await db.query.merchants.findFirst({
+    where: eq(schema.merchants.id, merchantId),
+    columns: { slug: true },
+  });
+  if (!row?.slug) return false;
+  const slugKey = String(row.slug).trim().toLowerCase();
+  return demoMerchantSlugs().includes(slugKey);
+}
 
 /** Resolve the showcase merchant row for demo owner login (prod PolaCafe + staging demo slug). */
 export async function resolveDemoShowcaseMerchantId(): Promise<string | null> {
@@ -98,6 +112,82 @@ export async function healDemoOwnerLogin(
   return deactivated;
 }
 
+/**
+ * Walkthrough PIN 0000 must unlock the Manager (full settings gear), not a floor waiter
+ * who still shares the default PIN on production demo data.
+ */
+export async function healDemoExclusiveManagerPin(merchantId: string): Promise<number> {
+  if (!(await isDemoShowcaseMerchantId(merchantId))) return 0;
+
+  const { StaffService, DEFAULT_MANAGER_PIN } = await import("@/services/staff.service");
+  const db = getDb();
+
+  await StaffService.ensureDefaultRoles(merchantId);
+  await StaffService.ensureDefaultManagerStaff(merchantId, "Manager");
+
+  const managerRole = await db.query.merchantRoles.findFirst({
+    where: and(
+      eq(schema.merchantRoles.merchantId, merchantId),
+      sql`lower(trim(${schema.merchantRoles.name})) = 'manager'`
+    ),
+  });
+  if (!managerRole) return 0;
+
+  const staffRows = await db.query.merchantStaff.findMany({
+    where: and(
+      eq(schema.merchantStaff.merchantId, merchantId),
+      eq(schema.merchantStaff.isActive, true)
+    ),
+  });
+  const managerStaff = staffRows.find((row) => row.roleId === managerRole.id);
+  if (!managerStaff) return 0;
+
+  let cleared = 0;
+  for (const staff of staffRows) {
+    if (staff.id === managerStaff.id || !staff.pinHash) continue;
+    const sharesDefault = await AuthService.comparePassword(
+      DEFAULT_MANAGER_PIN,
+      staff.pinHash
+    );
+    if (!sharesDefault) continue;
+    await db
+      .update(schema.merchantStaff)
+      .set({ pinHash: null, pinDisplay: null, updatedAt: new Date() })
+      .where(eq(schema.merchantStaff.id, staff.id));
+    cleared += 1;
+  }
+
+  const managerHasDefault =
+    !!managerStaff.pinHash &&
+    (await AuthService.comparePassword(DEFAULT_MANAGER_PIN, managerStaff.pinHash));
+  if (!managerHasDefault) {
+    const pinHash = await AuthService.hashPassword(DEFAULT_MANAGER_PIN);
+    await db
+      .update(schema.merchantStaff)
+      .set({
+        pinHash,
+        pinDisplay: DEFAULT_MANAGER_PIN,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.merchantStaff.id, managerStaff.id));
+  }
+
+  if (normalizeStaffLoginHome(managerStaff.loginHome) !== "panel") {
+    await db
+      .update(schema.merchantStaff)
+      .set({ loginHome: "panel", updatedAt: new Date() })
+      .where(eq(schema.merchantStaff.id, managerStaff.id));
+  }
+
+  return cleared;
+}
+
+/** Called before PIN verify on showcase merchants so 0000 resolves to Manager. */
+export async function ensureDemoPinUnlockReady(merchantId: string): Promise<void> {
+  if (!(await isDemoShowcaseMerchantId(merchantId))) return;
+  await healDemoExclusiveManagerPin(merchantId);
+}
+
 export async function healDemoMerchantLogin(opts?: {
   merchantId?: string;
   resetPassword?: boolean;
@@ -137,6 +227,7 @@ export async function healDemoMerchantLogin(opts?: {
   }
 
   const staffDeactivated = await healDemoOwnerLogin(merchantId, canonicalEmail);
+  const duplicatePinsCleared = await healDemoExclusiveManagerPin(merchantId);
   const panelNavCleared = await healDemoPanelNavSettings(merchantId);
 
   return {
@@ -144,6 +235,7 @@ export async function healDemoMerchantLogin(opts?: {
     slug: merchant.slug,
     email: canonicalEmail,
     staffDeactivated,
+    duplicatePinsCleared,
     passwordReset,
     panelNavCleared,
   };

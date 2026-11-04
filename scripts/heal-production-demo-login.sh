@@ -33,3 +33,4 @@ fi
 echo "Done. Owner login at https://app.rebornsense.com"
 echo "  Email:    ${SEED_DEMO_MERCHANT_EMAIL}"
 echo "  Password: ${SEED_DEMO_MERCHANT_PASSWORD}"
+echo "  Panel PIN: 0000 (Manager — full settings gear after owner login)"

@@ -236,14 +236,16 @@ Set `SEED_DEMO_RESET_PASSWORD=false` in secrets to keep a custom demo password a
 | Password | `DemoShop123!` (reset when heal runs with default env) |
 | Merchant slug | usually `polacafe` (also resolves slug `demo` when configured) |
 
-If the header shows a **staff** name (e.g. waiter) instead of **Owner**, a staff row is still using the demo email — owner login lost the race. On the production host (SSH alias `production-reborn`):
+If the header shows a **staff** name (e.g. waiter **shami**) after owner login + PIN **0000**, a floor user still shares the default Manager PIN — PIN unlock binds to that waiter and the settings gear stays empty. Same fix as email drift below.
+
+If the header shows a **staff** name right after **email** login (before PIN), a staff row is still using the demo email — owner login lost the race. On the production host (SSH alias `production-reborn`):
 
 ```bash
 cd /root/rebornSense   # or your DEPLOY_PATH
 bash scripts/heal-production-demo-login.sh
 ```
 
-This deactivates staff rows with demo alias emails, clears `panel_nav_hidden` for settings, and resets the owner password when `SEED_DEMO_RESET_PASSWORD=true`.
+This deactivates staff rows with demo alias emails, clears duplicate **0000** PINs from non-Manager staff (so PIN unlock opens Manager + full settings tabs), clears `panel_nav_hidden` for settings, and resets the owner password when `SEED_DEMO_RESET_PASSWORD=true`.
 
 Schema-drift login failures (HTTP 500, logs mention missing columns such as `adyen_store_reference`) are healed on deploy via `backend/sql/ensure-merchant-columns-drift.sql`.
 
