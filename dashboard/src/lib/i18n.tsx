@@ -4985,6 +4985,8 @@ const en: Dict = {
   terminalAdded: 'Terminal added',
   terminalRemoved: 'Terminal removed',
   failedAddTerminal: 'Could not add terminal',
+  terminalAlreadyRegisteredToMerchant:
+    'This terminal ID is already registered to {name}{detail}.',
   failedRemoveTerminal: 'Could not remove terminal',
   noTerminals: 'No terminals registered yet.',
   languageSettingsHint: 'Panel language for the merchant dashboard, and default language for the shop & homepage.',
@@ -10237,6 +10239,8 @@ const fr: Dict = {
   terminalAdded: 'Terminal ajouté',
   terminalRemoved: 'Terminal supprimé',
   failedAddTerminal: 'Impossible d’ajouter le terminal',
+  terminalAlreadyRegisteredToMerchant:
+    'Cet ID terminal est déjà enregistré pour {name}{detail}.',
   failedRemoveTerminal: 'Impossible de supprimer le terminal',
   noTerminals: 'Aucun terminal enregistré.',
   languageSettingsHint:
@@ -15436,6 +15440,8 @@ const de: Dict = {
   terminalAdded: 'Terminal hinzugefügt',
   terminalRemoved: 'Terminal entfernt',
   failedAddTerminal: 'Terminal konnte nicht hinzugefügt werden',
+  terminalAlreadyRegisteredToMerchant:
+    'Diese Terminal-ID ist bereits bei {name}{detail} registriert.',
   failedRemoveTerminal: 'Terminal konnte nicht entfernt werden',
   noTerminals: 'Noch keine Terminals registriert.',
   languageSettingsHint:

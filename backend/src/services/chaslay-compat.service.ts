@@ -11,6 +11,7 @@ import { normalizeComboSlots } from "@/lib/combo";
 import { roundMoney2 } from "@/lib/money";
 import { ModifierService } from "./modifier.service";
 import { filterCatalogForChannel, isVisibleOnChannel } from "@/lib/catalog-visibility";
+import { buildTerminalDuplicateConflictResponse } from "@/lib/terminal-duplicate-error";
 
 export function normalizeChaslayDeviceId(deviceId: string): string {
   if (!deviceId) return "";
@@ -774,7 +775,8 @@ export class ChaslayCompatService {
 
       if (existing) {
         if (existing.merchantId !== merchantId) {
-          throw new Error(`Terminal ${terminalId} belongs to another merchant`);
+          const conflict = await buildTerminalDuplicateConflictResponse(existing.merchantId);
+          throw new Error(conflict.error);
         }
         await db
           .update(schema.paymentTerminals)

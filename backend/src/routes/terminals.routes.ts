@@ -16,6 +16,7 @@ import {
   branchPanelTerminalsContext,
   resolveBranchPanelSettingsLocationId,
 } from "@/lib/branch-panel-settings";
+import { buildTerminalDuplicateConflictResponse } from "@/lib/terminal-duplicate-error";
 
 const router = Router();
 
@@ -195,7 +196,8 @@ router.post("/", requirePermission("MANAGE_SETTINGS"), async (req: Request, res:
       return res.status(500).json({ error: "Failed to register terminal" });
     }
     if (terminal.merchantId !== req.merchantId!) {
-      return res.status(409).json({ error: "Terminal ID is already registered to another merchant" });
+      const conflict = await buildTerminalDuplicateConflictResponse(terminal.merchantId);
+      return res.status(409).json(conflict);
     }
     res.status(201).json({
       success: true,

@@ -72,6 +72,7 @@ import PrinterKitchenRoutingPicker from '@/components/merchant/PrinterKitchenRou
 import SignagePage from './SignagePage';
 import KioskSettingsPage from './KioskSettingsPage';
 import api from '@/lib/api';
+import { terminalRegisterErrorMessage } from '@/lib/terminal-register-error';
 import { formatUserFacingApiError, toastLoadError } from '@/lib/deploy-blip';
 import {
   RECEIPT_LOGO_WIDTH_PX_MAX,
@@ -2061,7 +2062,7 @@ export default function Settings() {
       paymentsDataLoadedRef.current = false;
       await loadPaymentsData({ force: true });
     } catch (error: any) {
-      toast.error(error.response?.data?.error || t('failedAddTerminal'));
+      toast.error(terminalRegisterErrorMessage(error, t, 'failedAddTerminal'));
     } finally {
       setSavingTerminal(false);
     }
