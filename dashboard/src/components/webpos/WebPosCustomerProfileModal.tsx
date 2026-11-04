@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { X } from 'lucide-react';
 import api from '@/lib/api';
@@ -86,11 +86,20 @@ export default function WebPosCustomerProfileModal({
     membershipPlanId: '',
   });
 
+  const loadedCustomerIdRef = useRef<string | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open || !customerId) {
-      setProfile(null);
+      if (!open) {
+        loadedCustomerIdRef.current = null;
+        setProfile(null);
+      }
       return;
     }
+    if (loadedCustomerIdRef.current === customerId) return;
+    loadedCustomerIdRef.current = customerId;
     setTab('overview');
     let cancelled = false;
     setLoading(true);
@@ -117,7 +126,8 @@ export default function WebPosCustomerProfileModal({
       .catch((e: { response?: { data?: { error?: string } } }) => {
         if (!cancelled) {
           toast.error(e.response?.data?.error || t('webPosCustomerProfileFailed'));
-          onClose();
+          loadedCustomerIdRef.current = null;
+          onCloseRef.current();
         }
       })
       .finally(() => {
@@ -126,7 +136,7 @@ export default function WebPosCustomerProfileModal({
     return () => {
       cancelled = true;
     };
-  }, [open, customerId, onClose, t]);
+  }, [open, customerId, t]);
 
   if (!open) return null;
 
