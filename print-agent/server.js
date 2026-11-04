@@ -31,7 +31,7 @@ const {
 } = require("./windows-native");
 
 const PORT = Number(process.env.PRINT_AGENT_PORT || 9101);
-const VERSION = "1.10.6";
+const VERSION = "1.10.7";
 
 /** Persistent PowerShell worker — avoids Add-Type + OpenPrinter cold start per BT print. */
 let printWorker = null;
@@ -389,7 +389,7 @@ function pumpPrintWorkerJobs() {
   printWorkerJobActive = true;
   const job = printWorkerJobQueue[0];
   const payload = JSON.stringify({
-    cmd: "print",
+    cmd: job.cmd || "print",
     printerName: job.printerName || "",
     dataBase64: job.dataBase64,
     drawerKick: job.drawerKick === true,
@@ -516,11 +516,12 @@ function ensurePrintWorker() {
   return promise;
 }
 
-function printViaWorker({ printerName, dataBase64, drawerKick }) {
+function printViaWorker({ printerName, dataBase64, drawerKick, cmd }) {
   return ensurePrintWorker().then(
     () =>
       new Promise((resolve, reject) => {
         printWorkerJobQueue.push({
+          cmd: cmd || "print",
           printerName: printerName || "",
           dataBase64,
           drawerKick: drawerKick === true,
@@ -530,6 +531,10 @@ function printViaWorker({ printerName, dataBase64, drawerKick }) {
         pumpPrintWorkerJobs();
       })
   );
+}
+
+function warmupPrinterViaWorker(printerName) {
+  return printViaWorker({ printerName: printerName || "", cmd: "warmup" });
 }
 
 /** Resolve win-scale-read.ps1 (install dir, pkg asset dir, or dev source). */
@@ -986,7 +991,7 @@ async function runPowerShell(scriptPath, args, printerName) {
   }
 }
 
-async function listPrinters() {
+async function listPrintersUncached() {
   if (!isWindows()) {
     return [];
   }
@@ -1039,6 +1044,19 @@ $json = ($items | ConvertTo-Json -Compress -Depth 4)
       seen.add(p.name);
       return true;
     });
+}
+
+const PRINTERS_CACHE_MS = 12_000;
+let printersCache = null;
+let printersCacheAt = 0;
+
+async function listPrinters(forceRefresh = false) {
+  if (!forceRefresh && printersCache && Date.now() - printersCacheAt < PRINTERS_CACHE_MS) {
+    return printersCache;
+  }
+  printersCache = await listPrintersUncached();
+  printersCacheAt = Date.now();
+  return printersCache;
 }
 
 function stableDeviceKey(name) {
@@ -1430,6 +1448,8 @@ async function startServer() {
         "bt-cut-trailer",
         "usb-unpaced-raw",
         "faster-bt-com-pace",
+        "bt-com-warmup",
+        "printers-list-cache",
         "silent-native",
         "watchdog",
       ],
@@ -1438,7 +1458,8 @@ async function startServer() {
 
   app.get("/printers", async (_req, res) => {
     try {
-      const printers = await listPrinters();
+      const refresh = String(_req.query?.refresh || "").trim() === "1";
+      const printers = await listPrinters(refresh);
       res.json({ printers });
     } catch (error) {
       const payload = buildPrintErrorPayload(error, undefined);
@@ -1470,6 +1491,19 @@ async function startServer() {
   app.get("/cloud-relay", (_req, res) => {
     const cfg = readCloudRelay();
     res.json({ ok: true, paired: !!cfg, apiBase: cfg ? cfg.apiBase : null });
+  });
+
+  /** POST /warmup — OpenPrinter on the receipt queue (wakes idle BT/COM radios before first ticket). */
+  app.post("/warmup", async (req, res) => {
+    try {
+      const requested = String(req.body?.printerName || "").trim();
+      const name = requested ? await resolvePrinterName(requested) : "";
+      const used = await enqueuePrint(() => warmupPrinterViaWorker(name));
+      res.json({ ok: true, printer: used || name || "default" });
+    } catch (error) {
+      const payload = buildPrintErrorPayload(error, req.body && req.body.printerName);
+      res.status(500).json(payload);
+    }
   });
 
   app.post("/print", async (req, res) => {

@@ -118,10 +118,12 @@ import {
   resolveLiveEscPosTargetNames,
   resolveLivePrinterName,
   looksLikeLabelPrinterName,
+  looksLikeBluetoothOrComPrinter,
   suggestPrinterAutoHeal,
   sanitizeScaleUsbAddress,
   syncWebPosLocalPrinterName,
   unsuitableRawPrinterMessage,
+  warmupReceiptPrinterViaAgent,
   type AgentPrinter,
 } from '@/lib/print-agent';
 import { printerUsesLabelProtocol } from '@/lib/label-print-protocol';
@@ -2633,6 +2635,22 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         void api.put('/merchant/settings', { posPrintSettings: next }).catch(() => undefined);
         return next;
       });
+      if (isWindowsDevice()) {
+        const warmupName =
+          resolveEscPosPrinterName('', list) ||
+          list.find((p) => p.isDefault && !p.unsuitableForRaw)?.name ||
+          '';
+        const warmupRef =
+          list.find((p) => p.name === warmupName) ||
+          list.find((p) => looksLikeBluetoothOrComPrinter(p)) ||
+          null;
+        if (warmupRef && looksLikeBluetoothOrComPrinter(warmupRef)) {
+          void warmupReceiptPrinterViaAgent({
+            printerName: warmupRef.name,
+            livePrinters: list,
+          });
+        }
+      }
     } catch {
       setPrinters([]);
       setPrintersReady(false);
@@ -8684,7 +8702,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             retryLocally: printRetryLocally,
             jobKind,
             jobLabel,
-            skipRetarget: !livePrinters.length,
+            skipRetarget: true,
           });
           return { ok: true as const, mode, label };
         } catch (e: unknown) {
@@ -9999,6 +10017,12 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     };
     // Send uses fire-and-forget kitchen print; at payment, run kitchen + receipt in parallel when safe.
     if (shouldPrintKitchen || shouldPrintReceipt) {
+      if (shouldPrintReceipt) {
+        void warmupReceiptPrinterViaAgent({
+          printerName: resolveEscPosPrinterName(printerName, printers) || printerName,
+          livePrinters: printers,
+        });
+      }
       const receiptBuildPromise = shouldPrintReceipt
         ? resolveLastReceiptEscPosBase64(receiptText, {
             qrUrl: receiptQrForPrint,

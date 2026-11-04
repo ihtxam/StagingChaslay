@@ -7,6 +7,7 @@ import {
   installDesktopHardwareBridge,
 } from '@/lib/hardware/desktop-bridge';
 import { isStaleUsbEthernetPrinterName, looksLikeLabelPrinterName } from './printer-kind';
+import { isWindowsDevice } from '@/lib/print-agent-platform';
 import {
   agentPrintValidationErrorMessage,
   classifyAgentPrintBase64,
@@ -818,7 +819,7 @@ export function looksCorruptedPrinterName(name?: string | null): boolean {
   return !!name && name.includes('?');
 }
 
-/** 1.10.5+ warm worker + faster BT/COM pacing; 1.10.6 further reduces paced drain sleeps. */
+/** 1.10.5+ warm worker + faster BT/COM pacing; 1.10.7 trims COM chunk waits and caches printer list in the agent. */
 export const MIN_PRINT_AGENT_VERSION = '1.10.5';
 
 /** Niimbot K3/B21 labels need the dedicated /print/niimbot-label route. */
@@ -1491,6 +1492,49 @@ export async function printViaAgent(opts: {
   }
   markPrintAgentRecentSuccess();
   return { ok: true, printer: data?.printer };
+}
+
+const WARMUP_COOLDOWN_MS = 45_000;
+let lastWarmupKey = '';
+let lastWarmupAt = 0;
+
+/**
+ * Wake an idle Windows BT/COM queue (OpenPrinter via the warm worker).
+ * Best-effort — skips when not Windows browser or agent lacks /warmup (pre-1.10.7).
+ */
+export async function warmupReceiptPrinterViaAgent(opts?: {
+  printerName?: string;
+  livePrinters?: AgentPrinter[];
+}): Promise<void> {
+  if (typeof window === 'undefined' || window.manuposDesktop) return;
+  if (!isWindowsDevice()) return;
+  let printerName = String(opts?.printerName || '').trim();
+  const live = opts?.livePrinters;
+  if (live?.length) {
+    printerName =
+      resolveEscPosPrinterName(printerName, live) ||
+      resolveLivePrinterName(printerName, live) ||
+      printerName;
+  }
+  const key = printerName || '__default__';
+  const now = Date.now();
+  if (key === lastWarmupKey && now - lastWarmupAt < WARMUP_COOLDOWN_MS) return;
+  try {
+    if (!(await isPrintAgentAvailable())) return;
+    await agentFetchWithTimeout(
+      '/warmup',
+      {
+        method: 'POST',
+        body: JSON.stringify({ printerName: printerName || undefined }),
+      },
+      12_000
+    );
+    lastWarmupKey = key;
+    lastWarmupAt = now;
+    markPrintAgentRecentSuccess();
+  } catch {
+    /* optional optimization */
+  }
 }
 
 export async function printNiimbotLabelViaAgent(opts: {

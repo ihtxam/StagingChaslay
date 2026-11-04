@@ -5,13 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = "1.10.6";
+const VERSION = "1.10.7";
 
 function read(rel) {
   return fs.readFileSync(path.join(here, rel), "utf8");
 }
 
-test("print-agent version is 1.10.6 in package.json, server.js, and download manifest", () => {
+test("print-agent version is 1.10.7 in package.json, server.js, and download manifest", () => {
   const pkg = JSON.parse(read("../package.json"));
   const server = read("../server.js");
   const manifest = JSON.parse(
@@ -34,7 +34,9 @@ test("print-agent version is 1.10.6 in package.json, server.js, and download man
   assert.match(server, /usb-unpaced-raw/);
   assert.match(server, /faster-bt-com-pace/);
   assert.match(server, /printViaWorker/);
-  assert.match(server, /enqueuePrint/);
+  assert.match(server, /warmupPrinterViaWorker/);
+  assert.match(server, /PRINTERS_CACHE_MS/);
+  assert.match(server, /bt-com-warmup/);
   assert.match(server, /timeout: 180000/);
   assert.match(server, /silent-native/);
   assert.match(server, /windows-native/);
@@ -61,7 +63,7 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.match(src, /Test-NeedsPacedWrite/);
   assert.match(src, /Test-ComSerialPort/);
   assert.match(src, /ComSerialPort:\$isComPort/);
-  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 128 \} else \{ 192 \}/);
+  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 192 \} else \{ 192 \}/);
   assert.match(src, /\$DelayMs -eq 0 -and -not \$ComSerialPort/);
   assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
@@ -70,7 +72,7 @@ test("win-raw-print.ps1 is self-contained spooler-only (no COM helper, no slow-m
   assert.doesNotMatch(cutTrailer, /0x1D, 0x56, 0x01/);
   assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
   assert.match(src, /\$cutSuffix/);
-  assert.match(src, /\$drainMs = \[Math\]::Min\(180 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 48\)\), 1200\)/);
+  assert.match(src, /\$drainMs = \[Math\]::Min\(180 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 64\)\), 1000\)/);
   assert.match(src, /usb\\d\+\|usb00\|usbprint.*wsd/);
   assert.match(extractPsFunction(src, "Test-NeedsPacedWrite"), /thermal\|receipt\|escpos/);
   assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /ByteCount -ge 1800/);
@@ -93,7 +95,7 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.match(src, /Split-CutSuffix/);
   assert.match(src, /Test-ComSerialPort/);
   assert.match(src, /ComSerialPort:\$isComPort/);
-  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 128 \} else \{ 192 \}/);
+  assert.match(src, /writeChunk = if \(\$isComPort\) \{ 192 \} else \{ 192 \}/);
   assert.match(src, /\$DelayMs -eq 0 -and -not \$ComSerialPort/);
   assert.match(src, /elseif \(\$DelayMs -gt 0\) \{ 6 \}/);
   assert.match(src, /FlushPrinter/);
@@ -102,7 +104,9 @@ test("win-raw-print-worker.ps1 is self-contained spooler-only", () => {
   assert.doesNotMatch(cutTrailer, /0x1D, 0x56, 0x01/);
   assert.doesNotMatch(cutTrailer, /0x1B, 0x6D/);
   assert.match(src, /\$cutSuffix/);
-  assert.match(src, /\$drainMs = \[Math\]::Min\(180 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 48\)\), 1200\)/);
+  assert.match(src, /\$drainMs = \[Math\]::Min\(180 \+ \[int\]\(\[Math\]::Floor\(\$body\.Length \/ 64\)\), 1000\)/);
+  assert.match(src, /Invoke-PrinterWarmup/);
+  assert.match(src, /cmd -eq "warmup"/);
   assert.match(src, /usb\\d\+\|usb00\|usbprint.*wsd/);
   assert.match(extractPsFunction(src, "Test-NeedsPacedWrite"), /thermal\|receipt\|escpos/);
   assert.doesNotMatch(extractPsFunction(src, "Test-NeedsPacedWrite"), /ByteCount -ge 1800/);
