@@ -179,7 +179,7 @@ import {
   type ComoCartItem,
   type ComoSession,
 } from '@/lib/como-client';
-import { membershipDiscountPercent } from '@/lib/membership-plans';
+import { membershipDiscountPercent, countStampIncrementForSale } from '@/lib/membership-plans';
 import type { MembershipPlan } from '@/lib/membership-plans';
 import {
   lineSignature,
@@ -7436,7 +7436,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     membership: AttachedMembership,
     orderId: string,
     paidSubtotal: number,
-    pointsRedeemed: number
+    pointsRedeemed: number,
+    saleLines: CartLine[]
   ) => {
     if (pointsRedeemed > 0) {
       await api.post(`/gift-cards/${membership.cardId}/points/redeem`, {
@@ -7452,9 +7453,13 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       });
     }
     if (membership.membershipPlan?.type === 'stamp_card') {
+      const plan = membership.membershipPlan;
+      const increment = countStampIncrementForSale(plan, saleLines);
+      if (increment <= 0) return;
       try {
         const stampRes = await api.post(`/gift-cards/${membership.cardId}/stamps/increment`, {
           orderId,
+          increment,
         });
         if (stampRes.data?.rewardEarned) {
           toast.success(t('membershipRewardEarned'));
@@ -9637,7 +9642,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             attachedMembership,
             backendOrderId,
             paidSubtotal,
-            extrasWithDisc?.pointsRedeemed || 0
+            extrasWithDisc?.pointsRedeemed || 0,
+            saleLines
           );
         } catch (e: any) {
           toast.error(e.response?.data?.error || t('webPosLoyaltySyncFailed'));

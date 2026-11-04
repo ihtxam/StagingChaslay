@@ -910,8 +910,17 @@ const en: Dict = {
   membershipMinPoints: 'Auto from points (0 = assign only)',
   membershipMinPointsHint: 'If the customer has at least this many points and no tier is assigned, this level applies.',
   membershipStampsRequired: 'Stamps required',
+  membershipTiersIntro:
+    'Discount tiers apply a % off at checkout. Set min points > 0 for open tiers that auto-upgrade when the customer earns enough loyalty points. Stamp tiers count purchases toward a free reward (e.g. 10 coffees = 1 free).',
+  membershipStampTypeHint:
+    'Buy X qualifying orders (or X drinks if a product ID is set); the next reward is one free item — staff apply the free product at POS when the toast appears.',
+  membershipDiscountTypeHint:
+    'Assigned tier always wins. Open tiers (min points > 0) apply automatically when points balance qualifies.',
+  membershipStampProductId: 'Stamp product ID (optional)',
+  membershipStampProductHint:
+    'Leave empty: one stamp per paid merchandise sale. Set your coffee product UUID: one stamp per unit sold (buy 10, get the 11th free when stampsRequired is 10).',
   membershipEnabledHint:
-    'Create Student, VIP, Family, Special guest, or any fidelity level. Assign it when creating a customer, or auto-apply from points. POS applies the discount.',
+    'Default templates include Coffee Club (10 stamps), fixed % tiers, and Bronze/Silver/Gold open tiers from points. Edit or add tiers; assign on the customer or sell an RFID card at POS.',
   membershipSellTitle: 'Sell membership',
   membershipSellMissingFields: 'Name and RFID card are required',
   membershipSellContactRequired: 'Email or phone is required',
@@ -6443,7 +6452,8 @@ const fr: Dict = {
   membership: 'Adhésion',
   membershipPlan: 'Formule adhésion',
   membershipEnabled: 'Activer les cartes adhésion',
-  membershipEnabledHint: 'Vendre des cartes par formule (remise %, tampons) via la caisse.',
+  membershipEnabledHint:
+    'Modèles par défaut : Coffee Club (10 tampons), remises fixes et paliers Bronze/Argent/Or selon les points. Modifiez ou ajoutez des formules ; assignez au client ou vendez une carte RFID au POS.',
   membershipPlans: 'Formules adhésion',
   membershipAddPlan: 'Ajouter une formule',
   membershipPlanLabel: 'Libellé',
@@ -6454,8 +6464,15 @@ const fr: Dict = {
   membershipMinPoints: 'Auto dès X points (0 = assignation seule)',
   membershipMinPointsHint:
     'Si le client a au moins ce nombre de points et aucun palier assigné, ce niveau s’applique.',
-  membershipEnabledHint:
-    'Créez Étudiant, VIP, Famille, Invité spécial ou tout palier fidélité. Assignez-le à la création du client, ou automatiquement selon les points. Le POS applique la remise.',
+  membershipTiersIntro:
+    'Les formules remise appliquent un % à la caisse. Points min > 0 = paliers ouverts qui montent automatiquement avec les points fidélité. Tampons = achats comptés vers une récompense (ex. 10 cafés = 1 offert).',
+  membershipStampTypeHint:
+    'X achats qualifiants (ou X boissons si ID produit renseigné) ; la récompense suivante est un article gratuit — le staff l’ajoute au POS quand le toast apparaît.',
+  membershipDiscountTypeHint:
+    'Le palier assigné prime. Les paliers ouverts (points min > 0) s’appliquent automatiquement selon le solde de points.',
+  membershipStampProductId: 'ID produit tampon (optionnel)',
+  membershipStampProductHint:
+    'Vide : 1 tampon par vente marchandise payée. UUID du café : 1 tampon par unité (10 tampons = 11e offert si stampsRequired = 10).',
   membershipStampsRequired: 'Tampons requis',
   membershipSellTitle: 'Vendre une adhésion',
   membershipSellMissingFields: 'Nom et carte RFID requis',
@@ -11697,7 +11714,8 @@ const de: Dict = {
   membership: 'Mitgliedschaft',
   membershipPlan: 'Mitgliedschaftsplan',
   membershipEnabled: 'Mitgliedskarten aktivieren',
-  membershipEnabledHint: 'Gestaffelte Mitgliedskarten (Rabatt %, Stempel) an der Kasse verkaufen.',
+  membershipEnabledHint:
+    'Standardvorlagen: Coffee Club (10 Stempel), feste Rabattstufen und Bronze/Silber/Gold ab Punkten. Stufen bearbeiten; am Kunden zuweisen oder RFID-Karte an der Kasse verkaufen.',
   membershipPlans: 'Mitgliedschaftsstufen',
   membershipAddPlan: 'Stufe hinzufügen',
   membershipPlanLabel: 'Bezeichnung',
@@ -11708,8 +11726,15 @@ const de: Dict = {
   membershipMinPoints: 'Auto ab Punkte (0 = nur zuweisen)',
   membershipMinPointsHint:
     'Hat der Kunde mindestens so viele Punkte und keine Stufe zugewiesen, gilt dieses Level.',
-  membershipEnabledHint:
-    'Erstellen Sie Student, VIP, Familie, Ehrengast oder jede Treuestufe. Bei der Kundenerfassung zuweisen oder automatisch nach Punkten. Die Kasse wendet den Rabatt an.',
+  membershipTiersIntro:
+    'Rabattstufen geben % Rabatt an der Kasse. Mindestpunkte > 0 = offene Stufen, die automatisch mit Treuepunkten steigen. Stempelkarten zählen Käufe bis zur Belohnung (z. B. 10 Kaffees = 1 gratis).',
+  membershipStampTypeHint:
+    'X qualifizierte Käufe (oder X Getränke mit Produkt-ID) — dann eine Gratisbelohnung; Personal gibt den Gratisartikel am POS ein, wenn der Toast erscheint.',
+  membershipDiscountTypeHint:
+    'Zugewiesene Stufe hat Vorrang. Offene Stufen (Mindestpunkte > 0) gelten automatisch nach Punktestand.',
+  membershipStampProductId: 'Stempel-Produkt-ID (optional)',
+  membershipStampProductHint:
+    'Leer: 1 Stempel pro bezahlter Warenverkauf. Kaffee-UUID: 1 Stempel pro Stück (10 Stempel = 11. gratis bei stampsRequired 10).',
   membershipStampsRequired: 'Stempel erforderlich',
   membershipSellTitle: 'Mitgliedschaft verkaufen',
   membershipSellMissingFields: 'Name und RFID-Karte erforderlich',

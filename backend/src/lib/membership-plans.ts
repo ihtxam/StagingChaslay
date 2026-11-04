@@ -10,6 +10,8 @@ export type MembershipPlan = {
   discountPercent?: number;
   /** Stamps required before reward (stamp_card plans) */
   stampsRequired?: number;
+  /** When set, only sales containing this product earn stamps (qty = stamp count). */
+  stampProductId?: string | null;
   /** Optional product id for free reward item */
   rewardProductId?: string | null;
   /** Optional one-time sell price in CHF */
@@ -24,38 +26,49 @@ export type MembershipPlan = {
 
 export const DEFAULT_MEMBERSHIP_PLANS: MembershipPlan[] = [
   {
-    id: "student-10",
-    label: "Student",
-    type: "discount",
-    discountPercent: 10,
+    id: "coffee-club",
+    label: "Coffee Club",
+    type: "stamp_card",
+    stampsRequired: 10,
     active: true,
+    sellPrice: 0,
   },
   {
-    id: "vip-20",
-    label: "VIP",
-    type: "discount",
-    discountPercent: 20,
-    active: true,
-  },
-  {
-    id: "family-5",
-    label: "Family",
-    type: "discount",
-    discountPercent: 5,
-    active: true,
-  },
-  {
-    id: "special-guest",
-    label: "Special guest",
+    id: "regular",
+    label: "Regular",
     type: "discount",
     discountPercent: 0,
     active: true,
   },
   {
-    id: "coffee-club",
-    label: "Coffee Club",
-    type: "stamp_card",
-    stampsRequired: 6,
+    id: "member-5",
+    label: "Member 5%",
+    type: "discount",
+    discountPercent: 5,
+    active: true,
+  },
+  {
+    id: "rewards-bronze",
+    label: "Bronze (points)",
+    type: "discount",
+    discountPercent: 5,
+    minPoints: 250,
+    active: true,
+  },
+  {
+    id: "rewards-silver",
+    label: "Silver (points)",
+    type: "discount",
+    discountPercent: 10,
+    minPoints: 750,
+    active: true,
+  },
+  {
+    id: "rewards-gold",
+    label: "Gold (points)",
+    type: "discount",
+    discountPercent: 15,
+    minPoints: 1500,
     active: true,
   },
 ];
@@ -96,6 +109,7 @@ export function normalizeMembershipPlan(raw: unknown, index: number): Membership
     type,
     discountPercent,
     stampsRequired,
+    stampProductId: src.stampProductId ? String(src.stampProductId) : null,
     rewardProductId: src.rewardProductId ? String(src.rewardProductId) : null,
     sellPrice,
     minPoints,
@@ -148,6 +162,32 @@ export function resolveEffectiveMembershipPlan(
 export function membershipDiscountPercentFromPlan(plan: MembershipPlan | null | undefined): number {
   if (!plan || plan.type !== "discount" || !plan.active) return 0;
   return Math.min(100, Math.max(0, Number(plan.discountPercent) || 0));
+}
+
+type SaleLineForStamps = { productId?: string | null; quantity?: number; giftCard?: boolean };
+
+/** How many stamps to add for this sale (0 = skip increment). */
+export function countStampIncrementForSale(
+  plan: MembershipPlan,
+  lines: SaleLineForStamps[]
+): number {
+  if (plan.type !== "stamp_card") return 0;
+  const merchLines = lines.filter(
+    (l) =>
+      !l.giftCard &&
+      l.productId &&
+      !String(l.productId).startsWith("__gift_card_")
+  );
+  if (!merchLines.length) return 0;
+  const stampProductId = plan.stampProductId?.trim();
+  if (!stampProductId) return 1;
+  let count = 0;
+  for (const line of merchLines) {
+    if (String(line.productId) === stampProductId) {
+      count += Math.max(1, Math.floor(Number(line.quantity) || 1));
+    }
+  }
+  return count;
 }
 
 /** After a qualifying sale, compute new stamp count and whether reward is earned. */

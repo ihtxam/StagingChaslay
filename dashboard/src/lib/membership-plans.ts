@@ -8,6 +8,8 @@ export type MembershipPlan = {
   type: MembershipPlanType;
   discountPercent?: number;
   stampsRequired?: number;
+  /** When set, only this product earns stamps (quantity = stamps per sale). */
+  stampProductId?: string | null;
   rewardProductId?: string | null;
   sellPrice?: number;
   /** Auto-qualify when the customer has at least this many points and no assigned plan. */
@@ -73,10 +75,62 @@ export function membershipDiscountPercent(membership: {
   return membershipDiscountPercentFromPlan(membership?.membershipPlan);
 }
 
+export function countStampIncrementForSale(
+  plan: MembershipPlan,
+  lines: { productId?: string | null; quantity?: number; giftCard?: boolean }[]
+): number {
+  if (plan.type !== 'stamp_card') return 0;
+  const merchLines = lines.filter(
+    (l) =>
+      !l.giftCard &&
+      l.productId &&
+      !String(l.productId).startsWith('__gift_card_')
+  );
+  if (!merchLines.length) return 0;
+  const stampProductId = plan.stampProductId?.trim();
+  if (!stampProductId) return 1;
+  let count = 0;
+  for (const line of merchLines) {
+    if (String(line.productId) === stampProductId) {
+      count += Math.max(1, Math.floor(Number(line.quantity) || 1));
+    }
+  }
+  return count;
+}
+
 export const DEFAULT_MEMBERSHIP_PLANS: MembershipPlan[] = [
-  { id: 'student-10', label: 'Student', type: 'discount', discountPercent: 10, active: true },
-  { id: 'vip-20', label: 'VIP', type: 'discount', discountPercent: 20, active: true },
-  { id: 'family-5', label: 'Family', type: 'discount', discountPercent: 5, active: true },
-  { id: 'special-guest', label: 'Special guest', type: 'discount', discountPercent: 0, active: true },
-  { id: 'coffee-club', label: 'Coffee Club', type: 'stamp_card', stampsRequired: 6, active: true },
+  {
+    id: 'coffee-club',
+    label: 'Coffee Club',
+    type: 'stamp_card',
+    stampsRequired: 10,
+    active: true,
+    sellPrice: 0,
+  },
+  { id: 'regular', label: 'Regular', type: 'discount', discountPercent: 0, active: true },
+  { id: 'member-5', label: 'Member 5%', type: 'discount', discountPercent: 5, active: true },
+  {
+    id: 'rewards-bronze',
+    label: 'Bronze (points)',
+    type: 'discount',
+    discountPercent: 5,
+    minPoints: 250,
+    active: true,
+  },
+  {
+    id: 'rewards-silver',
+    label: 'Silver (points)',
+    type: 'discount',
+    discountPercent: 10,
+    minPoints: 750,
+    active: true,
+  },
+  {
+    id: 'rewards-gold',
+    label: 'Gold (points)',
+    type: 'discount',
+    discountPercent: 15,
+    minPoints: 1500,
+    active: true,
+  },
 ];

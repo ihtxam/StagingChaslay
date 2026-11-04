@@ -426,6 +426,7 @@ export default function Loyalty() {
               {gcSettings.membershipEnabled ? (
                 <div className="py-4 border-b border-slate-100 space-y-3">
                   <p className="text-sm font-medium text-slate-800">{t('membershipPlans')}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">{t('membershipTiersIntro')}</p>
                   {(gcSettings.membershipPlans || []).map((plan, idx) => (
                     <div key={plan.id} className="rounded-lg border border-slate-200 p-3 space-y-2">
                       <input
@@ -487,13 +488,15 @@ export default function Loyalty() {
                           placeholder={t('membershipMinPoints')}
                         />
                         <p className="text-[11px] text-slate-500">{t('membershipMinPointsHint')}</p>
+                        <p className="text-[11px] text-slate-500">{t('membershipDiscountTypeHint')}</p>
                         </>
                       ) : (
+                        <>
                         <input
                           className="input"
                           type="number"
                           min={1}
-                          value={plan.stampsRequired ?? 6}
+                          value={plan.stampsRequired ?? 10}
                           onChange={(e) => {
                             const next = [...(gcSettings.membershipPlans || [])];
                             next[idx] = {
@@ -504,6 +507,22 @@ export default function Loyalty() {
                           }}
                           placeholder={t('membershipStampsRequired')}
                         />
+                        <p className="text-[11px] text-slate-500">{t('membershipStampTypeHint')}</p>
+                        <input
+                          className="input font-mono text-sm"
+                          value={plan.stampProductId ?? ''}
+                          onChange={(e) => {
+                            const next = [...(gcSettings.membershipPlans || [])];
+                            next[idx] = {
+                              ...plan,
+                              stampProductId: e.target.value.trim() || null,
+                            };
+                            setGcSettings({ ...gcSettings, membershipPlans: next });
+                          }}
+                          placeholder={t('membershipStampProductId')}
+                        />
+                        <p className="text-[11px] text-slate-500">{t('membershipStampProductHint')}</p>
+                        </>
                       )}
                       <input
                         className="input"
