@@ -1,1 +1,0 @@
-import{aN as o}from"./index-aEJFZdlg.js";const P="1.0.0",e="0fb502f1",s=`Panel build: ${e}`,a=`${o} v${P}`;export{P as APP_VERSION,e as PANEL_BUILD_STAMP,s as panelBuildLabel,a as webPosVersionLabel};
