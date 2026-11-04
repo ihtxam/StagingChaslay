@@ -6,7 +6,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-export SEED_DEMO_MERCHANT_EMAIL="${SEED_DEMO_MERCHANT_EMAIL:-demo@rebornsense.com}"
+# Chaslay staging walkthrough account (aliases demo@rebornsense.com still resolve via seed heal)
+export SEED_DEMO_MERCHANT_EMAIL="${SEED_DEMO_MERCHANT_EMAIL:-demo@chaslay.com}"
 export SEED_DEMO_MERCHANT_PASSWORD="${SEED_DEMO_MERCHANT_PASSWORD:-DemoShop123!}"
 export SEED_DEMO_SLUG="${SEED_DEMO_SLUG:-demo}"
 export SEED_DEMO_RESET_PASSWORD="${SEED_DEMO_RESET_PASSWORD:-true}"

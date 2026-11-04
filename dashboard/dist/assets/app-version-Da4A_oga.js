@@ -1,0 +1,1 @@
+import{aO as o}from"./index-Ct_1uPWR.js";const a="1.0.0",e="e16a952a",n=`Panel build: ${e}`,s=`${o} v${a}`;export{a as APP_VERSION,e as PANEL_BUILD_STAMP,n as panelBuildLabel,s as webPosVersionLabel};

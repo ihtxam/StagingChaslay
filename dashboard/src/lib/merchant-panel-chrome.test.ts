@@ -30,6 +30,11 @@ assert.match(
 
 assert.match(dashboard, /storeName=\{merchantShopName\}/);
 assert.match(dashboard, /settings\?\.businessName/);
+assert.match(
+  dashboard,
+  /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0/,
+  'settings route must not double-stack panel-main padding (#917)'
+);
 
 assert.match(
   sidebar,

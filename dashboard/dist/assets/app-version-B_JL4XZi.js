@@ -1,1 +1,0 @@
-import{aO as o}from"./index-CWS2_lLG.js";const P="1.0.0",e="123136d7",s=`Panel build: ${e}`,a=`${o} v${P}`;export{P as APP_VERSION,e as PANEL_BUILD_STAMP,s as panelBuildLabel,a as webPosVersionLabel};

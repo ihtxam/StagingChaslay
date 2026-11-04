@@ -207,7 +207,7 @@ Default demo merchant (seeded on every deploy via `docker-compose` migrate conta
 | Field | Value |
 |-------|--------|
 | URL | https://app.chaslay.com |
-| Email | `demo@rebornsense.com` |
+| Email | `demo@chaslay.com` (alias: `demo@rebornsense.com`) |
 | Password | `DemoShop123!` |
 | Shop slug | `demo` → https://shop.chaslay.com/demo |
 

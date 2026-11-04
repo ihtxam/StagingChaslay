@@ -32,14 +32,29 @@ const AUTH_MERCHANT_SELECT = `id, email, password_hash, status, name,
 
 /** Auth paths use raw SQL so login works when drizzle schema columns lag production. */
 async function findAuthMerchantByEmail(email: string): Promise<AuthMerchantRow | null> {
+  const normalized = String(email || "").trim().toLowerCase();
   const rows = await queryRaw<AuthMerchantRow>(
     `SELECT ${AUTH_MERCHANT_SELECT}
      FROM merchants
      WHERE lower(email) = $1
      LIMIT 1`,
-    [email]
+    [normalized]
   );
-  return rows[0] ?? null;
+  if (rows[0]) return rows[0];
+
+  const { demoMerchantSlug, isDemoMerchantOwnerEmail } = await import(
+    "@/lib/demo-merchant-login"
+  );
+  if (!isDemoMerchantOwnerEmail(normalized)) return null;
+
+  const bySlug = await queryRaw<AuthMerchantRow>(
+    `SELECT ${AUTH_MERCHANT_SELECT}
+     FROM merchants
+     WHERE lower(slug) = $1
+     LIMIT 1`,
+    [demoMerchantSlug()]
+  );
+  return bySlug[0] ?? null;
 }
 
 async function findAuthMerchantById(merchantId: string): Promise<Omit<AuthMerchantRow, "password_hash"> | null> {

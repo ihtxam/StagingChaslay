@@ -5,6 +5,8 @@ import { AuthService } from "../services/auth.service";
 import { generateSyncApiKey } from "../services/chaslay-compat.service";
 import { SubscriptionPlansService } from "../services/subscription-plans.service";
 import { resolveShopPublicHost } from "../lib/brand";
+import { demoMerchantOwnerEmailAliases } from "../lib/demo-merchant-login";
+import { normalizePanelNavHidden } from "../lib/panel-nav-hidden";
 
 dotenv.config();
 
@@ -185,6 +187,7 @@ async function seedDemoShop() {
   }
 
   await healDemoPanelNavSettings(merchant.id);
+  await healDemoOwnerLogin(merchant.id, email);
 
   const existingCats = await db.query.categories.findMany({
     where: eq(schema.categories.merchantId, merchant.id),
@@ -296,6 +299,44 @@ async function healDemoPanelNavSettings(merchantId: string) {
     })
     .where(eq(schema.merchants.id, merchantId));
   console.log("Demo merchant: restored settings gear in panel nav (cleared panel_nav_hidden settings key)");
+}
+
+/**
+ * Owner email login must win over a staff row sharing demo@chaslay.com / demo@rebornsense.com.
+ * Re-sync password via SEED_DEMO_RESET_PASSWORD and canonicalize merchant.email.
+ */
+async function healDemoOwnerLogin(merchantId: string, canonicalEmail: string) {
+  const db = getDb();
+  const aliases = demoMerchantOwnerEmailAliases();
+  const normalizedCanonical = String(canonicalEmail || "").trim().toLowerCase();
+  if (!normalizedCanonical) return;
+
+  await db
+    .update(schema.merchants)
+    .set({
+      email: normalizedCanonical,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.merchants.id, merchantId));
+
+  const staffRows = await db.query.merchantStaff.findMany({
+    where: eq(schema.merchantStaff.merchantId, merchantId),
+    columns: { id: true, email: true, isActive: true },
+  });
+  for (const row of staffRows) {
+    const staffEmail = String(row.email || "")
+      .trim()
+      .toLowerCase();
+    if (!staffEmail || !aliases.includes(staffEmail)) continue;
+    if (!row.isActive) continue;
+    await db
+      .update(schema.merchantStaff)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(schema.merchantStaff.id, row.id));
+    console.log(
+      `Demo merchant: deactivated staff email login ${row.email} (use owner ${normalizedCanonical} for panel demo)`
+    );
+  }
 }
 
 /** Default demo location (Demo Food Truck / main) should be retail, not restaurant bootstrap default. */
