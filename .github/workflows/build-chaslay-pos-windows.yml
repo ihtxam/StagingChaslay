@@ -121,9 +121,19 @@ jobs:
             Write-Warning "Skipping reborn-pos-update.json — TAURI_SIGNING_PRIVATE_KEY not configured"
           }
 
+      - name: Upload RebornPOS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reborn-pos-windows
+          retention-days: 14
+          path: |
+            backend/public/downloads/reborn-pos-setup.exe
+            backend/public/downloads/reborn-pos-setup.json
+
       - name: Publish RebornPOS installer to production downloads (SCP)
         if: github.ref == 'refs/heads/main' && github.repository == 'ihtxam/rebornSense'
         shell: pwsh
+        timeout-minutes: 10
         env:
           REBORN_HOST: ${{ secrets.REBORN_HETZNER_HOST }}
           REBORN_USER: ${{ secrets.REBORN_HETZNER_USER || secrets.HETZNER_USER }}
@@ -131,12 +141,17 @@ jobs:
           REBORN_PORT: ${{ secrets.REBORN_HETZNER_SSH_PORT || secrets.HETZNER_SSH_PORT || 22 }}
           DEPLOY_PATH: ${{ secrets.REBORN_HETZNER_DEPLOY_PATH || '/root/rebornSense' }}
         run: |
+          if (-not $env:REBORN_HOST -or -not $env:REBORN_USER -or -not $env:REBORN_KEY) {
+            Write-Warning 'REBORN_HETZNER_HOST/USER/SSH_KEY not configured — skipping SCP (download reborn-pos-windows artifact and run scripts/publish-reborn-pos-download.sh)'
+            exit 0
+          }
           $keyPath = Join-Path $env:RUNNER_TEMP 'reborn_scp_key'
           $env:REBORN_KEY.Replace("`r`n", "`n").Replace("`n", [Environment]::NewLine) | Set-Content -Path $keyPath -Encoding ascii -NoNewline
           icacls $keyPath /inheritance:r /grant:r "$($env:USERNAME):(R)" | Out-Null
           $remote = "$($env:DEPLOY_PATH)/backend/public/downloads/"
           $port = if ($env:REBORN_PORT) { $env:REBORN_PORT } else { '22' }
           $target = "$($env:REBORN_USER)@$($env:REBORN_HOST):$remote"
+          $scpOpts = @('-P', $port, '-i', $keyPath, '-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=30', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3')
           $files = @(
             'backend/public/downloads/reborn-pos-setup.exe',
             'backend/public/downloads/reborn-pos-setup.json'
@@ -145,6 +160,7 @@ jobs:
             $files += 'backend/public/downloads/reborn-pos-update.json'
           }
           foreach ($f in $files) {
-            scp -P $port -i $keyPath -o StrictHostKeyChecking=no $f $target
+            & scp @scpOpts $f $target
+            if ($LASTEXITCODE -ne 0) { throw "scp failed for $f (exit $LASTEXITCODE)" }
           }
           Remove-Item -Force $keyPath
