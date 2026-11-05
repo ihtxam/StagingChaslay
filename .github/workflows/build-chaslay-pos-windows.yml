@@ -17,7 +17,7 @@ on:
 
 concurrency:
   group: build-reborn-pos-windows
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-windows:
