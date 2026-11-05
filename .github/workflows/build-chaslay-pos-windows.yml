@@ -74,7 +74,11 @@ jobs:
             Write-Warning 'TAURI_SIGNING_PRIVATE_KEY missing or invalid — building unsigned installer (no updater .sig)'
             Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
             Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
-            npm run build:nsis -- --config '{"bundle":{"createUpdaterArtifacts":false}}'
+            $confPath = Join-Path $PWD 'src-tauri/tauri.conf.json'
+            $conf = Get-Content $confPath -Raw | ConvertFrom-Json
+            $conf.bundle.createUpdaterArtifacts = $false
+            $conf | ConvertTo-Json -Depth 20 | Set-Content -Encoding utf8 $confPath
+            npm run build:nsis
           } else {
             npm run build:nsis
           }
