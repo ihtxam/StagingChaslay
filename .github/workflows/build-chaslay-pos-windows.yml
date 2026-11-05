@@ -60,11 +60,25 @@ jobs:
 
       - name: Build NSIS installer
         working-directory: desktop
+        shell: pwsh
         env:
           CHASLAY_POS_URL: https://app.rebornsense.com/login
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npm run build:nsis
+        run: |
+          # GitHub secret may be set but malformed (e.g. missing minisign "untrusted comment" line).
+          # NSIS must still publish unsigned when signing cannot run.
+          $key = $env:TAURI_SIGNING_PRIVATE_KEY
+          $looksValid = $key -and ($key -match '(?i)untrusted comment')
+          if (-not $looksValid) {
+            Write-Warning 'TAURI_SIGNING_PRIVATE_KEY missing or invalid — building unsigned installer (no updater .sig)'
+            Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+            Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
+            npm run build:nsis -- --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          } else {
+            npm run build:nsis
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Stage download files
         shell: pwsh
