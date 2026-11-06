@@ -1,0 +1,1 @@
+import{aO as o}from"./index-CLnyqAFi.js";const P="1.0.0",e="96357bfc",s=`Panel build: ${e}`,a=`${o} v${P}`;export{P as APP_VERSION,e as PANEL_BUILD_STAMP,s as panelBuildLabel,a as webPosVersionLabel};
