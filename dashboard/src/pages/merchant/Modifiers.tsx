@@ -1261,7 +1261,7 @@ export default function Modifiers() {
       />
 
       <style>{`
-        /* Local to this page only — avoid leaking a global `.field` rule into the panel. */
+        /* Local to this page only — avoid leaking a global ".field" rule into the panel. */
         .modifier-field {
           width: 100%;
           min-width: 0;
