@@ -444,7 +444,7 @@ export default function Modifiers() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">{t('extrasNosTitle')}</h1>
@@ -708,16 +708,16 @@ export default function Modifiers() {
       {editorOpen && typeof document !== 'undefined'
         ? createPortal(
         <div
-          className="modifier-drawer-backdrop fixed inset-0 z-[80] flex justify-end"
+          className="modifier-drawer-backdrop fixed inset-0 z-[80] flex justify-end bg-black/40 backdrop-blur-[1px]"
           onClick={closeEditor}
           role="presentation"
         >
           <form
             onSubmit={onSave}
-            className="modifier-drawer flex h-full flex-col"
+            className="modifier-drawer flex h-full max-h-full w-[min(100%,32rem)] flex-col border-l border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modifier-drawer__header flex items-center justify-between border-b px-5 py-4">
+            <div className="modifier-drawer__header flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-4">
               <h2 className="text-lg font-bold text-[var(--text)]">
                 {editingId ? t('editGroup') : t('extrasNosAddGroup')}
               </h2>
@@ -737,7 +737,7 @@ export default function Modifiers() {
               <section className="modifier-drawer__card p-5 space-y-5">
                 <Field label={t('title')} required>
                   <input
-                    className="field"
+                    className="modifier-field"
                     value={form.title}
                     onChange={(e) => setForm({ ...form, title: e.target.value })}
                     required
@@ -965,7 +965,7 @@ export default function Modifiers() {
                                     {t('items')}
                                   </span>
                                   <input
-                                    className="field min-w-0"
+                                    className="modifier-field min-w-0"
                                     placeholder={t('optionName')}
                                     value={opt.name}
                                     onChange={(e) => {
@@ -999,7 +999,7 @@ export default function Modifiers() {
                                   </span>
                                   <div className="relative">
                                     <input
-                                      className="field min-w-0 !pr-14 money-input"
+                                      className="modifier-field min-w-0 !pr-14 money-input"
                                       type="text"
                                       inputMode="decimal"
                                       value={opt.price}
@@ -1026,7 +1026,7 @@ export default function Modifiers() {
                                   {t('saleStatus')}
                                 </span>
                                 <select
-                                  className="field min-w-0"
+                                  className="modifier-field min-w-0"
                                   value={opt.saleStatus}
                                   onChange={(e) => {
                                     const options = [...form.options];
@@ -1083,7 +1083,7 @@ export default function Modifiers() {
                                     {t('invModifierStock')}
                                   </span>
                                   <select
-                                    className="field min-w-0"
+                                    className="modifier-field min-w-0"
                                     value={opt.inventoryItemId || ''}
                                     onChange={(e) => {
                                       const options = [...form.options];
@@ -1104,7 +1104,7 @@ export default function Modifiers() {
                                     {t('invQty')}
                                   </span>
                                   <input
-                                    className="field min-w-0"
+                                    className="modifier-field min-w-0"
                                     type="number"
                                     min={0}
                                     step="any"
@@ -1134,7 +1134,7 @@ export default function Modifiers() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <input
-                    className="field pl-9"
+                    className="modifier-field pl-9"
                     placeholder={t('searchModifierProductsPlaceholder')}
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
@@ -1173,7 +1173,7 @@ export default function Modifiers() {
               </section>
             </div>
 
-            <div className="modifier-drawer__footer flex justify-end gap-3 border-t px-5 py-4">
+            <div className="modifier-drawer__footer flex justify-end gap-3 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-4">
               <button type="button" onClick={closeEditor} className="btn-secondary px-5 py-2.5 text-sm">
                 {t('cancel')}
               </button>
@@ -1203,7 +1203,7 @@ export default function Modifiers() {
             </div>
             <div className="p-5 space-y-3">
               <input
-                className="field"
+                className="modifier-field"
                 placeholder={t('searchModifierProductsPlaceholder')}
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
@@ -1261,7 +1261,8 @@ export default function Modifiers() {
       />
 
       <style>{`
-        .field {
+        /* Local to this page only — avoid leaking a global `.field` rule into the panel. */
+        .modifier-field {
           width: 100%;
           min-width: 0;
           box-sizing: border-box;
@@ -1271,19 +1272,43 @@ export default function Modifiers() {
           font-size: 0.875rem;
           background: #fff;
         }
-        .field:focus {
+        .modifier-field:focus {
           outline: none;
           border-color: #14b8a6;
           box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
         }
         /* Prevent number spinner / suffix collision on narrow screens */
-        input.field[type='number'] {
+        input.modifier-field[type='number'] {
           -moz-appearance: textfield;
         }
-        input.field[type='number']::-webkit-outer-spin-button,
-        input.field[type='number']::-webkit-inner-spin-button {
+        input.modifier-field[type='number']::-webkit-outer-spin-button,
+        input.modifier-field[type='number']::-webkit-inner-spin-button {
           -webkit-appearance: none;
           margin: 0;
+        }
+        .modifier-drawer__segment {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+        .modifier-drawer__segment-btn {
+          border-radius: 0.5rem;
+          border: 1px solid var(--border, #e2e8f0);
+          background: var(--bg-muted, #f8fafc);
+          padding: 0.45rem 0.85rem;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: var(--text, #0f172a);
+          transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+        .modifier-drawer__segment-btn:hover {
+          background: color-mix(in srgb, var(--bg-muted, #f8fafc) 85%, var(--text, #0f172a));
+        }
+        .modifier-drawer__segment-btn--active {
+          border-color: #0d9488;
+          background: #f0fdfa;
+          color: #115e59;
+          box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
         }
       `}</style>
     </div>

@@ -2255,7 +2255,7 @@ export default function Settings() {
 
   return (
     <div
-      className="flex w-full max-w-[1400px] flex-1 min-h-0 flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4"
+      className="merchant-settings-shell mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col gap-3 overflow-hidden px-1 py-2 sm:gap-4 sm:px-2 sm:py-3"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -2435,7 +2435,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-0 [-webkit-overflow-scrolling:touch] lg:min-h-0"
+            className="merchant-settings-scroll min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-0 [-webkit-overflow-scrolling:touch] [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] lg:min-h-0 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent dark:[scrollbar-color:rgba(148,163,184,0.55)_transparent] dark:[&::-webkit-scrollbar-thumb]:bg-slate-500"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary

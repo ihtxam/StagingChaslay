@@ -13,6 +13,9 @@ const root = dirname(fileURLToPath(import.meta.url));
 const header = readFileSync(join(root, '../components/Header.tsx'), 'utf8');
 const sidebar = readFileSync(join(root, '../components/Sidebar.tsx'), 'utf8');
 const dashboard = readFileSync(join(root, '../pages/merchant/Dashboard.tsx'), 'utf8');
+const settings = readFileSync(join(root, '../pages/merchant/Settings.tsx'), 'utf8');
+const productEdit = readFileSync(join(root, '../components/products/ProductEditFullPage.tsx'), 'utf8');
+const modifiers = readFileSync(join(root, '../pages/merchant/Modifiers.tsx'), 'utf8');
 
 assert.equal(displaySidebarShopName('Brazza Pizza'), 'Brazza Pizza');
 assert.equal(displaySidebarShopName('  exotic  '), 'exotic');
@@ -48,5 +51,22 @@ assert.equal(
 );
 assert.match(sidebar, /aria-pressed=\{settingsActive/);
 assert.match(sidebar, /<Settings \/>/);
+
+assert.match(
+  settings,
+  /merchant-settings-shell[\s\S]*max-w-6xl/,
+  'settings shell should center content with a max width'
+);
+assert.match(
+  settings,
+  /merchant-settings-scroll/,
+  'settings scroll root should get scrollbar styling'
+);
+assert.match(
+  productEdit,
+  /formProductType[\s\S]*onProductTypeChange/,
+  'edit product must expose product type like create flow'
+);
+assert.match(modifiers, /modifier-field/, 'modifiers drawer inputs must not use global `.field`');
 
 console.log('merchant-panel-chrome: all assertions passed');

@@ -1,16 +1,10 @@
 import { FormEvent, ReactNode, type Ref } from 'react';
-import {
-  ArrowLeft,
-  Boxes,
-  ChevronRight,
-  ListTree,
-  Package,
-  SlidersHorizontal,
-  Tag,
-} from 'lucide-react';
+import { ArrowLeft, Boxes, ChevronRight, ListTree, Package, Tag } from 'lucide-react';
 import { LocationSwitcherChip } from '@/components/merchant/LocationPicker';
 
 type CategoryOption = { id: string; name: string };
+
+export type ProductEditProductType = 'standard' | 'combo' | 'open_price' | 'weighed';
 
 export type ProductEditFullPageProps = {
   formId: string;
@@ -35,10 +29,10 @@ export type ProductEditFullPageProps = {
   onTaxRateChange: (value: string) => void;
   cost: string;
   onCostChange: (value: string) => void;
-  isOpenPrice: boolean;
-  onOpenPriceChange: (enabled: boolean) => void;
-  soldByWeight: boolean;
-  onSoldByWeightChange: (enabled: boolean) => void;
+  formProductType: ProductEditProductType;
+  onProductTypeChange: (next: ProductEditProductType) => void;
+  weightUnit: 'kg' | 'g' | 'lb';
+  onWeightUnitChange: (next: 'kg' | 'g' | 'lb') => void;
   showWeighedTools: boolean;
   isCombo: boolean;
   variationCount: number;
@@ -89,45 +83,6 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
       {label}
       {required ? <span className="text-red-600"> *</span> : null}
     </label>
-  );
-}
-
-function SalesToggle({
-  title,
-  hint,
-  enabled,
-  disabled,
-  onChange,
-}: {
-  title: string;
-  hint: string;
-  enabled: boolean;
-  disabled?: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)]/30 px-4 py-3.5">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-[var(--text)]">{title}</p>
-        <p className="mt-0.5 text-xs text-[var(--text-muted)]">{hint}</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        disabled={disabled}
-        onClick={() => onChange(!enabled)}
-        className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
-          enabled ? 'bg-teal-600' : 'bg-stone-300 dark:bg-stone-600'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-            enabled ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
-    </div>
   );
 }
 
@@ -195,10 +150,10 @@ export default function ProductEditFullPage({
   onTaxRateChange,
   cost,
   onCostChange,
-  isOpenPrice,
-  onOpenPriceChange,
-  soldByWeight,
-  onSoldByWeightChange,
+  formProductType,
+  onProductTypeChange,
+  weightUnit,
+  onWeightUnitChange,
   showWeighedTools,
   isCombo,
   variationCount,
@@ -216,7 +171,8 @@ export default function ProductEditFullPage({
   comboPanel,
   formExtension,
 }: ProductEditFullPageProps) {
-  const priceSuffix = soldByWeight && !isCombo ? 'CHF/kg' : 'CHF';
+  const priceSuffix =
+    formProductType === 'weighed' && !isCombo ? 'CHF/kg' : 'CHF';
 
   return (
     <div className="-mx-3 flex h-[calc(100dvh-7.5rem)] max-h-[calc(100dvh-7.5rem)] min-h-0 flex-col sm:-mx-4 md:-mx-6">
@@ -281,6 +237,23 @@ export default function ProductEditFullPage({
                         ))}
                       </select>
                     </div>
+                    <div>
+                      <FieldLabel label={t('type')} />
+                      <select
+                        className="field-input w-full"
+                        value={formProductType}
+                        onChange={(e) =>
+                          onProductTypeChange(e.target.value as ProductEditProductType)
+                        }
+                      >
+                        <option value="standard">{t('productTypeStandard')}</option>
+                        <option value="combo">{t('comboMeal')}</option>
+                        <option value="open_price">{t('openPriceItem')}</option>
+                        {showWeighedTools ? (
+                          <option value="weighed">{t('weighingProduct')}</option>
+                        ) : null}
+                      </select>
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <FieldLabel label={t('productPriceChf')} required />
@@ -309,6 +282,25 @@ export default function ProductEditFullPage({
                         />
                       </div>
                     </div>
+                    {showWeighedTools && formProductType === 'weighed' && !isCombo ? (
+                      <div>
+                        <FieldLabel label={t('webPosWeightUnit')} />
+                        <select
+                          className="field-input w-full"
+                          value={weightUnit}
+                          onChange={(e) =>
+                            onWeightUnitChange(e.target.value as 'kg' | 'g' | 'lb')
+                          }
+                        >
+                          <option value="kg">kg</option>
+                          <option value="g">g</option>
+                          <option value="lb">lb</option>
+                        </select>
+                        <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+                          {t('webPosWeighedPriceHint')}
+                        </p>
+                      </div>
+                    ) : null}
                     <div>
                       <FieldLabel label={t('productBuyingPrice')} />
                       <div className="flex min-w-0 max-w-md items-stretch overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20">
@@ -419,27 +411,6 @@ export default function ProductEditFullPage({
                   </div>
                 </button>
               </div>
-
-              <EditorCard icon={<SlidersHorizontal size={18} />} title={t('productSalesOptions')}>
-                <div className="space-y-3">
-                  <SalesToggle
-                    title={t('productOpenPriceToggle')}
-                    hint={t('productOpenPriceSalesHint')}
-                    enabled={isOpenPrice}
-                    disabled={isCombo}
-                    onChange={onOpenPriceChange}
-                  />
-                  {showWeighedTools ? (
-                    <SalesToggle
-                      title={t('productSoldByWeightToggle')}
-                      hint={t('productSoldByWeightSalesHint')}
-                      enabled={soldByWeight}
-                      disabled={isCombo}
-                      onChange={onSoldByWeightChange}
-                    />
-                  ) : null}
-                </div>
-              </EditorCard>
             </aside>
           </div>
           {formExtension}

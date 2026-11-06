@@ -2125,16 +2125,10 @@ export default function Products() {
             if (moneyDigitCount(cost) > MAX_MONEY_DIGITS) return;
             setForm({ ...form, cost });
           }}
-          isOpenPrice={form.isOpenPrice}
-          onOpenPriceChange={(enabled) => {
-            if (enabled) setProductType('open_price');
-            else setProductType('standard');
-          }}
-          soldByWeight={form.soldByWeight}
-          onSoldByWeightChange={(enabled) => {
-            if (enabled) setProductType('weighed');
-            else setProductType('standard');
-          }}
+          formProductType={formProductType}
+          onProductTypeChange={(next) => setProductType(next)}
+          weightUnit={form.weightUnit}
+          onWeightUnitChange={(next) => setForm({ ...form, weightUnit: next })}
           showWeighedTools={showWeighedTools}
           isCombo={form.isCombo}
           variationCount={editVariationCount}
