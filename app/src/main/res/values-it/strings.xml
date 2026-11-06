@@ -61,6 +61,8 @@
     <string name="apply_discount">Applica sconto</string>
     <string name="discount_percent">Sconto %</string>
     <string name="discount_amount">Importo sconto</string>
+    <string name="discount_percent_applied">%1$s%% sconto applicato</string>
+    <string name="discount_amount_applied">%1$s sconto applicato</string>
     <string name="misc_item">Varie</string>
     <string name="receipt">Scontrino</string>
     <string name="take_away_delivery">Asporto / Consegna</string>
@@ -137,6 +139,15 @@
     <string name="terminal_pay_cancelled_msg">Il pagamento è stato annullato sul terminale.</string>
     <string name="terminal_pay_failed">Pagamento non riuscito</string>
     <string name="terminal_pay_failed_msg">Il terminale non ha potuto completare questo pagamento.</string>
+    <string name="terminal_error_busy">Il terminale è occupato. Attendi qualche secondo e riprova.</string>
+    <string name="terminal_error_offline">Il terminale è offline o non raggiungibile. Controlla alimentazione e rete.</string>
+    <string name="terminal_error_refused">Pagamento rifiutato sul terminale.</string>
+    <string name="terminal_error_aborted">Pagamento interrotto sul terminale.</string>
+    <string name="terminal_error_invalid_card">Carta non leggibile o non accettata.</string>
+    <string name="terminal_error_limit">L\'importo supera il limite del terminale.</string>
+    <string name="terminal_error_network">Impossibile contattare il terminale. Controlla la connessione e riprova.</string>
+    <string name="terminal_error_auth">Chiave API Adyen non valida o autenticazione fallita. In Impostazioni usa una chiave API di servizio Web (non la chiave client), allinea Test/Live alla chiave e verifica l\'account commerciante.</string>
+    <string name="terminal_error_generic">Pagamento rifiutato al terminale.</string>
     <string name="terminal_pay_retry">Riprova</string>
     <string name="settings">Impostazioni</string>
     <string name="general_settings">Général</string>
@@ -689,6 +700,8 @@
 
     <string name="order_complete">Ordine completato</string>
     <string name="total_paid">TOTALE PAGATO</string>
+    <string name="order_complete_amount_due">Importo dovuto</string>
+    <string name="order_complete_collected">Incassato</string>
     <string name="print_customer_card_receipt">Copia cliente carta</string>
     <string name="print_merchant_card_receipt">Copia esercente carta</string>
     <string name="print_payment_receipt">Stampa scontrino carta</string>

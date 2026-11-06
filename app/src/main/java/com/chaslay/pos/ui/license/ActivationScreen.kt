@@ -47,10 +47,14 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
 import com.chaslay.pos.BuildConfig
 import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.LicenseGateState
 import com.chaslay.pos.ui.settings.SettingsPageHeader
+import com.chaslay.pos.ui.settings.SettingsReadOnlyRow
+import com.chaslay.pos.ui.settings.SettingsRichHtmlBlock
 import com.chaslay.pos.ui.settings.SettingsSectionCard
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.posBrandHeroBackground
@@ -58,6 +62,7 @@ import com.chaslay.pos.ui.theme.posUiColors
 
 @Composable
 fun LicenseSettingsSection(
+    platformAboutHtml: String = "",
     viewModel: LicenseViewModel = hiltViewModel()
 ) {
     val license by viewModel.licenseState.collectAsStateWithLifecycle()
@@ -135,6 +140,27 @@ fun LicenseSettingsSection(
         onCodeChange = viewModel::updateActivationCode,
         onActivate = viewModel::activate
     )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    SettingsSectionCard(
+        title = stringResource(R.string.license_app_info_title),
+        icon = Icons.Outlined.Info,
+    ) {
+        SettingsReadOnlyRow(
+            label = stringResource(R.string.app_version),
+            value = stringResource(
+                R.string.app_version_format,
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE,
+            ),
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    SettingsSectionCard(
+        title = stringResource(R.string.license_company_info_title),
+        icon = Icons.Outlined.Info,
+    ) {
+        SettingsRichHtmlBlock(html = platformAboutHtml)
     }
 }
 

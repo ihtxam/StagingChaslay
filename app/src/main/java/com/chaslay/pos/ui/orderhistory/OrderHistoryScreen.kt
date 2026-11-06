@@ -117,7 +117,7 @@ fun OrderHistoryScreen(
             onDismiss = viewModel::closeOrderDetail,
             onPrint = viewModel::printSelectedOrder,
             onPrintCustomerCard = viewModel::printAdyenCustomerReceiptForSelected,
-            onPrintMerchantCard = {},
+            onPrintMerchantCard = viewModel::printAdyenCashierReceiptForSelected,
             onPrintAllSplits = viewModel::printAllSplitOrders,
             onPrintSplit = viewModel::printSplitOrder,
             onCancel = viewModel::showCancelDialog,

@@ -668,6 +668,7 @@ export class ChaslayCompatService {
         floor_plan_enabled: !!merchant.floorPlanEnabled,
         pax_ordering_enabled: !!merchant.paxOrderingEnabled,
         shifts_enabled: !!merchant.shiftsEnabled,
+        reservations_enabled: !!merchant.reservationsEnabled,
       },
       checkout: {
         ...posCheckoutSettings,
@@ -710,6 +711,79 @@ export class ChaslayCompatService {
         display_url: buildCdsPublicUrl(merchant.slug, cdsSettings.shortCode),
       },
     };
+  }
+
+  static async syncReservations(merchantId: string) {
+    const db = getDb();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+    });
+    if (!merchant?.reservationsEnabled) {
+      return {
+        serverTime: Date.now(),
+        reservations: [] as Array<Record<string, unknown>>,
+        reserved_table_ids: [] as string[],
+      };
+    }
+    const { ReservationService } = await import("@/services/reservation.service");
+    const rows = await ReservationService.listForSync(merchantId);
+    const reservedTableIds = [
+      ...new Set(rows.map((r) => r.tableId).filter((id): id is string => !!id)),
+    ];
+    return {
+      serverTime: Date.now(),
+      reservations: rows.map((r) => ({
+        id: r.id,
+        code: r.code,
+        guest_name: r.guestName,
+        guest_phone: r.guestPhone,
+        guest_email: r.guestEmail,
+        party_size: r.partySize,
+        reserved_at:
+          r.reservedAt instanceof Date ? r.reservedAt.toISOString() : String(r.reservedAt),
+        status: r.status,
+        table_id: r.tableId,
+        table_label: r.tableLabel,
+        notes: r.notes,
+        internal_notes: r.internalNotes,
+        source: r.source,
+      })),
+      reserved_table_ids: reservedTableIds,
+    };
+  }
+
+  /** Enable/disable reservations module (same as PUT /api/merchant/reservations/config). */
+  static async updateReservationsModule(
+    merchantId: string,
+    input: { enabled?: boolean }
+  ) {
+    const { ReservationService } = await import("@/services/reservation.service");
+    const config = await ReservationService.updateSettings(merchantId, {
+      enabled: input.enabled,
+    });
+    return { ok: true, enabled: !!config.enabled, config };
+  }
+
+  /** Host action on a reservation (accept / seat / cancel / …). */
+  static async reservationHostAction(
+    merchantId: string,
+    reservationId: string,
+    action: string,
+    payload: {
+      tableId?: string | null;
+      internalNotes?: string | null;
+      cancelReason?: string | null;
+      sendRejectionEmail?: boolean;
+    } = {}
+  ) {
+    const { ReservationService } = await import("@/services/reservation.service");
+    const reservation = await ReservationService.action(
+      merchantId,
+      reservationId,
+      action as Parameters<typeof ReservationService.action>[2],
+      payload
+    );
+    return { ok: true, reservation };
   }
 
   static async pushTerminalsFromDevice(

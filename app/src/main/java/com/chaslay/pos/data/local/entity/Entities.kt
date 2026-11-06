@@ -302,6 +302,8 @@ data class BusinessSettingsEntity(
     val requireTableForDineIn: Boolean = true,
     /** Synced from merchant panel — multi-course firing on dine-in tables. */
     val coursesEnabled: Boolean = false,
+    /** Restaurant module: online/table reservations (merchant panel `reservationsEnabled`). */
+    val reservationsEnabled: Boolean = false,
     /** fire_per_course (Send then Fire each course) or send_all_once. */
     val courseSendMode: String = "fire_per_course",
     val receiptBaseUrl: String = "https://pay.rebornsense.com/receipt",
@@ -338,7 +340,7 @@ data class BusinessSettingsEntity(
     /** Superadmin platform about HTML — synced from /v1/sync/bootstrap (platform_about_html). */
     val platformAboutHtml: String = "",
     /** Customer display (CDS) — synced from payment-config customer_display. */
-    val cdsEnabled: Boolean = true,
+    val cdsEnabled: Boolean = false,
     val cdsAccessToken: String = "",
     val cdsShortCode: String = "",
     val cdsMerchantSlug: String = "",
@@ -352,6 +354,27 @@ fun BusinessSettingsEntity.isAdyenTerminalCheckoutEnabled(): Boolean =
         adyenTerminalId.isNotBlank() &&
         adyenApiKey.isNotBlank() &&
         adyenMerchantAccount.isNotBlank()
+
+@Entity(
+    tableName = "synced_reservations",
+    indices = [androidx.room.Index("reservedAtMs")]
+)
+data class ReservationEntity(
+    @PrimaryKey val id: String,
+    val code: String,
+    val guestName: String,
+    val guestPhone: String,
+    val guestEmail: String? = null,
+    val partySize: Int,
+    val reservedAtMs: Long,
+    val status: String,
+    /** Cloud dining table UUID when assigned. */
+    val tableRemoteId: String? = null,
+    val tableLabel: String? = null,
+    val notes: String? = null,
+    val source: String? = null,
+    val syncedAtMs: Long = System.currentTimeMillis()
+)
 
 @Entity(tableName = "table_floors", indices = [androidx.room.Index("remoteId")])
 data class TableFloorEntity(

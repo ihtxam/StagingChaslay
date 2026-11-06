@@ -74,6 +74,15 @@ class MenuSyncRepository @Inject constructor(
     private val productVariantDao: ProductVariantDao,
     private val settingsRepository: SettingsRepository
 ) {
+    /** Hide stale catalog when cloud merchant binding no longer matches the POS staff session. */
+    suspend fun wipeCloudCatalog() = withContext(Dispatchers.IO) {
+        productDao.deactivateAll()
+        categoryDao.deactivateAll()
+        syncPreferences.resetMenuSyncCursor()
+        syncPreferences.setMenuCloudSynced(false)
+        PosLocalPrefs.clearAllLocalProductPrices(appContext)
+    }
+
     suspend fun syncMenu(mode: MenuSyncMode = MenuSyncMode.MERGE): MenuSyncResult =
         withContext(Dispatchers.IO) {
             if (!syncApiKeyStore.hasKey()) {

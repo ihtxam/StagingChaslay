@@ -168,28 +168,30 @@ export function qrImageUrl(
 }
 
 /** Thermal digital-receipt QR raster width on 80mm. */
-export const RECEIPT_QR_RASTER_PX_80 = 120;
+export const RECEIPT_QR_RASTER_PX_80 = 144;
 /** 58mm digital-receipt QR — readable without dominating the ticket. */
-export const RECEIPT_QR_RASTER_PX_58 = 100;
+export const RECEIPT_QR_RASTER_PX_58 = 120;
 
 /** E-gift redeem QR on customer receipt — minimum readable size on thermal. */
-export const GIFT_CARD_REDEEM_QR_RASTER_PX_80 = 120;
-export const GIFT_CARD_REDEEM_QR_RASTER_PX_58 = 96;
+export const GIFT_CARD_REDEEM_QR_RASTER_PX_80 = 144;
+export const GIFT_CARD_REDEEM_QR_RASTER_PX_58 = 115;
 
-/** Native ESC/POS QR module size for receipt tickets (1–16; was 2). */
-export const RECEIPT_QR_ESCPOS_MODULE_SIZE = 1;
+/** Native ESC/POS QR module size for receipt tickets (1–16; was 1). */
+export const RECEIPT_QR_ESCPOS_MODULE_SIZE = 2;
+/** Native ESC/POS fallback module size for e-gift redeem QR (was 4). */
+export const GIFT_CARD_REDEEM_QR_ESCPOS_MODULE_SIZE = 5;
 
 /** Labeled QR canvas width in pixels (matches printable dot width). */
-export const RECEIPT_QR_CANVAS_PX_80 = 161;
-export const RECEIPT_QR_CANVAS_PX_58 = 101;
+export const RECEIPT_QR_CANVAS_PX_80 = 193;
+export const RECEIPT_QR_CANVAS_PX_58 = 121;
 
-/** Side-by-side receipt QRs (digital + Google feedback) — 40% smaller than prior 48/38px. */
-export const RECEIPT_DUAL_QR_RASTER_PX_80 = 29;
-export const RECEIPT_DUAL_QR_RASTER_PX_58 = 23;
+/** Side-by-side receipt QRs (digital receipt + Google review). */
+export const RECEIPT_DUAL_QR_RASTER_PX_80 = 35;
+export const RECEIPT_DUAL_QR_RASTER_PX_58 = 28;
 
-/** Delivery slip QR — full paper width (400px target; 80mm thermal caps at 384 dots). */
+/** Delivery slip QR — full paper width (80mm thermal caps at 384 dots). */
 export const DELIVERY_SLIP_QR_RASTER_PX_80 = 384;
-export const DELIVERY_SLIP_QR_RASTER_PX_58 = 280;
+export const DELIVERY_SLIP_QR_RASTER_PX_58 = 336;
 
 export function receiptQrRasterPx(paperWidthMm?: 58 | 80): number {
   return paperWidthMm === 58 ? RECEIPT_QR_RASTER_PX_58 : RECEIPT_QR_RASTER_PX_80;

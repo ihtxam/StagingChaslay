@@ -16,11 +16,15 @@ import com.chaslay.pos.domain.model.ServiceType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
+import android.util.Log
+import com.chaslay.pos.printer.PrinterUserMessages
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -90,6 +94,7 @@ class OrderHistoryViewModel @Inject constructor(
     private var pendingRefundPrint: PendingRefundPrint? = null
 
     companion object {
+        private const val TAG = "OrderHistory"
         const val PAGE_SIZE = 25
 
         /** One list row per split-bill master group (WebPOS-style). */
@@ -693,15 +698,15 @@ class OrderHistoryViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            val settings = settingsRepository.getSettings()
-            printerService.routeRefundReceipt(
-                settings = settings,
-                transaction = pending.order,
-                refundAmount = pending.refundAmount,
-                reason = pending.reason,
-                lines = pending.lines
-            ).onFailure { e ->
-                _uiState.value = _uiState.value.copy(message = e.message ?: "Print failed")
+            runHistoryPrintJob {
+                val settings = settingsRepository.getSettings()
+                printerService.routeRefundReceipt(
+                    settings = settings,
+                    transaction = pending.order,
+                    refundAmount = pending.refundAmount,
+                    reason = pending.reason,
+                    lines = pending.lines
+                )
             }
         }
     }
@@ -724,34 +729,103 @@ class OrderHistoryViewModel @Inject constructor(
 
     fun printAllSplitOrders() {
         viewModelScope.launch {
-            val settings = settingsRepository.getSettings()
-            for (split in _uiState.value.splitOrders) {
-                val items = _uiState.value.splitItemsByOrderId[split.id].orEmpty()
-                val published = publishBeforePrint(split, items, settings)
-                val customerCopy = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
-                    .appendableForTransaction(published).first
-                printerService.routeReceipt(settings, published, items, customerCopy, null)
+            runHistoryPrintJob {
+                val settings = settingsRepository.getSettings()
+                var last: Result<Unit> = Result.success(Unit)
+                for (split in _uiState.value.splitOrders) {
+                    val items = _uiState.value.splitItemsByOrderId[split.id].orEmpty()
+                    if (items.isEmpty()) continue
+                    last = printStoredOrderReceipt(
+                        transactionId = split.id,
+                        settings = settings,
+                        includeCustomerCardCopy = true,
+                    )
+                }
+                last
             }
-            _uiState.value = _uiState.value.copy(message = "Split receipts printed")
         }
     }
 
-    private suspend fun publishBeforePrint(
-        order: TransactionEntity,
+    /** Match checkout / ongoing orders: reload from DB, warm ESC/POS, no blocking receipt upload. */
+    private suspend fun printStoredOrderReceipt(
+        transactionId: String,
+        settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity,
+        includeCustomerCardCopy: Boolean,
+    ): Result<Unit> {
+        val detail = transactionRepository.getTransaction(transactionId)
+            ?: return Result.failure(IllegalStateException("Transaction not found"))
+        val (transaction, items) = detail
+        if (items.isEmpty()) {
+            return Result.failure(IllegalStateException("No items to print"))
+        }
+        val forPrint = resolveReceiptUrlForReprint(transaction, items, settings)
+        val (customerCopy, cashierCopy) = com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+            .appendableForTransaction(forPrint)
+        warmStoredReceiptEscPos(
+            settings = settings,
+            transaction = forPrint,
+            items = items,
+            customerCopy = if (includeCustomerCardCopy) customerCopy else null,
+            cashierCopy = cashierCopy,
+        )
+        return printerService.routeReceipt(
+            settings,
+            forPrint,
+            items,
+            if (includeCustomerCardCopy) customerCopy else null,
+            cashierCopy,
+            usePayloadCache = true,
+        )
+    }
+
+    private suspend fun resolveReceiptUrlForReprint(
+        transaction: TransactionEntity,
         items: List<TransactionItemEntity>,
-        settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity
+        settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity,
     ): TransactionEntity {
-        return receiptRepository.ensureReceiptPublished(order, items, settings).fold(
+        if (!transaction.receiptUrl.isNullOrBlank()) return transaction
+        val fallback = receiptRepository.buildPublicUrl(transaction.id, settings)
+        if (!isDeviceOnline()) {
+            return transaction.copy(receiptUrl = fallback)
+        }
+        return receiptRepository.ensureReceiptPublished(transaction, items, settings).fold(
             onSuccess = { published ->
-                transactionRepository.updateReceiptUrl(order.id, published.publicUrl)
-                order.copy(receiptUrl = published.publicUrl)
+                runCatching { transactionRepository.updateReceiptUrl(transaction.id, published.publicUrl) }
+                transaction.copy(receiptUrl = published.publicUrl)
             },
             onFailure = {
-                val fallback = receiptRepository.buildPublicUrl(order.id, settings)
-                transactionRepository.updateReceiptUrl(order.id, fallback)
-                order.copy(receiptUrl = fallback)
-            }
+                runCatching { transactionRepository.updateReceiptUrl(transaction.id, fallback) }
+                transaction.copy(receiptUrl = fallback)
+            },
         )
+    }
+
+    private fun isDeviceOnline(): Boolean {
+        val cm = appContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+            as? android.net.ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private suspend fun warmStoredReceiptEscPos(
+        settings: com.chaslay.pos.data.local.entity.BusinessSettingsEntity,
+        transaction: TransactionEntity,
+        items: List<TransactionItemEntity>,
+        customerCopy: com.chaslay.pos.payment.AdyenTerminalReceipt?,
+        cashierCopy: com.chaslay.pos.payment.AdyenTerminalReceipt?,
+    ) {
+        runCatching {
+            printerService.warmEscPosReceiptPayload(
+                settings = settings,
+                transaction = transaction,
+                items = items,
+                appendAdyenCustomerReceipt = customerCopy,
+                appendAdyenCashierReceipt = cashierCopy,
+            )
+        }.onFailure { e ->
+            Log.w(TAG, "Receipt payload warm failed", e)
+        }
     }
 
     private fun printOrder(
@@ -759,40 +833,72 @@ class OrderHistoryViewModel @Inject constructor(
         items: List<TransactionItemEntity>,
         includeCustomerCardCopy: Boolean = false
     ) {
+        if (items.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                message = appContext.getString(com.chaslay.pos.R.string.print_nothing)
+            )
+            return
+        }
         viewModelScope.launch {
-            val settings = settingsRepository.getSettings()
-            val customerCopy = if (includeCustomerCardCopy) {
-                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendableForTransaction(order).first
-            } else {
-                null
+            runHistoryPrintJob {
+                val settings = settingsRepository.getSettings()
+                printStoredOrderReceipt(
+                    transactionId = order.id,
+                    settings = settings,
+                    includeCustomerCardCopy = includeCustomerCardCopy,
+                )
             }
-            val published = publishBeforePrint(order, items, settings)
-            printerService.routeReceipt(settings, published, items, customerCopy, null)
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(message = e.message ?: "Print failed")
-                }
         }
     }
 
     private fun printAdyenReceipt(order: TransactionEntity, customerCopy: Boolean) {
         viewModelScope.launch {
-            val receipt = if (customerCopy) {
-                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.customerReceipt(order)
+            val fresh = transactionRepository.getTransaction(order.id)?.first ?: order
+            val stored = if (customerCopy) {
+                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.customerReceipt(fresh)
             } else {
-                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.cashierReceipt(order)
-            } ?: run {
-                _uiState.value = _uiState.value.copy(message = "Card receipt not available for this order")
+                com.chaslay.pos.payment.AdyenPaymentReceiptStorage.cashierReceipt(fresh)
+            }
+            val receipt = com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(stored)
+            if (receipt == null) {
+                postPrintMessage(
+                    appContext.getString(
+                        if (customerCopy) {
+                            com.chaslay.pos.R.string.could_not_print_customer_card_receipt
+                        } else {
+                            com.chaslay.pos.R.string.could_not_print_merchant_card_receipt
+                        }
+                    )
+                )
                 return@launch
             }
-            val settings = settingsRepository.getSettings()
-            printerService.routeAdyenPaymentReceipt(settings, receipt)
-                .onSuccess {
-                    val label = if (customerCopy) "Customer card receipt printed" else "Merchant card receipt printed"
-                    _uiState.value = _uiState.value.copy(message = label)
+            runHistoryPrintJob {
+                val settings = settingsRepository.getSettings()
+                printerService.holdReceiptPrinterBluetoothConnections(settings)
+                printerService.routeAdyenPaymentReceipt(settings, receipt)
+            }
+        }
+    }
+
+    private suspend fun runHistoryPrintJob(block: suspend () -> Result<Unit>) {
+        withContext(Dispatchers.IO) {
+            try {
+                block().onFailure { e ->
+                    Log.w(TAG, "Order history print failed", e)
+                    postPrintMessage(PrinterUserMessages.fromPrintFailure(appContext))
                 }
-                .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(message = e.message ?: "Print failed")
-                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Order history print error", e)
+                postPrintMessage(
+                    appContext.getString(com.chaslay.pos.R.string.print_failed_generic)
+                )
+            }
+        }
+    }
+
+    private suspend fun postPrintMessage(message: String) {
+        withContext(Dispatchers.Main) {
+            _uiState.value = _uiState.value.copy(message = message)
         }
     }
 

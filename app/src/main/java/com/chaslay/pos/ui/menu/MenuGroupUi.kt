@@ -51,8 +51,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
+import com.chaslay.pos.ui.theme.PosColors
 
-internal val MenuTeal = Color(0xFF079B8F)
+/** Matches app primary teal ([PosColors.Primary]). */
+internal val MenuTeal = PosColors.Primary
 private val MenuBorder = Color(0xFFE2E8F0)
 private val MenuMuted = Color(0xFF64748B)
 private val MenuSurface = Color(0xFFF5F6F7)
@@ -74,8 +76,13 @@ internal fun MenuSearchField(
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = PosColors.Surface,
+            unfocusedContainerColor = PosColors.Surface,
             focusedBorderColor = MenuTeal,
-            unfocusedBorderColor = MenuBorder
+            unfocusedBorderColor = MenuBorder,
+            cursorColor = MenuTeal,
+            focusedTextColor = PosColors.TextPrimary,
+            unfocusedTextColor = PosColors.TextPrimary,
         )
     )
 }

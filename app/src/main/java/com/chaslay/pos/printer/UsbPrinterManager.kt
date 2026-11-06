@@ -143,7 +143,7 @@ class UsbPrinterManager @Inject constructor(
     fun listDevices(): List<UsbPrinterDevice> {
         val manager = usbManager ?: return emptyList()
         return manager.deviceList.values
-            .filter { isLikelyPrinter(it) }
+            .filter { isLikelyPrinter(it) && !SunmiInternalPrinter.isInternalUsbShadow(context, it) }
             .map { deviceToInfo(it, manager.hasPermission(it)) }
     }
 
@@ -549,6 +549,7 @@ class UsbPrinterManager @Inject constructor(
     }
 
     private fun isLikelyPrinter(device: UsbDevice): Boolean {
+        if (SunmiInternalPrinter.isInternalUsbShadow(context, device)) return false
         if (isUsbNetworkAdapter(device)) return false
         if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true
         if (hasPrinterInterface(device)) return true

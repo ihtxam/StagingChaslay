@@ -159,7 +159,7 @@ private fun ModernGuestCountDialog(
         mutableIntStateOf(initialCount.coerceIn(1, maxGuests))
     }
     val quickPicks = remember(maxGuests) {
-        (1..maxGuests).take(4)
+        (1..minOf(6, maxGuests)).toList()
     }
 
     Dialog(
@@ -246,6 +246,43 @@ private fun ModernGuestCountDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                if (quickPicks.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        quickPicks.forEach { n ->
+                            val selected = count == n
+                            FilterChip(
+                                selected = selected,
+                                onClick = { count = n.coerceIn(1, maxGuests) },
+                                label = {
+                                    Text(
+                                        n.toString(),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center,
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = PosShapes.Medium,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PosColors.Primary,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = ui.surface,
+                                    labelColor = ui.textPrimary,
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = selected,
+                                    borderColor = ui.border,
+                                    selectedBorderColor = PosColors.Primary,
+                                ),
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 Text(
                     text = stringResource(R.string.guest_count_label),
                     style = MaterialTheme.typography.labelLarge,
@@ -286,43 +323,6 @@ private fun ModernGuestCountDialog(
                         onClick = { count = (count + 1).coerceAtMost(maxGuests) },
                         enabled = count < maxGuests,
                     )
-                }
-
-                if (quickPicks.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        quickPicks.forEach { n ->
-                            val selected = count == n
-                            FilterChip(
-                                selected = selected,
-                                onClick = { count = n },
-                                label = {
-                                    Text(
-                                        n.toString(),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.Center,
-                                    )
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = PosShapes.Medium,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = PosColors.Primary,
-                                    selectedLabelColor = Color.White,
-                                    containerColor = ui.surface,
-                                    labelColor = ui.textPrimary,
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = selected,
-                                    borderColor = ui.border,
-                                    selectedBorderColor = PosColors.Primary,
-                                ),
-                            )
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

@@ -177,4 +177,16 @@ class SyncPreferences @Inject constructor(
             else prefs[dashboardUrlKey] = url.trim().trimEnd('/')
         }
     }
+
+    /** Drops panel/sync merchant binding (staff PIN session may continue). */
+    suspend fun clearCloudMerchantSession() {
+        setSyncApiKey(null)
+        setMerchantId(null)
+        setDashboardToken(null)
+        setDashboardUserJson(null)
+        setDashboardUrl(null)
+        resetMenuSyncCursor()
+        setLastOrdersSyncMs(0L)
+        setMenuCloudSynced(false)
+    }
 }

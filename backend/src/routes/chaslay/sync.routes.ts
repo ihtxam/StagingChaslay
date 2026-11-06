@@ -45,6 +45,48 @@ router.get("/payment-config", async (req: Request, res: Response) => {
   }
 });
 
+/** Active reservations window for native POS (read-only list + floor table hints). */
+router.get("/reservations", async (req: Request, res: Response) => {
+  try {
+    const data = await ChaslayCompatService.syncReservations(req.chaslayMerchantId!);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Reservation sync failed" });
+  }
+});
+
+/** Toggle reservations module from native POS settings (sync API key). */
+router.put("/reservations/config", async (req: Request, res: Response) => {
+  try {
+    const data = await ChaslayCompatService.updateReservationsModule(req.chaslayMerchantId!, {
+      enabled: req.body?.enabled,
+    });
+    res.json(data);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update reservations" });
+  }
+});
+
+/** Host actions: accept, seat, cancel, reject, complete, no_show, promote_waitlist, … */
+router.post("/reservations/:id/action", async (req: Request, res: Response) => {
+  try {
+    const data = await ChaslayCompatService.reservationHostAction(
+      req.chaslayMerchantId!,
+      req.params.id,
+      String(req.body?.action || ""),
+      {
+        tableId: req.body?.tableId,
+        internalNotes: req.body?.internalNotes,
+        cancelReason: req.body?.cancelReason,
+        sendRejectionEmail: req.body?.sendRejectionEmail,
+      }
+    );
+    res.json(data);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Reservation action failed" });
+  }
+});
+
 /** Live cart state for native POS customer display (Sunmi rear screen polls cloud). */
 router.post("/cds/push", async (req: Request, res: Response) => {
   try {

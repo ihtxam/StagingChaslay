@@ -221,6 +221,9 @@ class AuthViewModel @Inject constructor(
     }
 
     private suspend fun finishLogin(session: AuthRepository.AuthSession, pullCloudMenu: Boolean) {
+        val reconcile = authRepository.reconcileMerchantBinding(session)
+        val merchantChanged = authRepository.takeEmailLoginMerchantChanged()
+        val replaceMenu = pullCloudMenu || reconcile.staleMerchantCleared || merchantChanged
         val access = authRepository.toUserAccess(session)
         sessionManager.saveSession(session.user.id, session.user.name, access)
         runCatching {
@@ -231,7 +234,11 @@ class AuthViewModel @Inject constructor(
             runCatching { terminalSyncRepository.syncTerminals() }
                 .onFailure { Log.w("AuthViewModel", "Pre-login checkout sync failed", it) }
         }
-        if (pullCloudMenu) {
+        if (reconcile.staleMerchantCleared) {
+            runCatching { menuSyncRepository.wipeCloudCatalog() }
+                .onFailure { Log.w("AuthViewModel", "Stale merchant catalog wipe failed", it) }
+        }
+        if (replaceMenu) {
             runCatching {
                 menuSyncRepository.syncMenu(MenuSyncMode.REPLACE)
                 syncService.syncAll(force = true)

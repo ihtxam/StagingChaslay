@@ -203,6 +203,16 @@ class TerminalSyncRepository @Inject constructor(
             )
         }
 
+        config.features?.let { features ->
+            merged = merged.copy(
+                reservationsEnabled = if (merged.posMode == com.chaslay.pos.domain.model.PosMode.RETAIL) {
+                    false
+                } else {
+                    features.reservationsEnabled
+                }
+            )
+        }
+
         return merged
     }
 }

@@ -42,8 +42,8 @@ android {
         // Adyen Tap to Pay (In-Person Payments SDK) requires Android 8.0 (API 26).
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.0.24"
+        versionCode = 27
+        versionName = "1.0.26"
 
         multiDexEnabled = true
         multiDexKeepFile = file("multidex-config.txt")

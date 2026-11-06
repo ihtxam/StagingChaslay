@@ -584,11 +584,14 @@ fun PosScreen(
 
         val coursesEnabled = state.settings.coursesEnabled
         val courseSendMode = CourseSendMode.fromKey(state.settings.courseSendMode)
+        val showReservationsNav = isRestaurantMode && state.settings.reservationsEnabled
         OdooPosNavBar(
             isTableServiceEnabled = isTableServiceEnabled,
             selectedTab = mainTab,
             pendingOnlineOrderCount = state.pendingOnlineOrderCount,
             shiftsEnabled = state.shiftsEnabled,
+            showReservationsNav = showReservationsNav,
+            onReservationsNav = { onNavigate(AppRoute.Reservations.route) },
             onCashMovement = viewModel::showCashMovementDialog,
             showProductFilters = mainTab == PosMainTab.REGISTER && !isModernMenuDesign,
             showProductImages = state.productGridShowImages,
@@ -604,6 +607,7 @@ fun PosScreen(
             },
             userAccess = userAccess,
             onNavigate = onNavigate,
+            onOrderHistory = { onNavigate(AppRoute.OrderHistory.route) },
             onLogout = onLogout
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth().fillMaxHeight()) {
@@ -1245,6 +1249,8 @@ private fun OdooPosNavBar(
     selectedTab: PosMainTab,
     pendingOnlineOrderCount: Int = 0,
     shiftsEnabled: Boolean = false,
+    showReservationsNav: Boolean = false,
+    onReservationsNav: () -> Unit = {},
     onCashMovement: () -> Unit = {},
     showProductFilters: Boolean = false,
     showProductImages: Boolean = false,
@@ -1258,6 +1264,7 @@ private fun OdooPosNavBar(
     onTabSelected: (PosMainTab) -> Unit,
     userAccess: UserAccess,
     onNavigate: (String) -> Unit,
+    onOrderHistory: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val vc = vectronColors()
@@ -1312,6 +1319,22 @@ private fun OdooPosNavBar(
                     onToggleSortAlpha = onToggleSortAlpha,
                     onToggleSortBestseller = onToggleSortBestseller,
                     onCycleGridColumns = onCycleGridColumns
+                )
+            }
+            if (userAccess.canViewOrderHistory()) {
+                PosBottomTabChip(
+                    label = stringResource(R.string.order_history),
+                    icon = Icons.Default.History,
+                    selected = false,
+                    onClick = onOrderHistory,
+                )
+            }
+            if (showReservationsNav) {
+                PosBottomTabChip(
+                    label = stringResource(R.string.nav_reservations),
+                    icon = Icons.Default.CalendarToday,
+                    selected = false,
+                    onClick = onReservationsNav,
                 )
             }
         }
@@ -2861,7 +2884,12 @@ private fun VectronCartRow(
             }
             if (item.lineDiscount > 0) {
                 Text(
-                    "-${formatMoney(item.lineDiscount, currencySymbol)}",
+                    com.chaslay.pos.ui.format.lineItemDiscountLabel(
+                        notes = item.notes,
+                        lineDiscountAmount = item.lineDiscount,
+                        currencySymbol = currencySymbol,
+                        formatMoney = ::formatMoney,
+                    ),
                     color = Color(0xFFE67E22),
                     fontSize = 11.sp
                 )

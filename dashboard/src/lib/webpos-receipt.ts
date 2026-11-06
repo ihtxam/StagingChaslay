@@ -20,6 +20,7 @@ import {
   generateReceiptQrRasterEscPos,
   escposQrCode,
   RECEIPT_QR_ESCPOS_MODULE_SIZE,
+  GIFT_CARD_REDEEM_QR_ESCPOS_MODULE_SIZE,
   giftCardRedeemQrRasterPx,
   imageDataToEscPosRaster,
 } from '@/lib/qr';
@@ -710,7 +711,7 @@ export async function buildSoldGiftCardRedeemEscPosSections(
         qrData,
         paperWidthMm,
         giftCardRedeemQrRasterPx(paperWidthMm)
-      )) || nativeEscposQrFallback(qrData, 4);
+      )) || nativeEscposQrFallback(qrData, GIFT_CARD_REDEEM_QR_ESCPOS_MODULE_SIZE);
     if (qrRaster?.length) {
       parts.push(alignCenter, qrRaster);
     }

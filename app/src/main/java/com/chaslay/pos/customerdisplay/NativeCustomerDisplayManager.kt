@@ -4,6 +4,7 @@ import android.content.Context
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Display
 import androidx.appcompat.view.ContextThemeWrapper
 import com.chaslay.pos.R
@@ -18,54 +19,96 @@ class NativeCustomerDisplayManager @Inject constructor() {
     @Volatile
     private var presentation: CustomerDisplayPresentation? = null
     @Volatile
-    private var currentUrl: String = ""
+    private var cachedHasSecondaryDisplay: Boolean? = null
 
     fun dualScreenAvailable(context: Context): Boolean =
-        findCustomerDisplay(context) != null
+        hasSecondaryDisplay(context.applicationContext)
+
+    /** Non-blocking; caches a negative result so till does not re-probe every cart tick. */
+    fun hasSecondaryDisplay(context: Context): Boolean {
+        cachedHasSecondaryDisplay?.let { return it }
+        val found = findCustomerDisplay(context) != null
+        cachedHasSecondaryDisplay = found
+        return found
+    }
+
+    fun invalidateDisplayCache() {
+        cachedHasSecondaryDisplay = null
+    }
 
     fun isOpen(): Boolean = presentation?.isShowing == true
 
-    fun open(context: Context, url: String): OpenResult {
-        val trimmed = url.trim()
-        if (!trimmed.startsWith("http")) {
-            return OpenResult(ok = false, message = "url must be http(s)")
-        }
+    fun ensureOpen(context: Context): OpenResult {
         val display = findCustomerDisplay(context.applicationContext)
             ?: return OpenResult(ok = false, message = "No secondary display found")
+        // post + await on the main thread deadlocks: the Runnable never runs while we block.
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return showOnDisplay(context.applicationContext, display)
+        }
         val latch = CountDownLatch(1)
         var result = OpenResult(ok = false, message = "Could not show customer display")
         mainHandler.post {
-            result = showOnDisplay(context.applicationContext, display, trimmed)
+            result = showOnDisplay(context.applicationContext, display)
             latch.countDown()
         }
-        latch.await(2, TimeUnit.SECONDS)
+        if (!latch.await(2, TimeUnit.SECONDS)) {
+            Log.w(TAG, "Timed out waiting for customer display Presentation")
+        }
         return result
     }
 
-    fun close() {
+    fun update(state: CustomerDisplayState, branding: CustomerDisplayBranding) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            applyUpdate(state, branding)
+            return
+        }
         mainHandler.post {
-            presentation?.dismiss()
-            presentation = null
-            currentUrl = ""
+            runCatching { applyUpdate(state, branding) }
+                .onFailure { Log.w(TAG, "Customer display update failed", it) }
         }
     }
 
-    private fun showOnDisplay(appContext: Context, display: Display, url: String): OpenResult {
+    fun close() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            dismissPresentation()
+            return
+        }
+        mainHandler.post {
+            runCatching { dismissPresentation() }
+                .onFailure { Log.w(TAG, "Customer display close failed", it) }
+        }
+    }
+
+    private fun applyUpdate(state: CustomerDisplayState, branding: CustomerDisplayBranding) {
+        presentation?.updateState(state)
+        presentation?.updateBranding(branding)
+    }
+
+    private fun dismissPresentation() {
+        presentation?.dismiss()
+        presentation = null
+    }
+
+    private fun showOnDisplay(appContext: Context, display: Display): OpenResult {
         return try {
+            if (!display.isValid) {
+                return OpenResult(ok = false, message = "Secondary display is not valid")
+            }
             val themed = ContextThemeWrapper(appContext, R.style.Theme_RebornPOS)
             val existing = presentation
-            if (existing != null && existing.isShowing && currentUrl == url) {
+            if (existing != null && existing.isShowing && existing.display.displayId == display.displayId) {
                 return OpenResult(ok = true, message = "Already showing", displayId = display.displayId)
             }
-            existing?.dismiss()
-            val next = CustomerDisplayPresentation(themed, display, url)
+            runCatching { existing?.dismiss() }
+            presentation = null
+            val next = CustomerDisplayPresentation(themed, display)
             next.show()
             presentation = next
-            currentUrl = url
             OpenResult(ok = true, message = "Showing", displayId = display.displayId)
         } catch (e: Exception) {
+            Log.w(TAG, "Presentation show failed", e)
+            runCatching { presentation?.dismiss() }
             presentation = null
-            currentUrl = ""
             OpenResult(ok = false, message = e.message ?: "Presentation failed")
         }
     }
@@ -74,11 +117,19 @@ class NativeCustomerDisplayManager @Inject constructor() {
         val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return null
         val displays = dm.displays ?: return null
         return displays
-            .filter { it.displayId != Display.DEFAULT_DISPLAY }
+            .filter { isValidCustomerDisplay(it) }
             .maxByOrNull { display ->
                 val mode = display.mode
                 if (mode != null) mode.physicalWidth * mode.physicalHeight else display.displayId
             }
+    }
+
+    private fun isValidCustomerDisplay(display: Display): Boolean {
+        if (display.displayId == Display.DEFAULT_DISPLAY) return false
+        if (!display.isValid) return false
+        val mode = display.mode ?: return false
+        if (mode.physicalWidth <= 0 || mode.physicalHeight <= 0) return false
+        return true
     }
 
     data class OpenResult(
@@ -86,4 +137,8 @@ class NativeCustomerDisplayManager @Inject constructor() {
         val message: String = "",
         val displayId: Int = -1,
     )
+
+    private companion object {
+        const val TAG = "NativeCustomerDisplay"
+    }
 }

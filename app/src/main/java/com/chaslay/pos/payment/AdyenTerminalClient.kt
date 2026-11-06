@@ -30,7 +30,10 @@ sealed class AdyenTerminalResponse {
         val tipAmount: Double? = null,
         val authorizedAmount: Double? = null
     ) : AdyenTerminalResponse()
-    data class Declined(val message: String) : AdyenTerminalResponse()
+    data class Declined(
+        val errorCondition: String? = null,
+        val additionalResponse: String? = null,
+    ) : AdyenTerminalResponse()
     data class Cancelled(val message: String = "Payment cancelled on terminal") : AdyenTerminalResponse()
     data class Error(val message: String) : AdyenTerminalResponse()
 }
@@ -464,6 +467,15 @@ class AdyenTerminalClient @Inject constructor() {
     }
 
     private fun formatHttpError(code: Int, apiError: AdyenApiError?, triedLegacy: Boolean): String {
+        if (apiError?.errorCode == "00_401" || code == 401) {
+            return buildString {
+                append("Adyen authentication failed (401).\n\n")
+                append("Check the Web service API key in Settings (not the client key).\n")
+                append("Match Test/Live to your key environment and verify the merchant account.")
+                apiError?.requestId?.takeIf { it.isNotBlank() }?.let { append("\n\nRequest ID: $it") }
+            }.trim()
+        }
+
         if (apiError?.errorCode == "00_403") {
             return buildString {
                 append("Adyen permission denied (00_403). The POS API key is not allowed to call this Adyen endpoint.\n\n")
@@ -487,7 +499,6 @@ class AdyenTerminalClient @Inject constructor() {
 
         val detail = apiError?.let { formatApiErrorSummary(it) }
         return when (code) {
-            401 -> detail ?: "Invalid Adyen API key. Use a Web service API key with the Cloud Device API role."
             403 -> detail ?: "Adyen rejected the request (403). Check API key roles and merchant account access."
             404 -> "Terminal or merchant not found (404). Check merchant account and terminal POIID " +
                 "(format: Model-Serial, e.g. V400m-324688179)."
@@ -561,12 +572,14 @@ class AdyenTerminalClient @Inject constructor() {
                     AdyenTerminalResponse.Cancelled()
                 }
                 else -> {
-                    val message = buildString {
-                        append("Terminal payment failed")
-                        if (!errorCondition.isNullOrBlank()) append(": $errorCondition")
-                        if (!additionalResponse.isNullOrBlank()) append(" ($additionalResponse)")
-                    }
-                    AdyenTerminalResponse.Declined(message)
+                    Log.w(
+                        TAG,
+                        "Payment declined: condition=$errorCondition additional=$additionalResponse",
+                    )
+                    AdyenTerminalResponse.Declined(
+                        errorCondition = errorCondition,
+                        additionalResponse = additionalResponse,
+                    )
                 }
             }
         }.getOrElse { error ->
@@ -759,12 +772,14 @@ class AdyenTerminalClient @Inject constructor() {
                     AdyenTerminalResponse.Cancelled()
                 }
                 else -> {
-                    val message = buildString {
-                        append("Terminal refund failed")
-                        if (!errorCondition.isNullOrBlank()) append(": $errorCondition")
-                        if (!additionalResponse.isNullOrBlank()) append(" ($additionalResponse)")
-                    }
-                    AdyenTerminalResponse.Declined(message)
+                    Log.w(
+                        TAG,
+                        "Reversal declined: condition=$errorCondition additional=$additionalResponse",
+                    )
+                    AdyenTerminalResponse.Declined(
+                        errorCondition = errorCondition,
+                        additionalResponse = additionalResponse,
+                    )
                 }
             }
         }.getOrElse {

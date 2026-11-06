@@ -96,6 +96,38 @@ val MIGRATION_56_57 = object : Migration(56, 57) {
     }
 }
 
+val MIGRATION_57_58 = object : Migration(57, 58) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        if (!businessSettingsColumnExists(db, "reservationsEnabled")) {
+            db.execSQL(
+                "ALTER TABLE business_settings ADD COLUMN reservationsEnabled INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS synced_reservations (
+                id TEXT NOT NULL PRIMARY KEY,
+                code TEXT NOT NULL,
+                guestName TEXT NOT NULL,
+                guestPhone TEXT NOT NULL,
+                guestEmail TEXT,
+                partySize INTEGER NOT NULL,
+                reservedAtMs INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                tableRemoteId TEXT,
+                tableLabel TEXT,
+                notes TEXT,
+                source TEXT,
+                syncedAtMs INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_synced_reservations_reservedAtMs ON synced_reservations(reservedAtMs)"
+        )
+    }
+}
+
 private fun businessSettingsColumnExists(db: SupportSQLiteDatabase, column: String): Boolean {
     db.query("PRAGMA table_info(business_settings)").use { cursor ->
         val nameIndex = cursor.getColumnIndex("name")

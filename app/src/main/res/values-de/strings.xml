@@ -61,6 +61,8 @@
     <string name="apply_discount">Rabattregeln</string>
     <string name="discount_percent">Rabatt %</string>
     <string name="discount_amount">Rabattbetrag</string>
+    <string name="discount_percent_applied">%1$s%% Rabatt angewendet</string>
+    <string name="discount_amount_applied">%1$s Rabatt angewendet</string>
     <string name="misc_item">Verschiedenes</string>
     <string name="receipt">Empfangsbestätigung</string>
     <string name="take_away_delivery">Zum Mitnehmen / Lieferung</string>
@@ -137,6 +139,15 @@
     <string name="terminal_pay_cancelled_msg">Die Zahlung wurde am Terminal abgebrochen.</string>
     <string name="terminal_pay_failed">Zahlung fehlgeschlagen</string>
     <string name="terminal_pay_failed_msg">Das Terminal konnte diese Zahlung nicht abschliessen.</string>
+    <string name="terminal_error_busy">Das Terminal ist beschäftigt. Warten Sie einige Sekunden und versuchen Sie es erneut.</string>
+    <string name="terminal_error_offline">Das Terminal ist offline oder nicht erreichbar. Strom und Netzwerk prüfen.</string>
+    <string name="terminal_error_refused">Zahlung am Terminal abgelehnt.</string>
+    <string name="terminal_error_aborted">Zahlung am Terminal unterbrochen.</string>
+    <string name="terminal_error_invalid_card">Karte konnte nicht gelesen oder nicht akzeptiert werden.</string>
+    <string name="terminal_error_limit">Der Betrag überschreitet das Terminal-Limit.</string>
+    <string name="terminal_error_network">Terminal nicht erreichbar. Internet prüfen und erneut versuchen.</string>
+    <string name="terminal_error_auth">Ungültiger Adyen-API-Schlüssel oder Authentifizierung fehlgeschlagen. Verwenden Sie in den Einstellungen einen Webdienst-API-Schlüssel (nicht den Client-Schlüssel), passen Sie Test/Live an und prüfen Sie das Händlerkonto.</string>
+    <string name="terminal_error_generic">Zahlung am Terminal abgelehnt.</string>
     <string name="terminal_pay_retry">Erneut versuchen</string>
     <string name="settings">Einstellungen</string>
     <string name="general_settings">Allgemeine Konfiguration (Common)</string>
@@ -802,6 +813,8 @@
 
     <string name="order_complete">Bestellung abgeschlossen</string>
     <string name="total_paid">BEZAHLT GESAMT</string>
+    <string name="order_complete_amount_due">Fälliger Betrag</string>
+    <string name="order_complete_collected">Eingenommen</string>
     <string name="print_customer_card_receipt">Kunden-Kartenbeleg</string>
     <string name="print_merchant_card_receipt">Händler-Kartenbeleg</string>
     <string name="print_payment_receipt">Kartenbeleg drucken</string>

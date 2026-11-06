@@ -10,6 +10,7 @@ import com.chaslay.pos.data.local.MIGRATION_53_54
 import com.chaslay.pos.data.local.MIGRATION_54_55
 import com.chaslay.pos.data.local.MIGRATION_55_56
 import com.chaslay.pos.data.local.MIGRATION_56_57
+import com.chaslay.pos.data.local.MIGRATION_57_58
 import com.chaslay.pos.data.local.DatabaseCallback
 import com.chaslay.pos.data.local.dao.BusinessSettingsDao
 import com.chaslay.pos.data.local.dao.CategoryDao
@@ -26,6 +27,7 @@ import com.chaslay.pos.data.local.dao.HeldOrderItemDao
 import com.chaslay.pos.data.local.dao.PrinterConfigDao
 import com.chaslay.pos.data.local.dao.KitchenMessageDao
 import com.chaslay.pos.data.local.dao.FloorPlanElementDao
+import com.chaslay.pos.data.local.dao.ReservationDao
 import com.chaslay.pos.data.local.dao.RestaurantTableDao
 import com.chaslay.pos.data.local.dao.TableFloorDao
 import com.chaslay.pos.data.local.dao.TableOrderDao
@@ -54,6 +56,7 @@ object DatabaseModule {
                 MIGRATION_54_55,
                 MIGRATION_55_56,
                 MIGRATION_56_57,
+                MIGRATION_57_58,
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -85,4 +88,5 @@ object DatabaseModule {
     @Provides fun provideHeldOrderDao(db: AppDatabase): HeldOrderDao = db.heldOrderDao()
     @Provides fun provideHeldOrderItemDao(db: AppDatabase): HeldOrderItemDao = db.heldOrderItemDao()
     @Provides fun provideCustomerDao(db: AppDatabase): CustomerDao = db.customerDao()
+    @Provides fun provideReservationDao(db: AppDatabase): ReservationDao = db.reservationDao()
 }

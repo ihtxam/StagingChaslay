@@ -533,14 +533,19 @@ class PosViewModel @Inject constructor(
                 _uiExtras,
             ) { cart, settings, extras -> Triple(cart, settings, extras) }
                 .collect { (cart, settings, extras) ->
-                    customerDisplayCoordinator.publishFromPos(
-                        cart = cart,
-                        settings = settings,
-                        phase = resolveCustomerDisplayPhase(cart, extras),
-                        receiptUrl = extras.receiptPublicUrl,
-                        thankYouTotal = extras.completedTransaction?.total,
-                        checkout = extras.checkoutState,
-                    )
+                    if (!customerDisplayCoordinator.isCdsActive(settings)) return@collect
+                    runCatching {
+                        customerDisplayCoordinator.publishFromPos(
+                            cart = cart,
+                            settings = settings,
+                            phase = resolveCustomerDisplayPhase(cart, extras),
+                            receiptUrl = extras.receiptPublicUrl,
+                            thankYouTotal = extras.completedTransaction?.total,
+                            checkout = extras.checkoutState,
+                        )
+                    }.onFailure {
+                        Log.w("PosViewModel", "Customer display publish failed", it)
+                    }
                 }
         }
         viewModelScope.launch {
@@ -3546,6 +3551,15 @@ class PosViewModel @Inject constructor(
                     cdsMerchantSlug = cds.merchantSlug?.trim().orEmpty(),
                 )
             }
+            cfg.features?.let { features ->
+                merged = merged.copy(
+                    reservationsEnabled = if (merged.posMode == PosMode.RETAIL) {
+                        false
+                    } else {
+                        features.reservationsEnabled
+                    }
+                )
+            }
             if (merged != current) {
                 settingsRepository.saveSettings(merged)
             }
@@ -5672,12 +5686,11 @@ class PosViewModel @Inject constructor(
                     }
                     val splitIndex = if (isEqualSplit) equalSplitPaid else null
                     val splitTotal = if (isEqualSplit) fullCart.splitCount else null
-                    // Tap to Pay returns the same Terminal API receipt blocks as the
-                    // networked terminal, so both carry the card-scheme detail a card
-                    // receipt needs. Printing and reprints read these from the stored
-                    // transaction and are method-agnostic; this was the only gate.
-                    val carriesAdyenReceipt = resolvedMethod == PaymentMethod.ADYEN_TERMINAL ||
-                        resolvedMethod == PaymentMethod.TAP_TO_PAY
+                    // Any tender that returns Terminal API receipt blocks (terminal, tap,
+                    // or future integrated card) — reprints read JSON from the transaction.
+                    val carriesAdyenReceipt =
+                        paymentResult.adyenCustomerReceipt != null ||
+                            paymentResult.adyenCashierReceipt != null
                     val adyenCustomerReceipt = if (carriesAdyenReceipt) {
                         paymentResult.adyenCustomerReceipt
                     } else {

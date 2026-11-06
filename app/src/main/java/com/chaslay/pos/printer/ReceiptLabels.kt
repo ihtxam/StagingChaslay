@@ -12,11 +12,20 @@ data class ReceiptLabels(
     val orderNumber: String,
     val table: String,
     val itemDiscount: String,
+    /** e.g. "%d%% remise appliquée" — use [formatItemDiscountLineLabel]. */
+    val itemDiscountPercentApplied: String,
     val discount: String,
     val discountPercent: String,
     val tip: String,
     val recapTitle: String,
     val subtotal: String,
+    /** Bold payable line after remise (merchandise + VAT, excl. tip if shown separately). */
+    val grandTotalPayable: String,
+    /** Sum of payment amounts (cash, card, etc.), incl. gift card when used as tender. */
+    val totalCollected: String,
+    /** Label for cash change when tendered is greater than amount due. */
+    val changeGiven: String,
+    /** Table/footer "TOTAL" (VAT breakdown, EOD); bold payable line uses [grandTotalPayable]. */
     val total: String,
     val vatTitle: String,
     val vatType: String,
@@ -103,6 +112,12 @@ data class ReceiptLabels(
         }
     }
 
+    fun formatItemDiscountLineLabel(notes: String?): String {
+        val pct = com.chaslay.pos.domain.LineItemDiscount.percentFromNotes(notes) ?: return itemDiscount
+        val token = com.chaslay.pos.domain.LineItemDiscount.formatPercentToken(pct)
+        return String.format(Locale.ROOT, itemDiscountPercentApplied, token)
+    }
+
     companion object {
         fun forLanguage(languageCode: String): ReceiptLabels =
             when (AppLanguage.fromCode(languageCode)) {
@@ -117,11 +132,15 @@ data class ReceiptLabels(
             orderNumber = "Order #",
             table = "Table:",
             itemDiscount = "Item discount",
+            itemDiscountPercentApplied = "%s%% discount applied",
             discount = "Discount:",
             discountPercent = "Discount (%d%%):",
             tip = "Tip:",
             recapTitle = "SUMMARY",
             subtotal = "Subtotal:",
+            grandTotalPayable = "TOTAL DUE",
+            totalCollected = "Total collected:",
+            changeGiven = "Change:",
             total = "TOTAL",
             vatTitle = "VAT",
             vatType = "Type",
@@ -176,11 +195,15 @@ data class ReceiptLabels(
             orderNumber = "Commande n\u00B0",
             table = "Table :",
             itemDiscount = "Remise article",
+            itemDiscountPercentApplied = "%s%% remise appliquée",
             discount = "Remise :",
             discountPercent = "Remise (%d%%) :",
             tip = "Pourboire :",
             recapTitle = "R\u00C9CAPITULATIF",
             subtotal = "Sous-total :",
+            grandTotalPayable = "TOTAL \u00C0 PAYER",
+            totalCollected = "Total encaiss\u00E9 :",
+            changeGiven = "Monnaie :",
             total = "TOTAL",
             vatTitle = "TVA",
             vatType = "Type",
@@ -235,11 +258,15 @@ data class ReceiptLabels(
             orderNumber = "Bestellung Nr.",
             table = "Tisch:",
             itemDiscount = "Artikelrabatt",
+            itemDiscountPercentApplied = "%s%% Rabatt angewendet",
             discount = "Rabatt:",
             discountPercent = "Rabatt (%d%%):",
             tip = "Trinkgeld:",
             recapTitle = "\u00DCBERSICHT",
             subtotal = "Zwischensumme:",
+            grandTotalPayable = "TOTAL F\u00C4LLIG",
+            totalCollected = "Eingenommen:",
+            changeGiven = "R\u00fcckgeld:",
             total = "TOTAL",
             vatTitle = "MwSt.",
             vatType = "Typ",
@@ -294,11 +321,15 @@ data class ReceiptLabels(
             orderNumber = "Ordine n.",
             table = "Tavolo:",
             itemDiscount = "Sconto articolo",
+            itemDiscountPercentApplied = "%s%% sconto applicato",
             discount = "Sconto:",
             discountPercent = "Sconto (%d%%):",
             tip = "Mancia:",
             recapTitle = "RIEPILOGO",
             subtotal = "Subtotale:",
+            grandTotalPayable = "TOTALE DA PAGARE",
+            totalCollected = "Totale incassato:",
+            changeGiven = "Resto:",
             total = "TOTALE",
             vatTitle = "IVA",
             vatType = "Tipo",

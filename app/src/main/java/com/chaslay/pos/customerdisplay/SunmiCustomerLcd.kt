@@ -2,6 +2,9 @@ package com.chaslay.pos.customerdisplay
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import com.sunmi.peripheral.printer.InnerPrinterCallback
 import com.sunmi.peripheral.printer.InnerPrinterManager
 import com.sunmi.peripheral.printer.SunmiPrinterService
@@ -17,17 +20,18 @@ class SunmiCustomerLcd @Inject constructor() {
     private val lcdAvailable = AtomicReference<Boolean?>(null)
 
     companion object {
+        private const val TAG = "SunmiCustomerLcd"
         private const val LCD_LINE_MAX = 20
     }
 
     fun bindIfNeeded(context: Context) {
         if (serviceRef.get() != null) return
         if (!isSunmiDevice()) return
-        try {
-            val latch = CountDownLatch(1)
-            InnerPrinterManager.getInstance().bindService(
-                context.applicationContext,
-                object : InnerPrinterCallback() {
+        synchronized(this) {
+            if (serviceRef.get() != null) return
+            try {
+                val latch = CountDownLatch(1)
+                val callback = object : InnerPrinterCallback() {
                     override fun onConnected(service: SunmiPrinterService?) {
                         serviceRef.set(service)
                         latch.countDown()
@@ -36,11 +40,26 @@ class SunmiCustomerLcd @Inject constructor() {
                     override fun onDisconnected() {
                         serviceRef.set(null)
                     }
-                },
-            )
-            latch.await(3, TimeUnit.SECONDS)
-        } catch (_: Throwable) {
-            // Not a Sunmi device or service unavailable
+                }
+                val appCtx = context.applicationContext
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    InnerPrinterManager.getInstance().bindService(appCtx, callback)
+                } else {
+                    Handler(Looper.getMainLooper()).post {
+                        runCatching {
+                            InnerPrinterManager.getInstance().bindService(appCtx, callback)
+                        }.onFailure {
+                            Log.w(TAG, "Sunmi LCD bindService failed", it)
+                            latch.countDown()
+                        }
+                    }
+                }
+                if (!latch.await(3, TimeUnit.SECONDS)) {
+                    Log.w(TAG, "Timed out waiting for Sunmi LCD printer service")
+                }
+            } catch (_: Throwable) {
+                // Not a Sunmi device or service unavailable
+            }
         }
     }
 

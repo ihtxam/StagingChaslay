@@ -118,8 +118,14 @@ class AdyenTerminalService @Inject constructor(
                 terminalTipAmount = response.tipAmount
             )
             is AdyenTerminalResponse.Cancelled -> PaymentResult.Cancelled
-            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(response.message)
-            is AdyenTerminalResponse.Error -> PaymentResult.Failure(response.message)
+            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(
+                response.toUserPaymentMessage(appContext)
+                    ?: appContext.getString(com.chaslay.pos.R.string.terminal_pay_failed_msg),
+            )
+            is AdyenTerminalResponse.Error -> PaymentResult.Failure(
+                response.toUserPaymentMessage(appContext)
+                    ?: appContext.getString(com.chaslay.pos.R.string.terminal_pay_failed_msg),
+            )
         }
     }
 
@@ -174,8 +180,14 @@ class AdyenTerminalService @Inject constructor(
                 method = PaymentMethod.ADYEN_TERMINAL
             )
             is AdyenTerminalResponse.Cancelled -> PaymentResult.Cancelled
-            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(response.message)
-            is AdyenTerminalResponse.Error -> PaymentResult.Failure(response.message)
+            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(
+                response.toUserPaymentMessage(appContext)
+                    ?: appContext.getString(com.chaslay.pos.R.string.terminal_pay_failed_msg),
+            )
+            is AdyenTerminalResponse.Error -> PaymentResult.Failure(
+                response.toUserPaymentMessage(appContext)
+                    ?: appContext.getString(com.chaslay.pos.R.string.terminal_pay_failed_msg),
+            )
         }
     }
 
@@ -196,8 +208,14 @@ class AdyenTerminalService @Inject constructor(
                 method = PaymentMethod.ADYEN_TERMINAL
             )
             is AdyenTerminalResponse.Cancelled -> PaymentResult.Cancelled
-            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(response.message)
-            is AdyenTerminalResponse.Error -> PaymentResult.Failure(response.message)
+            is AdyenTerminalResponse.Declined -> PaymentResult.Failure(
+                response.toUserPaymentMessage(appContext)
+                    ?: appContext.getString(com.chaslay.pos.R.string.terminal_pay_failed_msg),
+            )
+            is AdyenTerminalResponse.Error -> PaymentResult.Failure(
+                response.toUserPaymentMessage(appContext)
+                    ?: appContext.getString(com.chaslay.pos.R.string.terminal_pay_failed_msg),
+            )
         }
     }
 }

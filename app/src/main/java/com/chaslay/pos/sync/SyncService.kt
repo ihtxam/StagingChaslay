@@ -15,6 +15,7 @@ class SyncService @Inject constructor(
     private val staffSyncRepository: StaffSyncRepository,
     private val onlineOrderSyncRepository: OnlineOrderSyncRepository,
     private val floorPlanSyncRepository: FloorPlanSyncRepository,
+    private val reservationSyncRepository: ReservationSyncRepository,
     private val onlineOrderAlertCoordinator: OnlineOrderAlertCoordinator
 ) {
     private val mutex = Mutex()
@@ -40,12 +41,28 @@ class SyncService @Inject constructor(
         val floorPlans = runCatching { floorPlanSyncRepository.syncFloorPlans() }
             .onFailure { Log.w(TAG, "Floor plan sync failed", it) }
             .getOrDefault(FloorPlanSyncResult())
+        val reservations = runCatching { reservationSyncRepository.syncReservations() }
+            .onFailure { Log.w(TAG, "Reservation sync failed", it) }
+            .getOrDefault(ReservationSyncResult())
         val tx = runCatching { syncPendingTransactions() }
             .onFailure { Log.w(TAG, "Transaction sync failed", it) }
             .getOrDefault(SyncResult(0, 0))
         lastFullSyncAt = now
-        FullSyncResult(menu = menu, terminals = terminals, staff = staff, orders = orders, floorPlans = floorPlans, transactions = tx)
+        FullSyncResult(
+            menu = menu,
+            terminals = terminals,
+            staff = staff,
+            orders = orders,
+            floorPlans = floorPlans,
+            reservations = reservations,
+            transactions = tx
+        )
     }
+
+    suspend fun syncReservationsOnly(): ReservationSyncResult =
+        runCatching { reservationSyncRepository.syncReservations() }
+            .onFailure { Log.w(TAG, "Reservation sync failed", it) }
+            .getOrDefault(ReservationSyncResult())
 
     suspend fun pullMenuReplace(): MenuSyncResult =
         menuSyncRepository.syncMenu(MenuSyncMode.REPLACE)
@@ -106,6 +123,7 @@ data class FullSyncResult(
     val staff: StaffSyncResult = StaffSyncResult(),
     val orders: OnlineOrderSyncResult = OnlineOrderSyncResult(),
     val floorPlans: FloorPlanSyncResult = FloorPlanSyncResult(),
+    val reservations: ReservationSyncResult = ReservationSyncResult(),
     val transactions: SyncResult = SyncResult(0, 0),
     val skipped: Boolean = false
 )

@@ -23,6 +23,7 @@ import com.chaslay.pos.data.local.dao.ProductDao
 import com.chaslay.pos.data.local.dao.ProductModifierGroupDao
 import com.chaslay.pos.data.local.dao.ProductVariantDao
 import com.chaslay.pos.data.local.dao.FloorPlanElementDao
+import com.chaslay.pos.data.local.dao.ReservationDao
 import com.chaslay.pos.data.local.dao.RestaurantTableDao
 import com.chaslay.pos.data.local.dao.TableFloorDao
 import com.chaslay.pos.data.local.dao.TableOrderDao
@@ -50,6 +51,7 @@ import com.chaslay.pos.data.local.entity.ProductEntity
 import com.chaslay.pos.data.local.entity.ProductModifierGroupEntity
 import com.chaslay.pos.data.local.entity.ProductVariantEntity
 import com.chaslay.pos.data.local.entity.FloorPlanElementEntity
+import com.chaslay.pos.data.local.entity.ReservationEntity
 import com.chaslay.pos.data.local.entity.RestaurantTableEntity
 import com.chaslay.pos.data.local.entity.TableFloorEntity
 import com.chaslay.pos.data.local.entity.TableOrderEntity
@@ -88,9 +90,10 @@ import com.chaslay.pos.data.local.entity.UserEntity
         CancelReasonEntity::class,
         HeldOrderEntity::class,
         HeldOrderItemEntity::class,
-        CustomerEntity::class
+        CustomerEntity::class,
+        ReservationEntity::class
     ],
-    version = 57,
+    version = 58,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -122,4 +125,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun heldOrderDao(): HeldOrderDao
     abstract fun heldOrderItemDao(): HeldOrderItemDao
     abstract fun customerDao(): CustomerDao
+    abstract fun reservationDao(): ReservationDao
 }

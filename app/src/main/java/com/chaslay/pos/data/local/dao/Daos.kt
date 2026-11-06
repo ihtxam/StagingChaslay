@@ -489,6 +489,36 @@ interface CustomerDao {
 }
 
 @Dao
+interface ReservationDao {
+    @Query(
+        """
+        SELECT * FROM synced_reservations
+        WHERE reservedAtMs >= :fromMs AND reservedAtMs < :toMs
+        ORDER BY reservedAtMs ASC
+        """
+    )
+    fun observeBetween(fromMs: Long, toMs: Long): Flow<List<com.chaslay.pos.data.local.entity.ReservationEntity>>
+
+    @Query(
+        """
+        SELECT * FROM synced_reservations
+        WHERE reservedAtMs >= :fromMs AND reservedAtMs < :toMs
+        ORDER BY reservedAtMs ASC
+        """
+    )
+    suspend fun getBetween(fromMs: Long, toMs: Long): List<com.chaslay.pos.data.local.entity.ReservationEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<com.chaslay.pos.data.local.entity.ReservationEntity>)
+
+    @Query("DELETE FROM synced_reservations WHERE id NOT IN (:ids)")
+    suspend fun deleteNotIn(ids: List<String>)
+
+    @Query("DELETE FROM synced_reservations")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface BusinessSettingsDao {
     @Query("SELECT * FROM business_settings WHERE id = 1 LIMIT 1")
     fun observe(): Flow<BusinessSettingsEntity?>

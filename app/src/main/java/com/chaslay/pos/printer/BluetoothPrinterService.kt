@@ -64,6 +64,7 @@ class BluetoothPrinterService @Inject constructor(
     private val printerConfigDao: com.chaslay.pos.data.local.dao.PrinterConfigDao,
     private val receiptQrGenerator: ReceiptQrGenerator,
     private val printerReachabilityCache: PrinterReachabilityCache,
+    private val sunmiInternalPrinter: SunmiInternalPrinter,
 ) {
     private val kitchenQtyLine = Regex("^\\d+x\\s+", RegexOption.IGNORE_CASE)
     private val kitchenDiscountNote = Regex("""^\d+(\.\d+)?% off$|(?i)^adjusted from """)
@@ -99,6 +100,14 @@ class BluetoothPrinterService @Inject constructor(
 
     fun discoverPrinters(hasBluetoothPermission: Boolean): List<DiscoveredPrinter> {
         val printers = mutableListOf(SIMULATED_PRINTER)
+        if (sunmiInternalPrinter.isAvailable()) {
+            printers.add(
+                DiscoveredPrinter(
+                    name = SunmiInternalPrinter.builtInLabel(),
+                    address = SunmiInternalPrinter.INTERNAL_ADDRESS,
+                ),
+            )
+        }
         if (!hasBluetoothPermission) return printers
         return runCatching {
             val adapter = bluetoothAdapter() ?: return printers
@@ -191,6 +200,8 @@ class BluetoothPrinterService @Inject constructor(
             val type = connectionType.trim().uppercase(Locale.US)
             val reachable = runCatching {
                 when {
+                    usesSunmiInternalRouting(trimmed) || type == "SUNMI" ->
+                        sunmiInternalPrinter.isAvailable()
                     type == "USB" || isUsbAddress(trimmed) -> {
                         val normalized = usbPrinterManager.normalizeStoredAddress(trimmed)
                         when {
@@ -220,13 +231,16 @@ class BluetoothPrinterService @Inject constructor(
                     }
                 }
             }.getOrDefault(false)
-            if (reachable) {
-                printerReachabilityCache.markReachable(trimmed)
-            } else {
-                printerReachabilityCache.markUnreachable(trimmed)
-            }
-            reachable
+            val cacheAddress = reachabilityCacheAddress(trimmed, type)
+            printerReachabilityCache.resolveAfterProbe(cacheAddress, reachable)
         }
+
+    private fun reachabilityCacheAddress(address: String, connectionTypeUpper: String): String {
+        if (connectionTypeUpper == "USB" || isUsbAddress(address)) {
+            return usbPrinterManager.normalizeStoredAddress(address)
+        }
+        return address.trim()
+    }
 
     /** Opens a short connection to verify the printer is reachable (Bluetooth / Wi-Fi / USB). */
     suspend fun warmupConnection(address: String, connectionType: String) = withContext(Dispatchers.IO) {
@@ -295,6 +309,8 @@ class BluetoothPrinterService @Inject constructor(
         loyaltyPointsEarned: Int? = null,
         loyaltyPointsBalance: Int? = null
     ): Result<Unit> {
+        val address = settings.printerMacAddress
+        val encoding = textEncodingForAddress(address)
         val payload = buildEscPosReceipt(
             settings,
             transaction,
@@ -302,13 +318,15 @@ class BluetoothPrinterService @Inject constructor(
             appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
             appendAdyenCashierReceipt = appendAdyenCashierReceipt,
             loyaltyPointsEarned = loyaltyPointsEarned,
-            loyaltyPointsBalance = loyaltyPointsBalance
+            loyaltyPointsBalance = loyaltyPointsBalance,
+            textEncoding = encoding,
         )
-        return sendBytes(settings.printerMacAddress, settings, payload, "Receipt ${transaction.transactionNumber}")
+        return sendBytes(address, settings, payload, "Receipt ${transaction.transactionNumber}")
     }
 
     fun testPrint(settings: BusinessSettingsEntity): Result<Unit> {
-        val payload = buildTestReceipt(settings)
+        val encoding = textEncodingForAddress(settings.printerMacAddress)
+        val payload = buildTestReceipt(settings, encoding)
         return sendBytes(settings.printerMacAddress, settings, payload, "Test print")
     }
 
@@ -343,15 +361,31 @@ class BluetoothPrinterService @Inject constructor(
         val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
         if (receiptPrinters.isEmpty()) {
-            val payload = buildCartReceipt(settings, cart, context, discountAmount, tipAmount, total)
-            return@withContext sendBytes(settings.printerMacAddress, settings, payload, "Receipt")
+            val address = settings.printerMacAddress
+            val payload = buildCartReceipt(
+                settings,
+                cart,
+                context,
+                discountAmount,
+                tipAmount,
+                total,
+                textEncoding = textEncodingForAddress(address),
+            )
+            return@withContext sendBytes(address, settings, payload, "Receipt")
         }
         val targets = if (singlePrinter) receiptPrinters.take(1) else receiptPrinters
         var last: Result<Unit> = Result.success(Unit)
         for (printer in targets) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
             val payload = buildCartReceipt(
-                settings, cart, context, discountAmount, tipAmount, total, lineWidth
+                settings,
+                cart,
+                context,
+                discountAmount,
+                tipAmount,
+                total,
+                lineWidth,
+                textEncoding = textEncodingForAddress(printer.address),
             )
             last = sendBytes(printer.address, settings, payload, "Receipt ${printer.name}")
         }
@@ -386,7 +420,13 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine("TOTAL: ${formatMoney(total, settings.currencySymbol)}")
         appendFooter(sb, settings.receiptFooter)
         sb.appendLine("\n\n\n")
-        return sendBytes(settings.printerMacAddress, settings, encodePayload(sb.toString()), "Preview receipt")
+        val encoding = textEncodingForAddress(settings.printerMacAddress)
+        return sendBytes(
+            settings.printerMacAddress,
+            settings,
+            encodePayload(sb.toString(), encoding),
+            "Preview receipt",
+        )
     }
 
     suspend fun routeCartPreview(
@@ -415,7 +455,8 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine("TOTAL: ${formatMoney(total, settings.currencySymbol)}")
             appendFooter(sb, settings.receiptFooter, lineWidth)
             sb.appendLine("\n\n\n")
-            last = sendBytes(printer.address, settings, encodePayload(sb.toString()), "Preview ${printer.name}")
+            val encoding = textEncodingForAddress(printer.address)
+            last = sendBytes(printer.address, settings, encodePayload(sb.toString(), encoding), "Preview ${printer.name}")
         }
         last
     }
@@ -851,30 +892,34 @@ class BluetoothPrinterService @Inject constructor(
             .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
         if (receiptPrinters.isEmpty()) {
             val lineWidth = lineWidthFor(80)
+            val address = settings.printerMacAddress?.trim().orEmpty()
+            if (address.isBlank()) {
+                return@withContext Result.failure(IllegalStateException("No receipt printer configured"))
+            }
+            val encoding = textEncodingForAddress(address)
             val payload = buildRefundEscPosReceipt(
                 settings,
                 transaction,
                 refundAmount,
                 reason,
                 lines,
-                lineWidth
+                lineWidth,
+                textEncoding = encoding,
             )
-            val address = settings.printerMacAddress?.trim().orEmpty()
-            if (address.isBlank()) {
-                return@withContext Result.failure(IllegalStateException("No receipt printer configured"))
-            }
             return@withContext sendBytes(address, settings, payload, "Refund receipt")
         }
         var last: Result<Unit> = Result.success(Unit)
         for (printer in receiptPrinters) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
+            val encoding = textEncodingForAddress(printer.address)
             val payload = buildRefundEscPosReceipt(
                 settings,
                 transaction,
                 refundAmount,
                 reason,
                 lines,
-                lineWidth
+                lineWidth,
+                textEncoding = encoding,
             )
             last = sendBytes(printer.address, settings, payload, "Refund ${printer.name}")
         }
@@ -887,7 +932,8 @@ class BluetoothPrinterService @Inject constructor(
         refundAmount: Double,
         reason: String?,
         lines: List<RefundReceiptLine>,
-        lineWidth: Int
+        lineWidth: Int,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
     ): ByteArray {
         val labels = ReceiptPrintLanguage.labelsFor(context, settings)
         val sep = "=".repeat(lineWidth.coerceAtMost(32))
@@ -936,7 +982,13 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(sep)
         appendFooter(sb, settings.receiptFooter, lineWidth, settings.businessName)
         sb.appendLine("\n\n\n")
-        return finalizePayload(sb.toString(), settings, lineWidth, receiptUrl = null)
+        return finalizePayload(
+            sb.toString(),
+            settings,
+            lineWidth,
+            receiptUrl = null,
+            textEncoding = textEncoding,
+        )
     }
 
     /**
@@ -947,6 +999,9 @@ class BluetoothPrinterService @Inject constructor(
         settings: BusinessSettingsEntity,
         receipt: com.chaslay.pos.payment.AdyenTerminalReceipt
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        if (receipt.lines.isEmpty()) {
+            return@withContext Result.failure(IllegalStateException("Empty card receipt"))
+        }
         val receiptPrinters = runCatching { printerConfigDao.getAll() }.getOrDefault(emptyList())
             .filter { it.isEnabled && it.printOrderReceipts && it.address.isNotBlank() }
         val targets = if (receiptPrinters.isEmpty()) {
@@ -957,9 +1012,16 @@ class BluetoothPrinterService @Inject constructor(
         var last: Result<Unit> = Result.success(Unit)
         for (printer in targets) {
             val lineWidth = printer?.let { lineWidthFor(it.paperWidthMm) } ?: LINE_WIDTH_80
-            val text = com.chaslay.pos.payment.AdyenPaymentReceiptFormatter.toPlainText(receipt, lineWidth)
-            val payload = finalizePayload(text, settings, lineWidth, receiptUrl = null)
             val address = printer?.address ?: settings.printerMacAddress
+            val encoding = textEncodingForAddress(address)
+            val text = com.chaslay.pos.payment.AdyenPaymentReceiptFormatter.toPlainText(receipt, lineWidth)
+            val payload = finalizePayload(
+                text,
+                settings,
+                lineWidth,
+                receiptUrl = null,
+                textEncoding = encoding,
+            )
             last = sendBytes(address, settings, payload, "Adyen ${receipt.documentQualifier}")
         }
         last
@@ -1203,7 +1265,8 @@ class BluetoothPrinterService @Inject constructor(
         discountAmount: Double,
         tipAmount: Double,
         total: Double,
-        lineWidth: Int = LINE_WIDTH_80
+        lineWidth: Int = LINE_WIDTH_80,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
     ): ByteArray {
         val sb = StringBuilder()
         appendEscPosStyleReset(sb)
@@ -1282,7 +1345,7 @@ class BluetoothPrinterService @Inject constructor(
             if (item.lineDiscount > 0) {
                 sb.appendLine(
                     leftRight(
-                        "  ${labels.itemDiscount}",
+                        "  ${labels.formatItemDiscountLineLabel(item.notes)}",
                         "-${formatMoney(item.lineDiscount, settings.currencySymbol)}",
                         lineWidth
                     )
@@ -1310,7 +1373,7 @@ class BluetoothPrinterService @Inject constructor(
             vatRows = if (settings.receiptShowVatTable) vatRows else emptyList()
         )
 
-        appendReceiptTotal(sb, labels.total, total, settings.currencySymbol, lineWidth)
+        appendReceiptTotal(sb, labels.grandTotalPayable, total, settings.currencySymbol, lineWidth)
 
         appendLoyaltyReceiptLines(sb, settings, context.loyaltyPointsEarned, context.loyaltyPointsBalance, lineWidth)
 
@@ -1352,7 +1415,13 @@ class BluetoothPrinterService @Inject constructor(
         appendFooter(sb, settings.receiptFooter, lineWidth, settings.businessName)
         val deliveryDirectionsUrl = deliveryDirectionsUrlForCart(settings, cart, context, lineWidth, sb)
         sb.appendLine("\n\n\n")
-        return finalizePayload(sb.toString(), settings, lineWidth, deliveryDirectionsUrl = deliveryDirectionsUrl)
+        return finalizePayload(
+            sb.toString(),
+            settings,
+            lineWidth,
+            deliveryDirectionsUrl = deliveryDirectionsUrl,
+            textEncoding = textEncoding,
+        )
     }
 
     private fun buildEscPosReceipt(
@@ -1363,7 +1432,8 @@ class BluetoothPrinterService @Inject constructor(
         appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
         appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt? = null,
         loyaltyPointsEarned: Int? = null,
-        loyaltyPointsBalance: Int? = null
+        loyaltyPointsBalance: Int? = null,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
     ): ByteArray {
         val sb = StringBuilder()
         appendEscPosStyleReset(sb)
@@ -1423,7 +1493,7 @@ class BluetoothPrinterService @Inject constructor(
             if (lineDiscount > 0.0) {
                 sb.appendLine(
                     leftRight(
-                        "  ${labels.itemDiscount}",
+                        "  ${labels.formatItemDiscountLineLabel(item.notes)}",
                         "-${formatMoney(lineDiscount, settings.currencySymbol)}",
                         lineWidth
                     )
@@ -1454,7 +1524,13 @@ class BluetoothPrinterService @Inject constructor(
             vatRows = if (settings.receiptShowVatTable) vatRows else emptyList()
         )
 
-        appendReceiptTotal(sb, labels.total, transaction.total, settings.currencySymbol, lineWidth)
+        appendReceiptTotal(
+            sb,
+            labels.grandTotalPayable,
+            transaction.total,
+            settings.currencySymbol,
+            lineWidth
+        )
 
         val refundTotal = transaction.refundAmount.coerceAtLeast(0.0)
         val goodwillTotal = transaction.goodwillAmount.coerceAtLeast(0.0)
@@ -1522,7 +1598,14 @@ class BluetoothPrinterService @Inject constructor(
             )
         }
 
-        appendReceiptPaymentLines(sb, labels, transaction, settings.currencySymbol, lineWidth, netPaid)
+        appendReceiptPaymentLines(
+            sb,
+            labels,
+            transaction,
+            settings.currencySymbol,
+            lineWidth,
+            netPaidAfterRefunds = if (compensationTotal > 0.001) netPaid else null,
+        )
 
         if (settings.receiptShowVatTable && vatRows.size > 1) {
             appendReceiptVatSection(sb, vatRows, labels, lineWidth, settings.vatIncludedInPrice)
@@ -1580,7 +1663,8 @@ class BluetoothPrinterService @Inject constructor(
             settings,
             lineWidth,
             receiptUrl = qrUrl,
-            deliveryDirectionsUrl = deliveryDirectionsUrl
+            deliveryDirectionsUrl = deliveryDirectionsUrl,
+            textEncoding = textEncoding,
         )
     }
 
@@ -2047,16 +2131,32 @@ class BluetoothPrinterService @Inject constructor(
             ?.toDoubleOrNull()
             ?.takeIf { it >= 0.0 }
 
+    private fun isReceiptCardMethod(method: PaymentMethod): Boolean =
+        method == PaymentMethod.CARD ||
+            method == PaymentMethod.ADYEN_TERMINAL ||
+            method == PaymentMethod.TAP_TO_PAY
+
     private fun appendReceiptPaymentLines(
         sb: StringBuilder,
         labels: ReceiptLabels,
         transaction: TransactionEntity,
         currencySymbol: String,
         lineWidth: Int,
-        paidAmount: Double = transaction.total
+        /** Net amount after refunds/goodwill; omit for normal sales (uses tender sum or total). */
+        netPaidAfterRefunds: Double? = null,
     ) {
         val splitTenders = PaymentTenderNotes.parse(transaction.notes)
-            .filter { it.method != PaymentMethod.GIFT_CARD && it.amount > 0.001 }
+            .filter { it.amount > 0.001 }
+        val tenderSum = splitTenders.sumOf { it.amount }.takeIf { it > 0.001 }
+        val amountTenderedField = transaction.amountTendered?.takeIf { it > 0.001 }
+        val hasRefundOrGoodwill =
+            transaction.refundAmount > 0.001 || transaction.goodwillAmount > 0.001
+        val paidTotalLine = when {
+            hasRefundOrGoodwill && netPaidAfterRefunds != null -> netPaidAfterRefunds
+            tenderSum != null -> tenderSum
+            amountTenderedField != null -> amountTenderedField
+            else -> transaction.total
+        }
         if (splitTenders.size >= 2) {
             sb.appendLine(labels.payment)
             splitTenders.forEach { tender ->
@@ -2082,7 +2182,21 @@ class BluetoothPrinterService @Inject constructor(
                 }
             }
         }
-        sb.appendLine(leftRight(labels.paid, twoDp(paidAmount), lineWidth))
+        sb.appendLine(leftRight(labels.totalCollected, formatMoney(paidTotalLine, currencySymbol), lineWidth))
+        if (hasRefundOrGoodwill) return
+        val due = transaction.total
+        transaction.changeDue?.takeIf { it > 0.01 }?.let { change ->
+            sb.appendLine(leftRight(labels.changeGiven, formatMoney(change, currencySymbol), lineWidth))
+            return
+        }
+        val diff = paidTotalLine - due
+        if (diff > 0.01) {
+            val hasCard = splitTenders.any { isReceiptCardMethod(it.method) } ||
+                isReceiptCardMethod(transaction.paymentMethod)
+            if (!hasCard) {
+                sb.appendLine(leftRight(labels.changeGiven, formatMoney(diff, currencySymbol), lineWidth))
+            }
+        }
     }
 
     private fun appendReceiptTotal(
@@ -2301,7 +2415,10 @@ class BluetoothPrinterService @Inject constructor(
     }
 
 
-    private fun buildTestReceipt(settings: BusinessSettingsEntity): ByteArray {
+    private fun buildTestReceipt(
+        settings: BusinessSettingsEntity,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
+    ): ByteArray {
         val text = buildString {
             appendLine(center(settings.businessName))
             appendLine(center("TEST PRINT"))
@@ -2310,11 +2427,34 @@ class BluetoothPrinterService @Inject constructor(
             appendLine(center("Printer OK"))
             appendLine("\n\n\n")
         }
-        return encodePayload(text)
+        return encodePayload(text, textEncoding)
     }
 
-    private fun encodePayload(text: String): ByteArray {
-        return buildPrintPayload(EscPosEncoder.encode(text))
+    private fun encodePayload(
+        text: String,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
+    ): ByteArray {
+        return buildPrintPayload(encodeEscPosText(text, textEncoding), textEncoding = textEncoding)
+    }
+
+    private fun encodeEscPosText(text: String, textEncoding: EscPosTextEncoding): ByteArray =
+        when (textEncoding) {
+            EscPosTextEncoding.UTF8 ->
+                EscPosEncoder.normalizeForPrint(text).toByteArray(Charsets.UTF_8)
+            EscPosTextEncoding.CP850 -> EscPosEncoder.encode(text)
+        }
+
+    private fun textEncodingForAddress(address: String?): EscPosTextEncoding {
+        if (usesSunmiInternalRouting(address)) return EscPosTextEncoding.UTF8
+        return EscPosTextEncoding.CP850
+    }
+
+    private fun usesSunmiInternalRouting(address: String?): Boolean {
+        if (SunmiInternalPrinter.isInternalAddress(address)) return true
+        if (!isUsbAddress(address)) return false
+        val normalized = usbPrinterManager.normalizeStoredAddress(address.orEmpty())
+        val device = usbPrinterManager.resolveDevice(normalized) ?: return false
+        return SunmiInternalPrinter.isInternalUsbShadow(context, device)
     }
 
     private fun buildPrintPayload(
@@ -2322,13 +2462,19 @@ class BluetoothPrinterService @Inject constructor(
         settings: BusinessSettingsEntity? = null,
         lineWidth: Int = LINE_WIDTH_80,
         qrBytes: ByteArray = byteArrayOf(),
-        cutFeedLines: Int = 4
+        cutFeedLines: Int = 4,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
     ): ByteArray {
         val logo = settings?.let { receiptLogoBytes(it, lineWidth) } ?: byteArrayOf()
         val header = ESC_INIT
         val afterLogo = if (logo.isNotEmpty()) logo + ESC_INIT else byteArrayOf()
-        val qrPrefix = if (qrBytes.isNotEmpty()) ESC_CODEPAGE_CP850 else byteArrayOf()
-        return header + afterLogo + ESC_CODEPAGE_CP850 + body + qrPrefix + qrBytes + paperCutCommand(cutFeedLines)
+        val codepage = if (textEncoding == EscPosTextEncoding.UTF8) byteArrayOf() else ESC_CODEPAGE_CP850
+        val qrPrefix = if (qrBytes.isNotEmpty() && textEncoding == EscPosTextEncoding.CP850) {
+            ESC_CODEPAGE_CP850
+        } else {
+            byteArrayOf()
+        }
+        return header + afterLogo + codepage + body + qrPrefix + qrBytes + paperCutCommand(cutFeedLines)
     }
 
     private fun paperCutCommand(feedLines: Int = 4): ByteArray =
@@ -2339,12 +2485,13 @@ class BluetoothPrinterService @Inject constructor(
         settings: BusinessSettingsEntity,
         lineWidth: Int = LINE_WIDTH_80,
         receiptUrl: String? = null,
-        @Suppress("UNUSED_PARAMETER") deliveryDirectionsUrl: String? = null
+        @Suppress("UNUSED_PARAMETER") deliveryDirectionsUrl: String? = null,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
     ): ByteArray {
         val scale = settings.receiptBodyTextScale.coerceIn(1, 3)
-        val bodyAttrs = EscPosEncoder.encode(escReceiptBodySize(scale))
-        val bodyReset = EscPosEncoder.encode(escReceiptBodySizeReset())
-        val body = bodyAttrs + EscPosEncoder.encode(text) + bodyReset
+        val bodyAttrs = encodeEscPosText(escReceiptBodySize(scale), textEncoding)
+        val bodyReset = encodeEscPosText(escReceiptBodySizeReset(), textEncoding)
+        val body = bodyAttrs + encodeEscPosText(text, textEncoding) + bodyReset
         val qrParts = mutableListOf<ByteArray>()
         if (settings.receiptShowQrCode && !receiptUrl.isNullOrBlank()) {
             qrParts.add(receiptQrRaster(receiptUrl, lineWidth))
@@ -2353,11 +2500,11 @@ class BluetoothPrinterService @Inject constructor(
         val qrBytes = qrParts.fold(byteArrayOf()) { acc, part -> acc + part }
         val cutFeed = if (qrBytes.isNotEmpty()) 2 else 4
         val qrPrefixReset = if (qrBytes.isNotEmpty()) {
-            EscPosEncoder.encode(escReceiptBodySizeReset() + escAlignLeft())
+            encodeEscPosText(escReceiptBodySizeReset() + escAlignLeft(), textEncoding)
         } else {
             byteArrayOf()
         }
-        return buildPrintPayload(body, settings, lineWidth, qrPrefixReset + qrBytes, cutFeed)
+        return buildPrintPayload(body, settings, lineWidth, qrPrefixReset + qrBytes, cutFeed, textEncoding)
     }
 
     private fun receiptQrRaster(url: String, lineWidth: Int): ByteArray {
@@ -2372,7 +2519,9 @@ class BluetoothPrinterService @Inject constructor(
             darkThreshold = 128
         ) ?: return byteArrayOf()
         if (!bitmap.isRecycled) bitmap.recycle()
-        return EscPosEncoder.encode(escAlignCenter()) + raster + EscPosEncoder.encode(escAlignLeft())
+        return encodeEscPosText(escAlignCenter(), EscPosTextEncoding.CP850) +
+            raster +
+            encodeEscPosText(escAlignLeft(), EscPosTextEncoding.CP850)
     }
 
     private var cachedLogoKey: String? = null
@@ -2460,6 +2609,9 @@ class BluetoothPrinterService @Inject constructor(
         val result: Result<Unit> = synchronized(lock) {
             runCatching {
                 when {
+                    usesSunmiInternalRouting(mac) -> {
+                        sunmiInternalPrinter.sendRaw(payload).getOrThrow()
+                    }
                     isUsbAddress(mac) -> {
                         val normalized = usbPrinterManager.normalizeStoredAddress(mac)
                         if (usbPrinterManager.resolveDevice(normalized) == null) {
@@ -2493,9 +2645,10 @@ class BluetoothPrinterService @Inject constructor(
         transactionId: String,
         printerAddress: String,
         lineWidth: Int,
-        receiptUrl: String?
+        receiptUrl: String?,
+        textEncoding: EscPosTextEncoding,
     ): String =
-        "${transactionId.trim()}|${printerReachabilityCache.keyForAddress(printerAddress)}|$lineWidth|${receiptUrl.orEmpty()}"
+        "${transactionId.trim()}|${printerReachabilityCache.keyForAddress(printerAddress)}|$lineWidth|${textEncoding.name}|${receiptUrl.orEmpty()}"
 
     private fun cachedOrBuildEscPosReceipt(
         useCache: Boolean,
@@ -2508,10 +2661,11 @@ class BluetoothPrinterService @Inject constructor(
         appendAdyenCustomerReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt?,
         appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt?,
         loyaltyPointsEarned: Int?,
-        loyaltyPointsBalance: Int?
+        loyaltyPointsBalance: Int?,
     ): ByteArray {
+        val textEncoding = textEncodingForAddress(printerAddress)
         val receiptUrl = transaction.receiptUrl?.takeIf { it.isNotBlank() }
-        val cacheKey = escPosReceiptCacheKey(transactionId, printerAddress, lineWidth, receiptUrl)
+        val cacheKey = escPosReceiptCacheKey(transactionId, printerAddress, lineWidth, receiptUrl, textEncoding)
         if (useCache) {
             val now = System.currentTimeMillis()
             escPosReceiptPayloadCache[cacheKey]?.let { entry ->
@@ -2521,7 +2675,7 @@ class BluetoothPrinterService @Inject constructor(
                 escPosReceiptPayloadCache.remove(cacheKey)
             }
             val urlAgnosticPrefix =
-                "${transactionId.trim()}|${printerReachabilityCache.keyForAddress(printerAddress)}|$lineWidth|"
+                "${transactionId.trim()}|${printerReachabilityCache.keyForAddress(printerAddress)}|$lineWidth|${textEncoding.name}|"
             escPosReceiptPayloadCache.entries.firstOrNull { (key, entry) ->
                 key.startsWith(urlAgnosticPrefix) &&
                     now - entry.cachedAtMs <= ESC_POS_RECEIPT_CACHE_TTL_MS
@@ -2538,7 +2692,8 @@ class BluetoothPrinterService @Inject constructor(
             appendAdyenCustomerReceipt,
             appendAdyenCashierReceipt,
             loyaltyPointsEarned,
-            loyaltyPointsBalance
+            loyaltyPointsBalance,
+            textEncoding = textEncoding,
         )
         if (useCache) {
             escPosReceiptPayloadCache[cacheKey] = CachedEscPosPayload(payload, System.currentTimeMillis())
@@ -2922,7 +3077,7 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine(leftRight("Burger classique", formatMoney(12.0, settings.currencySymbol), lineWidth))
         sb.appendLine(leftRight("Frites maison", formatMoney(4.5, settings.currencySymbol), lineWidth))
         sb.appendLine(leftRight("Eau plate", formatMoney(2.0, settings.currencySymbol), lineWidth))
-        appendReceiptTotal(sb, labels.total, 20.07, settings.currencySymbol, lineWidth)
+        appendReceiptTotal(sb, labels.grandTotalPayable, 20.07, settings.currencySymbol, lineWidth)
         if (settings.receiptShowVatTable) {
             appendReceiptVatSection(
                 sb,
@@ -2962,10 +3117,10 @@ class BluetoothPrinterService @Inject constructor(
         private const val ESC_POS_RECEIPT_CACHE_TTL_MS = 30 * 60 * 1000L
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
-        /** Thermal digital-receipt QR — matches WebPOS RECEIPT_QR_RASTER_PX_80. */
-        private const val RECEIPT_QR_RASTER_PX_80 = 120
-        /** Thermal digital-receipt QR on 58mm paper — matches WebPOS. */
-        private const val RECEIPT_QR_RASTER_PX_58 = 100
+        /** Thermal receipt QR raster (digital receipt, gift redeem) — matches WebPOS. */
+        private const val RECEIPT_QR_RASTER_PX_80 = 144
+        /** Thermal receipt QR on 58mm — matches WebPOS RECEIPT_QR_RASTER_PX_58. */
+        private const val RECEIPT_QR_RASTER_PX_58 = 120
         private const val LINE_WIDTH = LINE_WIDTH_80
         private val SPP_UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val ESC_INIT = byteArrayOf(0x1B, 0x40)

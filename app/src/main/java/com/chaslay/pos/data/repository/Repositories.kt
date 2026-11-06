@@ -99,6 +99,18 @@ class AuthRepository @Inject constructor(
         val role: com.chaslay.pos.data.local.entity.RoleEntity
     )
 
+    data class MerchantReconcile(val staleMerchantCleared: Boolean = false)
+
+    @Volatile
+    private var emailLoginMerchantChanged = false
+
+    /** True once after cloud email login when [merchantId] changed vs the previous session. */
+    fun takeEmailLoginMerchantChanged(): Boolean {
+        val changed = emailLoginMerchantChanged
+        emailLoginMerchantChanged = false
+        return changed
+    }
+
     companion object {
         /** Cloud merchant users are stored locally above seeded staff IDs. */
         private const val CLOUD_USER_ID_BASE = 100_000L
@@ -273,7 +285,36 @@ class AuthRepository @Inject constructor(
         }
     }
 
+    /**
+     * When POS staff email differs from persisted panel merchant login (e.g. melimelo owner
+     * session left in DataStore while chaslay staff signs in with PIN), drop stale sync state.
+     */
+    suspend fun reconcileMerchantBinding(session: AuthSession): MerchantReconcile {
+        val staffEmail = session.user.email?.trim()?.takeIf { email ->
+            email.isNotEmpty() && !email.startsWith("sync:", ignoreCase = true)
+        }?.lowercase(Locale.getDefault())
+        val dashboardEmail = readDashboardUserEmail()?.lowercase(Locale.getDefault())
+        val mismatch = staffEmail != null && dashboardEmail != null && staffEmail != dashboardEmail
+        if (!mismatch) return MerchantReconcile()
+        syncApiKeyStore.setKey(null)
+        syncPreferences.clearCloudMerchantSession()
+        return MerchantReconcile(staleMerchantCleared = true)
+    }
+
+    private suspend fun readDashboardUserEmail(): String? {
+        val json = syncPreferences.getDashboardUserJson() ?: return null
+        return runCatching {
+            JSONObject(json).optString("email").trim().takeIf { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
     private suspend fun persistCloudDashboardCredentials(body: PosLoginResponse) {
+        val previousMerchantId = syncPreferences.getMerchantId()
+        val incomingMerchantId = body.merchantId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: body.dashboardUser?.merchantId?.trim()?.takeIf { it.isNotEmpty() }
+        emailLoginMerchantChanged = previousMerchantId != null &&
+            incomingMerchantId != null &&
+            previousMerchantId != incomingMerchantId
         body.user.tenantSlug?.trim()?.takeIf { it.isNotEmpty() }?.let { licenseManager.setTenantSlug(it) }
         body.syncApiKey?.trim()?.takeIf { it.isNotEmpty() }?.let { key ->
             syncApiKeyStore.setKey(key)

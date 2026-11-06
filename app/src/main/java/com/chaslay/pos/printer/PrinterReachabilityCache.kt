@@ -37,11 +37,38 @@ class PrinterReachabilityCache @Inject constructor() {
         entries[keyForAddress(trimmed)] = Entry(reachable = false, updatedAtMs = System.currentTimeMillis())
     }
 
+    /** True when a recent probe or print confirmed the printer was reachable. */
+    fun isRecentlyReachable(address: String): Boolean {
+        val trimmed = address.trim()
+        if (trimmed.isBlank()) return false
+        val entry = entries[keyForAddress(trimmed)] ?: return false
+        if (System.currentTimeMillis() - entry.updatedAtMs > POSITIVE_HOLD_MS) return false
+        return entry.reachable
+    }
+
+    /**
+     * Applies probe result for settings UI and print gating. Transient probe failures do not
+     * downgrade a printer that was recently confirmed reachable (Sunmi bind races, USB busy, etc.).
+     */
+    fun resolveAfterProbe(address: String, probedReachable: Boolean): Boolean {
+        val trimmed = address.trim()
+        if (trimmed.isBlank()) return false
+        if (probedReachable) {
+            markReachable(trimmed)
+            return true
+        }
+        if (isRecentlyReachable(trimmed)) return true
+        markUnreachable(trimmed)
+        return false
+    }
+
     fun clear(address: String) {
         entries.remove(keyForAddress(address.trim()))
     }
 
     companion object {
         private const val STALE_MS = 45_000L
+        /** Keep "connected" in Settings after a successful probe/print despite flaky re-probes. */
+        private const val POSITIVE_HOLD_MS = 60_000L
     }
 }

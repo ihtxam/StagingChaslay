@@ -79,6 +79,8 @@ import com.chaslay.pos.data.repository.editablePaymentMethodsForHistory
 import com.chaslay.pos.domain.model.RefundReasonLabels
 import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.payment.AdyenPaymentReceiptStorage
+import com.chaslay.pos.domain.LineItemDiscount.lineDiscountTotal
+import com.chaslay.pos.ui.format.lineItemDiscountLabel
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosShapes
 import java.text.SimpleDateFormat
@@ -109,8 +111,12 @@ fun OrderDetailDialog(
 ) {
     val context = LocalContext.current
     val isSplit = splitOrders.size > 1
-    val hasCustomerCard = AdyenPaymentReceiptStorage.customerReceipt(order) != null
-    val hasMerchantCard = AdyenPaymentReceiptStorage.cashierReceipt(order) != null
+    val hasCustomerCard = AdyenPaymentReceiptStorage.appendable(
+        AdyenPaymentReceiptStorage.customerReceipt(order)
+    ) != null
+    val hasMerchantCard = AdyenPaymentReceiptStorage.appendable(
+        AdyenPaymentReceiptStorage.cashierReceipt(order)
+    ) != null
     val dateFmt = remember { SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()) }
     val refundTotal = order.refundAmount.coerceAtLeast(0.0)
     val netTotal = (order.total - refundTotal).coerceAtLeast(0.0)
@@ -953,20 +959,34 @@ private fun BillLine(text: String, value: String, bold: Boolean = false, color: 
 
 @Composable
 private fun ProductTimelineRow(item: TransactionItemEntity, currencySymbol: String) {
+    val lineDiscount = item.lineDiscountTotal()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top
     ) {
-        Text(
-            "${item.quantity}× ${item.productName}",
-            modifier = Modifier.weight(1f).padding(end = 8.dp),
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            color = posUiColors().textPrimary
-        )
+        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(
+                "${item.quantity}× ${item.productName}",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = posUiColors().textPrimary
+            )
+            if (lineDiscount > 0) {
+                Text(
+                    lineItemDiscountLabel(
+                        notes = item.notes,
+                        lineDiscountAmount = lineDiscount,
+                        currencySymbol = currencySymbol,
+                        formatMoney = ::formatMoney,
+                    ),
+                    fontSize = 11.sp,
+                    color = Color(0xFFE67E22),
+                )
+            }
+        }
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 formatMoney(item.lineTotal, currencySymbol),

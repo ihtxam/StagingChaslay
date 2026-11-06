@@ -12,12 +12,18 @@ import com.chaslay.pos.data.remote.dto.PushCatalogRequest
 import com.chaslay.pos.data.remote.dto.PushCatalogResponse
 import com.chaslay.pos.data.remote.dto.PushTerminalsRequest
 import com.chaslay.pos.data.remote.dto.PushTerminalsResponse
+import com.chaslay.pos.data.remote.dto.ReservationActionRequest
+import com.chaslay.pos.data.remote.dto.ReservationActionResponse
+import com.chaslay.pos.data.remote.dto.ReservationsConfigRequest
+import com.chaslay.pos.data.remote.dto.ReservationsConfigResponse
+import com.chaslay.pos.data.remote.dto.ReservationsSyncResponse
 import com.chaslay.pos.data.remote.dto.StaffSyncResponse
 import com.chaslay.pos.data.remote.dto.VerifyStaffPinRequest
 import com.chaslay.pos.data.remote.dto.VerifyStaffPinResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -33,6 +39,18 @@ interface SyncApi {
 
     @GET("v1/sync/payment-config")
     suspend fun paymentConfig(): PaymentConfigResponse
+
+    @GET("v1/sync/reservations")
+    suspend fun reservations(): ReservationsSyncResponse
+
+    @PUT("v1/sync/reservations/config")
+    suspend fun updateReservationsConfig(@Body body: ReservationsConfigRequest): ReservationsConfigResponse
+
+    @POST("v1/sync/reservations/{id}/action")
+    suspend fun reservationAction(
+        @Path("id") id: String,
+        @Body body: ReservationActionRequest
+    ): ReservationActionResponse
 
     @POST("v1/sync/cds/push")
     suspend fun pushCustomerDisplayState(@Body body: CdsPushRequest): AckResponse

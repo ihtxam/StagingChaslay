@@ -66,6 +66,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.TransactionEntity
 import com.chaslay.pos.domain.model.PaymentMethod
+import com.chaslay.pos.domain.model.PaymentTenderNotes
 import com.chaslay.pos.receipt.ReceiptQrGenerator
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosShapes
@@ -103,6 +104,37 @@ fun OrderCompleteDialog(
     val qrGenerator = remember { ReceiptQrGenerator() }
     val showMultiSplitReceiptPrint = completedSplitOrders.size > 1 &&
         (splitPaymentIndex == null || splitPaymentTotal == null || splitPaymentIndex >= splitPaymentTotal)
+
+    val tenderLines = remember(transaction.notes) {
+        PaymentTenderNotes.parse(transaction.notes)
+    }
+    val tenderSum = tenderLines.sumOf { it.amount }
+    val amountTenderedField = transaction.amountTendered?.takeIf { it > 0.001 }
+    val displayCollected = when {
+        tenderSum > 0.001 -> tenderSum
+        amountTenderedField != null -> amountTenderedField
+        else -> transaction.total
+    }
+    val hasRefundOrGoodwill =
+        transaction.refundAmount > 0.001 || transaction.goodwillAmount > 0.001
+    val showCollectedLine =
+        !hasRefundOrGoodwill &&
+            (tenderLines.isNotEmpty() || kotlin.math.abs(displayCollected - transaction.total) > 0.009)
+    val orderCompleteHasCardTender =
+        tenderLines.any {
+            it.method == PaymentMethod.CARD ||
+                it.method == PaymentMethod.ADYEN_TERMINAL ||
+                it.method == PaymentMethod.TAP_TO_PAY
+        } ||
+            transaction.paymentMethod == PaymentMethod.CARD ||
+            transaction.paymentMethod == PaymentMethod.ADYEN_TERMINAL ||
+            transaction.paymentMethod == PaymentMethod.TAP_TO_PAY
+    val computedChangeFromCollected =
+        if (!hasRefundOrGoodwill && !orderCompleteHasCardTender) {
+            (displayCollected - transaction.total).coerceAtLeast(0.0)
+        } else {
+            0.0
+        }
 
     Dialog(
         onDismissRequest = onDone,
@@ -162,9 +194,10 @@ fun OrderCompleteDialog(
 
                     val bodyScroll = rememberScrollState()
                     val ui = posUiColors()
+                    // fill = false: body only uses height it needs so Print/OK stay under content (no huge gap).
                     Box(
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1f, fill = false)
                             .fillMaxWidth()
                     ) {
                         Row(
@@ -188,22 +221,60 @@ fun OrderCompleteDialog(
                             color = posUiColors().surfaceMuted
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    stringResource(R.string.total_paid),
-                                    fontSize = 10.sp,
-                                    color = posUiColors().textSecondary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    letterSpacing = 0.8.sp
-                                )
-                                Text(
-                                    formatMoney(transaction.total, currencySymbol),
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = posUiColors().textPrimary,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                                transaction.changeDue?.takeIf { it > 0 }?.let { change ->
+                                if (!hasRefundOrGoodwill) {
+                                    Text(
+                                        stringResource(R.string.order_complete_amount_due),
+                                        fontSize = 10.sp,
+                                        color = posUiColors().textSecondary,
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = 0.8.sp
+                                    )
+                                    Text(
+                                        formatMoney(transaction.total, currencySymbol),
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = posUiColors().textPrimary,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                    if (showCollectedLine) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            stringResource(R.string.order_complete_collected),
+                                            fontSize = 10.sp,
+                                            color = posUiColors().textSecondary,
+                                            fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = 0.8.sp
+                                        )
+                                        Text(
+                                            formatMoney(displayCollected, currencySymbol),
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = posUiColors().textPrimary,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        stringResource(R.string.total_paid),
+                                        fontSize = 10.sp,
+                                        color = posUiColors().textSecondary,
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = 0.8.sp
+                                    )
+                                    Text(
+                                        formatMoney(transaction.total, currencySymbol),
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = posUiColors().textPrimary,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                                val changeToShow = transaction.changeDue?.takeIf { it > 0.01 }
+                                    ?: computedChangeFromCollected.takeIf { it > 0.01 }
+                                changeToShow?.let { change ->
                                     Text(
                                         stringResource(
                                             R.string.checkout_change_due,
@@ -353,22 +424,10 @@ fun OrderCompleteDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(
-                            onClick = onDone,
-                            modifier = Modifier.weight(0.85f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                stringResource(R.string.cancel),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = ui.textSecondary
-                            )
-                        }
                         OutlinedButton(
                             onClick = onPrintReceipt,
                             enabled = !isPrintingReceipt,
-                            modifier = Modifier.weight(1.15f),
+                            modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                         ) {
@@ -393,7 +452,7 @@ fun OrderCompleteDialog(
                         }
                         Button(
                             onClick = onDone,
-                            modifier = Modifier.weight(0.85f),
+                            modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = PosColors.Primary),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)

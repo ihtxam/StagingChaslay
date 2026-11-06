@@ -103,6 +103,7 @@ import com.chaslay.pos.ui.components.settingsSectionIconRes
 import com.chaslay.pos.ui.components.settingsSectionMaterialIcon
 import com.chaslay.pos.ui.tableplan.TablePlanDesignerContent
 import com.chaslay.pos.ui.theme.PosColors
+import com.chaslay.pos.ui.theme.PosDimens
 import com.chaslay.pos.ui.theme.PosSwitch
 import com.chaslay.pos.ui.theme.PosShapes
 import androidx.compose.foundation.BorderStroke
@@ -263,34 +264,49 @@ fun SettingsScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .padding(horizontal = PosDimens.Space3, vertical = PosDimens.Space2)
             ) {
-                Row(
+                SettingsPageHeader(
+                    title = stringResource(R.string.settings_section_tables),
+                    subtitle = stringResource(R.string.settings_tables_page_subtitle),
+                )
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(bottom = PosDimens.Space3),
+                    shape = PosShapes.Large,
+                    colors = CardDefaults.cardColors(containerColor = ui.surface),
+                    border = BorderStroke(1.dp, ui.border),
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(
-                            stringResource(R.string.track_covers_seating_plan),
-                            color = ui.textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            stringResource(R.string.track_covers_help),
-                            color = ui.textSecondary,
-                            fontSize = 11.sp
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                stringResource(R.string.track_covers_seating_plan),
+                                color = ui.textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                stringResource(R.string.track_covers_help),
+                                color = ui.textSecondary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        PosSwitch(
+                            checked = state.trackCoversFromSeatingPlan,
+                            onCheckedChange = {
+                                viewModel.updateTrackCoversFromSeatingPlan(it)
+                                viewModel.saveSettings()
+                            }
                         )
                     }
-                    PosSwitch(
-                        checked = state.trackCoversFromSeatingPlan,
-                        onCheckedChange = {
-                            viewModel.updateTrackCoversFromSeatingPlan(it)
-                            viewModel.saveSettings()
-                        }
-                    )
                 }
                 TablePlanDesignerContent(
                     modifier = Modifier
@@ -475,6 +491,31 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = ui.textSecondary
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingSwitch(
+                stringResource(R.string.settings_reservations_enabled),
+                state.reservationsEnabled,
+                viewModel::updateReservationsEnabled,
+                enabled = state.merchantCloudLinked && !state.reservationsToggleSaving
+            )
+            Text(
+                stringResource(
+                    if (state.merchantCloudLinked) {
+                        R.string.settings_reservations_enabled_hint
+                    } else {
+                        R.string.settings_reservations_cloud_required
+                    }
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = ui.textSecondary
+            )
+            if (state.reservationsToggleSaving) {
+                Text(
+                    stringResource(R.string.settings_reservations_saving),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ui.textSecondary
+                )
+            }
             if (state.coursesEnabled) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -527,17 +568,6 @@ fun SettingsScreen(
                 stringResource(R.string.pos_retail_delivery),
                 state.retailDeliveryEnabled,
                 viewModel::updateRetailDeliveryEnabled
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingSwitch(
-                stringResource(R.string.pos_retail_weighed_custom_entry),
-                state.retailWeighedCustomEntryEnabled,
-                viewModel::updateRetailWeighedCustomEntryEnabled
-            )
-            Text(
-                stringResource(R.string.pos_retail_weighed_custom_entry_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = ui.textSecondary
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -678,29 +708,6 @@ fun SettingsScreen(
             Text(stringResource(R.string.add_preset))
         }
         }
-
-        SettingsSectionCard(
-            title = stringResource(R.string.license_app_info_title),
-            icon = Icons.Outlined.Info,
-        ) {
-            SettingsReadOnlyRow(
-                label = stringResource(R.string.app_version),
-                value = stringResource(
-                    R.string.app_version_format,
-                    BuildConfig.VERSION_NAME,
-                    BuildConfig.VERSION_CODE,
-                ),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                stringResource(R.string.license_company_info_title),
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = ui.textPrimary,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            SettingsRichHtmlBlock(html = state.platformAboutHtml)
-        }
         }
 
         if (state.selectedSection == SettingsSection.VAT) {
@@ -835,6 +842,19 @@ fun SettingsScreen(
             fontSize = 11.sp,
             color = posUiColors().textMuted
         )
+        if (state.posMode == PosMode.RETAIL) {
+            SettingSwitch(
+                stringResource(R.string.pos_retail_weighed_custom_entry),
+                state.retailWeighedCustomEntryEnabled,
+                viewModel::updateRetailWeighedCustomEntryEnabled
+            )
+            Text(
+                stringResource(R.string.pos_retail_weighed_custom_entry_hint),
+                fontSize = 12.sp,
+                color = posUiColors().textSecondary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         SettingSwitch(stringResource(R.string.scale_enabled), state.scaleEnabled, viewModel::updateScaleEnabled)
         state.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { selectedAddress ->
             val needsPermission = state.scaleUsbDeviceAttached && !state.scaleUsbHasPermission
@@ -1015,7 +1035,9 @@ fun SettingsScreen(
             ReceiptSettingsSection(state = state, viewModel = viewModel)
         }
 
-        if (state.selectedSection == SettingsSection.FLOOR_DEVICES) {
+        if (state.selectedSection == SettingsSection.FLOOR_DEVICES &&
+            state.posMode == PosMode.RESTAURANT
+        ) {
             SettingsFloorDevicesSection(state = state, viewModel = viewModel)
         }
 
@@ -1147,7 +1169,7 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.LICENSE) {
-            LicenseSettingsSection()
+            LicenseSettingsSection(platformAboutHtml = state.platformAboutHtml)
         }
 
         if (state.selectedSection == SettingsSection.GENERAL) {

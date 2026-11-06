@@ -47,6 +47,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.chaslay.pos.sync.FloorLanServer
@@ -56,6 +58,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+
+private const val PRINTER_REACHABILITY_DEBOUNCE_MS = 1_500L
 
 data class PrinterLinkProduct(val id: Long, val name: String)
 data class PrinterLinkCategory(val id: Long, val name: String, val products: List<PrinterLinkProduct>)
@@ -93,11 +97,22 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
             when (section) {
                 SettingsSection.USERS_ACCOUNTS -> canManageUsers
                 SettingsSection.TABLES -> restaurantMode
+                SettingsSection.FLOOR_DEVICES -> restaurantMode
                 else -> true
             }
         }
     }
 }
+
+/** When not in restaurant mode, Tables and Floor & Waiters are hidden — fall back to General. */
+private fun coerceRestaurantOnlySection(posMode: PosMode, selected: SettingsSection): SettingsSection =
+    if (posMode != PosMode.RESTAURANT &&
+        (selected == SettingsSection.TABLES || selected == SettingsSection.FLOOR_DEVICES)
+    ) {
+        SettingsSection.GENERAL
+    } else {
+        selected
+    }
 
 data class SettingsUiState(
     val businessName: String = "",
@@ -211,6 +226,9 @@ data class SettingsUiState(
     val retailTakeawayEnabled: Boolean = false,
     val retailDeliveryEnabled: Boolean = false,
     val retailWeighedCustomEntryEnabled: Boolean = false,
+    val reservationsEnabled: Boolean = false,
+    val reservationsToggleSaving: Boolean = false,
+    val merchantCloudLinked: Boolean = false,
     val requireTableForDineIn: Boolean = true,
     val openHour: String = "10",
     val openMinute: String = "0",
@@ -254,6 +272,8 @@ class SettingsViewModel @Inject constructor(
     private val terminalSyncRepository: com.chaslay.pos.sync.TerminalSyncRepository,
     private val syncService: com.chaslay.pos.sync.SyncService,
     private val menuSyncRepository: com.chaslay.pos.sync.MenuSyncRepository,
+    private val reservationSyncRepository: com.chaslay.pos.sync.ReservationSyncRepository,
+    private val syncApiKeyStore: com.chaslay.pos.data.preferences.SyncApiKeyStore,
     private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
     private val authRepository: AuthRepository,
     private val tapToPayEngine: com.chaslay.pos.payment.taptopay.TapToPayEngine
@@ -263,6 +283,7 @@ class SettingsViewModel @Inject constructor(
     val launchOnlineSettingsIntent: Flow<Intent> = _launchOnlineSettingsIntent.receiveAsFlow()
 
     private var currentSettings = BusinessSettingsEntity()
+    private var printerReachabilityRefreshJob: Job? = null
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
@@ -365,6 +386,7 @@ class SettingsViewModel @Inject constructor(
                     logoUri = settings.logoUri,
                     receiptTemplateName = settings.receiptTemplateName,
                     posMode = settings.posMode,
+                    selectedSection = coerceRestaurantOnlySection(settings.posMode, it.selectedSection),
                     posModeManagedByCloud = cloudMerchant || settings.paymentMethodsManagedByCloud,
                     coursesEnabled = settings.coursesEnabled,
                     courseSendMode = CourseSendMode.fromKey(settings.courseSendMode),
@@ -373,6 +395,8 @@ class SettingsViewModel @Inject constructor(
                     retailTakeawayEnabled = settings.retailTakeawayEnabled,
                     retailDeliveryEnabled = settings.retailDeliveryEnabled,
                     retailWeighedCustomEntryEnabled = settings.retailWeighedCustomEntryEnabled,
+                    reservationsEnabled = settings.reservationsEnabled,
+                    merchantCloudLinked = syncApiKeyStore.hasKey(),
                     requireTableForDineIn = settings.requireTableForDineIn,
                     trackCoversFromSeatingPlan = settings.trackCoversFromSeatingPlan,
                     floorSyncEnabled = settings.floorSyncEnabled,
@@ -422,11 +446,9 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun selectSection(section: SettingsSection) {
-        _uiState.update { it.copy(selectedSection = section, message = null) }
-        if (section == SettingsSection.PRINTERS) {
-            refreshPrinterConnectionState()
-        }
-        if (section == SettingsSection.SCALE) {
+        val resolved = coerceRestaurantOnlySection(_uiState.value.posMode, section)
+        _uiState.update { it.copy(selectedSection = resolved, message = null) }
+        if (resolved == SettingsSection.SCALE) {
             refreshScaleConnectionState()
             usbPrinterManager.requestMonitoredScalePermissionFromSettings(_uiState.value.scaleUsbAddress) { granted ->
                 if (granted) refreshScaleConnectionState()
@@ -619,7 +641,9 @@ class SettingsViewModel @Inject constructor(
         }
 
     fun refreshPrinterConnectionState() {
-        viewModelScope.launch {
+        printerReachabilityRefreshJob?.cancel()
+        printerReachabilityRefreshJob = viewModelScope.launch {
+            delay(PRINTER_REACHABILITY_DEBOUNCE_MS)
             val printers = _uiState.value.savedPrinters
             if (printers.isEmpty()) {
                 _uiState.update { it.copy(printerReachability = emptyMap(), isProbingPrinters = false) }
@@ -830,12 +854,54 @@ class SettingsViewModel @Inject constructor(
     fun updatePosMode(mode: PosMode) = _uiState.update {
         it.copy(
             posMode = mode,
-            requireTableForDineIn = if (mode == PosMode.RETAIL) false else it.requireTableForDineIn
+            requireTableForDineIn = if (mode == PosMode.RETAIL) false else it.requireTableForDineIn,
+            selectedSection = coerceRestaurantOnlySection(mode, it.selectedSection),
         )
     }
     fun updateCoursesEnabled(enabled: Boolean) = _uiState.update { it.copy(coursesEnabled = enabled) }
     fun updateCourseSendMode(mode: CourseSendMode) = _uiState.update { it.copy(courseSendMode = mode) }
     fun updateTablesEnabled(enabled: Boolean) = _uiState.update { it.copy(tablesEnabled = enabled) }
+
+    fun updateReservationsEnabled(enabled: Boolean) {
+        if (_uiState.value.reservationsToggleSaving) return
+        if (!syncApiKeyStore.hasKey()) {
+            _uiState.update {
+                it.copy(message = appContext.getString(R.string.settings_reservations_cloud_required))
+            }
+            return
+        }
+        val previous = _uiState.value.reservationsEnabled
+        _uiState.update {
+            it.copy(reservationsEnabled = enabled, reservationsToggleSaving = true, message = null)
+        }
+        viewModelScope.launch {
+            val result = reservationSyncRepository.setModuleEnabled(enabled)
+            if (result.success) {
+                runCatching { terminalSyncRepository.syncTerminals() }
+                if (enabled) {
+                    runCatching { reservationSyncRepository.syncReservations() }
+                } else {
+                    runCatching { reservationSyncRepository.syncReservations() }
+                }
+                currentSettings = settingsRepository.getSettings()
+                _uiState.update {
+                    it.copy(
+                        reservationsEnabled = currentSettings.reservationsEnabled,
+                        reservationsToggleSaving = false,
+                        message = "Settings saved"
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        reservationsEnabled = previous,
+                        reservationsToggleSaving = false,
+                        message = result.error ?: appContext.getString(R.string.reservations_action_failed)
+                    )
+                }
+            }
+        }
+    }
     fun updateRetailDineInEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDineInEnabled = enabled) }
 
     fun updateRetailWeighedCustomEntryEnabled(enabled: Boolean) =
@@ -893,6 +959,8 @@ class SettingsViewModel @Inject constructor(
                 closeMinute = settings.closeMinute.toString(),
                 language = AppLanguage.fromCode(settings.defaultLanguage),
                 platformAboutHtml = settings.platformAboutHtml.orEmpty(),
+                posMode = settings.posMode,
+                selectedSection = coerceRestaurantOnlySection(settings.posMode, it.selectedSection),
             )
         }
     }
@@ -1707,6 +1775,7 @@ class SettingsViewModel @Inject constructor(
             retailTakeawayEnabled = state.retailTakeawayEnabled,
             retailDeliveryEnabled = state.retailDeliveryEnabled,
             retailWeighedCustomEntryEnabled = state.retailWeighedCustomEntryEnabled,
+            reservationsEnabled = state.reservationsEnabled,
             requireTableForDineIn = state.requireTableForDineIn,
             trackCoversFromSeatingPlan = state.trackCoversFromSeatingPlan,
             floorSyncEnabled = state.floorSyncEnabled,

@@ -249,7 +249,52 @@ data class SyncFeaturesDto(
     @SerializedName("courses_enabled") val coursesEnabled: Boolean = false,
     @SerializedName("floor_plan_enabled") val floorPlanEnabled: Boolean = false,
     @SerializedName("pax_ordering_enabled") val paxOrderingEnabled: Boolean = false,
-    @SerializedName("shifts_enabled") val shiftsEnabled: Boolean = false
+    @SerializedName("shifts_enabled") val shiftsEnabled: Boolean = false,
+    @SerializedName("reservations_enabled") val reservationsEnabled: Boolean = false
+)
+
+data class SyncReservationDto(
+    val id: String,
+    val code: String,
+    @SerializedName("guest_name") val guestName: String,
+    @SerializedName("guest_phone") val guestPhone: String,
+    @SerializedName("guest_email") val guestEmail: String? = null,
+    @SerializedName("party_size") val partySize: Int = 2,
+    @SerializedName("reserved_at") val reservedAt: String,
+    val status: String,
+    @SerializedName("table_id") val tableId: String? = null,
+    @SerializedName("table_label") val tableLabel: String? = null,
+    val notes: String? = null,
+    @SerializedName("internal_notes") val internalNotes: String? = null,
+    val source: String? = null
+)
+
+data class ReservationsSyncResponse(
+    val serverTime: Long = 0L,
+    val reservations: List<SyncReservationDto> = emptyList(),
+    @SerializedName("reserved_table_ids") val reservedTableIds: List<String> = emptyList()
+)
+
+data class ReservationsConfigRequest(
+    val enabled: Boolean
+)
+
+data class ReservationsConfigResponse(
+    val ok: Boolean = true,
+    val enabled: Boolean = false
+)
+
+data class ReservationActionRequest(
+    val action: String,
+    val tableId: String? = null,
+    val cancelReason: String? = null,
+    val sendRejectionEmail: Boolean? = null
+)
+
+data class ReservationActionResponse(
+    val ok: Boolean = true,
+    val reservation: SyncReservationDto? = null,
+    val error: String? = null
 )
 
 data class SyncCheckoutDiscountPresetDto(

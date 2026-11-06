@@ -27,7 +27,11 @@ fun AdyenConnectionTestResult.toDisplayMessage(context: Context): String {
                 detail?.takeIf { it.isNotBlank() } ?: context.getString(R.string.adyen_test_network_unknown),
             )
         AdyenTestMessageCode.API_ERROR ->
-            detail?.takeIf { it.isNotBlank() }
-                ?: context.getString(R.string.adyen_test_failed_generic)
+            when {
+                detail != null && isAdyenAuthenticationFailure(detail) ->
+                    context.getString(R.string.terminal_error_auth)
+                detail?.isNotBlank() == true -> detail
+                else -> context.getString(R.string.adyen_test_failed_generic)
+            }
     }
 }

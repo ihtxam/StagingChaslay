@@ -19,38 +19,40 @@ function readConst(source, name) {
   return m ? Number(m[1]) : null;
 }
 
-const EXPECT_80 = 120;
-const EXPECT_58 = 100;
+/** Expected sizes after +20% scale (Nov 2026). */
+const EXPECT = {
+  RECEIPT_QR_RASTER_PX_80: 144,
+  RECEIPT_QR_RASTER_PX_58: 120,
+  GIFT_CARD_REDEEM_QR_RASTER_PX_80: 144,
+  GIFT_CARD_REDEEM_QR_RASTER_PX_58: 115,
+  RECEIPT_DUAL_QR_RASTER_PX_80: 35,
+  RECEIPT_DUAL_QR_RASTER_PX_58: 28,
+  RECEIPT_QR_CANVAS_PX_80: 193,
+  RECEIPT_QR_CANVAS_PX_58: 121,
+  RECEIPT_QR_ESCPOS_MODULE_SIZE: 2,
+  GIFT_CARD_REDEEM_QR_ESCPOS_MODULE_SIZE: 5,
+  DELIVERY_SLIP_QR_RASTER_PX_80: 384,
+  DELIVERY_SLIP_QR_RASTER_PX_58: 336,
+};
 
-const web80 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_80');
-const web58 = readConst(qrTs, 'RECEIPT_QR_RASTER_PX_58');
-const and80 = readConst(androidKt, 'RECEIPT_QR_RASTER_PX_80');
-const and58 = readConst(androidKt, 'RECEIPT_QR_RASTER_PX_58');
 const webEccM = /ecc:\s*'M'/.test(qrTs) || /ecc = opts\?\.ecc \?\? 'M'/.test(qrTs);
 const androidEccM = /ErrorCorrectionLevel\.M/.test(
   readFileSync(join(root, 'app/src/main/java/com/chaslay/pos/receipt/ReceiptQrGenerator.kt'), 'utf8')
 );
 
-const ok =
-  web80 === EXPECT_80 &&
-  web58 === EXPECT_58 &&
-  and80 === EXPECT_80 &&
-  and58 === EXPECT_58 &&
-  webEccM &&
-  androidEccM;
-
+let ok = webEccM && androidEccM;
 console.log('Receipt QR size check:', ok ? 'PASS' : 'FAIL');
-console.log(`  WebPOS 80mm: ${web80} (expected ${EXPECT_80})`);
-console.log(`  WebPOS 58mm: ${web58} (expected ${EXPECT_58})`);
-console.log(`  Android 80mm: ${and80} (expected ${EXPECT_80})`);
-console.log(`  Android 58mm: ${and58} (expected ${EXPECT_58})`);
 console.log(`  WebPOS ECC-M: ${webEccM}`);
 console.log(`  Android ECC-M: ${androidEccM}`);
 
-const slip80 = readConst(qrTs, 'DELIVERY_SLIP_QR_RASTER_PX_80');
-const slip58 = readConst(qrTs, 'DELIVERY_SLIP_QR_RASTER_PX_58');
-const slipOk = slip80 === 384 && slip58 === 280;
-console.log(`  Delivery slip QR 80mm: ${slip80} (expected 384)`);
-console.log(`  Delivery slip QR 58mm: ${slip58} (expected 280)`);
+for (const [name, expected] of Object.entries(EXPECT)) {
+  const web = readConst(qrTs, name);
+  const and = name.startsWith('RECEIPT_QR_RASTER')
+    ? readConst(androidKt, name)
+    : null;
+  const match = web === expected && (and === null || and === expected);
+  if (!match) ok = false;
+  console.log(`  ${name}: web=${web} android=${and ?? 'n/a'} (expected ${expected}) ${match ? 'OK' : 'FAIL'}`);
+}
 
-if (!ok || !slipOk) process.exit(1);
+if (!ok) process.exit(1);
