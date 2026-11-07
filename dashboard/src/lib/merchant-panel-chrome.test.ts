@@ -35,8 +35,8 @@ assert.match(dashboard, /storeName=\{merchantShopName\}/);
 assert.match(dashboard, /settings\?\.businessName/);
 assert.match(
   dashboard,
-  /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0/,
-  'settings route must not double-stack panel-main padding (#917)'
+  /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4/,
+  'settings route uses the same panel-main padding as other merchant pages; shell has no extra horizontal gutter'
 );
 
 assert.match(
@@ -54,8 +54,8 @@ assert.match(sidebar, /<Settings \/>/);
 
 assert.match(
   settings,
-  /merchant-settings-shell[\s\S]*max-w-6xl/,
-  'settings shell should center content with a max width'
+  /merchant-settings-shell[\s\S]*sm:max-w-\[1400px\]/,
+  'settings shell should match overview width cap from sm up; horizontal inset comes from panel-main only'
 );
 assert.match(
   settings,

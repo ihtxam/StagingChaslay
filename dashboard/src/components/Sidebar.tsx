@@ -292,7 +292,7 @@ export default function Sidebar({
           isOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
         } fixed lg:relative lg:translate-x-0 lg:pointer-events-auto ${
           railMode ? 'w-[4.5rem] lg:w-[4.5rem]' : isAgency ? 'w-60' : 'w-56'
-        } h-dvh max-h-dvh lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
+        } h-[var(--panel-vvh,100dvh)] max-h-[var(--panel-vvh,100dvh)] lg:h-full lg:max-h-full transition-transform duration-200 z-40 flex flex-col shrink-0`}
       >
         <div className={`panel-sidebar-divider px-4 py-3 border-b flex items-center justify-between shrink-0 ${isAgency ? 'border-stone-100' : ''}`}>
           <div className="flex min-w-0 items-center">

@@ -2255,7 +2255,7 @@ export default function Settings() {
 
   return (
     <div
-      className="merchant-settings-shell mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col gap-3 overflow-hidden px-1 py-2 sm:gap-4 sm:px-2 sm:py-3"
+      className="merchant-settings-shell flex w-full max-w-none flex-1 min-h-0 flex-col gap-2 overflow-hidden px-0 py-2 sm:max-w-[1400px] sm:gap-4 sm:py-3"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

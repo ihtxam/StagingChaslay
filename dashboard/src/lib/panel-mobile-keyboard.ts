@@ -45,13 +45,17 @@ export function resetPanelViewportScroll(): void {
   }
 }
 
-function clearKeyboardPin(root: HTMLElement): void {
+function clearPanelKeyboardPinState(root: HTMLElement): void {
   root.classList.remove('panel-kb-open');
-  root.style.removeProperty('--panel-vvh');
   root.style.removeProperty('--panel-vv-top');
   root.style.removeProperty('--panel-vv-left');
   root.style.removeProperty('--panel-vvw');
   document.body.style.removeProperty('overflow');
+}
+
+function clearKeyboardPin(root: HTMLElement): void {
+  clearPanelKeyboardPinState(root);
+  root.style.removeProperty('--panel-vvh');
 }
 
 export function clearWebPosVisualViewport(): void {
@@ -121,7 +125,19 @@ export function syncPanelVisualViewportHeight(): void {
     document.body.style.overflow = 'hidden';
     return;
   }
-  clearKeyboardPin(root);
+  clearPanelKeyboardPinState(root);
+  /*
+   * iOS Safari: `100dvh` / large viewport units are taller than the *visible*
+   * layout when the tab/URL chrome is showing, so the fixed panel shell and
+   * drawer look letterboxed (gray margins). Keep --panel-vvh aligned with
+   * visualViewport.height whenever the soft keyboard is not pinned.
+   */
+  const narrow = window.matchMedia('(max-width: 1023px)').matches;
+  if (narrow && isIosVisualViewportPin()) {
+    root.style.setProperty('--panel-vvh', `${Math.round(vv.height)}px`);
+  } else {
+    root.style.removeProperty('--panel-vvh');
+  }
   // A focused field on Settings can scroll the layout viewport. That offset
   // stays after opening POS and looks like padding on the left and top.
   resetPanelViewportScroll();
