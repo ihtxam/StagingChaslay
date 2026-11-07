@@ -39,7 +39,7 @@ import {
   localDateTimeToIso,
   type StoreHours,
 } from '@/lib/shop-hours';
-import { roundMoney2, roundTo005, roundingAdjustment } from '@/lib/money';
+import { extractVatFromGross, roundMoney2, roundTo005, roundingAdjustment } from '@/lib/money';
 import { formatShopChannelEta } from '@/lib/shop-eta';
 import { adjustTaxForOrderDiscount } from '@/lib/tax-discount';
 import { shopDocumentTitle } from '@/lib/brand';
@@ -647,7 +647,12 @@ export default function CheckoutPage() {
     taxIncludedInPrice: merchant?.taxIncludedInPrice === true,
     vatAfterDiscount: merchant?.vatAfterDiscount !== false,
   };
-  const grossTax = roundMoney2(((subtotal + deliveryFee) * taxRate) / 100);
+  const grossTax = taxOpts.taxIncludedInPrice
+    ? roundMoney2(
+        extractVatFromGross(subtotal, taxRate) +
+          (deliveryFee > 0 ? extractVatFromGross(deliveryFee, taxRate) : 0)
+      )
+    : roundMoney2(((subtotal + deliveryFee) * taxRate) / 100);
   const taxAfterOffer = adjustTaxForOrderDiscount(
     grossTax,
     subtotal + deliveryFee,
@@ -662,7 +667,9 @@ export default function CheckoutPage() {
   const balanceAfterRewards = Math.max(0, loyaltyBalance - rewardPointsInCart);
   // Points can cover food + delivery + tax (not tip / card fee)
   const redeemableBase = roundMoney2(
-    Math.max(0, subtotal - offerDiscount - voucherDiscount) + deliveryFee + taxAfterOffer
+    Math.max(0, subtotal - offerDiscount - voucherDiscount) +
+      deliveryFee +
+      (taxOpts.taxIncludedInPrice ? 0 : taxAfterOffer)
   );
   const maxCashPoints = Math.min(
     Math.floor(Math.max(0, redeemableBase)) * rate,
@@ -682,7 +689,15 @@ export default function CheckoutPage() {
     taxOpts
   );
   const preGiftTotal =
-    Math.max(0, subtotal + deliveryFee + tax - offerDiscount - voucherDiscount - pointsDiscount) + tip;
+    Math.max(
+      0,
+      subtotal +
+        deliveryFee +
+        (taxOpts.taxIncludedInPrice ? 0 : tax) -
+        offerDiscount -
+        voucherDiscount -
+        pointsDiscount
+    ) + tip;
   const giftCardDiscount =
     draft.giftCardCode?.trim() && giftCardBalance > 0
       ? roundMoney2(Math.min(giftCardBalance, preGiftTotal))

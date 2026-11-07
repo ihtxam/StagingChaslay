@@ -159,6 +159,7 @@ import SettingsAccountingTab from './settings/SettingsAccountingTab';
 import SettingsExtraModulesTab from './settings/SettingsExtraModulesTab';
 import SettingsPrintCompanionSection from '@/components/settings/SettingsPrintCompanionSection';
 import SettingsAboutTab from './settings/SettingsAboutTab';
+import SettingsLicenseTab from './settings/SettingsLicenseTab';
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { isLicensedSettingsAddonTab } from './settings/settings-extra-modules';
@@ -4593,11 +4594,11 @@ export default function Settings() {
                     ? t('settingsNavPrinters')
                     : tab === 'scale'
                       ? t('settingsNavScale')
-                      : t('settingsReceiptDesign')
+                      : t('settingsNavReceipt')
                 }
                 subtitle={
                   tab === 'receipt'
-                    ? t('settingsReceiptDesignHint')
+                    ? t('settingsReceiptHint')
                     : tab === 'printers'
                       ? t('settingsPrintersSubtitle')
                       : t('settingsScaleHint')
@@ -4618,7 +4619,7 @@ export default function Settings() {
               >
               <div className="space-y-5 min-w-0">
               {tab === 'receipt' && (
-              <Section icon={ScrollText} accent={settingsDash.accent} title={t('settingsReceiptDesign')} description={t('settingsReceiptDesignHint')}>
+              <Section icon={ScrollText} accent={settingsDash.accent} title={t('settingsNavReceipt')} description={t('settingsReceiptHint')}>
                 <Field label={t('receiptLanguage')}>
                   <select
                     className="input"
@@ -6105,7 +6106,11 @@ export default function Settings() {
             <SettingsExtraModulesTab settings={settings} isRetailMerchant={isRetailMerchant} />
           ) : null}
 
-          {(tab === 'about' || tab === 'license') && settings ? (
+          {tab === 'license' && settings ? (
+            <SettingsLicenseTab settings={settings} isRetailMerchant={isRetailMerchant} />
+          ) : null}
+
+          {tab === 'about' && settings ? (
             <SettingsAboutTab settings={settings} isRetailMerchant={isRetailMerchant} />
           ) : null}
 

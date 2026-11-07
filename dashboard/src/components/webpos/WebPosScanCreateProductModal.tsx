@@ -160,6 +160,7 @@ export default function WebPosScanCreateProductModal({
     <WebPosKeypadModalShell
       open={open}
       onClose={onClose}
+      size="lg"
       title={t('webPosScanCreateProductTitle')}
       subtitle={t('webPosScanCreateProductHint').replace('{code}', barcode)}
       zIndexClass="z-[85]"

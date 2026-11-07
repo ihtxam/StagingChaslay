@@ -707,34 +707,40 @@ export default function Modifiers() {
 
       {editorOpen && typeof document !== 'undefined'
         ? createPortal(
-        <div
-          className="modifier-drawer-backdrop fixed inset-0 z-[80] flex justify-end bg-black/40 backdrop-blur-[1px]"
-          onClick={closeEditor}
-          role="presentation"
-        >
-          <form
-            onSubmit={onSave}
-            className="modifier-drawer flex h-full max-h-full w-[min(100%,32rem)] flex-col border-l border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modifier-drawer__header flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-4">
-              <h2 className="text-lg font-bold text-[var(--text)]">
+            <div
+              className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center overflow-hidden bg-black/50 p-0 sm:p-3 touch-none"
+              onClick={closeEditor}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') closeEditor();
+              }}
+              role="presentation"
+            >
+              <form
+                onSubmit={onSave}
+                className="merchant-product-editor-modal flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-xl touch-auto"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+              >
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+              <h2 className="text-base font-semibold text-[var(--text)]">
                 {editingId ? t('editGroup') : t('extrasNosAddGroup')}
               </h2>
               <button
                 type="button"
                 onClick={closeEditor}
-                className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md muted hover:bg-[var(--bg-muted)]"
+                aria-label={t('close')}
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
             <div
               ref={modifierEditorScrollRef}
-              className="modifier-drawer__scroll flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 space-y-4 [-webkit-overflow-scrolling:touch]"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 touch-pan-y [-webkit-overflow-scrolling:touch] space-y-4"
             >
-              <section className="modifier-drawer__card p-5 space-y-5">
+              <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
                 <Field label={t('title')} required>
                   <input
                     className="modifier-field"
@@ -955,12 +961,12 @@ export default function Modifiers() {
                                 ) : null}
                               </div>
                             </div>
-                            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:gap-3">
-                              <div className="flex items-center gap-2 sm:contents">
-                                <div className="shrink-0 sm:pb-2">
+                            <div className="grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-[auto_minmax(0,2fr)_6.5rem_7.5rem_auto] xl:items-end xl:gap-3">
+                              <div className="flex items-center gap-2 xl:contents">
+                                <div className="shrink-0 xl:row-span-1 xl:pb-2">
                                   <DragHandle attributes={attributes} listeners={listeners} />
                                 </div>
-                                <label className="block min-w-0 flex-1 sm:flex-[1.4]">
+                                <label className="block min-w-0 flex-1 xl:min-w-0">
                                   <span className="mb-1 block text-xs font-medium text-slate-500">
                                     {t('items')}
                                   </span>
@@ -993,7 +999,7 @@ export default function Modifiers() {
                               </div>
 
                               {form.pricingType !== 'free' && (
-                                <label className="block w-full sm:w-36 sm:shrink-0">
+                                <label className="block w-full min-w-0 xl:w-auto xl:shrink-0">
                                   <span className="mb-1 block text-xs font-medium text-slate-500">
                                     {t('salePrice')}
                                   </span>
@@ -1021,7 +1027,7 @@ export default function Modifiers() {
                                 </label>
                               )}
 
-                              <label className="block w-full min-w-0 sm:w-40 sm:shrink-0">
+                              <label className="block w-full min-w-0 xl:w-auto xl:shrink-0">
                                 <span className="mb-1 block text-xs font-medium text-slate-500">
                                   {t('saleStatus')}
                                 </span>
@@ -1042,8 +1048,8 @@ export default function Modifiers() {
                                 </select>
                               </label>
 
-                              <div className="flex items-center justify-between gap-3 sm:contents">
-                                <label className="inline-flex items-center gap-2 text-sm text-slate-700 sm:pb-2.5 sm:shrink-0">
+                              <div className="flex items-center justify-between gap-3 xl:contents">
+                                <label className="inline-flex items-center gap-2 text-sm text-slate-700 xl:pb-2.5 xl:shrink-0">
                                   <input
                                     type="checkbox"
                                     className="accent-teal-600 h-4 w-4"
@@ -1173,17 +1179,25 @@ export default function Modifiers() {
               </section>
             </div>
 
-            <div className="modifier-drawer__footer flex justify-end gap-3 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-4">
-              <button type="button" onClick={closeEditor} className="btn-secondary px-5 py-2.5 text-sm">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="btn-secondary px-4 py-2.5 text-sm font-semibold"
+              >
                 {t('cancel')}
               </button>
-              <button type="submit" disabled={saving} className="btn-primary px-6 py-2.5 text-sm">
+              <button
+                type="submit"
+                disabled={saving}
+                className="btn-primary px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
+              >
                 {saving ? t('saving') : t('save')}
               </button>
             </div>
           </form>
-        </div>,
-        document.body
+            </div>,
+            document.body
           )
         : null}
 

@@ -16,6 +16,13 @@ export type ReceiptLabels = {
   /** EUR equivalent line under CHF total (when exchange rate is set). */
   eurEquivalent: string;
   payment: string;
+  /** Large header when an online/delivery order is not paid yet */
+  unpaidBanner: string;
+  /** Large header when payment was captured (card/online). */
+  paidBanner: string;
+  /** Cash on delivery footnote */
+  paymentOnDelivery: string;
+  deliveryFee: string;
   paid: string;
   tendered: string;
   change: string;
@@ -123,6 +130,10 @@ const EN: ReceiptLabels = {
   total: 'TOTAL',
   eurEquivalent: 'EUR equiv.',
   payment: 'Payment',
+  unpaidBanner: 'UNPAID',
+  paidBanner: 'PAID',
+  paymentOnDelivery: 'Payment on delivery',
+  deliveryFee: 'Delivery',
   paid: 'Paid',
   tendered: 'Tendered',
   change: 'Change',
@@ -222,6 +233,10 @@ const FR: ReceiptLabels = {
   total: 'TOTAL',
   eurEquivalent: 'Equiv. EUR',
   payment: 'Paiement',
+  unpaidBanner: 'IMPAYÉ',
+  paidBanner: 'PAYÉ',
+  paymentOnDelivery: 'Paiement à la livraison',
+  deliveryFee: 'Livraison',
   paid: 'Payé',
   tendered: 'Remis',
   change: 'Monnaie',
@@ -321,6 +336,10 @@ const DE: ReceiptLabels = {
   total: 'TOTAL',
   eurEquivalent: 'EUR-Wert',
   payment: 'Zahlung',
+  unpaidBanner: 'UNBEZAHLT',
+  paidBanner: 'BEZAHLT',
+  paymentOnDelivery: 'Zahlung bei Lieferung',
+  deliveryFee: 'Lieferung',
   paid: 'Bezahlt',
   tendered: 'Gegeben',
   change: 'Rueckgeld',

@@ -152,7 +152,7 @@ test('matchSettingsSearch finds checkout EUR under payments-methods', () => {
 
 test('pickSettingsSearchMatch prefers current tab when it has a hit', () => {
   const index = buildSettingsSearchIndex(t);
-  const matches = matchSettingsSearch(index, 'terminal');
+  const matches = matchSettingsSearch(index, 'gift');
   const picked = pickSettingsSearchMatch(matches, 'pos');
   assert.equal(picked?.id, 'pos-checkout');
 });
