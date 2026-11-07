@@ -3221,7 +3221,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
 
     // Points can cover food + delivery + tax after offer discount (not tip / card fee)
-    const feeTaxPreview = roundMoney2((deliveryFee * taxRate) / 100);
+    const feeTaxPreview = vatIncluded
+      ? extractVatFromGross(deliveryFee, taxRate)
+      : roundMoney2((deliveryFee * taxRate) / 100);
     const taxDiscountOpts = {
       taxIncludedInPrice: merchant.taxIncludedInPrice === true,
       vatAfterDiscount: merchant.vatAfterDiscount !== false,
@@ -3234,7 +3236,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       taxDiscountOpts
     );
     const redeemableBase = roundMoney2(
-      Math.max(0, subtotal - offerDiscount - voucherDiscount) + deliveryFee + taxPreview
+      Math.max(0, subtotal - offerDiscount - voucherDiscount) +
+        deliveryFee +
+        (vatIncluded ? 0 : taxPreview)
     );
 
     let pointsDiscount = 0;
@@ -3334,7 +3338,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
 
     const tip = roundTo005(Math.max(0, Number(tipAmount) || 0));
-    const feeTax = roundMoney2((deliveryFee * taxRate) / 100);
+    const feeTax = vatIncluded
+      ? extractVatFromGross(deliveryFee, taxRate)
+      : roundMoney2((deliveryFee * taxRate) / 100);
     const grossTaxAmount = roundMoney2(taxAmount + feeTax);
     subtotal = roundMoney2(subtotal);
     deliveryFee = roundMoney2(deliveryFee);
@@ -3351,7 +3357,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     pointsDiscount = roundMoney2(
       Math.min(
         pointsDiscount,
-        Math.max(0, subtotal - offerDiscount - voucherDiscount) + deliveryFee + taxAfterOffer
+        Math.max(0, subtotal - offerDiscount - voucherDiscount) +
+          deliveryFee +
+          (vatIncluded ? 0 : taxAfterOffer)
       )
     );
     taxAmount = adjustTaxForOrderDiscount(
@@ -3360,12 +3368,16 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
       offerDiscount + voucherDiscount + pointsDiscount,
       taxDiscountOpts
     );
-    const preGiftTotal = roundMoney2(
-      Math.max(
-        0,
-        subtotal + deliveryFee + taxAmount - offerDiscount - voucherDiscount - pointsDiscount
-      ) + tip
-    );
+    const merchandisePayable = vatIncluded
+      ? Math.max(
+          0,
+          subtotal + deliveryFee - offerDiscount - voucherDiscount - pointsDiscount
+        )
+      : Math.max(
+          0,
+          subtotal + deliveryFee + taxAmount - offerDiscount - voucherDiscount - pointsDiscount
+        );
+    const preGiftTotal = roundMoney2(merchandisePayable + tip);
     if (trimmedGiftCode && giftCardPreviewBalance > 0) {
       giftCardDiscount = roundMoney2(Math.min(giftCardPreviewBalance, preGiftTotal));
     }

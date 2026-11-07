@@ -71,6 +71,38 @@ import { resolveLabelPrintProtocol } from './label-print-protocol';
 export type KitchenOrderSource = 'WEBPOS' | 'ONLINE' | 'POSAPP' | 'WAITERAPP';
 
 /** Web shop or delivery-aggregator order (not in-store POS). */
+export function orderReceiptPaymentSettled(order: {
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+}): boolean {
+  const status = String(order.paymentStatus || '').toLowerCase();
+  if (status === 'completed' || status === 'paid') return true;
+  if (
+    status === 'awaiting_payment' ||
+    status === 'pending' ||
+    status === 'failed' ||
+    status === 'cancelled'
+  ) {
+    return false;
+  }
+  const method = String(order.paymentMethod || '').toLowerCase();
+  if (method === 'cash' || method === 'cod' || method === 'pay_later' || !method) return false;
+  if (method === 'card' || method === 'terminal' || method === 'online') {
+    return status !== '';
+  }
+  return false;
+}
+
+/** Cash / pay-later shop delivery that still needs collection at the door. */
+export function isCashOnDeliveryReceipt(order: {
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+}): boolean {
+  if (orderReceiptPaymentSettled(order)) return false;
+  const method = String(order.paymentMethod || '').toLowerCase();
+  return method === 'cash' || method === 'cod' || method === 'pay_later' || !method;
+}
+
 export function isExternalOnlineOrder(
   order: { orderSource?: string | null; orderType?: string | null }
 ): boolean {
@@ -398,6 +430,8 @@ export type WebPosReceipt = {
   completedAt: number;
   channel?: string;
   paymentMethod: string;
+  paymentStatus?: string | null;
+  deliveryFee?: number;
   /** Split tenders printed as separate lines (cash + card, etc.). */
   paymentLines?: Array<{ method: string; amount: number; giftCardNumber?: string | null }>;
   /** Pay Later collected tender: cash | card | terminal. */
@@ -2322,6 +2356,10 @@ export function resolveOrderReceiptVat(tx: WebPosReceipt): {
     if (fromBill > 0 && fromItems > 0 && Math.abs(fromItems - fromBill) > 0.02) {
       brut = fromBill;
     }
+    const deliveryFee = roundMoney2(Number(tx.deliveryFee) || 0);
+    if (deliveryFee > 0) {
+      brut = roundMoney2(Math.max(brut, fromItems + deliveryFee));
+    }
     if (brut <= 0) {
       const adjusted = adjustReceiptVatForDiscount(tx.subtotal, tx.taxAmount, tx.discount || 0, {
         vatIncludedInPrice: true,
@@ -2436,7 +2474,19 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
     }
   }
   if (tx.splitLabel) r += `${tx.splitLabel}\n`;
-  r += thin + '\n';
+  const settled = orderReceiptPaymentSettled(tx);
+  const cashOnDelivery = isCashOnDeliveryReceipt(tx);
+  if ((isDelivery || isOnline) && !tx.isProvisional) {
+    if (cashOnDelivery) {
+      r += centerLine(L.unpaidBanner, width) + '\n';
+      r += thin + '\n';
+    } else if (settled) {
+      r += centerLine(L.paidBanner, width) + '\n';
+      r += thin + '\n';
+    }
+  } else {
+    r += thin + '\n';
+  }
 
   // Guest receipt: no COURSE banners (those stay on kitchen tickets only).
   for (const item of tx.items) {
@@ -2454,6 +2504,10 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
       : tx.subtotal
   );
   r += padLine(`${L.subtotal}:`, `CHF ${recapSubtotal.toFixed(2)}`, width) + '\n';
+  const deliveryFeeLine = roundMoney2(Number(tx.deliveryFee) || 0);
+  if (deliveryFeeLine > 0.001) {
+    r += padLine(`${L.deliveryFee}:`, `CHF ${deliveryFeeLine.toFixed(2)}`, width) + '\n';
+  }
   if (tx.discount > 0) {
     r += padLine(`${L.discount}:`, `-CHF ${tx.discount.toFixed(2)}`, width) + '\n';
   }
@@ -2526,7 +2580,11 @@ export function generateWebPosReceiptText(tx: WebPosReceipt, panelLang?: string)
       tx.payLaterCollected === true ||
       /pay[_-]?later[:_\s]+(cash|card|terminal)/i.test(payMethodRaw);
     if (!isPayLater || payLaterCollected) {
-      r += padLine(`${L.paid}:`, `CHF ${netPaid.toFixed(2)}`, width) + '\n';
+      if (settled) {
+        r += padLine(`${L.paid}:`, `CHF ${netPaid.toFixed(2)}`, width) + '\n';
+      } else if (cashOnDelivery && (isDelivery || isOnline)) {
+        r += centerLine(L.paymentOnDelivery, width) + '\n';
+      }
     }
     if (
       (!isPayLater || payLaterCollected) &&
@@ -4868,6 +4926,7 @@ export type PosOrderForReceipt = {
   scheduledFor?: string | number | Date | null;
   completedAt?: string | null;
   createdAt: string;
+  paymentStatus?: string | null;
   splitCheckNumber?: number | null;
   /** Persisted Adyen Terminal API CustomerReceipt JSON (order history reprint). */
   adyenCustomerReceiptJson?: string | null;
@@ -4915,22 +4974,28 @@ export function resolveReceiptTaxRateForOrder(
   opts?: {
     fallbackRate?: number;
     merchantTax?: MerchantChannelTaxSettings;
+    vatIncludedInPrice?: boolean;
   }
 ): number {
   const explicit = Number(order.taxRate);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
 
-  const subtotal = Number(order.subtotal ?? 0);
-  const taxAmount = Number(order.taxAmount ?? 0);
-  if (subtotal > 0.001 && taxAmount > 0.001) {
-    return roundMoney2((taxAmount / subtotal) * 100);
-  }
-
   if (opts?.merchantTax) {
-    return channelTaxRateFromMerchant(
+    const channelRate = channelTaxRateFromMerchant(
       opts.merchantTax,
       order.channel || order.fulfillmentChannel
     );
+    if (channelRate > 0) return channelRate;
+  }
+
+  const subtotal = Number(order.subtotal ?? 0);
+  const taxAmount = Number(order.taxAmount ?? 0);
+  if (
+    opts?.vatIncludedInPrice !== true &&
+    subtotal > 0.001 &&
+    taxAmount > 0.001
+  ) {
+    return roundMoney2((taxAmount / subtotal) * 100);
   }
 
   const fallback = Number(opts?.fallbackRate);
@@ -4960,6 +5025,7 @@ export function posOrderToWebPosReceipt(
   const taxRate = resolveReceiptTaxRateForOrder(order, {
     fallbackRate: ctx.taxRate,
     merchantTax: ctx.merchantTax,
+    vatIncludedInPrice: ctx.vatIncludedInPrice === true,
   });
   const lang = resolveReceiptLanguage(ctx.printSettings, ctx.panelLang);
   const paperWidthMm = resolveReceiptPaperWidthMm(ctx.printSettings);
@@ -5018,6 +5084,8 @@ export function posOrderToWebPosReceipt(
     completedAt,
     channel: order.channel || order.fulfillmentChannel || undefined,
     paymentMethod: order.paymentMethod || 'cash',
+    paymentStatus: order.paymentStatus ?? null,
+    deliveryFee: Number(order.deliveryFee ?? 0) || 0,
     payLaterTender: payLaterCollectedTender(order.paymentMethod),
     payLaterCollected: !!payLaterCollectedTender(order.paymentMethod),
     paymentLines,
@@ -5255,15 +5323,10 @@ function deliveryReceiptPaymentLine(
   paymentMethod?: string | null,
   paymentStatus?: string | null
 ): string {
-  const paid =
-    paymentStatus === 'completed' ||
-    paymentStatus === 'paid' ||
-    paymentMethod === 'card' ||
-    paymentMethod === 'terminal' ||
-    paymentMethod === 'online';
-  if (paid) return L.paid;
+  if (orderReceiptPaymentSettled({ paymentMethod, paymentStatus })) return L.paidBanner;
+  if (isCashOnDeliveryReceipt({ paymentMethod, paymentStatus })) return L.paymentOnDelivery;
   const method = String(paymentMethod || '').toLowerCase();
-  if (method === 'cash' || method === 'cod' || !paymentMethod) return 'COD';
+  if (method === 'cash' || method === 'cod' || !paymentMethod) return L.unpaidBanner;
   return paymentLabel(L, paymentMethod) || String(paymentMethod).toUpperCase();
 }
 
