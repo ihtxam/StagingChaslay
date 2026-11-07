@@ -5198,7 +5198,11 @@ export default function Settings() {
                   <div>
                     <p className="text-sm font-semibold text-[var(--text)] m-0">{t('settingsPrintersSummaryTitle')}</p>
                     <p className="text-sm text-[var(--text-muted)] mt-1 m-0">
-                      {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length}{' '}
+                      {
+                        (settings.posPrintSettings?.printers || []).filter((p) =>
+                          String(p.name || '').trim()
+                        ).length
+                      }{' '}
                       {t('settingsPrintersConfigured')}
                       {' · '}
                       {printAgentOk ? t('webPosAgentOnline') : t('webPosAgentOffline')}
@@ -5272,9 +5276,12 @@ export default function Settings() {
                     </p>
                   );
                 })()}
-                {(settings.posPrintSettings?.printers || []).filter((p) => p.name?.trim()).length ===
-                0 ? (
+                {(settings.posPrintSettings?.printers || []).filter((p) => String(p.name || '').trim())
+                  .length === 0 ? (
                   <div className="mb-4 space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] m-0">
+                      {t('settingsPrinterExamplesTitle')}
+                    </p>
                     <p className="text-sm text-[var(--text-muted)] m-0">{t('settingsPrinterDemoHint')}</p>
                     {SETTINGS_DEMO_PRINTER_ROWS.map((row) => (
                       <SettingsDemoPrinterRow key={row.id} row={row} />

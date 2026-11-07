@@ -39,11 +39,8 @@ export async function enterKitchenFromOrder(
     .catch(() => {});
 
   if (opts?.printKitchen) {
-    const src =
-      opts.orderSource ||
-      (order.orderSource === "justeat" || order.orderSource === "ubereats"
-        ? order.orderSource
-        : "online_shop");
+    const { resolveOrderPrintSource } = await import("@/lib/order-print-source");
+    const src = opts.orderSource || resolveOrderPrintSource(order.orderSource);
     void import("@/services/delivery-platform.service")
       .then(({ DeliveryPlatformService }) =>
         DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, src as OrderSource, {

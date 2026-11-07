@@ -676,16 +676,12 @@ export class OrderService {
             console.warn("Partner accept callback:", err)
           );
         }
+        const { resolveOrderPrintSource } = await import("@/lib/order-print-source");
+        const printSource = resolveOrderPrintSource(order.orderSource);
         try {
           const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
-          const source =
-            order.orderSource === "justeat" || order.orderSource === "ubereats"
-              ? order.orderSource
-              : order.orderSource === "kiosk"
-                ? "kiosk"
-                : "online_shop";
           if (opts?.skipAutoPrintKitchen !== true) {
-            await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, source, {
+            await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, printSource, {
               printKitchen: true,
               printDeliveryReceipt: false,
               printReceipt: false,
@@ -704,12 +700,7 @@ export class OrderService {
           .then(({ enterKitchenFromOrder }) =>
             enterKitchenFromOrder(merchantId, orderId, {
               printKitchen: false,
-              orderSource:
-                order.orderSource === "justeat" || order.orderSource === "ubereats"
-                  ? order.orderSource
-                  : order.orderSource === "kiosk"
-                    ? "kiosk"
-                    : "online_shop",
+              orderSource: printSource,
             })
           )
           .catch(() => {});
@@ -723,6 +714,42 @@ export class OrderService {
         const updated = await set({ status: "preparing" });
         void import("@/services/kitchen-ingress.service")
           .then(({ enterKitchenFromOrder }) => enterKitchenFromOrder(merchantId, orderId))
+          .catch(() => {});
+        return updated;
+      }
+      case "send_to_kitchen": {
+        if (["cancelled", "refunded", "completed"].includes(status)) {
+          throw new Error("Order cannot be sent to kitchen");
+        }
+        const { resolveOrderPrintSource } = await import("@/lib/order-print-source");
+        const printSource = resolveOrderPrintSource(order.orderSource);
+        const nextStatus =
+          status === "pending" || status === "pending_approval" ? "preparing" : status;
+        const updated =
+          nextStatus !== status ? await set({ status: nextStatus }) : order;
+        try {
+          const { DeliveryPlatformService } = await import("@/services/delivery-platform.service");
+          await DeliveryPlatformService.enqueueAutoPrint(merchantId, orderId, printSource, {
+            printKitchen: true,
+            printDeliveryReceipt: false,
+            printReceipt: false,
+            printNotification: false,
+            kitchenPrepOnly: true,
+          });
+          await db
+            .update(schema.orders)
+            .set({ printCount: sql`COALESCE(${schema.orders.printCount}, 0) + 1` })
+            .where(eq(schema.orders.id, orderId));
+        } catch (printErr) {
+          console.warn("send_to_kitchen print failed:", printErr);
+        }
+        void import("@/services/kitchen-ingress.service")
+          .then(({ enterKitchenFromOrder }) =>
+            enterKitchenFromOrder(merchantId, orderId, {
+              printKitchen: false,
+              orderSource: printSource,
+            })
+          )
           .catch(() => {});
         return updated;
       }

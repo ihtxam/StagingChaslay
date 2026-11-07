@@ -414,7 +414,7 @@ export function orderListPrimaryLabel(o: MerchantOrder): string {
     orderDisplay: refs.ticketDisplay || undefined,
     tabNumber: refs.tabNumber || undefined,
   });
-  if (/^(WEB|TX)-/i.test(String(o.orderNumber || '')) && formatted) {
+  if (/^(WEB|TX|QR)-/i.test(String(o.orderNumber || '')) && formatted) {
     if (guest && guest !== formatted && !formatted.endsWith(guest.replace(/^#/, ''))) {
       return `${formatted} · ${guest}`;
     }
