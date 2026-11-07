@@ -45,7 +45,12 @@ import { VoucherService } from "@/services/voucher.service";
 import { ShopGiftCardService } from "@/services/shop-gift-card.service";
 import { merchantHasGiftCardsLicense } from "@/lib/gift-card-addon";
 import { normalizeDietaryTags } from "@/lib/product-dietary";
-import { generateKioskOrderNumber, generateWebOrderNumber } from "@/lib/web-order-number";
+import {
+  generateKioskOrderNumber,
+  generateQrTableOrderNumber,
+  generateWebOrderNumber,
+} from "@/lib/web-order-number";
+import { QrTableOrderService } from "@/services/qr-table-order.service";
 import {
   inStockProductSpecifications,
   SHOP_SIZE_MODIFIER_GROUP_ID,
@@ -1541,6 +1546,43 @@ router.get("/:slug/menu", async (req: Request, res: Response) => {
 /**
  * GET /api/shop/:slug/table/:tableId/session — open/resume QR table session + order history
  */
+/**
+ * POST /api/shop/:slug/table/:tableId/waiter-call — guest requests staff (1/min cooldown server-side)
+ */
+router.post("/:slug/table/:tableId/waiter-call", async (req: Request, res: Response) => {
+  try {
+    const merchant = await resolveMerchant(req.params.slug);
+    if (!requireShopMerchant(res, merchant)) return;
+    const tableId = String(req.params.tableId || "").trim();
+    const sessionToken = String(req.body?.tableSessionToken || "").trim();
+    const messageKey = String(req.body?.messageKey || "need_help").trim();
+    const allowed = new Set(["please_come", "bring_bill", "need_help"]);
+    if (!allowed.has(messageKey)) {
+      return res.status(400).json({ error: "Invalid message" });
+    }
+    await TableSessionService.assertOpenSession(merchant.id, tableId, sessionToken);
+    const table = await TableSessionService.resolveTable(merchant.id, tableId);
+    try {
+      const { ChaslayFloorService } = await import("@/services/chaslay-floor.service");
+      await ChaslayFloorService.createPrintJob(merchant.id, {
+        jobType: "NOTIFICATION",
+        payload: {
+          kind: "table_guest_call",
+          tableId,
+          tableLabel: table?.label || tableId,
+          messageKey,
+        },
+        sourceDeviceId: "qr_table",
+      });
+    } catch {
+      /* bell/notification is best-effort */
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Waiter call failed" });
+  }
+});
+
 router.get("/:slug/table/:tableId/session", async (req: Request, res: Response) => {
   try {
     const merchant = await resolveMerchant(req.params.slug);
@@ -3383,7 +3425,9 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
     }
     const orderNumber = isKioskOrder
       ? await generateKioskOrderNumber(db, merchant.id)
-      : await generateWebOrderNumber(db, merchant.id);
+      : isQrTableOrder
+        ? await generateQrTableOrderNumber(db, merchant.id)
+        : await generateWebOrderNumber(db, merchant.id);
     const comoDiscount = isKioskOrder
       ? roundMoney2(Math.max(0, Math.min(Number(comoDiscountAmountRaw) || 0, preGiftTotal)))
       : 0;
@@ -3422,9 +3466,15 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         ? [shippingAddress, zipCode, city].filter(Boolean).join(", ")
         : shippingAddress
           ? JSON.stringify(shippingAddress)
-          : channel === "takeaway" || channel === "dine_in"
+          : isQrTableOrder
+            ? resolvedTableLabel
+              ? `Table ${resolvedTableLabel}`
+              : null
+          : channel === "takeaway"
             ? `Pickup: ${merchant.address || merchant.name}${merchant.city ? `, ${merchant.city}` : ""}`
-            : null;
+            : channel === "dine_in"
+              ? null
+              : null;
 
     const paymentStatus =
       payMethod === "card"
@@ -3517,6 +3567,71 @@ router.post("/:slug/orders", async (req: Request, res: Response) => {
         return LocationsService.getDefaultId(merchant.id);
       }
     })();
+
+    if (
+      isQrTableOrder &&
+      resolvedTableSession?.id &&
+      payMethod === "pay_later" &&
+      !cardPaymentPending &&
+      !appliedVoucher &&
+      giftCardDiscount <= 0 &&
+      totalPointsRedeemed <= 0
+    ) {
+      const tabOrder = await QrTableOrderService.findOpenTabOrder(merchant.id, resolvedTableSession.id);
+      if (tabOrder) {
+        const merged = await QrTableOrderService.appendRound(merchant.id, tabOrder.id, {
+          lineItems,
+          subtotalDelta: subtotal,
+          taxDelta: taxAmount,
+          totalDelta: total,
+          guestNotes: notes || null,
+          autoKitchen: !!qrAutoAccept,
+        });
+        if (!qrAutoAccept) {
+          try {
+            const guestLocale = String(
+              (req.body as { locale?: string })?.locale || req.headers["x-shop-locale"] || ""
+            );
+            const { runOnlineShopOrderArrivalSideEffects } = await import(
+              "@/services/shop-online-order-arrival.service"
+            );
+            await runOnlineShopOrderArrivalSideEffects(merchant, merged, {
+              guestLocale: guestLocale || null,
+            });
+          } catch {
+            /* non-fatal */
+          }
+        }
+        return res.status(201).json({
+          success: true,
+          merged: true,
+          order: {
+            id: merged.id,
+            orderNumber: merged.orderNumber,
+            status: merged.status,
+            fulfillmentChannel: merged.fulfillmentChannel,
+            paymentMethod: merged.paymentMethod,
+            paymentStatus: merged.paymentStatus,
+            subtotal: merged.subtotal,
+            deliveryFee: merged.deliveryFee,
+            tipAmount: merged.tipAmount,
+            cardFee: merged.cardFee,
+            taxAmount: merged.taxAmount,
+            pointsDiscount: merged.pointsDiscount,
+            pointsEarned: merged.pointsEarned,
+            pointsRedeemed: merged.pointsRedeemed,
+            total: merged.total,
+            scheduledFor: merged.scheduledFor,
+            shippingAddress: merged.shippingAddress,
+            customerName: merged.customerName,
+            customerPhone: merged.customerPhone,
+            customerEmail: merged.customerEmail,
+            notes: merged.notes,
+          },
+          paymentSession: null,
+        });
+      }
+    }
 
     const [order] = await db
       .insert(schema.orders)

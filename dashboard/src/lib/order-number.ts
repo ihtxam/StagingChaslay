@@ -1,5 +1,7 @@
 const SHORT_WEB_RE = /^WEB-(\d{1,6})$/;
 const SCOPED_WEB_RE = /^WEB-([A-Z0-9]{4})-(\d{1,6})$/;
+const SCOPED_QR_RE = /^QR-([A-Z0-9]{4})-(\d{1,6})$/;
+const SHORT_QR_RE = /^QR-(\d{1,6})$/;
 const LEGACY_WEB_RE = /^WEB-(\d{10,})(?:-([A-F0-9]{4,8}))?$/i;
 const OPAQUE_ORDER_RE = /^(WP|DI|POS)-/i;
 const HEX_FRAGMENT_RE = /^[a-f0-9]{6,12}$/i;
@@ -17,6 +19,8 @@ export function formatOrderNumberDisplay(orderNumber: string | null | undefined)
   if (!n) return n;
   if (SHORT_WEB_RE.test(n)) return n;
   if (SCOPED_WEB_RE.test(n)) return n;
+  if (SHORT_QR_RE.test(n)) return n;
+  if (SCOPED_QR_RE.test(n)) return n;
   const legacy = n.match(LEGACY_WEB_RE);
   if (legacy) {
     if (legacy[2]) return `WEB-${legacy[2]}`;
@@ -35,7 +39,7 @@ export function guestOrderNumber(opts: {
   tabNumber?: string | null;
 }): string {
   const raw = String(opts.orderNumber || '').trim();
-  if (/^(WEB|TX)-/i.test(raw)) {
+  if (/^(WEB|TX|QR)-/i.test(raw)) {
     return formatOrderNumberDisplay(raw) || raw;
   }
   const shout = String(opts.orderDisplay || '').trim();

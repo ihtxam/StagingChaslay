@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { CreditCard, Plus, ShoppingBag } from 'lucide-react';
+import { Bell, ChevronDown, CreditCard, Plus, ShoppingBag } from 'lucide-react';
+import { formatOrderNumberDisplay } from '@/lib/order-number';
 import { useI18n } from '@/lib/i18n';
 import { customerShopError } from '@/lib/shop-public-error';
 import { resolveShopKey, shopMenuApiPath, resolveShopLocationSlug, shopBasePath, shopCustomerAuthConfig } from '@/lib/shop-cart';
@@ -57,6 +58,25 @@ type PaymentSession = {
   environment?: string;
 };
 
+const WAITER_COOLDOWN_MS = 60_000;
+
+function tableSessionStorageKey(shopKey: string, tableId: string) {
+  return `table_qr_session_v1:${shopKey}:${tableId}`;
+}
+
+function waiterCallStorageKey(tableId: string) {
+  return `table_qr_waiter_call_v1:${tableId}`;
+}
+
+function orderStatusLabel(status: string, t: (key: string) => string): string {
+  const s = String(status || '').toLowerCase();
+  if (s === 'preparing' || s === 'accepted') return t('tableOrderStatusPreparing');
+  if (s === 'ready') return t('tableOrderStatusReady');
+  if (s === 'pending' || s === 'pending_approval') return t('tableOrderStatusPending');
+  if (s === 'completed') return t('tableOrderStatusReady');
+  return status;
+}
+
 export default function TableOrderPage() {
   const { t, locale } = useI18n();
   const { merchantSlug, tableId, locationSlug: routeLocationSlug } = useParams<{
@@ -93,9 +113,19 @@ export default function TableOrderPage() {
   const [paying, setPaying] = useState(false);
   const [dropinEl, setDropinEl] = useState<HTMLDivElement | null>(null);
   const dropinMounted = useRef(false);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [cartOpen, setCartOpen] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [waiterOpen, setWaiterOpen] = useState(false);
+  const [tipChooserOpen, setTipChooserOpen] = useState(false);
+  const [tipAmount, setTipAmount] = useState(0);
 
   const loadSession = useCallback(async () => {
     if (!shopKey || !tableId) return;
+    const storedToken =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem(tableSessionStorageKey(shopKey, tableId)) || ''
+        : '';
     const sessionParams = signedAccess ? { s: signedAccess } : undefined;
     const [sessionRes, menuRes] = await Promise.all([
       axios.get(`/api/shop/${shopKey}/table/${tableId}/session`, { params: sessionParams }),
@@ -105,7 +135,11 @@ export default function TableOrderPage() {
     ]);
     const sessionData = sessionRes.data;
     setTableLabel(sessionData.table?.label || tableId);
-    setSessionToken(sessionData.session?.token || '');
+    const token = sessionData.session?.token || storedToken || '';
+    setSessionToken(token);
+    if (token && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(tableSessionStorageKey(shopKey, tableId), token);
+    }
     setOrders(sessionData.orders || []);
     setRunningTotal(Number(sessionData.runningTotal || 0));
     setPayAtTableEnabled(!!sessionData.settings?.qrPayAtTableEnabled);
@@ -125,6 +159,14 @@ export default function TableOrderPage() {
       }
     })();
   }, [loadSession, t]);
+
+  useEffect(() => {
+    if (!shopKey || !tableId) return;
+    const id = window.setInterval(() => {
+      void loadSession();
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [shopKey, tableId, loadSession]);
 
   useEffect(() => {
     if (wantPay && payAtTableEnabled && runningTotal > 0) {
@@ -251,6 +293,41 @@ export default function TableOrderPage() {
     });
   };
 
+  const toggleCategory = (catId: string) => {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId);
+      else next.add(catId);
+      return next;
+    });
+  };
+
+  const callWaiter = async (messageKey: string) => {
+    if (!shopKey || !tableId || !sessionToken) return;
+    const last =
+      typeof localStorage !== 'undefined'
+        ? Number(localStorage.getItem(waiterCallStorageKey(tableId)) || 0)
+        : 0;
+    if (Date.now() - last < WAITER_COOLDOWN_MS) {
+      toast.error(t('tableOrderWaiterCallCooldown'));
+      return;
+    }
+    try {
+      await axios.post(`/api/shop/${shopKey}/table/${tableId}/waiter-call`, {
+        tableSessionToken: sessionToken,
+        messageKey,
+      });
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(waiterCallStorageKey(tableId), String(Date.now()));
+      }
+      toast.success(t('tableOrderWaiterCallSent'));
+      setWaiterOpen(false);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || t('tableOrderWaiterCallFailed'));
+    }
+  };
+
   const submitOrder = async () => {
     if (!cart.length || !tableId) return;
     setSubmitting(true);
@@ -275,6 +352,7 @@ export default function TableOrderPage() {
       toast.success(t('tableOrderSubmitted'));
       setCart([]);
       setNotes('');
+      setCartOpen(false);
       await loadSession();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
@@ -296,57 +374,108 @@ export default function TableOrderPage() {
     <ShopThemeShell theme={cmsTheme} site={shopSite}>
       <div className={`mx-auto min-h-screen bg-white pb-28 ${photoMenuEnabled ? 'max-w-xl' : 'max-w-lg'}`}>
         <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-            {t('tableOrderTitle')}
-          </p>
-          <h1 className="text-xl font-bold text-stone-900">
-            {t('tableOrderTableLabel').replace('{label}', tableLabel)}
-          </h1>
-        </header>
-
-        {orders.length > 0 ? (
-          <section className="border-b border-stone-100 px-4 py-4">
-            <h2 className="text-sm font-bold text-stone-800">{t('tableOrderHistory')}</h2>
-            <div className="mt-2 space-y-2">
-              {orders.map((o) => (
-                <div key={o.id} className="rounded-lg border border-stone-200 p-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">#{o.orderNumber}</span>
-                    <span className="text-xs uppercase text-stone-500">{o.status}</span>
-                  </div>
-                  <ul className="mt-1 text-stone-600">
-                    {o.items.map((item, idx) => (
-                      <li key={`${o.id}-${idx}`}>
-                        {item.quantity}× {item.name}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-1 font-semibold tabular-nums">{o.total.toFixed(2)}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-sm font-bold">
-                {t('tableOrderRunningTotal')}: {runningTotal.toFixed(2)}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {t('tableOrderTitle')}
               </p>
-              {payAtTableEnabled && runningTotal > 0 ? (
+              <h1 className="text-xl font-bold text-stone-900">
+                {t('tableOrderTableLabel').replace('{label}', tableLabel)}
+              </h1>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {orders.length > 0 ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-2.5 py-2 text-xs font-semibold text-stone-700"
+                    onClick={() => setOrdersOpen((v) => !v)}
+                  >
+                    {t('tableOrderHistory')}
+                    <ChevronDown size={14} className={ordersOpen ? 'rotate-180' : ''} />
+                  </button>
+                  {ordersOpen ? (
+                    <div className="absolute right-0 z-20 mt-1 w-[min(18rem,calc(100vw-2rem))] max-h-72 overflow-y-auto rounded-xl border border-stone-200 bg-white p-2 shadow-lg">
+                      {orders.map((o) => (
+                        <div key={o.id} className="rounded-lg border border-stone-100 p-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold">
+                              #{formatOrderNumberDisplay(o.orderNumber)}
+                            </span>
+                            <span className="text-[10px] uppercase text-stone-500">
+                              {orderStatusLabel(o.status, t)}
+                            </span>
+                          </div>
+                          <p className="mt-1 font-semibold tabular-nums">{o.total.toFixed(2)}</p>
+                        </div>
+                      ))}
+                      <p className="mt-2 px-1 text-xs font-bold">
+                        {t('tableOrderRunningTotal')}: {runningTotal.toFixed(2)}
+                      </p>
+                      {payAtTableEnabled && runningTotal > 0 ? (
+                        <button
+                          type="button"
+                          className="btn-primary mt-2 w-full py-2 text-xs"
+                          onClick={() => {
+                            setOrdersOpen(false);
+                            setTipChooserOpen(true);
+                          }}
+                        >
+                          {t('tableOrderPayNow')}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="relative">
                 <button
                   type="button"
-                  className="btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-sm"
-                  onClick={() => setPayOpen(true)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-700"
+                  aria-label={t('tableOrderWaiterCall')}
+                  onClick={() => setWaiterOpen((v) => !v)}
                 >
-                  <CreditCard size={16} />
-                  {t('tableOrderPayNow')}
+                  <Bell size={16} />
                 </button>
-              ) : null}
+                {waiterOpen ? (
+                  <div className="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-stone-200 bg-white p-1 shadow-lg">
+                    {(
+                      [
+                        ['please_come', t('tableOrderWaiterCallPleaseCome')],
+                        ['bring_bill', t('tableOrderWaiterCallBringBill')],
+                        ['need_help', t('tableOrderWaiterCallNeedHelp')],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-stone-700 hover:bg-stone-50"
+                        onClick={() => void callWaiter(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </section>
-        ) : null}
+          </div>
+        </header>
 
-        <section className="px-4 py-4 space-y-4">
-          {menu.map((cat) => (
+        <section className="px-4 py-4 space-y-3">
+          {menu.map((cat) => {
+            const expanded = expandedCats.has(cat.id);
+            return (
             <div key={cat.id}>
-              <h2 className="text-sm font-bold text-stone-800">{cat.name}</h2>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-left"
+                onClick={() => toggleCategory(cat.id)}
+              >
+                <h2 className="text-sm font-bold text-stone-800">{cat.name}</h2>
+                <ChevronDown size={16} className={`text-stone-500 ${expanded ? 'rotate-180' : ''}`} />
+              </button>
+              {expanded ? (
               <div className={photoMenuEnabled ? 'mt-2 grid grid-cols-2 gap-2.5' : 'mt-2 space-y-2'}>
                 {cat.items.map((item) =>
                   photoMenuEnabled ? (
@@ -401,35 +530,105 @@ export default function TableOrderPage() {
                   )
                 )}
               </div>
+              ) : null}
             </div>
-          ))}
+            );
+          })}
         </section>
 
         {cart.length > 0 ? (
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-stone-200 bg-white p-4 shadow-lg">
-            <div className="mx-auto max-w-lg space-y-2">
-              <div className="flex items-center justify-between text-sm font-semibold">
-                <span className="inline-flex items-center gap-1.5">
-                  <ShoppingBag size={16} />
-                  {t('tableOrderCartCount').replace('{n}', String(cart.length))}
-                </span>
-                <span className="tabular-nums">{cartTotal.toFixed(2)}</span>
-              </div>
+            <button
+              type="button"
+              className="mx-auto flex w-full max-w-lg items-center justify-between text-sm font-semibold"
+              onClick={() => setCartOpen(true)}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <ShoppingBag size={16} />
+                {t('tableOrderCartCount').replace('{n}', String(cart.length))}
+              </span>
+              <span className="tabular-nums">{cartTotal.toFixed(2)}</span>
+            </button>
+          </div>
+        ) : null}
+
+        {cartOpen ? (
+          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl max-h-[85vh] overflow-y-auto">
+              <h2 className="text-lg font-bold">{t('tableOrderCartTitle')}</h2>
+              <ul className="mt-3 space-y-2 text-sm">
+                {cart.map((line) => (
+                  <li key={line.id} className="flex justify-between gap-2">
+                    <span>
+                      {line.quantity}× {line.name}
+                    </span>
+                    <span className="tabular-nums font-semibold">
+                      {((line.price + (line.selectedExtras || []).reduce((s, e) => s + e.price, 0)) *
+                        line.quantity
+                      ).toFixed(2)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
               <textarea
-                className="input w-full text-sm"
+                className="input mt-3 w-full text-sm"
                 rows={2}
                 placeholder={t('tableOrderNotesPlaceholder')}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => void submitOrder()}
-                className="btn-primary w-full py-3"
-              >
-                {submitting ? t('loading') : t('tableOrderSendToKitchen')}
-              </button>
+              <div className="mt-4 space-y-2">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void submitOrder()}
+                  className="btn-primary w-full py-3"
+                >
+                  {submitting ? t('loading') : t('tableOrderConfirmSend')}
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-stone-200 py-3 text-sm font-semibold"
+                  onClick={() => setCartOpen(false)}
+                >
+                  {t('tableOrderAddMore')}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {tipChooserOpen ? (
+          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
+              <h2 className="text-lg font-bold">{t('tableOrderTipTitle')}</h2>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="rounded-xl border border-stone-200 py-3 text-sm font-semibold"
+                  onClick={() => {
+                    setTipAmount(0);
+                    setTipChooserOpen(false);
+                    setPayOpen(true);
+                  }}
+                >
+                  {t('tableOrderTipNone')}
+                </button>
+                {[1, 2, 5].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    className="rounded-xl border border-stone-200 py-3 text-sm font-semibold"
+                    onClick={() => {
+                      setTipAmount(Math.round(((runningTotal * pct) / 100) * 20) / 20);
+                      setTipChooserOpen(false);
+                      setPayOpen(true);
+                    }}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}
@@ -452,8 +651,16 @@ export default function TableOrderPage() {
                 </button>
               </div>
               <p className="mt-1 text-sm text-stone-600">
-                {t('tableOrderPayAmount').replace('{amount}', runningTotal.toFixed(2))}
+                {t('tableOrderPayAmount').replace(
+                  '{amount}',
+                  (runningTotal + tipAmount).toFixed(2)
+                )}
               </p>
+              {tipAmount > 0 ? (
+                <p className="text-xs text-stone-500">
+                  {t('shopTip')}: {tipAmount.toFixed(2)} CHF
+                </p>
+              ) : null}
               {payMsg ? <p className="mt-2 text-sm text-amber-700">{payMsg}</p> : null}
               <div ref={setDropinEl} className="mt-4 min-h-[120px]" />
               {demoMode ? (

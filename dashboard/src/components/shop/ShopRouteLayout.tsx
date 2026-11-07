@@ -17,7 +17,7 @@ export default function ShopRouteLayout({ children }: { children: ReactNode }) {
   const { theme: cmsTheme } = useShopCmsTheme(shopKey);
   const hideReservationFab = useMemo(() => {
     const path = pathname.replace(/\/+$/, '') || '/';
-    return /\/reservations$/.test(path);
+    return /\/reservations$/.test(path) || /\/table\/[^/]+/.test(path);
   }, [pathname]);
 
   useEffect(() => {

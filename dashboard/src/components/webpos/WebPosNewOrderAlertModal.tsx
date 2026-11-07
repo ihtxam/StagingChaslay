@@ -111,7 +111,7 @@ export default function WebPosNewOrderAlertModal({
             <div className="space-y-0.5 text-sm text-stone-700">
               {order.customerName ? <p className="font-semibold">{order.customerName}</p> : null}
               {order.customerPhone ? <p>{order.customerPhone}</p> : null}
-              {order.shippingAddress ? (
+              {order.shippingAddress && order.orderSource !== 'qr_table' ? (
                 <p className="text-xs text-stone-600">{order.shippingAddress}</p>
               ) : null}
               {zip ? (

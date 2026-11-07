@@ -1428,11 +1428,16 @@ export default function WebPosOrdersPanel({
     opts: { onClose: () => void; align?: 'left' | 'right'; anchor: HTMLElement | null }
   ) => {
     const showPrint = !!onPrintOrder;
+    const showKitchen =
+      (isOnlineShopOrder(order) || String(order.orderSource || '') === 'qr_table') &&
+      !['cancelled', 'refunded', 'completed'].includes(String(order.status || '').toLowerCase());
     const showCancel = !!(canCancel && canCancelOrder(order));
     const showRefund = !!(canRefund && canRefundOrder(order));
     const showEditPay = canEditPayment(order) && !isInvoiceOrder(order);
     const showInvoice = isInvoiceOrder(order);
-    if (!showPrint && !showCancel && !showRefund && !showEditPay && !showInvoice) return null;
+    if (!showPrint && !showKitchen && !showCancel && !showRefund && !showEditPay && !showInvoice) {
+      return null;
+    }
     if (!opts.anchor) return null;
     return (
       <PortaledActionMenu
@@ -1470,6 +1475,21 @@ export default function WebPosOrdersPanel({
           >
             <Printer size={14} className="shrink-0 text-stone-500" />
             {t('webPosPrintReceipt')}
+          </button>
+        ) : null}
+        {showKitchen ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:opacity-40"
+            disabled={onlineActionBusy === order.id}
+            onClick={() => {
+              opts.onClose();
+              void runOnlineAction(order, 'send_to_kitchen');
+            }}
+          >
+            <UtensilsCrossed size={14} className="shrink-0 text-stone-500" />
+            {t('webPosSendToKitchen')}
           </button>
         ) : null}
         {showRefund ? (

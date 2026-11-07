@@ -8,6 +8,8 @@ const SHORT_WEB_RE = /^WEB-(\d{1,6})$/;
 const SCOPED_WEB_RE = /^WEB-([A-Z0-9]{4})-(\d{1,6})$/;
 const LEGACY_WEB_RE = /^WEB-(\d{10,})(?:-([A-F0-9]{4,8}))?$/i;
 const SCOPED_KIOSK_RE = /^KIOSK-([A-Z0-9]{4})-(\d{1,6})$/;
+const SCOPED_QR_RE = /^QR-([A-Z0-9]{4})-(\d{1,6})$/;
+const SHORT_QR_RE = /^QR-(\d{1,6})$/;
 
 /** Stable 4-char merchant code for globally unique WEB order numbers. */
 export function merchantWebOrderCode(merchantId: string): string {
@@ -24,6 +26,8 @@ export function formatWebOrderNumberDisplay(orderNumber: string): string {
   if (!n) return n;
   if (SHORT_WEB_RE.test(n)) return n;
   if (SCOPED_WEB_RE.test(n)) return n;
+  if (SHORT_QR_RE.test(n)) return n;
+  if (SCOPED_QR_RE.test(n)) return n;
   const legacy = n.match(LEGACY_WEB_RE);
   if (legacy) {
     if (legacy[2]) return `WEB-${legacy[2]}`;
@@ -57,6 +61,22 @@ function parseShortKioskSeq(orderNumber: string): number | null {
   if (!scoped) return null;
   const seq = parseInt(scoped[2], 10);
   return Number.isFinite(seq) ? seq : null;
+}
+
+function parseShortQrSeq(orderNumber: string): number | null {
+  const scoped = orderNumber.match(SCOPED_QR_RE);
+  if (scoped) {
+    const seq = parseInt(scoped[2], 10);
+    return Number.isFinite(seq) ? seq : null;
+  }
+  const m = orderNumber.match(SHORT_QR_RE);
+  if (!m) return null;
+  const seq = parseInt(m[1], 10);
+  return Number.isFinite(seq) ? seq : null;
+}
+
+function scopedQrOrderNumber(merchantId: string, seq: number): string {
+  return `QR-${merchantWebOrderCode(merchantId)}-${seq}`;
 }
 
 /** Next short WEB-xxxx number for a merchant (daily sequence, Europe/Zurich). */
@@ -129,4 +149,40 @@ export async function generateKioskOrderNumber(db: Db, merchantId: string): Prom
 
   const rand = Math.random().toString(36).substring(2, 5).toUpperCase();
   return `KIOSK-${merchantCode}-${maxSeq + 1}${rand}`;
+}
+
+/** Next short QR-xxxx number for QR table orders (daily sequence, Europe/Zurich). */
+export async function generateQrTableOrderNumber(db: Db, merchantId: string): Promise<string> {
+  const { start, end } = zurichDayBounds(ymdZurich());
+  const merchantCode = merchantWebOrderCode(merchantId);
+
+  const rows = await db
+    .select({ orderNumber: schema.orders.orderNumber })
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.merchantId, merchantId),
+        eq(schema.orders.orderSource, "qr_table"),
+        gte(schema.orders.createdAt, start),
+        lte(schema.orders.createdAt, end)
+      )
+    );
+
+  let maxSeq = 0;
+  for (const row of rows) {
+    const seq = parseShortQrSeq(row.orderNumber);
+    if (seq != null) maxSeq = Math.max(maxSeq, seq);
+  }
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const seq = maxSeq + 1 + attempt;
+    const candidate = scopedQrOrderNumber(merchantId, seq);
+    const exists = await db.query.orders.findFirst({
+      where: eq(schema.orders.orderNumber, candidate),
+    });
+    if (!exists) return candidate;
+  }
+
+  const rand = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `QR-${merchantCode}-${maxSeq + 1}${rand}`;
 }
