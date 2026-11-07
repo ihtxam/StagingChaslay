@@ -5233,6 +5233,18 @@ export default function Settings() {
                 </div>
               </div>
 
+              <SettingsPrintCompanionSection
+                printBridgeManifest={printBridgeManifest}
+                printAgentManifest={printAgentManifest}
+                printAgentOk={printAgentOk}
+                printAgentHealthChecked={printAgentHealthChecked}
+                installedPrintCompanionVersion={installedPrintCompanionVersion}
+                printAgentOutdated={printAgentOutdated}
+                desktopBundledSidecarOk={desktopBundledSidecarOk}
+                onRefresh={() => void refreshPrintAgentPrinters()}
+                refreshing={refreshingPrinters}
+              />
+
               <Section icon={Printer} accent={settingsDash.success} title={t('printerProfiles')}>
                 <div id="settings-printers">
                 {(() => {
@@ -5858,20 +5870,6 @@ export default function Settings() {
                 </label>
               </Section>
               )}
-
-              {tab === 'printers' ? (
-                <SettingsPrintCompanionSection
-                  printBridgeManifest={printBridgeManifest}
-                  printAgentManifest={printAgentManifest}
-                  printAgentOk={printAgentOk}
-                  printAgentHealthChecked={printAgentHealthChecked}
-                  installedPrintCompanionVersion={installedPrintCompanionVersion}
-                  printAgentOutdated={printAgentOutdated}
-                  desktopBundledSidecarOk={desktopBundledSidecarOk}
-                  onRefresh={() => void refreshPrintAgentPrinters()}
-                  refreshing={refreshingPrinters}
-                />
-              ) : null}
 
               <Section
                 id="order-labels"
