@@ -152,12 +152,12 @@ button {
     overscroll-behavior: none;
   }
 
-  @media (max-width: 1023px) {
-    html.panel-vv-sync .panel-shell {
-      height: var(--panel-vvh, 100dvh);
-      max-height: var(--panel-vvh, 100dvh);
-    }
+  html.panel-vv-sync .panel-shell {
+    height: var(--panel-vvh, 100dvh);
+    max-height: var(--panel-vvh, 100dvh);
+  }
 
+  @media (max-width: 1023px) {
     html.panel-vv-sync.panel-kb-open .panel-shell {
       /* Stay in the top-left corner. top/left from visualViewport.offset*
          stuck as a gap on Settings and then on POS after the keyboard closed. */

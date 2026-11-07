@@ -127,17 +127,11 @@ export function syncPanelVisualViewportHeight(): void {
   }
   clearPanelKeyboardPinState(root);
   /*
-   * iOS Safari: `100dvh` / large viewport units are taller than the *visible*
-   * layout when the tab/URL chrome is showing, so the fixed panel shell and
-   * drawer look letterboxed (gray margins). Keep --panel-vvh aligned with
-   * visualViewport.height whenever the soft keyboard is not pinned.
+   * `100dvh` is often taller than the visible layout (mobile browser chrome,
+   * desktop toolbars). Align the panel shell to visualViewport.height whenever
+   * the soft keyboard is not pinned — all platforms, not only iOS.
    */
-  const narrow = window.matchMedia('(max-width: 1023px)').matches;
-  if (narrow && isIosVisualViewportPin()) {
-    root.style.setProperty('--panel-vvh', `${Math.round(vv.height)}px`);
-  } else {
-    root.style.removeProperty('--panel-vvh');
-  }
+  root.style.setProperty('--panel-vvh', `${Math.round(vv.height)}px`);
   // A focused field on Settings can scroll the layout viewport. That offset
   // stays after opening POS and looks like padding on the left and top.
   resetPanelViewportScroll();

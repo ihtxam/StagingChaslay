@@ -35,8 +35,8 @@ assert.match(dashboard, /storeName=\{merchantShopName\}/);
 assert.match(dashboard, /settings\?\.businessName/);
 assert.match(
   dashboard,
-  /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4/,
-  'settings route uses the same panel-main padding as other merchant pages; shell has no extra horizontal gutter'
+  /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0/,
+  'settings route keeps panel-main flush; horizontal inset lives only on merchant-settings-shell'
 );
 
 assert.match(
@@ -54,8 +54,13 @@ assert.match(sidebar, /<Settings \/>/);
 
 assert.match(
   settings,
-  /merchant-settings-shell[\s\S]*sm:max-w-\[1400px\]/,
-  'settings shell should match overview width cap from sm up; horizontal inset comes from panel-main only'
+  /merchant-settings-shell[\s\S]*sm:px-4/,
+  'settings shell owns horizontal padding (panel-main p-0)'
+);
+assert.match(
+  modifiers,
+  /merchant-dialog-surface[\s\S]*bg-\[var\(--bg-elevated\)\]/,
+  'link-products picker must not be transparent'
 );
 assert.match(
   settings,

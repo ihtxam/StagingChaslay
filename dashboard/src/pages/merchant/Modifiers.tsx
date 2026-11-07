@@ -1190,7 +1190,7 @@ export default function Modifiers() {
       {productPickerOpen && typeof document !== 'undefined'
         ? createPortal(
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
-          <div className="merchant-dialog-surface w-full max-w-lg rounded-2xl shadow-xl">
+          <div className="merchant-dialog-surface w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
             <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
               <h3 className="font-bold text-[var(--text)]">{t('linkProducts')}</h3>
               <button
