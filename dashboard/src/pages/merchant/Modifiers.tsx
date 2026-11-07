@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   ChevronUp,
@@ -706,22 +707,38 @@ export default function Modifiers() {
         </SortableContainer>
       </div>
 
-      {editorOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-          <form
-            onSubmit={onSave}
-            className="flex h-full w-full max-w-3xl flex-col bg-[#f5f6f8] shadow-2xl"
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
-              <h2 className="text-xl font-bold text-slate-900">
+      {editorOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center overflow-hidden bg-black/50 p-0 sm:p-3 touch-none"
+              onClick={closeEditor}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') closeEditor();
+              }}
+              role="presentation"
+            >
+              <form
+                onSubmit={onSave}
+                className="merchant-product-editor-modal flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-xl touch-auto"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+              >
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+              <h2 className="text-base font-semibold text-[var(--text)]">
                 {editingId ? t('editGroup') : t('extrasNosAddGroup')}
               </h2>
-              <button type="button" onClick={closeEditor} className="rounded-lg p-2 hover:bg-slate-100">
-                <X size={18} />
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md muted hover:bg-[var(--bg-muted)]"
+                aria-label={t('close')}
+              >
+                <X size={20} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 touch-pan-y [-webkit-overflow-scrolling:touch] space-y-4">
               <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
                 <Field label={t('title')} required>
                   <input
@@ -943,12 +960,12 @@ export default function Modifiers() {
                                 ) : null}
                               </div>
                             </div>
-                            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:gap-3">
-                              <div className="flex items-center gap-2 sm:contents">
-                                <div className="shrink-0 sm:pb-2">
+                            <div className="grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-[auto_minmax(0,2fr)_6.5rem_7.5rem_auto] xl:items-end xl:gap-3">
+                              <div className="flex items-center gap-2 xl:contents">
+                                <div className="shrink-0 xl:row-span-1 xl:pb-2">
                                   <DragHandle attributes={attributes} listeners={listeners} />
                                 </div>
-                                <label className="block min-w-0 flex-1 sm:flex-[1.4]">
+                                <label className="block min-w-0 flex-1 xl:min-w-0">
                                   <span className="mb-1 block text-xs font-medium text-slate-500">
                                     {t('items')}
                                   </span>
@@ -981,7 +998,7 @@ export default function Modifiers() {
                               </div>
 
                               {form.pricingType !== 'free' && (
-                                <label className="block w-full sm:w-36 sm:shrink-0">
+                                <label className="block w-full min-w-0 xl:w-auto xl:shrink-0">
                                   <span className="mb-1 block text-xs font-medium text-slate-500">
                                     {t('salePrice')}
                                   </span>
@@ -1009,7 +1026,7 @@ export default function Modifiers() {
                                 </label>
                               )}
 
-                              <label className="block w-full min-w-0 sm:w-40 sm:shrink-0">
+                              <label className="block w-full min-w-0 xl:w-auto xl:shrink-0">
                                 <span className="mb-1 block text-xs font-medium text-slate-500">
                                   {t('saleStatus')}
                                 </span>
@@ -1030,8 +1047,8 @@ export default function Modifiers() {
                                 </select>
                               </label>
 
-                              <div className="flex items-center justify-between gap-3 sm:contents">
-                                <label className="inline-flex items-center gap-2 text-sm text-slate-700 sm:pb-2.5 sm:shrink-0">
+                              <div className="flex items-center justify-between gap-3 xl:contents">
+                                <label className="inline-flex items-center gap-2 text-sm text-slate-700 xl:pb-2.5 xl:shrink-0">
                                   <input
                                     type="checkbox"
                                     className="accent-teal-600 h-4 w-4"
@@ -1177,28 +1194,30 @@ export default function Modifiers() {
               </section>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
               <button
                 type="button"
                 onClick={closeEditor}
-                className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="btn-secondary px-4 py-2.5 text-sm font-semibold"
               >
                 {t('cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                className="btn-primary px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
               >
                 {saving ? t('saving') : t('save')}
               </button>
             </div>
           </form>
-        </div>
-      )}
+            </div>,
+            document.body
+          )
+        : null}
 
       {productPickerOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h3 className="font-bold text-slate-900">{t('linkProducts')}</h3>

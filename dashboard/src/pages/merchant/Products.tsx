@@ -2784,7 +2784,7 @@ export default function Products() {
           role="presentation"
         >
           <div
-            className="merchant-product-editor-modal flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-xl touch-auto"
+            className="merchant-product-editor-modal flex h-[min(94dvh,94vh)] max-h-[min(94dvh,94vh)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-t-lg sm:rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-xl touch-auto"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"

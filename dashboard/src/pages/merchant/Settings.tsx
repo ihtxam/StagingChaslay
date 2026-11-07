@@ -155,6 +155,7 @@ import SettingsAccountingTab from './settings/SettingsAccountingTab';
 import SettingsExtraModulesTab from './settings/SettingsExtraModulesTab';
 import SettingsPrintCompanionSection from '@/components/settings/SettingsPrintCompanionSection';
 import SettingsAboutTab from './settings/SettingsAboutTab';
+import SettingsLicenseTab from './settings/SettingsLicenseTab';
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { isLicensedSettingsAddonTab } from './settings/settings-extra-modules';
@@ -6025,7 +6026,11 @@ export default function Settings() {
             <SettingsExtraModulesTab settings={settings} isRetailMerchant={isRetailMerchant} />
           ) : null}
 
-          {(tab === 'about' || tab === 'license') && settings ? (
+          {tab === 'license' && settings ? (
+            <SettingsLicenseTab settings={settings} isRetailMerchant={isRetailMerchant} />
+          ) : null}
+
+          {tab === 'about' && settings ? (
             <SettingsAboutTab settings={settings} isRetailMerchant={isRetailMerchant} />
           ) : null}
 
