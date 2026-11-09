@@ -2159,6 +2159,7 @@ const en: Dict = {
   productBuyingPriceHint: 'Purchase cost per unit. Used for profit and margin in Reports.',
   storekeeperBuyingPrice: 'Buying price',
   reportsTabProfit: 'Profit & margin',
+  reportsTabAiCoach: 'AI coach',
   reportsProfitHint: 'Gross profit from sold items using each product’s buying price (catalog cost).',
   reportsProfitLoadFailed: 'Could not load profit report',
   reportsCogs: 'Cost of goods',

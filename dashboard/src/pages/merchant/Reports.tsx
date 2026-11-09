@@ -417,7 +417,7 @@ export default function ReportsPage() {
     { id: 'revenue', label: t('reportsTabRevenue') },
     { id: 'mix', label: t('reportsTabSalesMix') },
     { id: 'profit', label: t('reportsTabProfit') },
-    ...(aiCoachLicensed ? [{ id: 'coach' as const, label: 'AI coach' }] : []),
+    ...(aiCoachLicensed ? [{ id: 'coach' as const, label: t('reportsTabAiCoach') }] : []),
     { id: 'products', label: t('reportsTabProducts') },
     ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
   ];
