@@ -160,7 +160,6 @@ import SettingsExtraModulesTab from './settings/SettingsExtraModulesTab';
 import SettingsPrintCompanionSection from '@/components/settings/SettingsPrintCompanionSection';
 import SettingsAboutTab from './settings/SettingsAboutTab';
 import SettingsLicenseTab from './settings/SettingsLicenseTab';
-import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import SettingsSearchErrorBoundary from './settings/SettingsSearchErrorBoundary';
 import { isLicensedSettingsAddonTab } from './settings/settings-extra-modules';
 import { isKdsLicensed } from '@/lib/kds-addon';
@@ -6181,7 +6180,6 @@ export default function Settings() {
           </div>
         </div>
       </div>
-      <RebornPoweredByFooter variant="panel" className="shrink-0 rounded-b-xl" />
     </div>
   );
 }

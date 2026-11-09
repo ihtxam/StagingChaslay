@@ -1,24 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
-import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { resolvePanelBuildMeta } from './scripts/resolve-panel-build'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
-function resolveBuildStamp(): string {
-  const override = process.env.REBORN_BUILD_STAMP?.trim()
-  if (override) return override
-  try {
-    const sha = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
-    if (sha) return sha
-  } catch {
-    /* outside git or git unavailable */
-  }
-  return new Date().toISOString().slice(0, 19)
-}
-
-const buildStamp = resolveBuildStamp()
+const { gitSha: buildStamp, datedTag: panelBuildTag } = resolvePanelBuildMeta()
 
 export default defineConfig({
   plugins: [
@@ -33,6 +21,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_STAMP__: JSON.stringify(buildStamp),
+    __PANEL_BUILD_TAG__: JSON.stringify(panelBuildTag),
   },
   resolve: {
     alias: {

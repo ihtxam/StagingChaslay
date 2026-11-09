@@ -12,6 +12,7 @@ import type { PanelLocationHeaderLabels } from '@/lib/panel-location-header';
 import PanelLocationTitle from '@/components/PanelLocationTitle';
 import { useI18n, type Locale } from '@/lib/i18n';
 import StaffSwitchButton, { type StaffSwitchButtonHandle } from '@/components/StaffSwitchButton';
+import { panelBuildLabel } from '@/lib/app-version';
 
 export interface SidebarLeaf {
   label: string;
@@ -551,6 +552,21 @@ export default function Sidebar({
             );
           })}
         </nav>
+
+        {!isAgency ? (
+          <div
+            className={`panel-sidebar-build shrink-0 px-3 py-2 ${railMode ? 'px-1' : ''}`}
+            title={panelBuildLabel}
+          >
+            <p
+              className={`m-0 text-center font-mono leading-snug text-white/50 ${
+                railMode ? 'sr-only' : 'text-[10px]'
+              }`}
+            >
+              {panelBuildLabel}
+            </p>
+          </div>
+        ) : null}
 
         <div
           className={`panel-sidebar-footer relative z-10 p-3 border-t space-y-2 shrink-0 overflow-visible`}

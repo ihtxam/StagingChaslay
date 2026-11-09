@@ -38,6 +38,9 @@ assert.match(
   /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0/,
   'settings route keeps panel-main flush; horizontal inset lives only on merchant-settings-shell'
 );
+assert.doesNotMatch(settings, /RebornPoweredByFooter/);
+assert.match(settings, /merchant-settings-shell[\s\S]*max-w-none/);
+assert.match(sidebar, /panelBuildLabel/);
 
 assert.match(
   sidebar,
@@ -58,14 +61,14 @@ assert.match(
   'settings shell owns horizontal padding (panel-main p-0)'
 );
 assert.match(
-  modifiers,
-  /merchant-dialog-surface[\s\S]*bg-\[var\(--bg-elevated\)\]/,
-  'link-products picker must not be transparent'
-);
-assert.match(
   settings,
   /merchant-settings-scroll/,
   'settings scroll root should get scrollbar styling'
+);
+assert.match(
+  modifiers,
+  /merchant-dialog-surface[\s\S]*bg-\[var\(--bg-elevated\)\]/,
+  'link-products picker must not be transparent'
 );
 assert.match(
   productEdit,
