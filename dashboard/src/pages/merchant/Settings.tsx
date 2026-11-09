@@ -2359,11 +2359,10 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-          <aside className="sticky top-0 z-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)] lg:static lg:z-auto lg:flex lg:w-56 lg:flex-col lg:border-b-0 lg:border-r">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-[var(--border)] lg:flex-row lg:border-t-0">
+          <aside className="sticky top-0 z-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg)] lg:static lg:z-auto lg:flex lg:h-full lg:w-56 lg:min-h-0 lg:flex-col lg:border-b-0 lg:border-r lg:bg-transparent">
             <nav
-              className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 [-webkit-overflow-scrolling:touch] lg:flex lg:flex-col lg:gap-0.5 lg:overflow-x-visible lg:overflow-y-auto"
+              className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 [-webkit-overflow-scrolling:touch] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0.5 lg:overflow-x-hidden lg:overflow-y-auto"
               aria-label={t('settings')}
             >
               {SETTINGS_NAV_GROUPS.map((group) => {
@@ -6178,7 +6177,6 @@ export default function Settings() {
 
           </SettingsSearchErrorBoundary>
           </div>
-        </div>
       </div>
     </div>
   );
