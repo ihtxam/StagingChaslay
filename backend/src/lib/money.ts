@@ -20,6 +20,31 @@ export function extractVatFromGross(gross: number, ratePercent: number): number 
   return roundMoney2(gross - extractNetFromGross(gross, ratePercent));
 }
 
+/** Implied VAT % from stored HT + TVA lines (valid only when prices are ex-VAT). */
+export function impliedVatRatePercent(subtotal: number, taxAmount: number): number | undefined {
+  if (subtotal > 0.001 && taxAmount > 0.001) {
+    return roundMoney2((taxAmount / subtotal) * 100);
+  }
+  return undefined;
+}
+
+/**
+ * VAT % exposed on order list APIs — when prices are VAT-included, never derive
+ * taxAmount/subtotal (shows 2.7% instead of configured 2.6%).
+ */
+export function resolveOrderListTaxRate(opts: {
+  subtotal: number;
+  taxAmount: number;
+  taxIncludedInPrice?: boolean;
+  channelTaxRate?: number;
+}): number | undefined {
+  const channelRate = Number(opts.channelTaxRate);
+  if (opts.taxIncludedInPrice === true && Number.isFinite(channelRate) && channelRate > 0) {
+    return channelRate;
+  }
+  return impliedVatRatePercent(opts.subtotal, opts.taxAmount);
+}
+
 /** Round to nearest 0.05 CHF. */
 export function roundTo005(amount: number): number {
   if (!Number.isFinite(amount)) return 0;

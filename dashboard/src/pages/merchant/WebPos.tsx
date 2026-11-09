@@ -11991,6 +11991,16 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             autoPrintReceipt={shouldAutoPrintReceipt(printSettings)}
             taxIncludedInPrice={vatIncludedInPrice}
             vatAfterDiscount={vatAfterDiscount}
+            merchantTax={
+              merchant
+                ? {
+                    vatRate: merchant.vatRate,
+                    taxTakeawayRate: merchant.taxTakeawayRate,
+                    taxDineInRate: merchant.taxDineInRate,
+                    taxDeliveryRate: merchant.taxDeliveryRate,
+                  }
+                : undefined
+            }
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

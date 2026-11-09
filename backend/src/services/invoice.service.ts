@@ -3,7 +3,8 @@ import path from "path";
 import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import { getDb, schema } from "@/db";
-import { roundMoney2 } from "@/lib/money";
+import { resolveOrderListTaxRate, roundMoney2 } from "@/lib/money";
+import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { getUploadsRoot } from "@/services/media-upload.service";
 import {
   buildQrrReference,
@@ -258,6 +259,18 @@ export class InvoiceService {
       limit,
     });
 
+    const merchantRow = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: {
+        taxIncludedInPrice: true,
+        vatRate: true,
+        taxTakeawayRate: true,
+        taxDineInRate: true,
+        taxDeliveryRate: true,
+      },
+    });
+    const vatIncludedInPrice = merchantRow?.taxIncludedInPrice === true;
+
     const orderIds = rows.map((o) => o.id);
     const refundsByOrder = new Map<string, Array<Record<string, unknown>>>();
     if (orderIds.length) {
@@ -309,10 +322,18 @@ export class InvoiceService {
         total: Number(o.total),
         subtotal: Number(o.subtotal),
         taxAmount: Number(o.taxAmount),
-        taxRate:
-          Number(o.subtotal) > 0.001 && Number(o.taxAmount) > 0.001
-            ? roundMoney2((Number(o.taxAmount) / Number(o.subtotal)) * 100)
+        taxRate: resolveOrderListTaxRate({
+          subtotal: Number(o.subtotal),
+          taxAmount: Number(o.taxAmount),
+          taxIncludedInPrice: vatIncludedInPrice,
+          channelTaxRate: merchantRow
+            ? MerchantSettingsService.channelTaxRate(
+                merchantRow,
+                (o.fulfillmentChannel as "takeaway" | "dine_in" | "delivery" | "in_store") ||
+                  "takeaway"
+              )
             : undefined,
+        }),
         discountAmount: Number(o.discountAmount || 0),
         tipAmount: Number(o.tipAmount || 0),
         refundAmount: Number(o.refundAmount || 0),
