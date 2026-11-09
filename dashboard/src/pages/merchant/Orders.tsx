@@ -1483,6 +1483,16 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   order={selected}
                   taxIncludedInPrice={merchant?.taxIncludedInPrice === true}
                   vatAfterDiscount={merchant?.vatAfterDiscount !== false}
+                  merchantTax={
+                    merchant
+                      ? {
+                          vatRate: merchant.vatRate,
+                          taxTakeawayRate: merchant.taxTakeawayRate,
+                          taxDineInRate: merchant.taxDineInRate,
+                          taxDeliveryRate: merchant.taxDeliveryRate,
+                        }
+                      : undefined
+                  }
                 />
                 {Number(selected.refundAmount || 0) > 0 ? (
                   <p className="mt-1 text-right text-xs font-semibold text-rose-700 tabular-nums">

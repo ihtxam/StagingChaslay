@@ -9,17 +9,24 @@ import {
   resolveReceiptTaxRateForOrder,
 } from '@/lib/webpos-receipt';
 
+const merchantTax = {
+  taxDineInRate: 8.1,
+  taxTakeawayRate: 2.6,
+  taxDeliveryRate: 2.6,
+};
+
 assert.equal(
   resolveReceiptTaxRateForOrder(
     { subtotal: 26.5, taxAmount: 0.72, channel: 'delivery' },
-    {
-      vatIncludedInPrice: true,
-      merchantTax: {
-        taxDineInRate: 8.1,
-        taxTakeawayRate: 2.6,
-        taxDeliveryRate: 2.6,
-      },
-    }
+    { vatIncludedInPrice: true, merchantTax }
+  ),
+  2.6
+);
+
+assert.equal(
+  resolveReceiptTaxRateForOrder(
+    { subtotal: 3.7, taxAmount: 0.1, taxRate: 2.7, channel: 'takeaway' },
+    { vatIncludedInPrice: true, merchantTax }
   ),
   2.6
 );

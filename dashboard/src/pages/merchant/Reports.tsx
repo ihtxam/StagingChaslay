@@ -38,6 +38,12 @@ import SalesMixPanel from '@/components/reports/SalesMixPanel';
 import ProfitMarginPanel from '@/components/reports/ProfitMarginPanel';
 import AiCoachPanel from '@/components/growth/AiCoachPanel';
 import ReportCollapsibleSection from '@/components/reports/ReportCollapsibleSection';
+import { appendReportLocale } from '@/lib/report-api';
+import {
+  formatReportVatRowLabel,
+  localizeReportRangeLabel,
+  reportChannelLabel,
+} from '@/lib/report-display-labels';
 
 type EodShiftCash = CashDrawerShift;
 
@@ -78,7 +84,7 @@ type EodReport = {
   cashTotal: number;
   cardTotal: number;
   terminalTotal: number;
-  vatRows?: Array<{ label: string; net: number; tva: number; brut: number }>;
+  vatRows?: Array<{ label: string; channel?: string; rate?: number; net: number; tva: number; brut: number }>;
   paymentRows: Array<{ method: string; count: number; total: number; percent?: number }>;
   refundRows?: Array<{ method: string; total: number }>;
   channelRows: Array<{ channel: string; count: number; total: number }>;
@@ -140,13 +146,16 @@ export default function ReportsPage() {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
     }
-    return params;
-  }, [preset, from, to]);
+    return appendReportLocale(params, locale);
+  }, [preset, from, to, locale]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ preset });
+      const params = appendReportLocale(
+        new URLSearchParams({ preset }),
+        locale
+      );
       if (preset === 'custom') {
         if (from) params.set('from', from);
         if (to) params.set('to', to);
@@ -169,7 +178,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [preset, from, to, t]);
+  }, [preset, from, to, t, locale]);
 
   useEffect(() => {
     void load();
@@ -408,7 +417,7 @@ export default function ReportsPage() {
     { id: 'revenue', label: t('reportsTabRevenue') },
     { id: 'mix', label: t('reportsTabSalesMix') },
     { id: 'profit', label: t('reportsTabProfit') },
-    ...(aiCoachLicensed ? [{ id: 'coach' as const, label: 'AI coach' }] : []),
+    ...(aiCoachLicensed ? [{ id: 'coach' as const, label: t('reportsTabAiCoach') }] : []),
     { id: 'products', label: t('reportsTabProducts') },
     ...(ownOnly ? [] : [{ id: 'users' as const, label: t('reportsTabUsers') }]),
   ];
@@ -664,7 +673,14 @@ export default function ReportsPage() {
         <p className="text-sm muted">{t('reportsEmpty')}</p>
       ) : (
         <>
-          <p className="text-sm text-[var(--text-muted)]">{report.range.label}</p>
+          <p className="text-sm text-[var(--text-muted)]">
+            {localizeReportRangeLabel(
+              report.range.label,
+              report.range.from,
+              report.range.to,
+              locale
+            )}
+          </p>
 
           {(tab === 'eod' || tab === 'sales') && (
             <>
@@ -712,7 +728,7 @@ export default function ReportsPage() {
                       <tbody>
                         {report.vatRows.map((row) => (
                           <tr key={row.label} className="border-b border-[var(--border)]/60">
-                            <td className="px-3 py-2">{row.label}</td>
+                            <td className="px-3 py-2">{formatReportVatRowLabel(row, t)}</td>
                             <td className="px-3 py-2 tabular-nums text-right">{money(row.net)}</td>
                             <td className="px-3 py-2 tabular-nums text-right">{money(row.tva)}</td>
                             <td className="px-3 py-2 tabular-nums text-right">{money(row.brut)}</td>
@@ -736,7 +752,7 @@ export default function ReportsPage() {
                       report.channelRows.map((r) => (
                         <li key={r.channel} className="flex justify-between px-3 py-2">
                           <span>
-                            {r.channel} · {r.count}
+                            {reportChannelLabel(r.channel, t)} · {r.count}
                           </span>
                           <span className="tabular-nums">{money(r.total)}</span>
                         </li>

@@ -10,7 +10,8 @@ import {
   resolvePosCancelReason,
   resolvePosRefundReason,
 } from "@/lib/pos-print-settings";
-import { roundMoney2 } from "@/lib/money";
+import { resolveOrderListTaxRate, roundMoney2 } from "@/lib/money";
+import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { zurichDayBounds } from "@/lib/vacation";
 import { resolveOrderItemName } from "@/lib/order-item-name";
 import {
@@ -670,6 +671,18 @@ export class PosOrdersService {
       );
     }
 
+    const merchantRow = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: {
+        taxIncludedInPrice: true,
+        vatRate: true,
+        taxTakeawayRate: true,
+        taxDineInRate: true,
+        taxDeliveryRate: true,
+      },
+    });
+    const vatIncludedInPrice = merchantRow?.taxIncludedInPrice === true;
+
     const orderIds = rows.map((o) => o.id);
     const assignedIds = [
       ...new Set(rows.map((r) => r.assignedDeliveryStaffId).filter(Boolean) as string[]),
@@ -743,10 +756,18 @@ export class PosOrdersService {
       invoiceDueAt: (o as { invoiceDueAt?: Date | null }).invoiceDueAt || null,
       subtotal: Number(o.subtotal),
       taxAmount: Number(o.taxAmount),
-      taxRate:
-        Number(o.subtotal) > 0.001 && Number(o.taxAmount) > 0.001
-          ? roundMoney2((Number(o.taxAmount) / Number(o.subtotal)) * 100)
+      taxRate: resolveOrderListTaxRate({
+        subtotal: Number(o.subtotal),
+        taxAmount: Number(o.taxAmount),
+        taxIncludedInPrice: vatIncludedInPrice,
+        channelTaxRate: merchantRow
+          ? MerchantSettingsService.channelTaxRate(
+              merchantRow,
+              (o.fulfillmentChannel as "takeaway" | "dine_in" | "delivery" | "in_store") ||
+                "takeaway"
+            )
           : undefined,
+      }),
       discountAmount: Number(o.discountAmount || 0),
       tipAmount: Number(o.tipAmount || 0),
       roundingAmount: Number(o.roundingAmount || 0),

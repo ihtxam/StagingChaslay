@@ -3,6 +3,11 @@ import { ChevronLeft, ChevronRight, ChevronRight as RowChevron } from 'lucide-re
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import RevenuePeriodSummaryModal from '@/components/reports/RevenuePeriodSummaryModal';
+import { appendReportLocale } from '@/lib/report-api';
+import {
+  formatReportMonthLong,
+  localizeRevenueBreakdownRows,
+} from '@/lib/report-display-labels';
 
 type RevenueMode = 'days' | 'weeks' | 'months' | 'custom';
 
@@ -24,21 +29,6 @@ function todayYmd() {
   return new Date(z.getTime() - z.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
 export default function ReportsRevenuePanel() {
   const { t, locale } = useI18n();
   const now = new Date();
@@ -51,44 +41,10 @@ export default function ReportsRevenuePanel() {
   const [loading, setLoading] = useState(true);
   const [selectedRow, setSelectedRow] = useState<RevenueRow | null>(null);
 
-  const monthLabel = useMemo(() => {
-    const name = MONTH_NAMES[month - 1] || String(month);
-    if (locale === 'fr') {
-      const fr = [
-        'janvier',
-        'février',
-        'mars',
-        'avril',
-        'mai',
-        'juin',
-        'juillet',
-        'août',
-        'septembre',
-        'octobre',
-        'novembre',
-        'décembre',
-      ];
-      return `${fr[month - 1] || name} ${year}`;
-    }
-    if (locale === 'de') {
-      const de = [
-        'Januar',
-        'Februar',
-        'März',
-        'April',
-        'Mai',
-        'Juni',
-        'Juli',
-        'August',
-        'September',
-        'Oktober',
-        'November',
-        'Dezember',
-      ];
-      return `${de[month - 1] || name} ${year}`;
-    }
-    return `${name} ${year}`;
-  }, [locale, month, year]);
+  const monthLabel = useMemo(
+    () => `${formatReportMonthLong(month, locale)} ${year}`,
+    [locale, month, year]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,14 +58,16 @@ export default function ReportsRevenuePanel() {
         params.set('from', customFrom);
         params.set('to', customTo);
       }
+      appendReportLocale(params, locale);
       const res = await api.get(`/merchant/reports/revenue?${params}`);
-      setRows(res.data.breakdown?.rows || []);
+      const raw = res.data.breakdown?.rows || [];
+      setRows(localizeRevenueBreakdownRows(raw, mode, locale, t));
     } catch {
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [mode, month, year, customFrom, customTo]);
+  }, [mode, month, year, customFrom, customTo, locale, t]);
 
   useEffect(() => {
     void load();
@@ -185,7 +143,7 @@ export default function ReportsRevenuePanel() {
             type="button"
             className="p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-muted)]"
             onClick={() => (mode === 'months' ? shiftYear(-1) : shiftMonth(-1))}
-            aria-label="Previous"
+            aria-label={t('previous')}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -196,7 +154,7 @@ export default function ReportsRevenuePanel() {
             type="button"
             className="p-2 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-muted)]"
             onClick={() => (mode === 'months' ? shiftYear(1) : shiftMonth(1))}
-            aria-label="Next"
+            aria-label={t('next')}
           >
             <ChevronRight className="w-5 h-5" />
           </button>

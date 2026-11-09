@@ -5,6 +5,16 @@ import { addDaysYmd } from "@/lib/ymd";
 import { normalizePaymentMethod, paymentMethodLabelEn, netPaymentBucketsAfterRefund, refundBucketsFromCumulative, netTaxableSale } from "@/lib/payment-breakdown";
 import { normalizePosCheckoutSettings } from "@/lib/pos-checkout-settings";
 import { normalizeBusinessModule, posModeForModule } from "@/lib/business-module";
+import {
+  formatReportMonthLong,
+  formatReportPeriodLabel,
+  formatReportWeekdayLong,
+  formatReportChartDayShort,
+  formatReportYmdDisplay,
+  localizeReportRangeLabel,
+  reportCalendarWeekLabel,
+  reportChannelLabel as reportChannelLabelI18n,
+} from "@/lib/report-display-labels";
 
 export type ReportPreset =
   | "today"
@@ -77,21 +87,9 @@ export function isCountableSale(o: { status?: string | null; paymentStatus?: str
   return false;
 }
 
-function channelLabel(ch: string): string {
-  switch (ch) {
-    case "dine_in":
-      return "Dine-in";
-    case "delivery":
-      return "Delivery";
-    case "in_store":
-    case "pos":
-    case "retail":
-      return "In store";
-    case "takeaway":
-      return "Takeaway";
-    default:
-      return "Takeaway";
-  }
+function channelLabel(ch: string, locale?: string | null): string {
+  const label = reportChannelLabelI18n(ch, locale);
+  return label || ch;
 }
 
 function merchantReportsShowOrderTypes(merchant: {
@@ -117,7 +115,8 @@ function merchantReportsShowOrderTypes(merchant: {
 export function resolveReportRange(
   preset: ReportPreset,
   from?: string,
-  to?: string
+  to?: string,
+  locale?: string | null
 ): { start: Date; end: Date; label: string; from: string; to: string } {
   const today = ymdInZurich();
   if (preset === "custom") {
@@ -125,39 +124,81 @@ export function resolveReportRange(
     const t = (to || f).slice(0, 10);
     const a = zurichDayBounds(f);
     const b = zurichDayBounds(t);
-    return { start: a.start, end: b.end, label: `${f} to ${t}`, from: f, to: t };
+    return {
+      start: a.start,
+      end: b.end,
+      label: localizeReportRangeLabel(f, t, locale),
+      from: f,
+      to: t,
+    };
   }
   if (preset === "yesterday") {
     const y = addDaysYmd(today, -1);
     const b = zurichDayBounds(y);
-    return { start: b.start, end: b.end, label: y, from: y, to: y };
+    return {
+      start: b.start,
+      end: b.end,
+      label: formatReportYmdDisplay(y, locale),
+      from: y,
+      to: y,
+    };
   }
   if (preset === "last_week") {
     const f = addDaysYmd(today, -6);
     const a = zurichDayBounds(f);
     const b = zurichDayBounds(today);
-    return { start: a.start, end: b.end, label: `${f} to ${today}`, from: f, to: today };
+    return {
+      start: a.start,
+      end: b.end,
+      label: formatReportPeriodLabel(f, today, locale),
+      from: f,
+      to: today,
+    };
   }
   if (preset === "this_month") {
     const f = `${today.slice(0, 7)}-01`;
     const a = zurichDayBounds(f);
     const b = zurichDayBounds(today);
-    return { start: a.start, end: b.end, label: `${f} to ${today}`, from: f, to: today };
+    return {
+      start: a.start,
+      end: b.end,
+      label: formatReportPeriodLabel(f, today, locale),
+      from: f,
+      to: today,
+    };
   }
   if (preset === "last_month") {
     const f = addDaysYmd(today, -29);
     const a = zurichDayBounds(f);
     const b = zurichDayBounds(today);
-    return { start: a.start, end: b.end, label: `${f} to ${today}`, from: f, to: today };
+    return {
+      start: a.start,
+      end: b.end,
+      label: formatReportPeriodLabel(f, today, locale),
+      from: f,
+      to: today,
+    };
   }
   if (preset === "last_3_months") {
     const f = addDaysYmd(today, -89);
     const a = zurichDayBounds(f);
     const b = zurichDayBounds(today);
-    return { start: a.start, end: b.end, label: `${f} to ${today}`, from: f, to: today };
+    return {
+      start: a.start,
+      end: b.end,
+      label: formatReportPeriodLabel(f, today, locale),
+      from: f,
+      to: today,
+    };
   }
   const b = zurichDayBounds(today);
-  return { start: b.start, end: b.end, label: today, from: today, to: today };
+  return {
+    start: b.start,
+    end: b.end,
+    label: formatReportYmdDisplay(today, locale),
+    from: today,
+    to: today,
+  };
 }
 
 export type SalesScopeOpts = {
@@ -167,6 +208,8 @@ export type SalesScopeOpts = {
   staffName?: string | null;
   /** When set, filter orders to this branch location. */
   locationId?: string | null;
+  /** Merchant panel language for report labels (en | fr | de). */
+  locale?: string | null;
 };
 
 export class PosReportsService {
@@ -222,7 +265,12 @@ export class PosReportsService {
         to: opts.endAt,
       };
     } else {
-      range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
+      range = resolveReportRange(
+        opts.preset || "today",
+        opts.from,
+        opts.to,
+        opts.locale
+      );
     }
 
     const merchantRaw = await loadMerchantRowById(merchantId);
@@ -487,7 +535,7 @@ export class PosReportsService {
         const tva = round2(v.tva);
         const rate = rateFor(ch);
         return {
-          label: `${channelLabel(ch)} ${rate.toFixed(1)}%`,
+          label: `${channelLabel(ch, opts.locale)} ${rate.toFixed(1)}%`,
           channel: ch,
           rate,
           net: round2(brut - tva),
@@ -532,7 +580,7 @@ export class PosReportsService {
     const orderTypeRows = merchantReportsShowOrderTypes(merchantRaw as Parameters<typeof merchantReportsShowOrderTypes>[0])
       ? Object.entries(channels).map(([channel, v]) => ({
           channel,
-          label: channelLabel(channel),
+          label: channelLabel(channel, opts.locale),
           count: v.count,
           percent: completed.length
             ? round2((v.count / completed.length) * 100)
@@ -764,7 +812,12 @@ export class PosReportsService {
     opts: { preset?: ReportPreset; from?: string; to?: string } & SalesScopeOpts
   ) {
     const current = await this.getEndOfDayReport(merchantId, opts);
-    const range = resolveReportRange(opts.preset || "today", opts.from, opts.to);
+    const range = resolveReportRange(
+      opts.preset || "today",
+      opts.from,
+      opts.to,
+      opts.locale
+    );
 
     const msPerDay = 24 * 3600_000;
     const spanDays = Math.max(
@@ -880,8 +933,11 @@ export class PosReportsService {
         );
         if (byDay.has(day)) byDay.set(day, (byDay.get(day) || 0) + brut);
       }
-      for (const [label, amount] of byDay) {
-        salesOverTime.push({ label, amount: round2(amount) });
+      for (const [ymd, amount] of byDay) {
+        salesOverTime.push({
+          label: formatReportChartDayShort(ymd, opts.locale),
+          amount: round2(amount),
+        });
       }
     }
 
@@ -1164,16 +1220,11 @@ export class PosReportsService {
         day: "2-digit",
       }).format(d);
 
+    const reportLocale = opts.locale;
     const fmtDisplayDay = (ymd: string) => {
-      const [y, m, d] = ymd.split("-").map(Number);
-      const dt = new Date(`${ymd}T12:00:00+02:00`);
-      const weekday = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Europe/Zurich",
-        weekday: "long",
-      }).format(dt);
       return {
-        label: `${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}.${y}`,
-        sublabel: weekday,
+        label: formatReportYmdDisplay(ymd, reportLocale),
+        sublabel: formatReportWeekdayLong(ymd, reportLocale),
         sortKey: ymd,
       };
     };
@@ -1246,18 +1297,10 @@ export class PosReportsService {
       const monthEnd = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
       for (const [, v] of byWeek) {
         if (v.to < monthStart || v.from > monthEnd) continue;
-        const fmtShort = (ymd: string) => {
-          const [, mo, da] = ymd.split("-");
-          return `${da}.${mo}`;
-        };
-        const fmtEnd = (ymd: string) => {
-          const [y, mo, da] = ymd.split("-");
-          return `${da}.${mo}.${y}`;
-        };
         rows.push({
           id: `CW${v.week}`,
-          label: `CW ${v.week}`,
-          sublabel: `${fmtShort(v.from)} - ${fmtEnd(v.to)}`,
+          label: reportCalendarWeekLabel(v.week, reportLocale),
+          sublabel: formatReportPeriodLabel(v.from, v.to, reportLocale),
           total: round2(v.total),
           sortKey: String(v.week).padStart(2, "0"),
           from: v.from,
@@ -1275,28 +1318,14 @@ export class PosReportsService {
         const mo = parts[1] || "01";
         if (byMonth.has(mo)) byMonth.set(mo, (byMonth.get(mo) || 0) + saleAmount(o));
       }
-      const monthNames = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-      ];
       for (const [mo, total] of byMonth) {
-        const idx = Number(mo) - 1;
-        const lastDay = new Date(year, Number(mo), 0).getDate();
+        const idx = Number(mo);
+        const lastDay = new Date(year, idx, 0).getDate();
         const from = `${year}-${mo}-01`;
         const to = `${year}-${mo}-${String(lastDay).padStart(2, "0")}`;
         rows.push({
           id: `${year}-${mo}`,
-          label: monthNames[idx] || mo,
+          label: formatReportMonthLong(idx, reportLocale),
           total: round2(total),
           sortKey: mo,
           from,

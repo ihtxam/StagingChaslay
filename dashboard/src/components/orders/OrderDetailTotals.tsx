@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { formatCHF } from '@/lib/money';
+import { formatCHF, type MerchantChannelTaxSettings } from '@/lib/money';
 import { receiptLabels } from '@/lib/receipt-labels';
 import {
   buildDigitalReceiptTotals,
@@ -28,6 +28,7 @@ type Props = {
   order: OrderTotalsInput;
   taxIncludedInPrice?: boolean;
   vatAfterDiscount?: boolean;
+  merchantTax?: MerchantChannelTaxSettings;
   className?: string;
   /** Side panel uses smaller text; modal uses default sizing. */
   compact?: boolean;
@@ -76,13 +77,21 @@ export default function OrderDetailTotals({
   order,
   taxIncludedInPrice,
   vatAfterDiscount = true,
+  merchantTax,
   className = '',
   compact = false,
 }: Props) {
   const { t, locale } = useI18n();
   const L = receiptLabels(locale);
 
-  const taxRate = useMemo(() => resolveReceiptTaxRateForOrder(order), [order]);
+  const taxRate = useMemo(
+    () =>
+      resolveReceiptTaxRateForOrder(order, {
+        vatIncludedInPrice: taxIncludedInPrice === true,
+        merchantTax,
+      }),
+    [order, taxIncludedInPrice, merchantTax]
+  );
 
   const totals = useMemo(
     () =>

@@ -2286,8 +2286,9 @@ export function buildDigitalReceiptTotals(order: {
 } {
   const subtotal = Number(order.subtotal) || 0;
   const taxAmount = Number(order.taxAmount) || 0;
+  const vatIncludedForRate = order.vatIncludedInPrice !== false;
   let taxRate = Number(order.taxRate) || 0;
-  if (taxRate <= 0 && subtotal > 0 && taxAmount > 0) {
+  if (taxRate <= 0 && !vatIncludedForRate && subtotal > 0 && taxAmount > 0) {
     taxRate = roundMoney2((taxAmount / subtotal) * 100);
   }
   const tx: WebPosReceipt = {
@@ -4978,6 +4979,14 @@ export function resolveReceiptTaxRateForOrder(
     vatIncludedInPrice?: boolean;
   }
 ): number {
+  if (opts?.vatIncludedInPrice === true && opts?.merchantTax) {
+    const configured = channelTaxRateFromMerchant(
+      opts.merchantTax,
+      order.channel || order.fulfillmentChannel
+    );
+    if (configured > 0) return configured;
+  }
+
   const explicit = Number(order.taxRate);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
 

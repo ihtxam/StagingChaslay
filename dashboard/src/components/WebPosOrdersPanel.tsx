@@ -320,6 +320,12 @@ type Props = {
   /** Merchant tax mode — drives VAT breakdown in order detail */
   taxIncludedInPrice?: boolean;
   vatAfterDiscount?: boolean;
+  merchantTax?: {
+    vatRate?: string | number | null;
+    taxTakeawayRate?: string | number | null;
+    taxDineInRate?: string | number | null;
+    taxDeliveryRate?: string | number | null;
+  };
 };
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'terminal', 'bank_transfer'] as const;
@@ -557,6 +563,7 @@ export default function WebPosOrdersPanel({
   autoPrintReceipt = true,
   taxIncludedInPrice,
   vatAfterDiscount = true,
+  merchantTax,
 }: Props) {
   const { t, formatDateTime, locale } = useI18n();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -2489,6 +2496,7 @@ export default function WebPosOrdersPanel({
                       order={selectedOrder}
                       taxIncludedInPrice={taxIncludedInPrice}
                       vatAfterDiscount={vatAfterDiscount}
+                      merchantTax={merchantTax}
                       compact
                     />
                   </div>
