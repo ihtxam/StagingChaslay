@@ -236,6 +236,8 @@ button {
      * scroll container (CSS overflow pairing), which blocks wheel/touchpad scroll.
      * Do NOT set touch-action: pan-y here — it intersects with descendants and
      * blocks horizontal swipe on nested .table-scroll wrappers (iOS Safari).
+     * Do NOT add Tailwind overflow-hidden on standard panel routes — it overrides
+     * overflow-y and kills scroll on /merchant/products, reports, etc.
      */
     overflow-x: clip;
     overflow-y: auto;

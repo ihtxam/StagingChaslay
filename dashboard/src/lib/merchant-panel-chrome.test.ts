@@ -38,6 +38,16 @@ assert.match(
   /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0/,
   'settings route keeps panel-main flush; horizontal inset lives only on merchant-settings-shell'
 );
+assert.match(
+  dashboard,
+  /panel-main flex min-h-0 flex-1 flex-col overflow-y-auto p-3 sm:p-4/,
+  'standard panel routes must scroll on panel-main (not overflow-hidden)'
+);
+assert.doesNotMatch(
+  dashboard,
+  /panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4/,
+  'overflow-hidden on panel-main blocks wheel scroll for products/reports'
+);
 assert.doesNotMatch(settings, /RebornPoweredByFooter/);
 assert.match(settings, /merchant-settings-shell[\s\S]*max-w-none/);
 assert.doesNotMatch(settings, /max-w-\[1400px\]/);
