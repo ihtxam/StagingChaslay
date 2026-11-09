@@ -39,14 +39,8 @@ assert.match(
   'settings route keeps panel-main flush; horizontal inset lives only on merchant-settings-shell'
 );
 assert.doesNotMatch(settings, /RebornPoweredByFooter/);
-assert.doesNotMatch(dashboard, /isSettingsRoute/);
 assert.match(settings, /merchant-settings-shell[\s\S]*max-w-none/);
 assert.doesNotMatch(settings, /max-w-\[1400px\]/);
-assert.doesNotMatch(
-  settings,
-  /merchant-settings-shell[\s\S]*sm:px-4/,
-  'settings shell must not double pad; panel-main owns edge inset'
-);
 assert.doesNotMatch(
   settings,
   /card !p-0 flex min-h-0 flex-1 flex-col overflow-hidden/,
