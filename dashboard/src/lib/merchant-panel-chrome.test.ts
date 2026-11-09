@@ -13,6 +13,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const header = readFileSync(join(root, '../components/Header.tsx'), 'utf8');
 const sidebar = readFileSync(join(root, '../components/Sidebar.tsx'), 'utf8');
 const dashboard = readFileSync(join(root, '../pages/merchant/Dashboard.tsx'), 'utf8');
+const settings = readFileSync(join(root, '../pages/merchant/Settings.tsx'), 'utf8');
 
 assert.equal(displaySidebarShopName('Brazza Pizza'), 'Brazza Pizza');
 assert.equal(displaySidebarShopName('  exotic  '), 'exotic');
@@ -30,6 +31,14 @@ assert.match(
 
 assert.match(dashboard, /storeName=\{merchantShopName\}/);
 assert.match(dashboard, /settings\?\.businessName/);
+assert.match(
+  dashboard,
+  /panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4/,
+  'merchant shell routes share panel-main padding (settings included)'
+);
+assert.doesNotMatch(settings, /RebornPoweredByFooter/);
+assert.match(settings, /merchant-settings-shell[\s\S]*max-w-none/);
+assert.match(sidebar, /panelBuildLabel/);
 
 assert.match(
   sidebar,

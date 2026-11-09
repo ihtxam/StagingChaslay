@@ -36,6 +36,8 @@ backend-chaslay-legacy/
 node_modules/
 **/node_modules/
 
+dashboard/.panel-build-seq.json
+
 # OpenPage (vendored builder) — install/build locally or in Docker
 openpage/node_modules/
 openpage/dist/

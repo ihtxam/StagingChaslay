@@ -171,9 +171,6 @@ button {
       z-index: 1;
     }
 
-    html.panel-vv-sync.panel-kb-open .reborn-powered-by--panel {
-      display: none;
-    }
   }
 
   /* Merchant/reseller/superadmin nav — Reborn burgundy brand gradient */
