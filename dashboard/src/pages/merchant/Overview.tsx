@@ -31,6 +31,11 @@ import {
   CashDrawerBreakdown,
   type CashDrawerShift,
 } from '@/components/reports/CashDrawerBreakdown';
+import { appendReportLocale } from '@/lib/report-api';
+import {
+  formatReportChartDayLabel,
+  reportChannelLabel,
+} from '@/lib/report-display-labels';
 
 type Preset = 'today' | 'yesterday' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months' | 'custom';
 
@@ -108,7 +113,7 @@ function ChangeLine({ value, label }: { value: number | null; label: string }) {
 type InsightsPreset = 'today' | 'yesterday' | 'last_week';
 
 export default function Overview() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const locationId = useLocationStore((s) => s.locationId);
   const isHqView = useLocationStore((s) => s.isHqView);
   const locations = useLocationStore((s) => s.locations);
@@ -132,8 +137,8 @@ export default function Overview() {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
     }
-    return params;
-  }, [preset, from, to, overviewScopeParams]);
+    return appendReportLocale(params, locale);
+  }, [preset, from, to, overviewScopeParams, locale]);
 
   const paymentMethods = useMemo(
     () =>
@@ -142,6 +147,24 @@ export default function Overview() {
         label: paymentMethodLabel(p.method, t),
       })),
     [data?.paymentMethods, t]
+  );
+
+  const orderTypes = useMemo(
+    () =>
+      (data?.orderTypes || []).map((o) => ({
+        ...o,
+        label: reportChannelLabel(o.channel, t),
+      })),
+    [data?.orderTypes, t]
+  );
+
+  const salesOverTime = useMemo(
+    () =>
+      (data?.salesOverTime || []).map((row) => ({
+        ...row,
+        label: formatReportChartDayLabel(row.label, locale),
+      })),
+    [data?.salesOverTime, locale]
   );
 
   const load = useCallback(async () => {
@@ -424,7 +447,7 @@ export default function Overview() {
           </div>
           <div className="h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data?.salesOverTime || []}>
+              <LineChart data={salesOverTime}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
@@ -517,14 +540,14 @@ export default function Overview() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={data?.orderTypes || []}
+                    data={orderTypes}
                     dataKey="total"
                     nameKey="label"
                     innerRadius={48}
                     outerRadius={72}
                     paddingAngle={2}
                   >
-                    {(data?.orderTypes || []).map((_, i) => (
+                    {orderTypes.map((_, i) => (
                       <Cell key={i} fill={CHART_COLORS[(i + 2) % CHART_COLORS.length]} />
                     ))}
                   </Pie>
@@ -533,7 +556,7 @@ export default function Overview() {
               </ResponsiveContainer>
             </div>
             <ul className="text-sm space-y-1.5 w-full sm:w-1/2">
-              {(data?.orderTypes || []).map((o, i) => (
+              {orderTypes.map((o, i) => (
                 <li key={o.channel} className="flex justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 min-w-0">
                     <span
@@ -547,7 +570,7 @@ export default function Overview() {
                   </span>
                 </li>
               ))}
-              {!data?.orderTypes?.length && <li className="muted">{t('reportsEmpty')}</li>}
+              {!orderTypes.length && <li className="muted">{t('reportsEmpty')}</li>}
             </ul>
           </div>
         </div>

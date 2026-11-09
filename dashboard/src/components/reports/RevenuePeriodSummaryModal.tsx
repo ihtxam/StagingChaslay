@@ -14,6 +14,8 @@ import {
   resolveReceiptLanguage,
   type PosPrintSettingsClient,
 } from '@/lib/webpos-receipt';
+import { appendReportLocale } from '@/lib/report-api';
+import { formatReportPeriodLabel } from '@/lib/report-display-labels';
 
 type EodSlice = {
   range: { label: string; from: string; to: string };
@@ -46,7 +48,7 @@ function debitMoney(n: number) {
 const UNASSIGNED_STAFF_KEY = 'Unassigned';
 
 export default function RevenuePeriodSummaryModal({ open, from, to, title, onClose }: Props) {
-  const { t, formatDate, locale } = useI18n();
+  const { t, locale } = useI18n();
   const [report, setReport] = useState<EodSlice | null>(null);
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -55,16 +57,10 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
   const [shopLogoUrl, setShopLogoUrl] = useState<string | null>(null);
   const [includeStaffPerformance, setIncludeStaffPerformance] = useEodIncludeStaffPerformance();
 
-  const periodLabel = useMemo(() => {
-    if (from === to) {
-      try {
-        return formatDate(new Date(`${from}T12:00:00`));
-      } catch {
-        return from;
-      }
-    }
-    return `${from} – ${to}`;
-  }, [from, to, formatDate]);
+  const periodLabel = useMemo(
+    () => formatReportPeriodLabel(from, to, locale),
+    [from, to, locale]
+  );
 
   const staffNameLabel = useCallback(
     (name: string) => (name === UNASSIGNED_STAFF_KEY ? t('reportsUnassignedSales') : name),
@@ -74,7 +70,10 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ preset: 'custom', from, to });
+      const params = appendReportLocale(
+        new URLSearchParams({ preset: 'custom', from, to }),
+        locale
+      );
       const [repRes, setRes] = await Promise.all([
         api.get(`/merchant/reports/eod?${params}`),
         api.get('/merchant/settings'),
@@ -90,7 +89,7 @@ export default function RevenuePeriodSummaryModal({ open, from, to, title, onClo
     } finally {
       setLoading(false);
     }
-  }, [from, to, t]);
+  }, [from, to, t, locale]);
 
   useEffect(() => {
     if (!open) return;

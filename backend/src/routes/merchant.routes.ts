@@ -37,6 +37,7 @@ import {
   merchantFacingBillingPayload,
   platformPanelLocale,
 } from "@/lib/platform-adyen-credentials";
+import { reportLocaleFromQuery } from "@/lib/panel-intl-locale";
 import { SubscriptionPlansService } from "@/services/subscription-plans.service";
 import posSessionsRoutes from "@/routes/pos-sessions.routes";
 import locationsRoutes from "@/routes/locations.routes";
@@ -2838,6 +2839,7 @@ router.get(
         channel: req.query.channel ? String(req.query.channel) : undefined,
         staffId,
         staffName,
+        locale: reportLocaleFromQuery(req.query.locale),
         locationId:
           req.query.scope === "location"
             ? (req.locationId as string | undefined) || undefined
@@ -2935,6 +2937,7 @@ router.get(
         to: req.query.to ? String(req.query.to) : undefined,
         staffId: scope.staffId,
         staffName: scope.staffName,
+        locale: reportLocaleFromQuery(req.query.locale),
         locationId:
           req.query.scope === "location"
             ? (req.locationId as string | undefined) || undefined
@@ -2998,6 +3001,7 @@ router.get(
         to,
         staffId: scope.staffId,
         staffName: scope.staffName,
+        locale: reportLocaleFromQuery(req.query.locale),
       });
       res.json({ success: true, breakdown });
     } catch (error) {
