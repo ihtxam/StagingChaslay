@@ -460,6 +460,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     phone?: string;
     vatNumber?: string;
     vatRate?: string;
+    taxTakeawayRate?: string | number | null;
+    taxDineInRate?: string | number | null;
+    taxDeliveryRate?: string | number | null;
     taxIncludedInPrice?: boolean;
     vatAfterDiscount?: boolean;
     shopLogoUrl?: string;
@@ -514,6 +517,9 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         phone: s.phone,
         vatNumber: s.vatNumber,
         vatRate: s.vatRate,
+        taxTakeawayRate: s.taxTakeawayRate,
+        taxDineInRate: s.taxDineInRate,
+        taxDeliveryRate: s.taxDeliveryRate,
         taxIncludedInPrice: s.taxIncludedInPrice,
         vatAfterDiscount: s.vatAfterDiscount !== false,
         shopLogoUrl: s.shopLogoUrl,
