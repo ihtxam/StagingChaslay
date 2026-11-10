@@ -4,7 +4,10 @@ const HIDDEN_MERCHANT_SHOP_URL_PATTERNS: RegExp[] = [
   /^https?:\/\/shop\.app\.chaslay\.com\/demo(?:\/|$)/i,
 ];
 
-export type MerchantShopLinkKey = "shopWebsiteLink" | "shopCustomDomainLink";
+export type MerchantShopLinkKey =
+  | "shopWebsiteLink"
+  | "shopCustomDomainLink"
+  | "shopReservationsLink";
 
 export function isHiddenMerchantShopUrl(url: string | null | undefined): boolean {
   const value = String(url || "").trim();
@@ -34,10 +37,14 @@ export function listMerchantShopPublicLinks(input: {
   shopPanelPathUrl?: string | null;
   shopSubdomainUrl?: string | null;
   shopCustomDomainUrl?: string | null;
+  shopReservationsUrl?: string | null;
 }): Array<{ key: MerchantShopLinkKey; url: string }> {
   const custom = filterMerchantShopUrl(input.shopCustomDomainUrl);
   const website = filterMerchantShopUrl(input.shopPathUrl);
-  if (custom) return [{ key: "shopCustomDomainLink", url: custom }];
-  if (website) return [{ key: "shopWebsiteLink", url: website }];
-  return [];
+  const reservations = filterMerchantShopUrl(input.shopReservationsUrl);
+  const out: Array<{ key: MerchantShopLinkKey; url: string }> = [];
+  if (custom) out.push({ key: "shopCustomDomainLink", url: custom });
+  else if (website) out.push({ key: "shopWebsiteLink", url: website });
+  if (reservations) out.push({ key: "shopReservationsLink", url: reservations });
+  return out;
 }

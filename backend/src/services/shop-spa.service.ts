@@ -11,6 +11,7 @@ import {
   isShopPathHubHost,
   shopSlugFromPath,
 } from "@/lib/shop-request-host";
+import { merchantHasPublicStorefront } from "@/lib/shop-storefront";
 
 function publicShopSite(req: Request, merchant: { shopSiteSettings?: unknown }) {
   const site = normalizeShopSiteSettings(merchant.shopSiteSettings);
@@ -61,7 +62,7 @@ export class ShopSpaService {
     }
 
     const merchant = await resolveMerchantForSpa(req);
-    if (!merchant?.shopEnabled) return html;
+    if (!merchant || !merchantHasPublicStorefront(merchant)) return html;
 
     const lang = String(merchant.shopLanguage || merchant.panelLanguage || "en");
     let fallbackTitle = merchant.name;

@@ -2574,7 +2574,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (productVisibleOnChannel(p, cat, 'pos')) withPosProducts.add(p.categoryId);
     }
     return categories.filter(
-      (c) => isVisibleOnChannel(c.visibility, 'pos') || withPosProducts.has(c.id)
+      (c) => isVisibleOnChannel(c.visibility, 'pos') && withPosProducts.has(c.id)
     );
   }, [categories, products]);
 

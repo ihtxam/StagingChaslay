@@ -35,13 +35,13 @@ assert.match(dashboard, /storeName=\{merchantShopName\}/);
 assert.match(dashboard, /settings\?\.businessName/);
 assert.match(
   dashboard,
-  /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0/,
-  'settings route keeps panel-main flush; horizontal inset lives only on merchant-settings-shell'
-);
-assert.match(
-  dashboard,
   /panel-main flex min-h-0 flex-1 flex-col overflow-y-auto p-3 sm:p-4/,
-  'standard panel routes must scroll on panel-main (not overflow-hidden)'
+  'settings uses the same panel-main shell as products (single scroll, edge padding)'
+);
+assert.doesNotMatch(
+  dashboard,
+  /isSettingsRoute[\s\S]*panel-main flex min-h-0 flex-1 flex-col overflow-hidden p-0/,
+  'settings must not use a nested scroll shell on panel-main'
 );
 assert.doesNotMatch(
   dashboard,
@@ -58,11 +58,20 @@ assert.doesNotMatch(
 );
 assert.match(
   settings,
-  /flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-\[var\(--border\)\] lg:flex-row/,
-  'settings nav + body share a flat split layout like other panel pages'
+  /className="merchant-settings-shell flex w-full min-w-0 max-w-none flex-col gap-3"/,
+  'settings shell must not add horizontal inset (panel-main already pads)'
+);
+assert.doesNotMatch(
+  settings,
+  /flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-\[var\(--border\)\]/,
+  'settings nav split must not use a framed card border'
 );
 assert.match(settings, /merchant-settings-scroll/);
-assert.match(settings, /lg:min-h-0 lg:flex-1[\s\S]*lg:overflow-y-auto/);
+assert.doesNotMatch(
+  settings,
+  /merchant-settings-scroll[\s\S]*overflow-y-auto/,
+  'tab body scroll should be panel-main only'
+);
 assert.match(sidebar, /panelBuildLabel/);
 
 assert.match(
@@ -78,16 +87,6 @@ assert.equal(
 assert.match(sidebar, /aria-pressed=\{settingsActive/);
 assert.match(sidebar, /<Settings \/>/);
 
-assert.match(
-  settings,
-  /merchant-settings-shell[\s\S]*sm:px-4/,
-  'settings shell owns horizontal padding (panel-main p-0)'
-);
-assert.match(
-  settings,
-  /merchant-settings-scroll/,
-  'settings scroll root should get scrollbar styling'
-);
 assert.match(
   modifiers,
   /merchant-dialog-surface[\s\S]*bg-\[var\(--bg-elevated\)\]/,

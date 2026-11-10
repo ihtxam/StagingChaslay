@@ -920,7 +920,8 @@ router.get("/tls-ask", async (req: Request, res: Response) => {
     if (!domain) return res.status(400).end();
     const { findMerchantForTlsAsk } = await import("@/lib/custom-domain-lookup");
     const merchant = (await findMerchantForTlsAsk(domain)) || (await resolveMerchant(domain));
-    if (!merchant?.shopEnabled) return res.status(404).end();
+    const { merchantHasPublicStorefront } = await import("@/lib/shop-storefront");
+    if (!merchant || !merchantHasPublicStorefront(merchant)) return res.status(404).end();
 
     if (merchant.subdomain || merchant.customDomain || merchant.slug) {
       return res.status(200).end();

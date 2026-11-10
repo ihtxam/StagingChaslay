@@ -9,6 +9,7 @@ type ShopPublicLinksProps = {
   shopPanelPathUrl?: string | null;
   shopSubdomainUrl?: string | null;
   shopCustomDomainUrl?: string | null;
+  shopReservationsUrl?: string | null;
   className?: string;
 };
 
@@ -69,6 +70,7 @@ export default function ShopPublicLinks({
   shopPanelPathUrl,
   shopSubdomainUrl,
   shopCustomDomainUrl,
+  shopReservationsUrl,
   className,
 }: ShopPublicLinksProps) {
   const { t } = useI18n();
@@ -78,6 +80,7 @@ export default function ShopPublicLinks({
     shopPanelPathUrl,
     shopSubdomainUrl,
     shopCustomDomainUrl,
+    shopReservationsUrl,
   });
   if (!links.length) return null;
 

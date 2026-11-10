@@ -2145,6 +2145,14 @@ export default function Settings() {
   const posRetailMode = isRetailMerchant;
   const shopPaymentsOn = settings?.shopEnabled === true;
   const posSwisspayoutOn = settings?.webposTerminalEnabled !== false;
+  const shopReservationsPublicUrl =
+    settings?.reservationsEnabled && settings?.slug
+      ? `${String(
+          filterMerchantShopUrl(settings.shopCustomDomainUrl) ||
+            filterMerchantShopUrl(settings.shopPathUrl) ||
+            `https://${SHOP_HOST}/${settings.slug}`
+        ).replace(/\/$/, '')}/reservations`
+      : null;
 
   const renderSwisspayoutCredentials = (showWebhook: boolean) => (
     <>
@@ -2255,7 +2263,7 @@ export default function Settings() {
 
   return (
     <div
-      className="merchant-settings-shell flex w-full min-w-0 max-w-none flex-1 min-h-0 flex-col gap-2 overflow-hidden px-3 py-2 sm:gap-4 sm:px-4 sm:py-3"
+      className="merchant-settings-shell flex w-full min-w-0 max-w-none flex-col gap-3"
       data-settings-search={SETTINGS_SEARCH_CLICK_MARK}
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -2359,10 +2367,10 @@ export default function Settings() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-[var(--border)] lg:flex-row lg:border-t-0">
-          <aside className="sticky top-0 z-10 shrink-0 border-b border-[var(--border)] bg-[var(--bg)] lg:static lg:z-auto lg:flex lg:h-full lg:w-56 lg:min-h-0 lg:flex-col lg:border-b-0 lg:border-r lg:bg-transparent">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:gap-4">
+          <aside className="shrink-0 lg:w-56 lg:sticky lg:top-0 lg:self-start">
             <nav
-              className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 [-webkit-overflow-scrolling:touch] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0.5 lg:overflow-x-hidden lg:overflow-y-auto"
+              className="flex gap-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] lg:flex lg:flex-col lg:gap-0.5 lg:overflow-x-hidden"
               aria-label={t('settings')}
             >
               {SETTINGS_NAV_GROUPS.map((group) => {
@@ -2434,7 +2442,7 @@ export default function Settings() {
           </aside>
 
           <div
-            className="merchant-settings-scroll min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-0 [-webkit-overflow-scrolling:touch] [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] lg:min-h-0 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent dark:[scrollbar-color:rgba(148,163,184,0.55)_transparent] dark:[&::-webkit-scrollbar-thumb]:bg-slate-500"
+            className="merchant-settings-scroll min-w-0 flex-1 p-0"
             data-settings-scroll-root="search-click-v7"
           >
           <SettingsSearchErrorBoundary
@@ -2821,6 +2829,9 @@ export default function Settings() {
                   shopPanelPathUrl={settings.shopPanelPathUrl}
                   shopSubdomainUrl={settings.shopSubdomainUrl}
                   shopCustomDomainUrl={settings.shopCustomDomainUrl}
+                  shopReservationsUrl={
+                    reservationsLicensed ? shopReservationsPublicUrl : null
+                  }
                 />
 
                 <div className="rounded-md border border-[var(--border)] bg-[var(--bg-muted)]/50 p-3 space-y-2">

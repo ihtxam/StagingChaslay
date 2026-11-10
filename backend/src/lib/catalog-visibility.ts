@@ -33,7 +33,10 @@ export function normalizeCatalogVisibility(raw: unknown): CatalogVisibility {
   const channels = channelsRaw
     .map((c) => String(c).trim().toLowerCase())
     .filter((c): c is CatalogChannel => CHANNEL_SET.has(c));
-  if (!channels.length) return { ...DEFAULT_CATALOG_VISIBILITY };
+  if (!channels.length) {
+    // Explicit `{ channels: [] }` means hidden on all channels (deactivated category).
+    return { channels: [] };
+  }
   return { channels: collapseDeliveryIntoShop([...new Set(channels)]) };
 }
 
@@ -75,8 +78,6 @@ export function productVisibleOnChannel(
 ): boolean {
   if (product.isActive === false) return false;
   if (!isVisibleOnChannel(product.visibility, channel)) return false;
-  // POS honors per-product visibility even when the category omits POS (common after shop-only setup).
-  if (channel === "pos") return true;
   if (category && !isVisibleOnChannel(category.visibility, channel)) return false;
   return true;
 }
@@ -124,9 +125,13 @@ export function filterCatalogForChannel<
   const categoryIdsWithProducts = new Set(
     visibleProducts.map((p) => p.categoryId).filter(Boolean) as string[]
   );
-  const visibleCategories = categories.filter(
-    (c) => categoryIdsWithProducts.has(c.id) || isVisibleOnChannel(c.visibility, channel)
-  );
+  const visibleCategories = categories.filter((c) => {
+    const offers = (c as { isOffersCategory?: boolean }).isOffersCategory;
+    if (offers) {
+      return categoryIdsWithProducts.has(c.id) || isVisibleOnChannel(c.visibility, channel);
+    }
+    return categoryIdsWithProducts.has(c.id) && isVisibleOnChannel(c.visibility, channel);
+  });
   return { products: visibleProducts, categories: visibleCategories };
 }
 
