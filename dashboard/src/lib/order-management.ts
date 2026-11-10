@@ -242,6 +242,16 @@ export function isUnconfirmedCardOnlineOrder(o: {
   return method === 'card' && pay === 'awaiting_payment';
 }
 
+/** Stored fulfillment/channel only — must not call orderChannel (orderChannel uses this). */
+function onlineOrderChannelHint(o: {
+  channel?: string | null;
+  fulfillmentChannel?: string | null;
+}): string {
+  return String(o.fulfillmentChannel || o.channel || '')
+    .trim()
+    .toLowerCase();
+}
+
 export function isOnlineShopOrder(o: {
   orderType?: string | null;
   orderSource?: string | null;
@@ -250,7 +260,7 @@ export function isOnlineShopOrder(o: {
 }): boolean {
   const t = (o.orderType || '').toLowerCase();
   const src = String(o.orderSource || '').toLowerCase();
-  const ch = orderChannel(o as MerchantOrder).toLowerCase();
+  const ch = onlineOrderChannelHint(o);
   return (
     t === 'web_shop' ||
     t === 'online' ||
