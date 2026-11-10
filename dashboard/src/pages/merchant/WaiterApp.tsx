@@ -598,7 +598,10 @@ export default function WaiterApp({ appMode = true }: { appMode?: boolean }) {
     const meta = parseHeldCartJson(held.cartJson);
     activeHeldIdRef.current = held.id;
     setCart(meta.cart || []);
-    setChannel((meta.channel as PosChannel) || 'dine_in');
+    setChannel(
+      (meta.channel as PosChannel) ||
+        (table.id ? 'dine_in' : 'takeaway')
+    );
     setTableId(table.id);
     setTableLabel(table.label || meta.tableLabel || null);
     setTicketDisplay(meta.ticketDisplay || null);

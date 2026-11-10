@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { FloorPlanService } from "@/services/floor-plan.service";
 import { roundMoney2, roundTo005 } from "@/lib/money";
+import { resolvePosOrderFulfillmentChannel } from "@/lib/pos-fulfillment-channel";
 import { resolvePosCancelReason } from "@/lib/pos-print-settings";
 import { isUsableProductName, resolveOrderItemName } from "@/lib/order-item-name";
 import { resolveSalePaymentMethod } from "@/lib/payment-breakdown";
@@ -514,6 +515,24 @@ export class SyncService {
       };
     }> = [];
 
+    const merchantRow = await db.query.merchants.findFirst({
+      where: eq(schema.merchants.id, merchantId),
+      columns: {
+        taxIncludedInPrice: true,
+        vatRate: true,
+        taxTakeawayRate: true,
+        taxDineInRate: true,
+      },
+    });
+    const { MerchantSettingsService } = await import("@/services/merchant-settings.service");
+    const posChannelTaxOpts = merchantRow
+      ? {
+          taxIncludedInPrice: merchantRow.taxIncludedInPrice === true,
+          taxTakeawayRate: MerchantSettingsService.channelTaxRate(merchantRow, "takeaway"),
+          taxDineInRate: MerchantSettingsService.channelTaxRate(merchantRow, "dine_in"),
+        }
+      : undefined;
+
     for (const sale of sales) {
       const existing = await db.query.orders.findFirst({
         where: and(eq(schema.orders.merchantId, merchantId), eq(schema.orders.clientId, sale.clientId)),
@@ -618,7 +637,20 @@ export class SyncService {
           sale.paymentMethod === "pay-later" ||
           isInvoice);
       const scheduledFor = parseScheduledFor(sale);
-      const channel = normalizeFulfillmentChannel(sale);
+      let channel = normalizeFulfillmentChannel(sale);
+      channel = resolvePosOrderFulfillmentChannel(
+        {
+          fulfillmentChannel: channel,
+          orderType: "pos",
+          tableId: sale.tableId,
+          tableLabel: sale.tableLabel,
+          orderNumber: baseOrderNumber,
+          ticketDisplay: sale.ticketDisplay,
+          subtotal,
+          taxAmount,
+        },
+        posChannelTaxOpts
+      );
       // Shop pickup/delivery/dine-in flags are enforced in shop.routes only.
       // This endpoint is POS/register sync — do not reject cash/card when
       // the website channels are off (see isFulfillmentChannelAllowedForSource).

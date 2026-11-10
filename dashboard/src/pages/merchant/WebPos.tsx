@@ -10,6 +10,7 @@ import { formatCheckoutOrderRef, guestOrderNumber, resolveOdsPushNumber } from '
 import { paymentMethodLabel } from '@/lib/payment-breakdown';
 import { lineWidthForPaper } from '@/lib/receipt-labels';
 import { roundMoney2, roundWeightKg, roundTo005, roundingAdjustment, computeMerchandiseTotals, scaleLinesByFactor, extractVatFromGross, channelTaxRateFromMerchant } from '@/lib/money';
+import { isCounterDineInOrderEvidence } from '@/lib/pos-fulfillment-channel';
 import {
   applyTerminalTipToCheckoutExtras,
   normalizePosCheckoutExtras,
@@ -531,6 +532,7 @@ import {
   heldCartSignature,
   heldRowTimeMs,
   parseHeldCartJson,
+  resolveHeldChannel,
   releaseHeldOrder,
   remoteHeldShouldReplaceLocal,
   type HeldOrderRow,
@@ -5481,7 +5483,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       if (!meta.cart.length) return false;
       resumedHeldIdRef.current = String(held.id).startsWith('local:') ? null : held.id;
       setCart(normalizeCartLines(meta.cart));
-      setChannel((meta.channel as Channel) || 'dine_in');
+      const heldCh = resolveHeldChannel({ channel: held.channel, cartJson: held.cartJson });
+      setChannel((heldCh === 'in_store' ? 'takeaway' : heldCh) as Channel);
       setTableId(meta.tableId || table?.id || null);
       setTableLabel(meta.tableLabel || table?.label || null);
       setTabNumber(meta.tabNumber);
@@ -5515,11 +5518,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       const draftKey = openCartDraftKey({
         tableId: meta.tableId || table?.id || null,
         tabNumber: meta.tabNumber,
-        channel: (meta.channel as Channel) || 'dine_in',
+        channel: (heldCh === 'in_store' ? 'takeaway' : heldCh) as Channel,
       });
       openCartDraftsRef.current.set(draftKey, {
         cart: meta.cart,
-        channel: (meta.channel as Channel) || 'dine_in',
+        channel: (heldCh === 'in_store' ? 'takeaway' : heldCh) as Channel,
         tableId: meta.tableId || table?.id || null,
         tableLabel: meta.tableLabel || table?.label || null,
         tabNumber: meta.tabNumber,
@@ -6417,7 +6420,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         await api.post('/merchant/pos/held', {
           id: h.id,
           label: h.label,
-          channel: (cj.channel as string) || 'dine_in',
+          channel: resolveHeldChannel({ channel: h.channel, cartJson: cj }),
           cartJson: { ...cj, cart: remaining },
           staffId: webposStaff?.id,
           staffName: webposStaff?.name,
@@ -6673,6 +6676,11 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       clearCartTicket();
     }
     const channelChanged = channel !== ch;
+    if (ch === 'dine_in' && requireTableForDineIn && !tableId) {
+      setPosTab('tables');
+      setPosView('tables');
+      return;
+    }
     setChannel(ch);
     if (ch === 'dine_in') {
       if (channel === 'delivery' || channel === 'takeaway') {
@@ -6680,7 +6688,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         if (!tableId) clearCartTicket();
       }
       setFulfillmentWhen(null);
-      if (!tableId && !ticketDisplay) {
+      if (!tableId && !ticketDisplay && counterDineInEnabled) {
         const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
         setTicketDisplay(ticket.display);
         setTicketOrderNumber(ticket.orderNumber);
@@ -6699,17 +6707,19 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   /** Menu: switch to dine-in (floor-plan table selection is on the Tables tab only). */
   const switchToDineIn = () => {
     if (!tablesUiEnabled) return;
+    if (requireTableForDineIn && !tableId) {
+      setPosTab('tables');
+      setPosView('tables');
+      return;
+    }
     if (channel !== 'dine_in') {
       setChannel('dine_in');
       setFulfillmentWhen(null);
     }
-    if (!tableId && !ticketDisplay) {
+    if (!tableId && !ticketDisplay && counterDineInEnabled) {
       const ticket = nextDineInCounterNumber(merchant?.id, openShift?.id);
       setTicketDisplay(ticket.display);
       setTicketOrderNumber(ticket.orderNumber);
-    }
-    if (!requireTableForDineIn) {
-      return;
     }
   };
 
@@ -9242,8 +9252,23 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
         : tenders.length === 1
           ? tenders[0]!.method
           : method;
+    const saleFulfillmentChannel = (() => {
+      let syncCh = tableId ? 'dine_in' : effectiveChannel;
+      if (
+        syncCh === 'dine_in' &&
+        !tableId &&
+        requireTableForDineIn &&
+        !isCounterDineInOrderEvidence({
+          orderNumber: orderNumber || ticketOrderNumber || undefined,
+          ticketDisplay: saleTicketDisplay,
+        })
+      ) {
+        syncCh = 'takeaway';
+      }
+      return syncCh;
+    })();
     const fulfillmentStatus = posSaleFulfillmentStatus({
-      channel: effectiveChannel,
+      channel: saleFulfillmentChannel,
       payLater,
       scheduledFor,
     });
@@ -9298,8 +9323,8 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
       staffName: webposStaff?.name || null,
       staffId: webposStaff?.id || null,
       total: saleTotal,
-      fulfillmentChannel: effectiveChannel,
-      channel: effectiveChannel,
+      fulfillmentChannel: saleFulfillmentChannel,
+      channel: saleFulfillmentChannel,
       completedAt: fulfillmentStatus === 'completed' ? Date.now() : undefined,
       scheduledFor,
       customerId: selectedCustomer?.id || null,

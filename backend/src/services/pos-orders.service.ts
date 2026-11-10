@@ -11,6 +11,7 @@ import {
   resolvePosRefundReason,
 } from "@/lib/pos-print-settings";
 import { resolveOrderListTaxRate, roundMoney2 } from "@/lib/money";
+import { resolvePosOrderFulfillmentChannel } from "@/lib/pos-fulfillment-channel";
 import { MerchantSettingsService } from "@/services/merchant-settings.service";
 import { zurichDayBounds } from "@/lib/vacation";
 import { resolveOrderItemName } from "@/lib/order-item-name";
@@ -682,6 +683,12 @@ export class PosOrdersService {
       },
     });
     const vatIncludedInPrice = merchantRow?.taxIncludedInPrice === true;
+    const listTakeawayRate = merchantRow
+      ? MerchantSettingsService.channelTaxRate(merchantRow, "takeaway")
+      : 2.6;
+    const listDineInRate = merchantRow
+      ? MerchantSettingsService.channelTaxRate(merchantRow, "dine_in")
+      : 8.1;
 
     const orderIds = rows.map((o) => o.id);
     const assignedIds = [
@@ -738,6 +745,23 @@ export class PosOrdersService {
       const tabNumber =
         tabMatch?.[1]?.trim() ||
         (o.guestCount != null && Number(o.guestCount) > 0 ? String(o.guestCount) : null);
+      const resolvedChannel = resolvePosOrderFulfillmentChannel(
+        {
+          fulfillmentChannel: o.fulfillmentChannel,
+          orderType: o.orderType,
+          tableId: o.tableId,
+          tableLabel: o.tableLabel,
+          orderNumber: o.orderNumber,
+          ticketDisplay,
+          subtotal: o.subtotal,
+          taxAmount: o.taxAmount,
+        },
+        {
+          taxIncludedInPrice: vatIncludedInPrice,
+          taxTakeawayRate: listTakeawayRate,
+          taxDineInRate: listDineInRate,
+        }
+      );
       return {
       id: o.id,
       orderNumber: o.orderNumber,
@@ -746,8 +770,8 @@ export class PosOrdersService {
       orderSource: o.orderSource,
       externalOrderId: o.externalOrderId,
       status: o.status,
-      channel: o.fulfillmentChannel,
-      fulfillmentChannel: o.fulfillmentChannel,
+      channel: resolvedChannel,
+      fulfillmentChannel: resolvedChannel,
       paymentMethod: o.paymentMethod,
       paymentBreakdown: o.paymentBreakdown ?? null,
       paymentStatus: o.paymentStatus,
@@ -761,11 +785,7 @@ export class PosOrdersService {
         taxAmount: Number(o.taxAmount),
         taxIncludedInPrice: vatIncludedInPrice,
         channelTaxRate: merchantRow
-          ? MerchantSettingsService.channelTaxRate(
-              merchantRow,
-              (o.fulfillmentChannel as "takeaway" | "dine_in" | "delivery" | "in_store") ||
-                "takeaway"
-            )
+          ? MerchantSettingsService.channelTaxRate(merchantRow, resolvedChannel)
           : undefined,
       }),
       discountAmount: Number(o.discountAmount || 0),
