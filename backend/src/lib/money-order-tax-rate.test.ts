@@ -26,4 +26,15 @@ assert.equal(
   8.1
 );
 
+// Label follows merchant takeaway rate even when stored HT/TVA lines imply dine-in VAT.
+assert.equal(
+  resolveOrderListTaxRate({
+    subtotal: 7.96,
+    taxAmount: 0.64,
+    taxIncludedInPrice: true,
+    channelTaxRate: 2.6,
+  }),
+  2.6
+);
+
 console.log('money-order-tax-rate.test.ts ok');

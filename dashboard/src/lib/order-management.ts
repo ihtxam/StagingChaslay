@@ -6,7 +6,7 @@ import {
 } from '@/lib/payment-breakdown';
 import { formatOrderNumberDisplay, guestOrderNumber } from '@/lib/order-number';
 import { ticketQueryMatches } from '@/lib/webpos-held';
-import { resolvePosOrderFulfillmentChannel } from '@/lib/pos-fulfillment-channel';
+import { normalizePosFulfillmentChannel } from '@/lib/pos-fulfillment-channel';
 
 export type MerchantOrder = PosOrderForReceipt & {
   status: string;
@@ -66,18 +66,7 @@ export function orderChannel(o: MerchantOrder): string {
   if (isOnlineShopOrder(o)) {
     return o.channel || o.fulfillmentChannel || 'takeaway';
   }
-  const refs = orderPublicRefs(o);
-  return resolvePosOrderFulfillmentChannel({
-    channel: o.channel,
-    fulfillmentChannel: o.fulfillmentChannel,
-    orderType: o.orderType,
-    tableId: (o as { tableId?: string | null }).tableId,
-    tableLabel: o.tableLabel,
-    orderNumber: o.orderNumber,
-    ticketDisplay: o.ticketDisplay || refs.ticketDisplay,
-    subtotal: o.subtotal,
-    taxAmount: o.taxAmount,
-  });
+  return normalizePosFulfillmentChannel(o.fulfillmentChannel || o.channel);
 }
 
 /** Delivery fulfillment (POS or online shop). */

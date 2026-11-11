@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { resolvePosOrderFulfillmentChannel } from "./pos-fulfillment-channel";
 
-// Bistro walk-in: Sur place in DB but #6351 + WP-… + 2.6% VAT split → takeaway
+// Sync-time only: Sur place in DB but #6351 + WP-… + 2.6% VAT split → takeaway
 assert.equal(
   resolvePosOrderFulfillmentChannel(
     {

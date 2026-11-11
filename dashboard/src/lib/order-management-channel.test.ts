@@ -45,7 +45,7 @@ describe('orderChannel / isOnlineShopOrder', () => {
       taxAmount: 0.23,
     });
     expect(() => orderChannel(o)).not.toThrow();
-    expect(orderChannel(o)).toBe('takeaway');
+    expect(orderChannel(o)).toBe('dine_in');
     expect(isOnlineShopOrder(o)).toBe(false);
   });
 
