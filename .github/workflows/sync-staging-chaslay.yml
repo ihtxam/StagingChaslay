@@ -54,7 +54,27 @@ jobs:
           SYNC_TOKEN: ${{ secrets.STAGING_CHASLAY_SYNC_TOKEN }}
         run: |
           set -euo pipefail
-          # rebornSense-only workflows (must not land in StagingChaslay)
+          staging_fetched=false
+          if git fetch "https://x-access-token:${SYNC_TOKEN}@github.com/ihtxam/StagingChaslay.git" main:staging-main-ref 2>/dev/null; then
+            if git rev-parse staging-main-ref >/dev/null 2>&1; then
+              staging_fetched=true
+            fi
+          fi
+          # Mirror is a force-push of the rebornSense tree. Without this step, git add -A would
+          # delete StagingChaslay-only workflows (deploy-hetzner.yml) and push rebornSense
+          # workflows (check-migrations.yml) — both require PAT **workflow** scope on the mirror.
+          if [ "$staging_fetched" = "true" ]; then
+            git checkout staging-main-ref -- .github/workflows
+          else
+            echo "::warning::Could not fetch StagingChaslay main — bootstrapping workflows from overlay."
+            rm -rf .github/workflows
+            mkdir -p .github/workflows
+            cp -f .github/staging-overlay/deploy-hetzner.yml .github/workflows/deploy-hetzner.yml
+            for wf in build-bridge-apk.yml staging-api-auto-heal.yml staging-health-watch.yml; do
+              git show HEAD:".github/workflows/$wf" > ".github/workflows/$wf" 2>/dev/null || true
+            done
+          fi
+          # rebornSense-only workflows (must never land in StagingChaslay)
           rm -f .github/workflows/deploy-rebornsense.yml
           rm -f .github/workflows/production-api-auto-heal.yml
           rm -f .github/workflows/production-health-watch.yml
@@ -62,20 +82,10 @@ jobs:
           rm -f .github/workflows/restart-rebornsense.yml
           rm -f .github/workflows/restore-rebornsense-now.yml
           rm -f .github/workflows/sync-staging-chaslay.yml
-          # Windows / Android POS builds run on rebornSense only (PAT lacks workflow scope on mirror)
           rm -f .github/workflows/build-chaslay-pos-windows.yml
           rm -f .github/workflows/build-chaslay-pos-apk.yml
           rm -f .github/workflows/cleanup-github-artifacts.yml
-          # STAGING_CHASLAY_SYNC_TOKEN often lacks workflow scope — keep StagingChaslay's
-          # build-bridge-apk.yml so the mirror push is not rejected.
-          if git fetch "https://x-access-token:${SYNC_TOKEN}@github.com/ihtxam/StagingChaslay.git" main:staging-main-ref 2>/dev/null; then
-            if git rev-parse staging-main-ref >/dev/null 2>&1; then
-              git checkout staging-main-ref -- .github/workflows/build-bridge-apk.yml 2>/dev/null || true
-            fi
-          fi
-          # Do not copy deploy-hetzner.yml overlay — STAGING_CHASLAY_SYNC_TOKEN often lacks
-          # the workflow scope, which blocks the entire sync push. StagingChaslay already has
-          # deploy-hetzner.yml; git remote + deploy key handling lives in scripts/deploy-hetzner.sh.
+          rm -f .github/workflows/check-migrations.yml
 
       - name: Push to StagingChaslay
         if: steps.token.outputs.configured == 'true'

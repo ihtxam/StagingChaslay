@@ -411,7 +411,11 @@ Cloud agents and `cursor[bot]` **cannot** push to `ihtxam/StagingChaslay` (403 �
    - Value: the PAT
 3. To deploy to test: **Actions** → **Sync to StagingChaslay** → **Run workflow** (pick branch if not `main`).
 
-The sync workflow swaps in `.github/staging-overlay/deploy-hetzner.yml` and strips rebornSense-only workflows before pushing. That push triggers the Chaslay auto-deploy on `app.chaslay.com`. Histories may diverge — the workflow **force-pushes** by default.
+The sync workflow **does not** copy rebornSense `.github/workflows/*` to the mirror (PATs without **workflow** scope cannot add/change/delete workflow files on another repo). It **reuses StagingChaslay’s existing** `.github/workflows/` from `main`, strips any rebornSense-only files, then force-pushes application code only. If StagingChaslay has no `main` yet, it seeds `deploy-hetzner.yml` from `.github/staging-overlay/`.
+
+To **update** workflow YAML on StagingChaslay (e.g. new `check-migrations.yml`), either edit that repo directly or refresh `STAGING_CHASLAY_SYNC_TOKEN` with **Contents + Workflows** write (fine-grained) or classic **`repo` + `workflow`** scope, then temporarily adjust the sync workflow — day-to-day sync does not need workflow scope.
+
+That push triggers the Chaslay auto-deploy on `app.chaslay.com`. Histories may diverge — the workflow **force-pushes** by default.
 
 **Do not run Deploy to Rebornsense until you have verified the same code on staging.**
 

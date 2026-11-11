@@ -6,6 +6,8 @@
 - **Added:** `/v1/*` Reborn Android API compatibility (license, sync, orders, receipts)
 
 ## Deploy
+**Staging sync (rebornSense → StagingChaslay):** add GitHub Actions secret **`STAGING_CHASLAY_SYNC_TOKEN`** on **rebornSense** (classic PAT: `repo` + `workflow`, or fine-grained **Contents + Workflows** write on `ihtxam/StagingChaslay`). Sync keeps StagingChaslay’s own `.github/workflows/`; a token without **workflow** scope is fine for routine code mirrors. Details: `DEPLOY.md` § StagingChaslay sync.
+
 1. Copy `.env.production.example` → `.env.production` and set secrets
 2. For Reborn domains use `deploy/Caddyfile.chaslay`
 3. `docker compose up -d --build`
