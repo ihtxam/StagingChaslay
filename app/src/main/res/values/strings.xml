@@ -374,8 +374,12 @@
     <string name="orders_tab_all">All</string>
     <string name="orders_tab_reservation">Reservation</string>
     <string name="nav_reservations">Bookings</string>
-    <string name="reservations_title">Today\'s reservations</string>
+    <string name="reservations_title">Bookings</string>
+    <string name="reservations_filter_today">Today</string>
+    <string name="reservations_filter_future">Upcoming</string>
     <string name="reservations_empty">No reservations for today</string>
+    <string name="reservations_empty_future">No upcoming reservations</string>
+    <string name="reservation_step_request">Request</string>
     <string name="reservations_offline_hint">Showing last synced data. Connect to refresh from the panel.</string>
     <string name="reservations_module_disabled">Reservations are not enabled for this location.</string>
     <string name="reservation_detail_title">Booking %1$s</string>

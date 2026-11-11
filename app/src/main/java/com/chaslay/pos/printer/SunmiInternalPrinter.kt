@@ -3,17 +3,9 @@ package com.chaslay.pos.printer
 import android.content.Context
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbConstants
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import com.sunmi.peripheral.printer.InnerPrinterCallback
-import com.sunmi.peripheral.printer.InnerPrinterManager
-import com.sunmi.peripheral.printer.SunmiPrinterService
+import java.util.Locale
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,82 +13,83 @@ import javax.inject.Singleton
 @Singleton
 class SunmiInternalPrinter @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val serviceHolder: SunmiPrinterServiceHolder,
 ) {
-    private val serviceRef = AtomicReference<SunmiPrinterService?>(null)
-    private val bindLock = Any()
-
-    fun bindIfNeeded() {
-        if (serviceRef.get() != null) return
-        if (!isSunmiDevice()) return
-        synchronized(bindLock) {
-            if (serviceRef.get() != null) return
-            runCatching {
-                val latch = CountDownLatch(1)
-                val callback = object : InnerPrinterCallback() {
-                    override fun onConnected(service: SunmiPrinterService?) {
-                        serviceRef.set(service)
-                        latch.countDown()
-                    }
-
-                    override fun onDisconnected() {
-                        serviceRef.set(null)
-                    }
-                }
-                val appCtx = context.applicationContext
-                if (Looper.myLooper() == Looper.getMainLooper()) {
-                    InnerPrinterManager.getInstance().bindService(appCtx, callback)
-                } else {
-                    Handler(Looper.getMainLooper()).post {
-                        runCatching {
-                            InnerPrinterManager.getInstance().bindService(appCtx, callback)
-                        }.onFailure {
-                            Log.w(TAG, "Sunmi bindService failed", it)
-                            latch.countDown()
-                        }
-                    }
-                }
-                latch.await(5, TimeUnit.SECONDS)
-            }.onFailure {
-                Log.w(TAG, "Sunmi printer bind failed", it)
-            }
-        }
-    }
+    fun bindIfNeeded() = serviceHolder.bindIfNeeded()
 
     fun isAvailable(): Boolean {
         if (!isSunmiDevice()) return false
         bindIfNeeded()
-        return serviceRef.get() != null
+        return serviceHolder.isServiceConnected()
     }
 
     fun sendRaw(data: ByteArray): Result<Unit> {
         bindIfNeeded()
-        val service = serviceRef.get()
+        val service = serviceHolder.getService()
             ?: return Result.failure(IllegalStateException("Sunmi printer service not connected"))
         return runCatching {
-            runCatching { service.printerInit(null) }
+            // Payload already leads with ESC @; a second printerInit can blank some D3 firmware.
+            val skipInit = data.size >= 2 && data[0] == 0x1B.toByte() && data[1] == 0x40.toByte()
+            if (!skipInit) {
+                runCatching { service.printerInit(null) }
+            }
             var offset = 0
             while (offset < data.size) {
-                val end = minOf(offset + RAW_CHUNK_SIZE, data.size)
+                val rawEnd = minOf(offset + RAW_CHUNK_SIZE, data.size)
+                val end = alignUtf8ChunkEnd(data, offset, rawEnd)
                 service.sendRAWData(data.copyOfRange(offset, end), null)
                 offset = end
                 if (offset < data.size) {
                     Thread.sleep(RAW_CHUNK_DELAY_MS)
                 }
             }
+            val chunkCount = (data.size + RAW_CHUNK_SIZE - 1) / RAW_CHUNK_SIZE
+            val prefixHex = data.take(24).joinToString(" ") { b -> "%02X".format(b.toInt() and 0xFF) }
+            val msg = buildString {
+                append("sendRaw ok bytes=")
+                append(data.size)
+                append(" chunks=")
+                append(chunkCount)
+                append(" profile=")
+                append(serviceHolder.deviceProfile())
+                append(" head=")
+                append(prefixHex)
+            }
+            Log.d(TAG, msg)
+            Unit
+        }.onFailure { t ->
+            Log.w(TAG, "sendRaw failed", t)
         }
+    }
+
+    /** Avoid splitting UTF-8 multibyte sequences across sendRAWData chunks (D3 garbles or drops text). */
+    private fun alignUtf8ChunkEnd(data: ByteArray, offset: Int, proposedEnd: Int): Int {
+        if (proposedEnd >= data.size) return proposedEnd
+        var end = proposedEnd
+        while (end > offset && (data[end - 1].toInt() and 0xC0) == 0x80) {
+            end--
+        }
+        return if (end == offset) proposedEnd else end
     }
 
     companion object {
         private const val TAG = "SunmiInternalPrinter"
         const val INTERNAL_ADDRESS = "sunmi:internal"
+        /** Fake bonded BT address Sunmi uses for the USB InnerPrinter facade on D3 Mini. */
+        const val INTERNAL_BLUETOOTH_SHADOW_MAC = "00:11:22:33:44:55"
         private const val RAW_CHUNK_SIZE = 4096
         private const val RAW_CHUNK_DELAY_MS = 15L
 
         private val SUNMI_INTERNAL_USB_NAME =
-            Regex("""AX8772B|GD32-USB_Printer|InnerPrinter|Sunmi""", RegexOption.IGNORE_CASE)
+            Regex("""AX8772B|GD32-USB_Printer|InnerPrinter|Sunmi|Printer""", RegexOption.IGNORE_CASE)
+        private val INNER_PRINTER_NAME = Regex("""InnerPrinter""", RegexOption.IGNORE_CASE)
+        private val MAC_ADDRESS = Regex("""^([0-9A-F]{2}:){5}[0-9A-F]{2}$""")
 
         fun isSunmiDevice(): Boolean =
-            Build.MANUFACTURER.orEmpty().contains("SUNMI", ignoreCase = true)
+            serviceHolderManufacturer().contains("SUNMI", ignoreCase = true)
+
+        private fun serviceHolderManufacturer(): String =
+            android.os.Build.MANUFACTURER.orEmpty()
 
         fun isInternalAddress(address: String?): Boolean {
             val trimmed = address?.trim().orEmpty()
@@ -114,9 +107,14 @@ class SunmiInternalPrinter @Inject constructor(
                 append(device.productName.orEmpty())
                 append(' ')
                 append(device.manufacturerName.orEmpty())
+                append(" vid=")
+                append(device.vendorId)
+                append(" pid=")
+                append(device.productId)
             }
             if (blob.isNotEmpty() && SUNMI_INTERNAL_USB_NAME.containsMatchIn(blob)) return true
-            if (hasPrinterClass(device) && !blob.contains("gd32", ignoreCase = true)) return false
+            // On Sunmi POS hardware, any USB printer-class interface is the internal thermal facade.
+            if (hasPrinterClass(device)) return true
             if (!hasPrinterClass(device) && hasAnyBulkOut(device) && !hasPrinterInterface(device)) {
                 val classes = interfaceClasses(device)
                 if (classes.isNotEmpty() && classes.all { it == UsbConstants.USB_CLASS_VENDOR_SPEC }) {
@@ -126,7 +124,89 @@ class SunmiInternalPrinter @Inject constructor(
             return false
         }
 
-        fun builtInLabel(): String = "Sunmi built-in (${Build.MODEL})"
+        fun builtInLabel(): String = "Sunmi built-in (${android.os.Build.MODEL})"
+
+        fun builtInPickerLabel(): String = "${builtInLabel()} (use this)"
+
+        fun looksLikeInnerPrinterLabel(name: String?): Boolean =
+            INNER_PRINTER_NAME.containsMatchIn(name.orEmpty())
+
+        /** Stored row that should use [INTERNAL_ADDRESS] and connection type SUNMI. */
+        fun shouldMigrateStoredPrinter(
+            address: String?,
+            name: String?,
+            connectionType: String?,
+        ): Boolean {
+            if (!isSunmiDevice()) return false
+            if (isInternalAddress(address) && connectionType?.trim().equals("SUNMI", ignoreCase = true)) {
+                return false
+            }
+            if (isInternalAddress(address) && !connectionType.isNullOrBlank() &&
+                !connectionType.trim().equals("SUNMI", ignoreCase = true)
+            ) {
+                return true
+            }
+            return looksLikeStoredSunmiInnerShadow(address, name) ||
+                isInternalBluetoothShadow(address, name)
+        }
+
+        fun migratedPrinterEntity(name: String?): Pair<String, String> {
+            val label = when {
+                looksLikeInnerPrinterLabel(name) || name.isNullOrBlank() -> builtInLabel()
+                else -> name.trim()
+            }
+            return label to "SUNMI"
+        }
+
+        fun displayNameForSettings(name: String?, address: String?, connectionType: String?): String {
+            if (!isSunmiDevice()) return name.orEmpty()
+            if (isInternalAddress(address) || connectionType.equals("SUNMI", ignoreCase = true)) {
+                if (looksLikeInnerPrinterLabel(name) || name.isNullOrBlank()) return builtInLabel()
+            }
+            if (looksLikeStoredSunmiInnerShadow(address, name)) return builtInLabel()
+            return name.orEmpty()
+        }
+
+        fun normalizeBluetoothMac(address: String?): String =
+            address?.trim()?.replace('-', ':')?.uppercase(Locale.US).orEmpty()
+
+        /**
+         * Sunmi exposes the built-in printer as a paired "InnerPrinter" Bluetooth device — not ESC/POS BT.
+         */
+        fun isInternalBluetoothShadow(address: String?, name: String? = null): Boolean {
+            if (!isSunmiDevice()) return false
+            if (isInternalAddress(address)) return false
+            val mac = normalizeBluetoothMac(address)
+            if (mac == INTERNAL_BLUETOOTH_SHADOW_MAC) return true
+            if (mac.isNotBlank() && MAC_ADDRESS.matches(mac) && INNER_PRINTER_NAME.containsMatchIn(name.orEmpty())) {
+                return true
+            }
+            val blob = buildString {
+                append(mac)
+                append(' ')
+                append(name.orEmpty())
+            }
+            return mac.isNotBlank() && MAC_ADDRESS.matches(mac) && INNER_PRINTER_NAME.containsMatchIn(blob)
+        }
+
+        /** Stored USB address/name that matched Sunmi built-in before service bind (startup migration). */
+        fun looksLikeStoredSunmiInnerUsb(address: String?, name: String? = null): Boolean {
+            if (!isSunmiDevice()) return false
+            if (isInternalAddress(address)) return false
+            val addr = address?.trim().orEmpty()
+            if (addr.isBlank() || !addr.startsWith("usb:", ignoreCase = true)) return false
+            val blob = buildString {
+                append(addr)
+                append(' ')
+                append(name.orEmpty())
+            }
+            return SUNMI_INTERNAL_USB_NAME.containsMatchIn(blob)
+        }
+
+        /** USB gadget or fake Bluetooth entry that should map to [INTERNAL_ADDRESS]. */
+        fun looksLikeStoredSunmiInnerShadow(address: String?, name: String? = null): Boolean =
+            looksLikeStoredSunmiInnerUsb(address, name) ||
+                isInternalBluetoothShadow(address, name)
 
         private fun hasPrinterClass(device: UsbDevice): Boolean {
             if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER) return true

@@ -337,8 +337,12 @@
     <string name="orders_tab_all">Tous</string>
     <string name="orders_tab_reservation">Réservation</string>
     <string name="nav_reservations">Réservations</string>
-    <string name="reservations_title">Réservations du jour</string>
+    <string name="reservations_title">Réservations</string>
+    <string name="reservations_filter_today">Aujourd\'hui</string>
+    <string name="reservations_filter_future">À venir</string>
     <string name="reservations_empty">Aucune réservation aujourd\'hui</string>
+    <string name="reservations_empty_future">Aucune réservation à venir</string>
+    <string name="reservation_step_request">Demande</string>
     <string name="reservations_offline_hint">Données de la dernière synchro. Connectez-vous pour actualiser.</string>
     <string name="reservations_module_disabled">Les réservations ne sont pas activées pour cet établissement.</string>
     <string name="reservation_detail_title">Réservation %1$s</string>

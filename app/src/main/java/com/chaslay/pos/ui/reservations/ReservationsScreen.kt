@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -44,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.ReservationEntity
+import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.posUiColors
 import com.chaslay.pos.ui.theme.vectronColors
 import java.text.SimpleDateFormat
@@ -203,6 +208,23 @@ fun ReservationsScreen(
                     fontSize = 12.sp
                 )
             }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = state.listScope == ReservationsListScope.TODAY,
+                    onClick = { viewModel.setListScope(ReservationsListScope.TODAY) },
+                    label = { Text(stringResource(R.string.reservations_filter_today)) }
+                )
+                FilterChip(
+                    selected = state.listScope == ReservationsListScope.FUTURE,
+                    onClick = { viewModel.setListScope(ReservationsListScope.FUTURE) },
+                    label = { Text(stringResource(R.string.reservations_filter_future)) }
+                )
+            }
             if (state.reservations.isEmpty()) {
                 Column(
                     modifier = Modifier
@@ -217,7 +239,13 @@ fun ReservationsScreen(
                         tint = ui.textSecondary
                     )
                     Text(
-                        stringResource(R.string.reservations_empty),
+                        stringResource(
+                            if (state.listScope == ReservationsListScope.FUTURE) {
+                                R.string.reservations_empty_future
+                            } else {
+                                R.string.reservations_empty
+                            }
+                        ),
                         color = ui.textSecondary,
                         modifier = Modifier.padding(top = 8.dp)
                     )
@@ -228,7 +256,11 @@ fun ReservationsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.reservations, key = { it.id }) { row ->
-                        ReservationRow(row = row, onClick = { detail = row })
+                        ReservationRow(
+                            row = row,
+                            showDate = state.listScope == ReservationsListScope.FUTURE,
+                            onClick = { detail = row }
+                        )
                     }
                 }
             }
@@ -267,7 +299,8 @@ private fun ReservationDetailDialog(
                         row.partySize
                     )
                 )
-                Text(formatReservationTime(row.reservedAtMs))
+                Text(formatReservationDateTime(row.reservedAtMs))
+                ReservationStatusStepper(status = row.status)
                 Text(stringResource(R.string.reservation_status_label, formatStatus(row.status)))
                 row.tableLabel?.takeIf { it.isNotBlank() }?.let { label ->
                     Text(stringResource(R.string.reservation_table, label))
@@ -418,7 +451,60 @@ private fun ReservationCancelDialog(
 }
 
 @Composable
-private fun ReservationRow(row: ReservationEntity, onClick: () -> Unit) {
+private fun ReservationStatusStepper(status: String) {
+    val ui = posUiColors()
+    val normalized = status.lowercase(Locale.ROOT)
+    val steps = listOf("pending", "confirmed", "seated", "completed")
+    val activeIndex = when (normalized) {
+        "waitlist", "pending" -> 0
+        "confirmed" -> 1
+        "seated" -> 2
+        "completed" -> 3
+        else -> -1
+    }
+    if (activeIndex < 0) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        steps.forEachIndexed { index, stepKey ->
+            val labelRes = when (stepKey) {
+                "pending" -> R.string.reservation_step_request
+                "confirmed" -> R.string.reservation_status_confirmed
+                "seated" -> R.string.reservation_status_seated
+                else -> R.string.reservation_status_completed
+            }
+            val active = index <= activeIndex
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(
+                    modifier = Modifier
+                        .height(10.dp)
+                        .width(10.dp)
+                        .background(
+                            if (active) PosColors.Primary else ui.border,
+                            CircleShape
+                        )
+                )
+                Text(
+                    text = stringResource(labelRes),
+                    fontSize = 10.sp,
+                    color = if (active) ui.textPrimary else ui.textSecondary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReservationRow(
+    row: ReservationEntity,
+    showDate: Boolean,
+    onClick: () -> Unit
+) {
     val ui = posUiColors()
     Row(
         modifier = Modifier
@@ -432,7 +518,15 @@ private fun ReservationRow(row: ReservationEntity, onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text(row.guestName, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             Text(
-                "${formatReservationTime(row.reservedAtMs)} · ${stringResource(R.string.reservation_party_size, row.partySize)}",
+                buildString {
+                    if (showDate) {
+                        append(formatReservationDate(row.reservedAtMs))
+                        append(" · ")
+                    }
+                    append(formatReservationTime(row.reservedAtMs))
+                    append(" · ")
+                    append(stringResource(R.string.reservation_party_size, row.partySize))
+                },
                 fontSize = 12.sp,
                 color = ui.textSecondary
             )
@@ -455,6 +549,16 @@ private fun ReservationRow(row: ReservationEntity, onClick: () -> Unit) {
 
 private fun formatReservationTime(ms: Long): String {
     val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return fmt.format(Date(ms))
+}
+
+private fun formatReservationDate(ms: Long): String {
+    val fmt = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+    return fmt.format(Date(ms))
+}
+
+private fun formatReservationDateTime(ms: Long): String {
+    val fmt = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     return fmt.format(Date(ms))
 }
 

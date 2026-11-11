@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { requireChaslayApiKey } from "@/middleware/chaslay-api-key.middleware";
 import { ChaslayCompatService } from "@/services/chaslay-compat.service";
+import { handleChaslayPosDiagnosticPost } from "@/routes/chaslay/pos-diagnostics.handler";
 
 const router = Router();
 
@@ -153,38 +154,9 @@ router.get("/reports/profit-margin", async (req: Request, res: Response) => {
   }
 });
 
-/** Android POS crash/error logs — superadmin System Logs only. */
-router.post("/diagnostic-report", async (req: Request, res: Response) => {
-  try {
-    const { SupportTicketService } = await import("@/services/support-ticket.service");
-    const { subject, body, auto, deviceId, appVersion } = req.body || {};
-    if (!subject?.trim() || !body?.trim()) {
-      return res.status(400).json({ error: "Subject and body are required" });
-    }
-    const header = [
-      "--- Chaslay Android POS diagnostics ---",
-      JSON.stringify(
-        {
-          deviceId: deviceId ? String(deviceId).slice(0, 64) : null,
-          appVersion: appVersion ? String(appVersion).slice(0, 64) : null,
-          auto: auto === true || auto === "true",
-        },
-        null,
-        2
-      ),
-      "--- Log ---",
-    ].join("\n");
-    const log = await SupportTicketService.createDiagnosticReport(req.chaslayMerchantId!, {
-      source: "android",
-      subject: String(subject).slice(0, 255),
-      body: `${header}\n${String(body)}`,
-      auto: auto === true || auto === "true",
-      authorName: "Android POS",
-    });
-    res.json({ ok: true, logId: log.id });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to submit report" });
-  }
-});
+/** Android POS crash/error logs — superadmin System Logs (+ support ticket when manual). */
+router.post("/diagnostic-report", handleChaslayPosDiagnosticPost);
+router.post("/diagnostics", handleChaslayPosDiagnosticPost);
+router.post("/pos-logs", handleChaslayPosDiagnosticPost);
 
 export default router;

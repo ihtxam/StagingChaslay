@@ -16,6 +16,12 @@ Set in `app/build.gradle.kts`:
 - `LICENSE_API_BASE_URL` → your API host (e.g. `https://app.rebornsense.com/`)
 - `SYNC_API_KEY` → merchant **sync API key** from ManuPOS superadmin (Merchants detail)
 
+### POS remote diagnostics (debug builds)
+- **Debug APKs** upload crash/support logs to **staging only**: `https://app.chaslay.com/v1/sync/diagnostic-report` (override via `diagnosticApiBaseUrl` in `local.properties`).
+- **Release APKs** use `LICENSE_API_BASE_URL` for diagnostics (production merchant support).
+- Staging server runs with `DEPLOY_STACK=chaslay` (see `DEPLOY.md`); route is shared with production code in `backend/src/routes/chaslay/pos-diagnostics.handler.ts`.
+- **Read uploads:** superadmin → **System logs** at `https://app.chaslay.com/superadmin/logs`, filter category **merchant_diagnostic** (API: `GET /api/superadmin/system-logs?category=merchant_diagnostic`).
+
 ## Superadmin panel
 - `https://admin.yourdomain.com` or main domain `/superadmin`
 - Create merchants + device license keys there

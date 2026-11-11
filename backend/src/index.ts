@@ -30,6 +30,8 @@ import fiskalyRoutes from "@/routes/fiskaly.routes";
 import comoRoutes from "@/routes/como.routes";
 import signageRoutes, { signageMerchantRoutes } from "@/routes/signage.routes";
 import chaslayRoutes from "@/routes/chaslay";
+import { requireChaslayApiKey } from "@/middleware/chaslay-api-key.middleware";
+import { handleChaslayPosDiagnosticPost } from "@/routes/chaslay/pos-diagnostics.handler";
 import webhooksRoutes from "@/routes/webhooks.routes";
 import deliveryPlatformRoutes from "@/routes/delivery-platform.routes";
 import bexioOauthRoutes from "@/routes/bexio-oauth.routes";
@@ -358,6 +360,10 @@ app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/webhooks", deliveryPlatformRoutes);
 /** Reborn / FoodTruck Android POS (Retrofit /v1/* contract) */
 app.use("/v1", chaslayRoutes);
+
+/** Android POS diagnostics aliases (same auth + payload as POST /v1/sync/diagnostic-report). */
+app.post("/api/pos/diagnostics", requireChaslayApiKey, handleChaslayPosDiagnosticPost);
+app.post("/api/sync/pos-logs", requireChaslayApiKey, handleChaslayPosDiagnosticPost);
 
 // ============================================================================
 // ERROR HANDLING

@@ -2,21 +2,18 @@ package com.chaslay.pos.customerdisplay
 
 import android.content.Context
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import com.sunmi.peripheral.printer.InnerPrinterCallback
-import com.sunmi.peripheral.printer.InnerPrinterManager
+import com.chaslay.pos.printer.SunmiInternalPrinter
+import com.chaslay.pos.printer.SunmiPrinterServiceHolder
 import com.sunmi.peripheral.printer.SunmiPrinterService
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class SunmiCustomerLcd @Inject constructor() {
-    private val serviceRef = AtomicReference<SunmiPrinterService?>(null)
+class SunmiCustomerLcd @Inject constructor(
+    private val serviceHolder: SunmiPrinterServiceHolder,
+) {
     private val lcdAvailable = AtomicReference<Boolean?>(null)
 
     companion object {
@@ -25,46 +22,11 @@ class SunmiCustomerLcd @Inject constructor() {
     }
 
     fun bindIfNeeded(context: Context) {
-        if (serviceRef.get() != null) return
-        if (!isSunmiDevice()) return
-        synchronized(this) {
-            if (serviceRef.get() != null) return
-            try {
-                val latch = CountDownLatch(1)
-                val callback = object : InnerPrinterCallback() {
-                    override fun onConnected(service: SunmiPrinterService?) {
-                        serviceRef.set(service)
-                        latch.countDown()
-                    }
-
-                    override fun onDisconnected() {
-                        serviceRef.set(null)
-                    }
-                }
-                val appCtx = context.applicationContext
-                if (Looper.myLooper() == Looper.getMainLooper()) {
-                    InnerPrinterManager.getInstance().bindService(appCtx, callback)
-                } else {
-                    Handler(Looper.getMainLooper()).post {
-                        runCatching {
-                            InnerPrinterManager.getInstance().bindService(appCtx, callback)
-                        }.onFailure {
-                            Log.w(TAG, "Sunmi LCD bindService failed", it)
-                            latch.countDown()
-                        }
-                    }
-                }
-                if (!latch.await(3, TimeUnit.SECONDS)) {
-                    Log.w(TAG, "Timed out waiting for Sunmi LCD printer service")
-                }
-            } catch (_: Throwable) {
-                // Not a Sunmi device or service unavailable
-            }
-        }
+        serviceHolder.bindIfNeeded()
     }
 
     fun isLikelyCustomerLcdDevice(): Boolean {
-        if (!isSunmiDevice()) return false
+        if (!SunmiInternalPrinter.isSunmiDevice()) return false
         val model = Build.MODEL.orEmpty().uppercase()
         return model.contains("D3") ||
             model.contains("MINI") ||
@@ -80,19 +42,25 @@ class SunmiCustomerLcd @Inject constructor() {
             return false
         }
         bindIfNeeded(context)
-        val service = serviceRef.get()
+        val service = serviceHolder.getService()
         if (service == null) {
             lcdAvailable.set(false)
+            Log.w(TAG, "No Sunmi service for LCD (${serviceHolder.deviceProfile()})")
             return false
         }
         val ok = probeLcdWake(service)
         lcdAvailable.set(ok)
+        if (!ok) Log.w(TAG, "Sunmi customer LCD probe failed (${serviceHolder.deviceProfile()})")
         return ok
+    }
+
+    fun invalidateLcdCache() {
+        lcdAvailable.set(null)
     }
 
     fun showCustomerLcd(context: Context, topText: String, bottomText: String): Result<Unit> {
         bindIfNeeded(context)
-        val service = serviceRef.get()
+        val service = serviceHolder.getService()
             ?: return Result.failure(IllegalStateException("Sunmi printer service not connected"))
         return try {
             val top = sanitizeLcdLine(topText)
@@ -100,15 +68,17 @@ class SunmiCustomerLcd @Inject constructor() {
             service.sendLCDCommand(2)
             service.sendLCDDoubleString(top, bottom, null)
             lcdAvailable.set(true)
+            Log.i(TAG, "LCD show: \"$top\" / \"$bottom\"")
             Result.success(Unit)
         } catch (e: Exception) {
+            lcdAvailable.set(null)
             Result.failure(e)
         }
     }
 
     fun clearCustomerLcd(context: Context): Result<Unit> {
         bindIfNeeded(context)
-        val service = serviceRef.get()
+        val service = serviceHolder.getService()
             ?: return Result.failure(IllegalStateException("Sunmi printer service not connected"))
         return try {
             service.sendLCDCommand(4)
@@ -132,7 +102,4 @@ class SunmiCustomerLcd @Inject constructor() {
         if (collapsed.length <= LCD_LINE_MAX) return collapsed
         return collapsed.take(LCD_LINE_MAX - 1) + "…"
     }
-
-    private fun isSunmiDevice(): Boolean =
-        Build.MANUFACTURER.orEmpty().contains("SUNMI", ignoreCase = true)
 }

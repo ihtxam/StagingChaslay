@@ -796,15 +796,19 @@ export class ReservationService {
   }
 
   static async listForSync(merchantId: string) {
+    const merchant = await getMerchant(merchantId);
+    const settings = resolveSettings(merchant.reservationSettings);
     const now = new Date();
     const from = new Date(now.getTime() - 6 * 3600_000);
-    const to = new Date(now.getTime() + 48 * 3600_000);
+    const lastYmd = addDaysYmd(formatZurichDate(now), settings.maxDaysAhead);
+    const to = new Date(zurichLocalToDate(lastYmd, "23:59").getTime() + 59_999);
+    const syncStatuses: ReservationStatus[] = [...ACTIVE_STATUSES, "waitlist"];
     return this.list(merchantId, {
       from,
       to,
-      limit: 100,
+      limit: 500,
     }).then((rows) =>
-      rows.filter((r) => ACTIVE_STATUSES.includes(r.status as ReservationStatus) || r.status === "pending")
+      rows.filter((r) => syncStatuses.includes(r.status as ReservationStatus))
     );
   }
 

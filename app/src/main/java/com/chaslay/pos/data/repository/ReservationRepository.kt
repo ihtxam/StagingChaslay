@@ -16,6 +16,11 @@ class ReservationRepository @Inject constructor(
         return reservationDao.observeBetween(fromMs, toMs)
     }
 
+    fun observeFuture(): Flow<List<ReservationEntity>> {
+        val (fromMs, toMs) = futureWindowMs()
+        return reservationDao.observeBetween(fromMs, toMs)
+    }
+
     suspend fun getToday(): List<ReservationEntity> {
         val (fromMs, toMs) = todayWindowMs()
         return reservationDao.getBetween(fromMs, toMs)
@@ -29,6 +34,19 @@ class ReservationRepository @Inject constructor(
         cal.set(Calendar.MILLISECOND, 0)
         val fromMs = cal.timeInMillis
         cal.add(Calendar.DAY_OF_YEAR, 1)
+        return fromMs to cal.timeInMillis
+    }
+
+    /** From start of tomorrow through ~30 days — aligned with panel sync window. */
+    private fun futureWindowMs(): Pair<Long, Long> {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        val fromMs = cal.timeInMillis
+        cal.add(Calendar.DAY_OF_YEAR, 31)
         return fromMs to cal.timeInMillis
     }
 }

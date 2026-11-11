@@ -14,11 +14,18 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class ReservationsListScope {
+    TODAY,
+    FUTURE,
+}
+
 data class ReservationsUiState(
     val moduleVisible: Boolean = false,
+    val listScope: ReservationsListScope = ReservationsListScope.TODAY,
     val reservations: List<ReservationEntity> = emptyList(),
     val refreshing: Boolean = false,
     val actionInProgress: Boolean = false,
@@ -39,6 +46,7 @@ class ReservationsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ReservationsUiState())
     val uiState: StateFlow<ReservationsUiState> = _uiState.asStateFlow()
+    private val listScope = MutableStateFlow(ReservationsListScope.TODAY)
 
     init {
         viewModelScope.launch {
@@ -52,11 +60,23 @@ class ReservationsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            reservationRepository.observeToday().collect { list ->
-                _uiState.update { it.copy(reservations = list) }
-            }
+            listScope
+                .flatMapLatest { scope ->
+                    when (scope) {
+                        ReservationsListScope.TODAY -> reservationRepository.observeToday()
+                        ReservationsListScope.FUTURE -> reservationRepository.observeFuture()
+                    }
+                }
+                .collect { list ->
+                    _uiState.update { it.copy(reservations = list) }
+                }
         }
         refresh(fromUser = false)
+    }
+
+    fun setListScope(scope: ReservationsListScope) {
+        listScope.value = scope
+        _uiState.update { it.copy(listScope = scope) }
     }
 
     fun refresh(fromUser: Boolean = true) {
