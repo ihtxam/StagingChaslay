@@ -11,6 +11,7 @@ import { APP_NAME, APP_PANEL_TITLE, APP_TAGLINE, REBORN_LOGO_WHITE } from '@/lib
 import RebornPoweredByFooter from '@/components/RebornPoweredByFooter';
 import { BRAND_BLUE_CHARCOAL, BRAND_BURGUNDY, BRAND_WARM_WHITE } from '@/lib/brand-colors';
 import { useI18n, type Locale } from '@/lib/i18n';
+import { isDeployBlip } from '@/lib/deploy-blip';
 import { clearWebPosStaffSession } from '@/lib/permissions';
 import type { StaffLoginHome } from '@/lib/staff-login-home';
 import { useAuthStore, type User } from '@/store/auth';
@@ -57,16 +58,16 @@ function loginErrorMessage(
     message?: string;
     code?: string;
   };
-  if (isLoginApiUnavailable(error)) {
-    return t('loginApiUnavailable');
+  if (isLoginApiUnavailable(error) || isDeployBlip(error)) {
+    return t('systemUpdateWait');
   }
   if (err.response?.data?.error) {
     const mapped = mapStaffLoginGuidance(err.response.data.error, t);
     if (mapped) return mapped;
     return err.response.data.error;
   }
-  if (err.response?.status === 500) {
-    return t('loginServerUnavailable');
+  if (err.response?.status != null && err.response.status >= 500) {
+    return t('apiErrorTryAgain');
   }
   const msg = String(err.message || '');
   if (

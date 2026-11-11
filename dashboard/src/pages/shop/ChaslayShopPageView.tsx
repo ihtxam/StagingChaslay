@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
+import { pageLoadErrorMessage } from '@/lib/deploy-blip';
 import ShopVacationPopup from '@/components/shop/ShopVacationPopup';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
@@ -171,8 +172,8 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
             }))
           );
         }
-      } catch {
-        if (!cancelled) setError(t('cmsHomeUnavailable'));
+      } catch (err) {
+        if (!cancelled) setError(pageLoadErrorMessage(err, t('cmsHomeUnavailable'), locale));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -180,7 +181,7 @@ export default function ChaslayShopPageView({ shopKey, base, pageSlug = 'home' }
     return () => {
       cancelled = true;
     };
-  }, [shopKey, apiPath, t, setLocale]);
+  }, [shopKey, apiPath, t, setLocale, locale]);
 
   const site = pageSite || shopSite;
 

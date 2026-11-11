@@ -34,6 +34,16 @@ export function systemUpdateMessage(locale?: Locale): string {
   return translate(locale ?? panelLocale(), 'systemUpdateWait');
 }
 
+/** Shop CMS / legal pages — deploy blip vs generic load failure copy. */
+export function pageLoadErrorMessage(
+  error: unknown,
+  fallback: string,
+  locale?: Locale
+): string {
+  if (isDeployBlip(error)) return systemUpdateMessage(locale);
+  return fallback;
+}
+
 export function apiTryAgainMessage(locale?: Locale): string {
   return translate(locale ?? panelLocale(), 'apiErrorTryAgain');
 }

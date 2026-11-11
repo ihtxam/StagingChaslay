@@ -704,10 +704,9 @@ const en: Dict = {
   loginSigningIn: 'Signing in…',
   loginFailed: 'Incorrect email or password.',
   loginNetworkError:
-    'Cannot reach the server. Check your internet connection, or try again in a minute if the site is being updated.',
-  loginApiUnavailable:
-    'Cannot reach the server. Wait a minute if the site is being updated, then hard-refresh and try again.',
-  loginServerUnavailable: 'The server is temporarily unavailable. Please try again in a minute.',
+    'Connection interrupted — check your internet, or wait a moment if an update is rolling out, then try again.',
+  loginApiUnavailable: 'Small update in progress — please wait a moment.',
+  loginServerUnavailable: 'Something went wrong — please wait a moment and try again.',
   loginStaffUsePin:
     'This account uses a POS PIN. Sign in on the POS with your PIN, or ask the owner to set an official login password in Users & roles.',
   loginStaffNoPassword:
@@ -2337,9 +2336,8 @@ const en: Dict = {
   customersToastCreated: 'Customer added',
   customersToastSaveFailed: 'Failed to add customer',
   customersToastLoadFailed: 'Failed to load customers',
-  systemUpdateWait: 'Server temporarily unavailable. Please try again in a moment.',
-  apiErrorTryAgain:
-    "We couldn't reach the server right now. Please wait a moment and try again.",
+  systemUpdateWait: 'Small update in progress — please wait a moment.',
+  apiErrorTryAgain: 'Still connecting — please wait a moment and try again.',
   poweredBy: 'Powered by:',
   customersNameRequired: 'First name is required (spaces only are not allowed)',
   customersContactRequired: 'Provide a last name, email, or phone (not only spaces)',
@@ -5182,7 +5180,7 @@ const en: Dict = {
   cmsSecondaryLabel: 'Secondary button',
   cmsSecondaryLink: 'Secondary link',
   cmsCaption: 'Caption',
-  cmsHomeUnavailable: 'Homepage is not available',
+  cmsHomeUnavailable: 'This page is not available right now. Please try again in a moment.',
   cmsGoToMenu: 'Go to menu',
   cmsOrderOnline: 'Order online',
   printRoleLabels: 'Labels',
@@ -6305,10 +6303,9 @@ const fr: Dict = {
   loginSigningIn: 'Connexion…',
   loginFailed: 'E-mail ou mot de passe incorrect.',
   loginNetworkError:
-    'Impossible de joindre le serveur. Vérifiez votre connexion ou réessayez dans une minute.',
-  loginApiUnavailable:
-    'Serveur inaccessible. Attendez une minute si le site est en cours de mise à jour, puis actualisez et réessayez.',
-  loginServerUnavailable: 'Le serveur est temporairement indisponible. Réessayez dans une minute.',
+    'Connexion interrompue — vérifiez Internet ou attendez un instant si une mise à jour est en cours, puis réessayez.',
+  loginApiUnavailable: 'Petite mise à jour en cours — patientez un instant.',
+  loginServerUnavailable: 'Un problème est survenu — patientez un instant et réessayez.',
   loginStaffUsePin:
     'Ce compte utilise un PIN caisse. Connectez-vous à la caisse avec le PIN, ou demandez au propriétaire de définir un mot de passe officiel dans Utilisateurs et rôles.',
   loginStaffNoPassword:
@@ -7712,9 +7709,8 @@ const fr: Dict = {
   customersToastCreated: 'Client ajouté',
   customersToastSaveFailed: "Échec de l'ajout du client",
   customersToastLoadFailed: 'Échec du chargement des clients',
-  systemUpdateWait: 'Serveur temporairement indisponible. Réessayez dans un instant.',
-  apiErrorTryAgain:
-    'Connexion au serveur impossible pour le moment. Patientez un instant et réessayez.',
+  systemUpdateWait: 'Petite mise à jour en cours — patientez un instant.',
+  apiErrorTryAgain: 'Connexion en cours — patientez un instant et réessayez.',
   poweredBy: 'Propulsé par :',
   customersNameRequired: 'Le prénom est requis (espaces seuls non autorisés)',
   customersContactRequired: 'Indiquez un nom, un e-mail ou un téléphone (pas seulement des espaces)',
@@ -10474,7 +10470,7 @@ const fr: Dict = {
   cmsSecondaryLabel: 'Bouton secondaire',
   cmsSecondaryLink: 'Lien secondaire',
   cmsCaption: 'Légende',
-  cmsHomeUnavailable: 'Page d’accueil indisponible',
+  cmsHomeUnavailable: 'Cette page n’est pas disponible pour le moment. Réessayez dans un instant.',
   cmsGoToMenu: 'Voir le menu',
   cmsOrderOnline: 'Commander',
   printRoleLabels: 'Étiquettes',
@@ -11594,10 +11590,9 @@ const de: Dict = {
   loginSigningIn: 'Anmeldung…',
   loginFailed: 'E-Mail oder Passwort ungültig.',
   loginNetworkError:
-    'Server nicht erreichbar. Internet prüfen oder in einer Minute erneut versuchen.',
-  loginApiUnavailable:
-    'Server nicht erreichbar. Warten Sie eine Minute, falls die Seite aktualisiert wird, laden Sie neu und versuchen Sie es erneut.',
-  loginServerUnavailable: 'Server vorübergehend nicht verfügbar. Bitte in einer Minute erneut versuchen.',
+    'Verbindung unterbrochen — Internet prüfen oder kurz warten, falls ein Update läuft, dann erneut versuchen.',
+  loginApiUnavailable: 'Kleines Update läuft — bitte kurz warten.',
+  loginServerUnavailable: 'Etwas ist schiefgelaufen — bitte kurz warten und erneut versuchen.',
   loginStaffUsePin:
     'Dieses Konto nutzt eine Kassen-PIN. Melden Sie sich an der Kasse mit der PIN an, oder bitten Sie den Inhaber, in Benutzer & Rollen ein offizielles Login-Passwort festzulegen.',
   loginStaffNoPassword:
@@ -12835,9 +12830,8 @@ const de: Dict = {
   customersToastCreated: 'Kunde hinzugefügt',
   customersToastSaveFailed: 'Kunde konnte nicht hinzugefügt werden',
   customersToastLoadFailed: 'Kunden konnten nicht geladen werden',
-  systemUpdateWait: 'Server vorübergehend nicht erreichbar. Bitte gleich erneut versuchen.',
-  apiErrorTryAgain:
-    'Der Server ist gerade nicht erreichbar. Bitte kurz warten und erneut versuchen.',
+  systemUpdateWait: 'Kleines Update läuft — bitte kurz warten.',
+  apiErrorTryAgain: 'Verbindung wird aufgebaut — bitte kurz warten und erneut versuchen.',
   poweredBy: 'Powered by:',
   customersNameRequired: 'Vorname ist erforderlich (nur Leerzeichen nicht erlaubt)',
   customersContactRequired: 'Nachname, E-Mail oder Telefon angeben (nicht nur Leerzeichen)',
@@ -15710,7 +15704,7 @@ const de: Dict = {
   cmsSecondaryLabel: 'Zweiter Button',
   cmsSecondaryLink: 'Zweiter Link',
   cmsCaption: 'Bildunterschrift',
-  cmsHomeUnavailable: 'Homepage nicht verfügbar',
+  cmsHomeUnavailable: 'Diese Seite ist gerade nicht verfügbar. Bitte gleich erneut versuchen.',
   cmsGoToMenu: 'Zum Menü',
   cmsOrderOnline: 'Online bestellen',
   printRoleLabels: 'Etiketten',

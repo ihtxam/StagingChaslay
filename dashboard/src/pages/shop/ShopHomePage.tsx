@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { resolveShopKey, shopBasePath } from '@/lib/shop-cart';
 import { shopLangStorageKey, useI18n } from '@/lib/i18n';
+import { pageLoadErrorMessage } from '@/lib/deploy-blip';
 import ShopOpenPageHeader from '@/components/shop/ShopOpenPageHeader';
 import {
   emptyOpenPageBlocks,
@@ -76,8 +77,10 @@ export default function ShopHomePage() {
           const menu = await fetchCmsMenuCatalog(shopKey);
           if (!cancelled) setMenuCatalog(menu);
         }
-      } catch {
-        if (!cancelled) setError(t('cmsHomeUnavailable'));
+      } catch (err) {
+        if (!cancelled) {
+          setError(pageLoadErrorMessage(err, t('cmsHomeUnavailable'), locale));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -85,7 +88,7 @@ export default function ShopHomePage() {
     return () => {
       cancelled = true;
     };
-  }, [shopKey, t, setLocale]);
+  }, [shopKey, t, setLocale, locale]);
 
   useEffect(() => {
     if (!merchant) return;

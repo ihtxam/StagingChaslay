@@ -69,19 +69,19 @@ assert.equal(
 
 assert.equal(
   translate('en', 'systemUpdateWait'),
-  'Server temporarily unavailable. Please try again in a moment.'
+  'Small update in progress — please wait a moment.'
 );
 assert.equal(
   translate('fr', 'systemUpdateWait'),
-  'Serveur temporairement indisponible. Réessayez dans un instant.'
+  'Petite mise à jour en cours — patientez un instant.'
 );
 assert.equal(
   translate('de', 'systemUpdateWait'),
-  'Server vorübergehend nicht erreichbar. Bitte gleich erneut versuchen.'
+  'Kleines Update läuft — bitte kurz warten.'
 );
 assert.equal(
   systemUpdateMessage('en'),
-  'Server temporarily unavailable. Please try again in a moment.'
+  'Small update in progress — please wait a moment.'
 );
 assert.equal(isAxiosStatusMessage('Request failed with status code 502'), true);
 assert.equal(
@@ -89,7 +89,7 @@ assert.equal(
     { response: { status: 502 }, message: 'Request failed with status code 502' },
     'Could not load settings.'
   ),
-  'Server temporarily unavailable. Please try again in a moment.'
+  'Small update in progress — please wait a moment.'
 );
 assert.equal(
   formatUserFacingApiError(
@@ -103,7 +103,7 @@ assert.equal(
     { response: { status: 500 }, message: 'Request failed with status code 500' },
     'Fallback'
   ),
-  "We couldn't reach the server right now. Please wait a moment and try again."
+  'Still connecting — please wait a moment and try again.'
 );
 assert.equal(translate('en', 'poweredBy'), 'Powered by:');
 assert.equal(translate('fr', 'poweredBy'), 'Propulsé par :');

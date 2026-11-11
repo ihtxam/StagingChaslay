@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import DOMPurify from 'isomorphic-dompurify';
 import { useI18n } from '@/lib/i18n';
+import { pageLoadErrorMessage } from '@/lib/deploy-blip';
 import ShopVacationPopup, { type ShopVacationInfo } from '@/components/shop/ShopVacationPopup';
 import ShopThemeShell from '@/components/shop/ShopThemeShell';
 import ShopMinimalHeader from '@/components/shop/ShopMinimalHeader';
@@ -87,8 +88,8 @@ export default function ShopLegalPageView({ shopKey, base, pageSlug = 'privacy-p
         setSeoTitle(page.seoTitle || page.title || page.merchant?.name || '');
         setSeoDescription(page.seoDescription || '');
         setMerchant(page.merchant || null);
-      } catch {
-        if (!cancelled) setError(t('cmsHomeUnavailable'));
+      } catch (err) {
+        if (!cancelled) setError(pageLoadErrorMessage(err, t('cmsHomeUnavailable'), locale));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -96,7 +97,7 @@ export default function ShopLegalPageView({ shopKey, base, pageSlug = 'privacy-p
     return () => {
       cancelled = true;
     };
-  }, [shopKey, apiPath, t]);
+  }, [shopKey, apiPath, t, locale]);
 
   const chaslayLocale = locale === 'fr' || locale === 'de' ? locale : 'en';
   const defaultLanguage = String(merchant?.language || 'en').toLowerCase().slice(0, 2);
