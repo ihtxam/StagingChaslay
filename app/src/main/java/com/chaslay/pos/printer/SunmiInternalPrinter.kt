@@ -121,7 +121,7 @@ class SunmiInternalPrinter @Inject constructor(
             ?: return Result.failure(sunmiNotConnectedFailure())
         return runCatching {
             service.setAlignment(1, null)
-            service.printQRCode(trimmed, 8, 1, null)
+            service.printQRCode(trimmed, 4, 1, null)
             service.lineWrap(2, null)
             service.setAlignment(0, null)
             posDiagnosticLogger.logSunmiPrint("receiptQr", "len=${trimmed.length}")

@@ -39,6 +39,21 @@ fun BusinessSettingsEntity.mergePosPrintSettings(
         receiptShowVatTable = print.receiptShowVatTable,
         receiptShowStaffLine = print.receiptShowStaffLine,
         receiptShowQrCode = print.receiptShowQrCode,
+        receiptShowGoogleReviewQr = print.receiptShowGoogleReviewQr,
+        receiptGoogleReviewsUrl = print.receiptGoogleReviewsUrl?.trim()?.take(500)?.ifBlank { null },
         receiptBodyTextScale = print.receiptBodyTextScale.coerceIn(1, 3)
     )
+}
+
+/** http(s) Google review link from merchant print settings, or null. */
+fun BusinessSettingsEntity.normalizedGoogleReviewUrl(): String? {
+    val raw = receiptGoogleReviewsUrl?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    val withScheme = when {
+        raw.startsWith("https://", ignoreCase = true) || raw.startsWith("http://", ignoreCase = true) -> raw
+        raw.contains("://") -> return null
+        else -> "https://$raw"
+    }
+    if (withScheme.any { it.isWhitespace() }) return null
+    return withScheme.take(500)
 }

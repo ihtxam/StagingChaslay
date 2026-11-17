@@ -615,7 +615,7 @@ export class ChaslayCompatService {
       !!merchant.adyenApiKey &&
       !!merchant.adyenMerchantAccount;
 
-    const { normalizePosPrintSettings, receiptHeaderHtmlToPlain } = await import(
+    const { normalizePosPrintSettings, publicGoogleReviewUrl, receiptHeaderHtmlToPlain } = await import(
       "@/lib/pos-print-settings"
     );
     const { normalizePosCheckoutSettings } = await import("@/lib/pos-checkout-settings");
@@ -701,6 +701,8 @@ export class ChaslayCompatService {
         receipt_show_vat_table: posPrintSettings.receiptShowVatTable !== false,
         receipt_show_staff_line: posPrintSettings.receiptShowStaffLine !== false,
         receipt_show_qr_code: posPrintSettings.receiptShowQrCode !== false,
+        receipt_show_google_review_qr: posPrintSettings.receiptShowGoogleReviewQr === true,
+        receipt_google_reviews_url: publicGoogleReviewUrl(posPrintSettings),
         receipt_body_text_scale: posPrintSettings.receiptBodyTextScale ?? 1,
       },
       customer_display: {

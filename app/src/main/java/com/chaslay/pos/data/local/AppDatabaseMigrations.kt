@@ -148,6 +148,19 @@ val MIGRATION_59_60 = object : Migration(59, 60) {
     }
 }
 
+val MIGRATION_60_61 = object : Migration(60, 61) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        if (!businessSettingsColumnExists(db, "receiptGoogleReviewsUrl")) {
+            db.execSQL("ALTER TABLE business_settings ADD COLUMN receiptGoogleReviewsUrl TEXT")
+        }
+        if (!businessSettingsColumnExists(db, "receiptShowGoogleReviewQr")) {
+            db.execSQL(
+                "ALTER TABLE business_settings ADD COLUMN receiptShowGoogleReviewQr INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
+}
+
 private fun businessSettingsColumnExists(db: SupportSQLiteDatabase, column: String): Boolean {
     db.query("PRAGMA table_info(business_settings)").use { cursor ->
         val nameIndex = cursor.getColumnIndex("name")

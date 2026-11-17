@@ -13,6 +13,7 @@ import com.chaslay.pos.data.local.MIGRATION_56_57
 import com.chaslay.pos.data.local.MIGRATION_57_58
 import com.chaslay.pos.data.local.MIGRATION_58_59
 import com.chaslay.pos.data.local.MIGRATION_59_60
+import com.chaslay.pos.data.local.MIGRATION_60_61
 import com.chaslay.pos.data.local.DatabaseCallback
 import com.chaslay.pos.data.local.dao.BusinessSettingsDao
 import com.chaslay.pos.data.local.dao.CategoryDao
@@ -61,6 +62,7 @@ object DatabaseModule {
                 MIGRATION_57_58,
                 MIGRATION_58_59,
                 MIGRATION_59_60,
+                MIGRATION_60_61,
             )
             .fallbackToDestructiveMigration()
             .build()

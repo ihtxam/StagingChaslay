@@ -654,14 +654,16 @@ class PosViewModel @Inject constructor(
     }
 
     fun refreshTables() {
-        viewModelScope.launch {
-            val reservedIds = syncPreferences.getReservedTableIds()
-            _tables.value = tableOrderRepository.getTablesWithStatus(reservedIds)
-            val floors = tableOrderRepository.getAllFloors()
-            _tableFloors.value = floors
-            _floorElements.value = floors.associate { floor ->
-                floor.id to tableOrderRepository.getFloorElements(floor.id)
-            }
+        viewModelScope.launch { refreshTablesNow() }
+    }
+
+    private suspend fun refreshTablesNow() {
+        val reservedIds = syncPreferences.getReservedTableIds()
+        _tables.value = tableOrderRepository.getTablesWithStatus(reservedIds)
+        val floors = tableOrderRepository.getAllFloors()
+        _tableFloors.value = floors
+        _floorElements.value = floors.associate { floor ->
+            floor.id to tableOrderRepository.getFloorElements(floor.id)
         }
     }
 
@@ -5108,11 +5110,11 @@ class PosViewModel @Inject constructor(
             cartManager.removeItemsAfterPayment(paidIds)
             decrementStockForCartItems(payable.items)
             if (cartManager.snapshot().items.isEmpty()) {
-                finalizePaidTableOrder(cartManager.snapshot().tableOrderId)
+                finalizePaidTableOrder(payable.tableOrderId, payable.tableId)
                 finalizeHeldOrderAfterPayment(kitchenCart)
                 cartManager.clear()
             }
-            refreshTables()
+            refreshTablesNow()
             refreshBestsellers()
             updateExtras {
                 it.copy(
@@ -5693,6 +5695,8 @@ class PosViewModel @Inject constructor(
                         )
                     }
                     var equalSplitPaidAfterPayment = _uiExtras.value.equalSplitPaidCount
+                    val paidTableOrderId = fullCart.tableOrderId
+                    val paidTableId = fullCart.tableId
                     if (fullCart.splitByItems) {
                         cartManager.removeItemsAfterPayment(paidIds)
                     } else if (fullCart.splitCount > 1) {
@@ -5707,7 +5711,6 @@ class PosViewModel @Inject constructor(
                         cartManager.removeItemsAfterPayment(paidIds)
                     }
                     val remaining = cartManager.snapshot()
-                    refreshTables()
                     refreshBestsellers()
                     val isEqualSplit = fullCart.splitCount > 1 && !fullCart.splitByItems
                     val equalSplitPaid = if (isEqualSplit) equalSplitPaidAfterPayment else 0
@@ -5717,7 +5720,10 @@ class PosViewModel @Inject constructor(
                         else -> decrementStockForCartItems(fullCart.items.filter { paidIds.contains(it.id) })
                     }
                     if (remaining.items.isEmpty()) {
-                        finalizePaidTableOrder(remaining.tableOrderId)
+                        finalizePaidTableOrder(
+                            remaining.tableOrderId ?: paidTableOrderId,
+                            remaining.tableId ?: paidTableId,
+                        )
                         finalizeHeldOrderAfterPayment(kitchenCart)
                         if (!isEqualSplit || equalSplitPaid >= fullCart.splitCount) {
                             cartManager.resetForNewWalkInOrder(retailSilent = isRetailMode())
@@ -5726,6 +5732,7 @@ class PosViewModel @Inject constructor(
                             updateExtras { it.copy(masterOrderId = null, equalSplitPaidCount = 0) }
                         }
                     }
+                    refreshTablesNow()
                     val splitIndex = if (isEqualSplit) equalSplitPaid else null
                     val splitTotal = if (isEqualSplit) fullCart.splitCount else null
                     // Any tender that returns Terminal API receipt blocks (terminal, tap,
@@ -6632,12 +6639,19 @@ class PosViewModel @Inject constructor(
         return syncTableOrderToDb()
     }
 
-    private suspend fun finalizePaidTableOrder(orderId: String?) {
-        if (orderId.isNullOrBlank()) return
+    private suspend fun finalizePaidTableOrder(orderId: String?, tableId: Long? = null) {
+        if (orderId.isNullOrBlank() && tableId == null) return
         tableOrderMutex.withLock {
             persistTableJob?.cancel()
             persistTableJob = null
-            tableOrderRepository.closeOrder(orderId)
+            if (!orderId.isNullOrBlank()) {
+                tableOrderRepository.closeOrder(orderId)
+            }
+            if (tableId != null) {
+                tableOrderRepository.getOpenOrderForTable(tableId)?.let { open ->
+                    tableOrderRepository.closeOrder(open.id)
+                }
+            }
         }
     }
 

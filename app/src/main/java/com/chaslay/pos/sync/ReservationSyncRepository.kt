@@ -25,7 +25,8 @@ class ReservationSyncRepository @Inject constructor(
     private val syncPreferences: SyncPreferences,
     private val reservationDao: ReservationDao,
     private val settingsRepository: SettingsRepository,
-    private val floorSyncEvents: FloorSyncEvents
+    private val floorSyncEvents: FloorSyncEvents,
+    private val orderAlertNotifier: OrderAlertNotifier
 ) {
     suspend fun setModuleEnabled(enabled: Boolean): ReservationRemoteResult = withContext(Dispatchers.IO) {
         if (!syncApiKeyStore.hasKey()) {
@@ -91,6 +92,11 @@ class ReservationSyncRepository @Inject constructor(
             val response = syncApi.reservations()
             val now = System.currentTimeMillis()
             val entities = response.reservations.mapNotNull { it.toEntity(now) }
+            val knownIds = reservationDao.getAllIds().toSet()
+            val baseline = syncPreferences.isReservationNotifyBaseline()
+            val newPending = entities.count { entity ->
+                entity.id !in knownIds && entity.status.equals("pending", ignoreCase = true)
+            }
             if (entities.isEmpty()) {
                 reservationDao.deleteAll()
             } else {
@@ -100,6 +106,11 @@ class ReservationSyncRepository @Inject constructor(
             }
             syncPreferences.setReservedTableIds(response.reservedTableIds.toSet())
             floorSyncEvents.notifyTableOrdersChanged()
+            if (!baseline) {
+                syncPreferences.setReservationNotifyBaseline()
+            } else if (newPending > 0) {
+                orderAlertNotifier.notifyNewReservations(newPending)
+            }
             ReservationSyncResult(
                 count = entities.size,
                 serverTime = response.serverTime,

@@ -511,6 +511,9 @@ interface ReservationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<com.chaslay.pos.data.local.entity.ReservationEntity>)
 
+    @Query("SELECT id FROM synced_reservations")
+    suspend fun getAllIds(): List<String>
+
     @Query("DELETE FROM synced_reservations WHERE id NOT IN (:ids)")
     suspend fun deleteNotIn(ids: List<String>)
 

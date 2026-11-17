@@ -89,6 +89,43 @@ class OrderAlertNotifier @Inject constructor(
         notificationManager.notify(WAITER_BELL_NOTIFICATION_ID, notification)
     }
 
+    fun notifyNewReservations(count: Int) {
+        if (count <= 0) return
+        ensureChannel()
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            @Suppress("DEPRECATION")
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            2,
+            launchIntent,
+            pendingIntentFlags
+        )
+        val title = if (count == 1) {
+            context.getString(R.string.new_reservation_title)
+        } else {
+            context.getString(R.string.new_reservations_title, count)
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(context.getString(R.string.new_reservation_body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+            .setVibrate(longArrayOf(0, 400, 200, 400))
+            .build()
+        notificationManager.notify(RESERVATION_NOTIFICATION_ID, notification)
+    }
+
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
@@ -112,5 +149,6 @@ class OrderAlertNotifier @Inject constructor(
         private const val CHANNEL_ID = "online_orders"
         private const val NOTIFICATION_ID = 7001
         private const val WAITER_BELL_NOTIFICATION_ID = 7002
+        private const val RESERVATION_NOTIFICATION_ID = 7003
     }
 }

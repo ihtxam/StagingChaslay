@@ -305,6 +305,9 @@
     <string name="online_orders_channel">Commandes en ligne</string>
     <string name="online_orders_channel_desc">Alertes lorsque de nouvelles commandes arrivent alors que l\'application est en arrière-plan</string>
     <string name="new_online_order_title">Commande en ligne</string>
+    <string name="new_reservation_title">Nouvelle réservation</string>
+    <string name="new_reservations_title">%1$d nouvelles réservations</string>
+    <string name="new_reservation_body">Une réservation en ligne attend dans Réservations</string>
     <string name="new_online_orders_title">%1$d nouvelles commandes EN ligne</string>
     <string name="new_online_order_body">Appuyez sur pour ouvrir le PDV et afficher la commande.</string>
     <string name="new_online_order_alert_title">Nouvelle commande en ligne</string>

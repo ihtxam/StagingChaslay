@@ -104,7 +104,8 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
             when (section) {
                 SettingsSection.USERS_ACCOUNTS -> canManageUsers
                 SettingsSection.TABLES -> restaurantMode
-                SettingsSection.FLOOR_DEVICES -> restaurantMode
+                SettingsSection.FLOOR_DEVICES ->
+                    restaurantMode && com.chaslay.pos.PosBuildFeatures.FLOOR_AND_WAITERS_NAV_VISIBLE
                 else -> true
             }
         }
@@ -112,14 +113,20 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
 }
 
 /** When not in restaurant mode, Tables and Floor & Waiters are hidden — fall back to General. */
-private fun coerceRestaurantOnlySection(posMode: PosMode, selected: SettingsSection): SettingsSection =
-    if (posMode != PosMode.RESTAURANT &&
+private fun coerceRestaurantOnlySection(posMode: PosMode, selected: SettingsSection): SettingsSection {
+    if (!com.chaslay.pos.PosBuildFeatures.FLOOR_AND_WAITERS_NAV_VISIBLE &&
+        selected == SettingsSection.FLOOR_DEVICES
+    ) {
+        return SettingsSection.GENERAL
+    }
+    return if (posMode != PosMode.RESTAURANT &&
         (selected == SettingsSection.TABLES || selected == SettingsSection.FLOOR_DEVICES)
     ) {
         SettingsSection.GENERAL
     } else {
         selected
     }
+}
 
 data class SettingsUiState(
     val businessName: String = "",
@@ -1960,7 +1967,11 @@ class SettingsViewModel @Inject constructor(
     fun saveSettings() {
         viewModelScope.launch {
             val previous = currentSettings
-            val settings = buildSettingsFromState()
+            val persisted = settingsRepository.getSettings()
+            val settings = buildSettingsFromState().copy(
+                receiptGoogleReviewsUrl = persisted.receiptGoogleReviewsUrl,
+                receiptShowGoogleReviewQr = persisted.receiptShowGoogleReviewQr,
+            )
             if (settings.autoPrintReceipt != previous.autoPrintReceipt) {
                 com.chaslay.pos.util.PosLocalPrefs.saveAutoPrintReceipt(appContext, settings.autoPrintReceipt)
             }

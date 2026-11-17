@@ -27,6 +27,7 @@ import com.chaslay.pos.domain.model.ServiceType
 import com.chaslay.pos.domain.model.formatMoneyAmount
 import com.chaslay.pos.domain.model.roundMoney
 import com.chaslay.pos.data.repository.ReceiptPublicUrls
+import com.chaslay.pos.sync.normalizedGoogleReviewUrl
 import com.chaslay.pos.receipt.ReceiptQrGenerator
 import com.chaslay.pos.util.TextEncoding
 import com.chaslay.pos.util.reportsShowOrderTypes
@@ -357,12 +358,7 @@ class BluetoothPrinterService @Inject constructor(
         val address = settings.printerMacAddress
         val encoding = textEncodingForAddress(address, settings.printerName)
         val sunmi = usesSunmiInternalRouting(address, settings.printerName)
-        val sunmiQrUrl = if (sunmi && settings.receiptShowQrCode) {
-            transaction.receiptUrl?.takeIf { it.isNotBlank() }
-                ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
-        } else {
-            null
-        }
+        val sunmiQrUrl = if (sunmi) receiptQrTarget(settings, transaction) else null
         val payload = buildEscPosReceipt(
             settings,
             transaction,
@@ -923,12 +919,7 @@ class BluetoothPrinterService @Inject constructor(
         for (printer in receiptPrinters) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
             val sunmi = usesSunmiInternalRouting(printer.address, printer.name, printer.connectionType)
-            val sunmiQrUrl = if (sunmi && settings.receiptShowQrCode) {
-                transaction.receiptUrl?.takeIf { it.isNotBlank() }
-                    ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
-            } else {
-                null
-            }
+            val sunmiQrUrl = if (sunmi) receiptQrTarget(settings, transaction) else null
             val payload = cachedOrBuildEscPosReceipt(
                 useCache = usePayloadCache,
                 transactionId = transaction.id,
@@ -1861,13 +1852,15 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine(line)
         }
         appendFooter(sb, settings.receiptFooter, lineWidth, settings.businessName)
-        val qrUrl = if (settings.receiptShowQrCode) {
-            transaction.receiptUrl?.takeIf { it.isNotBlank() }
-                ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
-        } else null
+        val qrUrl = receiptQrTarget(settings, transaction)
         if (qrUrl != null) {
             sb.appendLine(center(sepDash(lineWidth), lineWidth))
-            sb.appendLine(center(labels.scanDigitalReceipt, lineWidth))
+            val caption = if (qrUrl == settings.normalizedGoogleReviewUrl()) {
+                labels.scanGoogleReview
+            } else {
+                labels.scanDigitalReceipt
+            }
+            sb.appendLine(center(caption, lineWidth))
         }
         val deliveryDirectionsUrl = deliveryDirectionsUrlForTransaction(settings, transaction, lineWidth, sb)
         com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCustomerReceipt)
@@ -2734,6 +2727,21 @@ class BluetoothPrinterService @Inject constructor(
         return buildPrintPayload(body, settings, lineWidth, qrPrefixReset + qrBytes, cutFeed, textEncoding)
     }
 
+    /**
+     * Google review URL when the merchant panel enabled that QR; otherwise the digital receipt URL.
+     */
+    private fun receiptQrTarget(
+        settings: BusinessSettingsEntity,
+        transaction: TransactionEntity,
+    ): String? {
+        if (!settings.receiptShowQrCode) return null
+        if (settings.receiptShowGoogleReviewQr) {
+            settings.normalizedGoogleReviewUrl()?.let { return it }
+        }
+        return transaction.receiptUrl?.takeIf { it.isNotBlank() }
+            ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
+    }
+
     private fun receiptQrRaster(url: String, lineWidth: Int): ByteArray {
         // Compact raster QR — native ESC/POS module size 1 is unreliable on many printers.
         val maxWidthPx = if (lineWidth >= LINE_WIDTH_80) RECEIPT_QR_RASTER_PX_80 else RECEIPT_QR_RASTER_PX_58
@@ -3360,10 +3368,10 @@ class BluetoothPrinterService @Inject constructor(
         private const val ESC_POS_RECEIPT_CACHE_TTL_MS = 30 * 60 * 1000L
         private const val LINE_WIDTH_58 = 32
         private const val LINE_WIDTH_80 = 48
-        /** Thermal receipt QR raster (digital receipt, gift redeem) — matches WebPOS. */
-        private const val RECEIPT_QR_RASTER_PX_80 = 144
-        /** Thermal receipt QR on 58mm — matches WebPOS RECEIPT_QR_RASTER_PX_58. */
-        private const val RECEIPT_QR_RASTER_PX_58 = 120
+        /** Thermal receipt QR raster on 80mm — half the previous 144px module. */
+        private const val RECEIPT_QR_RASTER_PX_80 = 72
+        /** Thermal receipt QR on 58mm — half the previous 120px module. */
+        private const val RECEIPT_QR_RASTER_PX_58 = 60
         private const val LINE_WIDTH = LINE_WIDTH_80
         private val SPP_UUID = java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val ESC_INIT = byteArrayOf(0x1B, 0x40)

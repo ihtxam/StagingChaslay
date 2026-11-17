@@ -319,6 +319,10 @@ data class BusinessSettingsEntity(
     val receiptShowVatTable: Boolean = true,
     val receiptShowStaffLine: Boolean = true,
     val receiptShowQrCode: Boolean = true,
+    /** Synced from merchant panel `receiptGoogleReviewsUrl`. */
+    val receiptGoogleReviewsUrl: String? = null,
+    /** Synced from merchant panel `receiptShowGoogleReviewQr`. */
+    val receiptShowGoogleReviewQr: Boolean = false,
     /** When true, delivery receipts include a Google Maps navigation QR at the bottom. */
     val receiptDeliveryDirectionsQr: Boolean = true,
     /** When true, Adyen card payment receipt is QR-only (not printed on thermal). */

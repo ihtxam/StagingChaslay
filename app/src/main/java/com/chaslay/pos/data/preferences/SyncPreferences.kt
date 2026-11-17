@@ -30,6 +30,7 @@ class SyncPreferences @Inject constructor(
     private val dashboardUserJsonKey = stringPreferencesKey("dashboard_user_json")
     private val dashboardUrlKey = stringPreferencesKey("dashboard_url")
     private val reservedTableIdsKey = stringPreferencesKey("reserved_table_ids")
+    private val reservationNotifyBaselineKey = booleanPreferencesKey("reservation_notify_baseline")
     private val tapToPayRegisteredKey = booleanPreferencesKey("tap_to_pay_registered")
 
     suspend fun getReservedTableIds(): Set<String> =
@@ -41,6 +42,13 @@ class SyncPreferences @Inject constructor(
                 ?.toSet()
                 ?: emptySet()
         }.first()
+
+    suspend fun isReservationNotifyBaseline(): Boolean =
+        context.syncDataStore.data.map { it[reservationNotifyBaselineKey] == true }.first()
+
+    suspend fun setReservationNotifyBaseline() {
+        context.syncDataStore.edit { it[reservationNotifyBaselineKey] = true }
+    }
 
     suspend fun setReservedTableIds(ids: Collection<String>) {
         context.syncDataStore.edit { prefs ->

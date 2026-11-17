@@ -358,6 +358,8 @@ data class SyncPrintDto(
     @SerializedName("receipt_show_vat_table") val receiptShowVatTable: Boolean = true,
     @SerializedName("receipt_show_staff_line") val receiptShowStaffLine: Boolean = true,
     @SerializedName("receipt_show_qr_code") val receiptShowQrCode: Boolean = true,
+    @SerializedName("receipt_show_google_review_qr") val receiptShowGoogleReviewQr: Boolean = false,
+    @SerializedName("receipt_google_reviews_url") val receiptGoogleReviewsUrl: String? = null,
     @SerializedName("receipt_body_text_scale") val receiptBodyTextScale: Int = 1
 )
 
