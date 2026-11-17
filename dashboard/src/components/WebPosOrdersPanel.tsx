@@ -2494,6 +2494,7 @@ export default function WebPosOrdersPanel({
                   <div className="mt-4 border-t border-stone-200 pt-3">
                     <OrderDetailTotals
                       order={selectedOrder}
+                      merchantTax={merchantTax}
                       taxIncludedInPrice={taxIncludedInPrice}
                       vatAfterDiscount={vatAfterDiscount}
                       merchantTax={merchantTax}

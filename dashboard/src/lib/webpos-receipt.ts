@@ -1,6 +1,7 @@
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY, formatTimeHHMM, ymdZurich } from '@/lib/date-format';
 import {
   channelTaxRateFromMerchant,
+  merchantChargesVat,
   roundMoney2,
   roundTo005,
   splitVatIncludedGross,
@@ -2288,8 +2289,19 @@ export function buildDigitalReceiptTotals(order: {
   const taxAmount = Number(order.taxAmount) || 0;
   const vatIncludedForRate = order.vatIncludedInPrice !== false;
   let taxRate = Number(order.taxRate) || 0;
-  if (taxRate <= 0 && !vatIncludedForRate && subtotal > 0 && taxAmount > 0) {
+  const rateIsExplicitZero =
+    order.taxRate === 0 || order.taxRate === '0' || order.taxRate === '0.00';
+  if (
+    !rateIsExplicitZero &&
+    taxRate <= 0 &&
+    !vatIncludedForRate &&
+    subtotal > 0 &&
+    taxAmount > 0
+  ) {
     taxRate = roundMoney2((taxAmount / subtotal) * 100);
+  }
+  if (rateIsExplicitZero || taxRate <= 0) {
+    taxRate = 0;
   }
   const tx: WebPosReceipt = {
     businessName: '',
@@ -4979,12 +4991,15 @@ export function resolveReceiptTaxRateForOrder(
     vatIncludedInPrice?: boolean;
   }
 ): number {
+  if (opts?.merchantTax && !merchantChargesVat(opts.merchantTax)) {
+    return 0;
+  }
+
   if (opts?.vatIncludedInPrice === true && opts?.merchantTax) {
-    const configured = channelTaxRateFromMerchant(
+    return channelTaxRateFromMerchant(
       opts.merchantTax,
       order.channel || order.fulfillmentChannel
     );
-    if (configured > 0) return configured;
   }
 
   const explicit = Number(order.taxRate);
@@ -5010,7 +5025,7 @@ export function resolveReceiptTaxRateForOrder(
 
   const fallback = Number(opts?.fallbackRate);
   if (Number.isFinite(fallback) && fallback > 0) return fallback;
-  return 8.1;
+  return 0;
 }
 
 export function posOrderToWebPosReceipt(
@@ -5031,12 +5046,13 @@ export function posOrderToWebPosReceipt(
   }
 ): WebPosReceipt {
   const subtotal = Number(order.subtotal ?? 0);
-  const taxAmount = Number(order.taxAmount ?? 0);
+  const storedTaxAmount = Number(order.taxAmount ?? 0);
   const taxRate = resolveReceiptTaxRateForOrder(order, {
     fallbackRate: ctx.taxRate,
     merchantTax: ctx.merchantTax,
     vatIncludedInPrice: ctx.vatIncludedInPrice === true,
   });
+  const taxAmount = taxRate <= 0 ? 0 : storedTaxAmount;
   const lang = resolveReceiptLanguage(ctx.printSettings, ctx.panelLang);
   const paperWidthMm = resolveReceiptPaperWidthMm(ctx.printSettings);
   const completedAt = order.completedAt
@@ -5144,7 +5160,7 @@ export function posOrderToWebPosReceipt(
     ...receiptHeaderTxFromPrintSettings(ctx.printSettings),
     footer: ctx.printSettings?.receiptFooter,
     ...receiptHeaderFieldsFromPrintSettings(ctx.printSettings),
-    showVat: ctx.printSettings?.receiptShowVatTable !== false,
+    showVat: taxRate > 0 && ctx.printSettings?.receiptShowVatTable !== false,
     showStaff: ctx.printSettings?.receiptShowStaffLine !== false,
     adyenCustomerReceipt: adyen.customer,
     printAdyenReceiptOnTicket: shouldPrintAdyenReceiptOnTicket(ctx.printSettings),

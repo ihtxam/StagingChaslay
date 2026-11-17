@@ -2011,7 +2011,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
   }, [tableId, channel, isRetail, showChannelTabs, channelTabOptions.length]);
 
   const taxRate = useMemo(
-    () => (merchant ? channelTaxRateFromMerchant(merchant, effectiveChannel) : 8.1),
+    () => (merchant ? channelTaxRateFromMerchant(merchant, effectiveChannel) : 0),
     [merchant, effectiveChannel]
   );
 
@@ -12016,16 +12016,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
             autoPrintReceipt={shouldAutoPrintReceipt(printSettings)}
             taxIncludedInPrice={vatIncludedInPrice}
             vatAfterDiscount={vatAfterDiscount}
-            merchantTax={
-              merchant
-                ? {
-                    vatRate: merchant.vatRate,
-                    taxTakeawayRate: merchant.taxTakeawayRate,
-                    taxDineInRate: merchant.taxDineInRate,
-                    taxDeliveryRate: merchant.taxDeliveryRate,
-                  }
-                : undefined
-            }
+            merchantTax={merchantTax}
             onClose={() => {
               setHighlightOrderId(null);
               setOrdersChannelPref(null);

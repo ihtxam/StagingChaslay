@@ -69,16 +69,25 @@ export function splitEqual005(total: number, parts: number): number[] {
   return Array.from({ length: n }, (_, i) => (base + (i < rem ? 1 : 0)) / 20);
 }
 
-/** Use channel-specific rate when > 0, else merchant vatRate, else default. */
+/** Parse a configured tax rate; empty/unset → null; explicit 0 → 0. */
+export function taxRateValue(raw: string | number | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Channel rate when set (including 0), else vatRate when set, else default (e.g. 8.1 / 2.6). */
 export function resolvePosTaxRate(
   channelRate: string | number | null | undefined,
   vatRate: string | number | null | undefined,
   defaultRate: number
 ): number {
-  const ch = Number(channelRate);
-  if (Number.isFinite(ch) && ch > 0) return ch;
-  const vat = Number(vatRate);
-  if (Number.isFinite(vat) && vat > 0) return vat;
+  const ch = taxRateValue(channelRate);
+  if (ch !== null) return Math.max(0, ch);
+  const vat = taxRateValue(vatRate);
+  if (vat !== null) return Math.max(0, vat);
   return defaultRate;
 }
 
@@ -98,12 +107,21 @@ export function channelTaxRateFromMerchant(
   const ch = String(channel || 'takeaway').toLowerCase().replace(/-/g, '_');
   if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
   if (ch === 'delivery') {
-    const delivery = resolvePosTaxRate(merchant.taxDeliveryRate, null, 0);
-    if (delivery > 0) return delivery;
+    const delivery = taxRateValue(merchant.taxDeliveryRate);
+    if (delivery !== null) return Math.max(0, delivery);
     return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
   }
   // takeaway, in_store (retail counter), and default → reduced / standard POS rate (e.g. 2.6% CH)
   return resolvePosTaxRate(merchant.taxTakeawayRate, vat, 2.6);
+}
+
+/** True when every configured channel rate resolves to 0% (merchant does not charge VAT). */
+export function merchantChargesVat(merchant: MerchantChannelTaxSettings): boolean {
+  return (
+    channelTaxRateFromMerchant(merchant, 'takeaway') > 0 ||
+    channelTaxRateFromMerchant(merchant, 'dine_in') > 0 ||
+    channelTaxRateFromMerchant(merchant, 'delivery') > 0
+  );
 }
 
 /** Extract net (HT) from a gross (TTC) amount when VAT is included in price. */

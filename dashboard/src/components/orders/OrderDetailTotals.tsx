@@ -26,9 +26,9 @@ type OrderTotalsInput = Pick<
 
 type Props = {
   order: OrderTotalsInput;
+  merchantTax?: MerchantChannelTaxSettings;
   taxIncludedInPrice?: boolean;
   vatAfterDiscount?: boolean;
-  merchantTax?: MerchantChannelTaxSettings;
   className?: string;
   /** Side panel uses smaller text; modal uses default sizing. */
   compact?: boolean;
@@ -75,9 +75,9 @@ function TotalsRow({
 
 export default function OrderDetailTotals({
   order,
+  merchantTax,
   taxIncludedInPrice,
   vatAfterDiscount = true,
-  merchantTax,
   className = '',
   compact = false,
 }: Props) {
@@ -103,7 +103,7 @@ export default function OrderDetailTotals({
           lineTotal: item.totalPrice,
         })),
         subtotal: order.subtotal ?? 0,
-        taxAmount: order.taxAmount ?? 0,
+        taxAmount: taxRate <= 0 ? 0 : order.taxAmount ?? 0,
         discountAmount: order.discountAmount,
         tipAmount: order.tipAmount,
         roundingAmount: order.roundingAmount,

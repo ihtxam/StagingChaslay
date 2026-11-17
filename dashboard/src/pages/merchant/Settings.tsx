@@ -549,6 +549,25 @@ function parseTaxRateForSave(value: string | null | undefined): number | undefin
   return Math.round(n * 100) / 100;
 }
 
+function resolvedTaxRateForUi(
+  channelRate: string | null | undefined,
+  fallback: string | null | undefined
+): string {
+  if (channelRate != null && String(channelRate).trim() !== '') return String(channelRate);
+  if (fallback != null && String(fallback).trim() !== '') return String(fallback);
+  return '';
+}
+
+function merchantTaxExemptMode(settings: SettingsData): boolean {
+  const rates = [
+    parseTaxRateForSave(settings.vatRate),
+    parseTaxRateForSave(resolvedTaxRateForUi(settings.taxTakeawayRate, settings.vatRate)),
+    parseTaxRateForSave(resolvedTaxRateForUi(settings.taxDineInRate, settings.vatRate)),
+    parseTaxRateForSave(resolvedTaxRateForUi(settings.taxDeliveryRate, settings.vatRate)),
+  ];
+  return rates.every((rate) => rate === 0 || rate === undefined);
+}
+
 function parseSettingsTabFromSearch(search: string): TabId {
   try {
     const params = new URLSearchParams(search);
@@ -2480,6 +2499,27 @@ export default function Settings() {
                 }
               />
               <Section id="taxes-rates" icon={Percent} accent={settingsDash.warning} title={t('taxRates')} description={t('taxRatesHint')} highlight={isSectionHighlight('taxes-rates')}>
+                <label className="mb-4 flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={merchantTaxExemptMode(settings)}
+                    onChange={(e) => {
+                      if (!e.target.checked) return;
+                      setSettings({
+                        ...settings,
+                        vatRate: '0',
+                        taxTakeawayRate: '0',
+                        taxDineInRate: '0',
+                        taxDeliveryRate: '0',
+                      });
+                    }}
+                  />
+                  <span>
+                    <span className="font-medium block">{t('taxVatExempt')}</span>
+                    <span className="text-xs muted">{t('taxVatExemptHint')}</span>
+                  </span>
+                </label>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label={`${t('defaultVatRate')} (%)`}>
                     <input
@@ -2488,7 +2528,7 @@ export default function Settings() {
                       min={0}
                       max={TAX_RATE_MAX}
                       step="0.01"
-                      value={settings.vatRate || ''}
+                      value={settings.vatRate ?? ''}
                       onChange={(e) =>
                         setSettings({ ...settings, vatRate: sanitizeTaxRateInput(e.target.value) })
                       }

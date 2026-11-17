@@ -1487,6 +1487,16 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
               <div className="border-t border-[var(--border)] pt-3">
                 <OrderDetailTotals
                   order={selected}
+                  merchantTax={
+                    merchant
+                      ? {
+                          vatRate: merchant.vatRate,
+                          taxTakeawayRate: merchant.taxTakeawayRate,
+                          taxDineInRate: merchant.taxDineInRate,
+                          taxDeliveryRate: merchant.taxDeliveryRate,
+                        }
+                      : undefined
+                  }
                   taxIncludedInPrice={merchant?.taxIncludedInPrice === true}
                   vatAfterDiscount={merchant?.vatAfterDiscount !== false}
                   merchantTax={

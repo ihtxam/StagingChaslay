@@ -3634,6 +3634,9 @@ const en: Dict = {
   defaultVatRate: 'Default VAT rate',
   taxRateRange: 'Tax rate must be between 0% and 100%',
   taxRatesHint: 'Channel tax rates for takeaway, dine-in, and delivery.',
+  taxVatExempt: 'Business does not charge VAT',
+  taxVatExemptHint:
+    'Sets all channel rates to 0%. POS, shop, and receipts will not add, calculate, or print VAT lines.',
   taxPriceMode: 'Price display',
   taxPriceModeHint: 'Whether menu prices already include VAT or tax is added at checkout.',
   taxIncludedInPrice: 'VAT included in prices',
@@ -9009,6 +9012,9 @@ const fr: Dict = {
   defaultVatRate: 'Taux TVA par défaut',
   taxRateRange: 'Le taux de taxe doit être entre 0 % et 100 %',
   taxRatesHint: 'Taux par canal : à emporter, sur place, livraison.',
+  taxVatExempt: 'Établissement sans TVA',
+  taxVatExemptHint:
+    'Met tous les taux à 0 %. La caisse, la boutique et les reçus n’ajoutent ni n’affichent de TVA.',
   taxPriceMode: 'Affichage des prix',
   taxPriceModeHint: 'Les prix du menu incluent-ils la TVA ou est-elle ajoutée au checkout ?',
   taxIncludedInPrice: 'TVA incluse dans les prix',
@@ -14269,6 +14275,9 @@ const de: Dict = {
   defaultVatRate: 'Standard-MWST-Satz',
   taxRateRange: 'Der Steuersatz muss zwischen 0 % und 100 % liegen',
   taxRatesHint: 'Steuersätze für Mitnehmen, Vor Ort und Lieferung.',
+  taxVatExempt: 'Keine MwSt.-Berechnung',
+  taxVatExemptHint:
+    'Setzt alle Kanalsätze auf 0 %. Kasse, Shop und Belege berechnen und drucken keine MwSt.',
   taxPriceMode: 'Preisanzeige',
   taxPriceModeHint: 'Enthalten Menüpreise die MWSt. oder wird sie beim Checkout addiert?',
   taxIncludedInPrice: 'MWSt. im Preis enthalten',
