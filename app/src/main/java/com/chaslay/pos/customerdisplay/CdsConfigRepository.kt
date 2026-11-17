@@ -2,20 +2,18 @@ package com.chaslay.pos.customerdisplay
 
 import com.chaslay.pos.BuildConfig
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
-import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 
 @Singleton
 class CdsConfigRepository @Inject constructor(
     private val httpClient: OkHttpClient,
 ) {
-    private val gson = Gson()
     suspend fun loadBranding(settings: BusinessSettingsEntity): CustomerDisplayBranding =
         withContext(Dispatchers.IO) {
             val fallback = CustomerDisplayBranding(
@@ -35,40 +33,28 @@ class CdsConfigRepository @Inject constructor(
                 httpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@withContext fallback
                     val body = response.body?.string().orEmpty()
-                    val parsed = gson.fromJson(body, CdsConfigResponse::class.java)
-                    val merchantName = parsed.merchant?.name?.trim().orEmpty()
-                        .ifBlank { settings.businessName }
-                    val logo = parsed.merchant?.logoUrl?.trim()?.takeIf { it.isNotEmpty() }
-                        ?: settings.logoUri?.takeIf { it.startsWith("http") }
-                    val promo = parsed.settings?.promoSlides
-                        ?.firstOrNull()
-                        ?.imageUrl
-                        ?.trim()
-                        ?.takeIf { it.isNotEmpty() }
-                    CustomerDisplayBranding(
-                        merchantName = merchantName,
-                        logoUrl = logo,
-                        promoImageUrl = promo,
-                    )
+                    parseBrandingJson(body, settings)
                 }
             }.getOrDefault(fallback)
         }
 
-    private data class CdsConfigResponse(
-        val merchant: CdsMerchantDto? = null,
-        val settings: CdsSettingsDto? = null,
-    )
-
-    private data class CdsMerchantDto(
-        val name: String? = null,
-        @SerializedName("logoUrl") val logoUrl: String? = null,
-    )
-
-    private data class CdsSettingsDto(
-        @SerializedName("promoSlides") val promoSlides: List<CdsPromoSlideDto>? = null,
-    )
-
-    private data class CdsPromoSlideDto(
-        @SerializedName("imageUrl") val imageUrl: String? = null,
-    )
+    private fun parseBrandingJson(body: String, settings: BusinessSettingsEntity): CustomerDisplayBranding {
+        val root = JSONObject(body)
+        val merchant = root.optJSONObject("merchant")
+        val merchantName = merchant?.optString("name")?.trim().orEmpty()
+            .ifBlank { settings.businessName }
+        val logo = merchant?.optString("logoUrl")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: settings.logoUri?.takeIf { it.startsWith("http") }
+        val promo = root.optJSONObject("settings")
+            ?.optJSONArray("promoSlides")
+            ?.optJSONObject(0)
+            ?.optString("imageUrl")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        return CustomerDisplayBranding(
+            merchantName = merchantName,
+            logoUrl = logo,
+            promoImageUrl = promo,
+        )
+    }
 }

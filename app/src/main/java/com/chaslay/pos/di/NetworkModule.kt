@@ -12,6 +12,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -27,9 +28,12 @@ object NetworkModule {
     fun provideOkHttpClient(syncApiKeyStore: SyncApiKeyStore): OkHttpClient {
         val apiKeyInterceptor = Interceptor { chain ->
             val requestBuilder = chain.request().newBuilder()
-            val key = syncApiKeyStore.current().ifBlank { syncApiKeyStore.currentBlocking() }
+            val key = syncApiKeyStore.resolvedKey()
             if (key.isNotBlank()) {
                 requestBuilder.header("X-Api-Key", key)
+                if (chain.request().header("Authorization").isNullOrBlank()) {
+                    requestBuilder.header("Authorization", "Bearer $key")
+                }
             }
             chain.proceed(requestBuilder.build())
         }
@@ -61,6 +65,22 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideSyncApi(retrofit: Retrofit): SyncApi = retrofit.create(SyncApi::class.java)
+
+    @Provides
+    @Singleton
+    @Named("diagnostic")
+    fun provideDiagnosticRetrofit(client: OkHttpClient): Retrofit =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.DIAGNOSTIC_API_BASE_URL)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+    @Provides
+    @Singleton
+    @Named("diagnostic")
+    fun provideDiagnosticSyncApi(@Named("diagnostic") retrofit: Retrofit): SyncApi =
+        retrofit.create(SyncApi::class.java)
 
     @Provides
     @Singleton

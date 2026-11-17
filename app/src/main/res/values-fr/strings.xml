@@ -654,6 +654,8 @@
     <string name="pos_retail_dine_in_hint">Style bistro : sur place et à emporter au comptoir sans choix de table.</string>
     <string name="pos_retail_weighed_custom_entry">Saisie poids personnalisée pour les produits au poids</string>
     <string name="pos_retail_weighed_custom_entry_hint">Désactivé : saisir le montant total (Divers, au poids) sans attendre la balance. Activé : saisir le poids et le prix CHF/kg.</string>
+    <string name="pos_restaurant_weighed_custom_entry">Saisie au poids pour Divers et articles pesés</string>
+    <string name="pos_restaurant_weighed_custom_entry_hint">Désactivé : montant simple pour Divers (sans poids ni CHF/kg). Activé : poids et CHF/kg comme avec la balance.</string>
     <string name="pos_retail_takeaway">Activer à emporter en retail</string>
     <string name="pos_retail_delivery">Activer livraison en retail</string>
     <string name="pos_require_table_dine_in">Table obligatoire pour sur place</string>
@@ -1125,4 +1127,35 @@
     <string name="table_plan_canvas_footer_note">Les tables s\'affichent sur une ligne ici ; ajustez la disposition complète dans le panneau marchand.</string>
     <string name="table_plan_canvas_summary">%1$d tables · %2$d couverts</string>
     <string name="table_plan_toolbar_line">%1$s — %2$d tables · %3$d couverts</string>
+
+    <!-- Compact 8″ portrait POS (FR) -->
+    <string name="compact_pos_history_today">Aujourd\'hui</string>
+    <string name="compact_pos_current_order">Commande en cours · %1$s</string>
+    <string name="compact_pos_current_order_title">Commande en cours</string>
+    <string name="compact_pos_expand_order">Développer la commande</string>
+    <string name="compact_pos_more_actions">Plus d\'actions</string>
+    <string name="compact_pos_history_short">Historique</string>
+    <string name="compact_pos_cart_items">Panier · %1$d articles</string>
+    <string name="compact_pos_total_ttc">Total TTC</string>
+    <string name="compact_pos_table_dine_in_hint">Pour une vente sur place, choisissez une table.</string>
+    <string name="compact_pos_release_table">Libérer la table</string>
+    <string name="compact_pos_pay_card">Carte</string>
+    <string name="compact_pos_pay_cash">Espèces</string>
+    <string name="compact_pos_send_kitchen">Envoyer</string>
+    <string name="compact_pos_incl_vat">TVA incl. · %1$d article(s)</string>
+    <string name="compact_pos_each_price">%1$s l\'unité</string>
+    <string name="compact_pos_decrease">Diminuer</string>
+    <string name="compact_pos_increase">Augmenter</string>
+    <string name="compact_pos_continue_serving">Continuer le service</string>
+    <string name="compact_pos_open_table">Ouvrir la table %1$s</string>
+    <string name="compact_pos_table_free">Libre</string>
+    <string name="compact_pos_table_reserved">Réservée</string>
+    <string name="compact_pos_current_table">Table actuelle</string>
+    <string name="compact_pos_table_seats">%1$d places</string>
+    <string name="compact_pos_layout_title">Disposition portrait 8 pouces</string>
+    <string name="compact_pos_layout_help">Auto : écran compact sur tablettes portrait étroites (ex. 8″). Forcer pour ignorer.</string>
+    <string name="compact_pos_layout_auto">Auto</string>
+    <string name="compact_pos_layout_on">Toujours compact</string>
+    <string name="compact_pos_layout_off">Disposition large</string>
+    <string name="compact_pos_settings_back">Tous les paramètres</string>
 </resources>

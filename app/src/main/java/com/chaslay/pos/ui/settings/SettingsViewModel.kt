@@ -9,8 +9,13 @@ import com.chaslay.pos.data.repository.ProductRepository
 import com.chaslay.pos.data.repository.SettingsRepository
 import com.chaslay.pos.data.repository.TableOrderRepository
 import com.chaslay.pos.data.repository.TransactionRepository
+import android.content.Intent
+import androidx.core.content.FileProvider
+import com.chaslay.pos.BuildConfig
 import com.chaslay.pos.debug.CrashLogEntry
 import com.chaslay.pos.debug.CrashLogger
+import com.chaslay.pos.debug.PosDiagnosticLogger
+import com.chaslay.pos.debug.RemoteDiagnosticUploader
 import com.chaslay.pos.data.repository.AuthRepository
 import com.chaslay.pos.domain.model.DashboardAuthResult
 import com.chaslay.pos.domain.model.AppLanguage
@@ -21,6 +26,7 @@ import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.domain.model.PosCompactLayoutPreference
 import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.domain.model.CategoryPrintSetting
@@ -29,13 +35,13 @@ import com.chaslay.pos.domain.model.SupportedCurrency
 import com.chaslay.pos.printer.BluetoothPrinterService
 import com.chaslay.pos.printer.PrinterUserMessages
 import com.chaslay.pos.printer.DiscoveredPrinter
+import com.chaslay.pos.printer.SunmiInternalPrinter
 import com.chaslay.pos.printer.UsbPrinterDevice
 import com.chaslay.pos.printer.UsbPrinterManager
 import androidx.core.os.LocaleListCompat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
-import android.content.Intent
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -87,7 +93,8 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
     FLOOR_DEVICES(R.string.settings_section_floor_devices),
     USERS_ACCOUNTS(R.string.settings_section_users),
     APPEARANCE(R.string.settings_section_appearance),
-    LICENSE(R.string.settings_section_license);
+    LICENSE(R.string.settings_section_license),
+    DIAGNOSTICS(R.string.settings_section_diagnostics);
 
     companion object {
         fun visibleNavSections(
@@ -214,6 +221,7 @@ data class SettingsUiState(
     val posDisplayScale: Float = 1f,
     val posTextScale: Float = 1f,
     val posMenuDesign: PosMenuDesign = PosMenuDesign.CLASSIC,
+    val posCompactLayoutPreference: PosCompactLayoutPreference = PosCompactLayoutPreference.AUTO,
     val crashLogs: List<CrashLogEntry> = emptyList(),
     val selectedCrashLog: String? = null,
     val crashLogContent: String = "",
@@ -226,6 +234,7 @@ data class SettingsUiState(
     val retailTakeawayEnabled: Boolean = false,
     val retailDeliveryEnabled: Boolean = false,
     val retailWeighedCustomEntryEnabled: Boolean = false,
+    val restaurantWeighedCustomEntryEnabled: Boolean = false,
     val reservationsEnabled: Boolean = false,
     val reservationsToggleSaving: Boolean = false,
     val merchantCloudLinked: Boolean = false,
@@ -252,6 +261,10 @@ data class SettingsUiState(
     val posSession: PosSessionDisplay = PosSessionDisplay(),
     /** Company / publisher blurb from superadmin (GET /api/merchant/platform-about via sync bootstrap). */
     val platformAboutHtml: String = "",
+    val diagnosticsLastUploadLabel: String = "",
+    val diagnosticsUploadInProgress: Boolean = false,
+    val diagnosticsSessionPreview: String = "",
+    val diagnosticsApiHostLabel: String = "",
 )
 
 @HiltViewModel
@@ -266,6 +279,8 @@ class SettingsViewModel @Inject constructor(
     private val printerService: BluetoothPrinterService,
     private val usbPrinterManager: UsbPrinterManager,
     private val crashLogger: CrashLogger,
+    private val remoteDiagnosticUploader: RemoteDiagnosticUploader,
+    private val posDiagnosticLogger: PosDiagnosticLogger,
     private val adyenTerminalService: com.chaslay.pos.payment.AdyenTerminalService,
     private val scaleService: com.chaslay.pos.scale.AclasScaleService,
     private val floorSyncRepository: com.chaslay.pos.sync.FloorSyncRepository,
@@ -276,11 +291,21 @@ class SettingsViewModel @Inject constructor(
     private val syncApiKeyStore: com.chaslay.pos.data.preferences.SyncApiKeyStore,
     private val syncPreferences: com.chaslay.pos.data.preferences.SyncPreferences,
     private val authRepository: AuthRepository,
-    private val tapToPayEngine: com.chaslay.pos.payment.taptopay.TapToPayEngine
+    private val tapToPayEngine: com.chaslay.pos.payment.taptopay.TapToPayEngine,
+    private val appUpdateCoordinator: com.chaslay.pos.update.AppUpdateCoordinator,
 ) : ViewModel() {
+
+    val appUpdateChecking = appUpdateCoordinator.isChecking
+
+    fun checkForAppUpdate() {
+        appUpdateCoordinator.checkForUpdate(manual = true)
+    }
 
     private val _launchOnlineSettingsIntent = Channel<Intent>(Channel.BUFFERED)
     val launchOnlineSettingsIntent: Flow<Intent> = _launchOnlineSettingsIntent.receiveAsFlow()
+
+    private val _shareDiagnosticsIntent = Channel<Intent>(Channel.BUFFERED)
+    val shareDiagnosticsIntent: Flow<Intent> = _shareDiagnosticsIntent.receiveAsFlow()
 
     private var currentSettings = BusinessSettingsEntity()
     private var printerReachabilityRefreshJob: Job? = null
@@ -317,6 +342,7 @@ class SettingsViewModel @Inject constructor(
             val displayScale = sessionManager.posDisplayScale.first()
             val textScale = sessionManager.posTextScale.first()
             val menuDesign = sessionManager.posMenuDesign.first()
+            val compactLayoutPreference = sessionManager.posCompactLayoutPreference.first()
             val syncBusinessInfo = syncPreferences.isSyncBusinessInfoEnabled()
             val categories = productRepository.getAllCategories()
             val posSession = loadPosSessionDisplay(settings.businessName)
@@ -329,6 +355,7 @@ class SettingsViewModel @Inject constructor(
                     posDisplayScale = displayScale,
                     posTextScale = textScale,
                     posMenuDesign = menuDesign,
+                    posCompactLayoutPreference = compactLayoutPreference,
                     vatNumber = settings.vatNumber,
                     address = settings.address,
                     phone = settings.phone,
@@ -395,6 +422,7 @@ class SettingsViewModel @Inject constructor(
                     retailTakeawayEnabled = settings.retailTakeawayEnabled,
                     retailDeliveryEnabled = settings.retailDeliveryEnabled,
                     retailWeighedCustomEntryEnabled = settings.retailWeighedCustomEntryEnabled,
+                    restaurantWeighedCustomEntryEnabled = settings.restaurantWeighedCustomEntryEnabled,
                     reservationsEnabled = settings.reservationsEnabled,
                     merchantCloudLinked = syncApiKeyStore.hasKey(),
                     requireTableForDineIn = settings.requireTableForDineIn,
@@ -453,6 +481,9 @@ class SettingsViewModel @Inject constructor(
             usbPrinterManager.requestMonitoredScalePermissionFromSettings(_uiState.value.scaleUsbAddress) { granted ->
                 if (granted) refreshScaleConnectionState()
             }
+        }
+        if (resolved == SettingsSection.DIAGNOSTICS) {
+            refreshDiagnosticsPanel()
         }
     }
 
@@ -590,6 +621,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { sessionManager.setPosMenuDesign(design) }
     }
 
+    fun updatePosCompactLayoutPreference(preference: PosCompactLayoutPreference) {
+        _uiState.update { it.copy(posCompactLayoutPreference = preference) }
+        viewModelScope.launch { sessionManager.setPosCompactLayoutPreference(preference) }
+    }
+
     fun refreshCrashLogs() {
         _uiState.update {
             it.copy(crashLogs = crashLogger.listLogs())
@@ -611,6 +647,76 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(selectedCrashLog = null, crashLogContent = "") }
     }
 
+    fun refreshDiagnosticsPanel() {
+        refreshCrashLogs()
+        val status = remoteDiagnosticUploader.lastUploadStatus()
+        val lastLabel = status.formatForUi().ifBlank {
+            appContext.getString(com.chaslay.pos.R.string.diagnostics_last_upload_none)
+        }
+        _uiState.update {
+            it.copy(
+                diagnosticsLastUploadLabel = lastLabel,
+                diagnosticsSessionPreview = posDiagnosticLogger.tailSessionLines(40),
+                diagnosticsApiHostLabel = appContext.getString(
+                    com.chaslay.pos.R.string.diagnostics_api_host,
+                    BuildConfig.DIAGNOSTIC_API_BASE_URL.trimEnd('/'),
+                ),
+            )
+        }
+    }
+
+    fun uploadDiagnosticsToSupport() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(diagnosticsUploadInProgress = true, message = null) }
+            val result = remoteDiagnosticUploader.uploadSupportBundle(manual = true)
+            refreshDiagnosticsPanel()
+            val msg = if (result.isSuccess) {
+                appContext.getString(com.chaslay.pos.R.string.diagnostics_upload_sent)
+            } else {
+                result.exceptionOrNull()?.message
+                    ?: appContext.getString(com.chaslay.pos.R.string.diagnostics_upload_failed)
+            }
+            _uiState.update {
+                it.copy(diagnosticsUploadInProgress = false, message = msg)
+            }
+        }
+    }
+
+    fun shareDiagnosticsLogs() {
+        viewModelScope.launch {
+            try {
+                val file = posDiagnosticLogger.writeShareExport(crashLogger)
+                val authority = "${appContext.packageName}.fileprovider"
+                val uri = FileProvider.getUriForFile(appContext, authority, file)
+                val subject = appContext.getString(com.chaslay.pos.R.string.diagnostics_share_subject)
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, subject)
+                    putExtra(Intent.EXTRA_TEXT, subject)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    clipData = android.content.ClipData.newRawUri(subject, uri)
+                    if (appContext !is android.app.Activity) {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+                val chooserTitle = appContext.getString(com.chaslay.pos.R.string.diagnostics_share_chooser)
+                val chooser = Intent.createChooser(send, chooserTitle).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    if (appContext !is android.app.Activity) {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+                _shareDiagnosticsIntent.send(chooser)
+            } catch (t: Throwable) {
+                posDiagnosticLogger.logWarn("DiagnosticsShare", "share sheet", t)
+                _uiState.update {
+                    it.copy(message = t.message ?: appContext.getString(com.chaslay.pos.R.string.diagnostics_upload_failed))
+                }
+            }
+        }
+    }
+
     private fun loadSavedPrinters() {
         viewModelScope.launch {
             val printers = settingsRepository.getPrinters()
@@ -621,6 +727,30 @@ class SettingsViewModel @Inject constructor(
                         settingsRepository.savePrinter(printer.copy(address = migrated))
                     }
                 }
+            if (SunmiInternalPrinter.isSunmiDevice()) {
+                printers.forEach { printer ->
+                    if (!SunmiInternalPrinter.shouldMigrateStoredPrinter(
+                            printer.address,
+                            printer.name,
+                            printer.connectionType,
+                        )
+                    ) {
+                        return@forEach
+                    }
+                    val coerced = SunmiInternalPrinter.coerceForStorage(
+                        printer.address,
+                        printer.name,
+                        printer.connectionType,
+                    )
+                    settingsRepository.savePrinter(
+                        printer.copy(
+                            address = coerced.address,
+                            name = coerced.name,
+                            connectionType = coerced.connectionType,
+                        ),
+                    )
+                }
+            }
             _uiState.update { it.copy(savedPrinters = settingsRepository.getPrinters()) }
             usbPrinterManager.setMonitoredPrinterAddresses(
                 settingsRepository.getPrinters()
@@ -633,12 +763,21 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun printerReachabilityKey(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity): String =
-        if (printer.connectionType == "USB") {
-            usbPrinterManager.normalizeStoredAddress(printer.address)
-        } else {
-            printer.address.trim()
+    fun printerReachabilityKey(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity): String {
+        val coerced = SunmiInternalPrinter.coerceForStorage(
+            printer.address,
+            printer.name,
+            printer.connectionType,
+        )
+        return when {
+            coerced.connectionType.equals("SUNMI", ignoreCase = true) ||
+                SunmiInternalPrinter.isInternalAddress(coerced.address) ->
+                SunmiInternalPrinter.INTERNAL_ADDRESS
+            coerced.connectionType == "USB" ->
+                usbPrinterManager.normalizeStoredAddress(coerced.address)
+            else -> coerced.address.trim()
         }
+    }
 
     fun refreshPrinterConnectionState() {
         printerReachabilityRefreshJob?.cancel()
@@ -653,9 +792,18 @@ class SettingsViewModel @Inject constructor(
             usbPrinterManager.syncGrantedDevicesFromSystem()
             val reachability = linkedMapOf<String, Boolean>()
             for (printer in printers) {
+                val coerced = SunmiInternalPrinter.coerceForStorage(
+                    printer.address,
+                    printer.name,
+                    printer.connectionType,
+                )
                 val key = printerReachabilityKey(printer)
                 val reachable = withContext(Dispatchers.IO) {
-                    printerService.probePrinterReachable(printer.address, printer.connectionType)
+                    printerService.probePrinterReachable(
+                        coerced.address,
+                        coerced.connectionType,
+                        coerced.name,
+                    )
                 }
                 reachability[key] = reachable
             }
@@ -719,7 +867,26 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun showAddPrinterDialog() = _uiState.update {
-        it.copy(showAddPrinterDialog = true, editingPrinter = null, printerDiscoveryMessage = null)
+        val sunmiHint = if (SunmiInternalPrinter.isSunmiDevice()) {
+            listOf(
+                DiscoveredPrinter(
+                    name = SunmiInternalPrinter.builtInPickerLabel(),
+                    address = SunmiInternalPrinter.INTERNAL_ADDRESS,
+                ),
+            )
+        } else {
+            emptyList()
+        }
+        it.copy(
+            showAddPrinterDialog = true,
+            editingPrinter = null,
+            printers = sunmiHint,
+            printerDiscoveryMessage = if (sunmiHint.isNotEmpty()) {
+                "SUNMI tab: tap built-in or Save — no long Bluetooth scan needed"
+            } else {
+                null
+            },
+        )
     }
 
     fun clearNetworkDiscovery() {
@@ -757,12 +924,18 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(message = "Enter a printer address") }
                 return@launch
             }
-            val address = if (resolved.connectionType == "USB") {
-                usbPrinterManager.normalizeStoredAddress(resolved.address)
-            } else {
-                resolved.address
+            val coerced = com.chaslay.pos.printer.SunmiInternalPrinter.coerceForStorage(
+                resolved.address,
+                resolved.name,
+                resolved.connectionType,
+            )
+            val address = when {
+                coerced.connectionType == "USB" ->
+                    usbPrinterManager.normalizeStoredAddress(coerced.address)
+                else -> coerced.address
             }
-            if (resolved.connectionType == "USB" && !usbPrinterManager.hasPermission(address)) {
+            val connectionType = coerced.connectionType
+            if (connectionType == "USB" && !usbPrinterManager.hasPermission(address)) {
                 _uiState.update { it.copy(message = "Allow USB access first, then save again") }
                 usbPrinterManager.requestPermission(address) { granted ->
                     viewModelScope.launch {
@@ -776,17 +949,45 @@ class SettingsViewModel @Inject constructor(
                 }
                 return@launch
             }
-            val finalForm = resolved.copy(address = address)
+            val finalForm = resolved.copy(
+                address = address,
+                name = coerced.name,
+                connectionType = connectionType,
+            )
             val editing = _uiState.value.editingPrinter
             val entity = if (editing != null) {
                 finalForm.toEntity(editing.sortOrder).copy(id = editing.id, createdAt = editing.createdAt)
             } else {
                 finalForm.toEntity(_uiState.value.savedPrinters.size)
             }
-            settingsRepository.savePrinter(entity)
+            val saveResult = runCatching { settingsRepository.savePrinter(entity) }
+            if (saveResult.isFailure) {
+                val err = saveResult.exceptionOrNull()
+                posDiagnosticLogger.logWarn(
+                    "PrinterSave",
+                    "connectionType=${entity.connectionType} address=${entity.address}",
+                    err,
+                )
+                _uiState.update {
+                    it.copy(message = "Printer save failed: ${err?.message ?: "unknown error"}")
+                }
+                return@launch
+            }
             loadSavedPrinters()
+            val savedMsg = if (editing != null) "Printer updated" else "Printer added"
             dismissAddPrinterDialog()
-            _uiState.update { it.copy(message = if (editing != null) "Printer updated" else "Printer added") }
+            _uiState.update {
+                it.copy(
+                    message = savedMsg,
+                    printerDiscoveryMessage = null,
+                )
+            }
+            if (coerced.connectionType.equals("SUNMI", ignoreCase = true)) {
+                withContext(Dispatchers.IO) {
+                    printerService.warmupConnection(coerced.address, coerced.connectionType)
+                }
+                refreshPrinterConnectionState()
+            }
         }
     }
 
@@ -799,30 +1000,80 @@ class SettingsViewModel @Inject constructor(
 
     fun testAddPrinterForm(form: AddPrinterForm) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isPrinterBusy = true) }
-            val result = withContext(Dispatchers.IO) {
-                when (form.connectionType) {
-                    "USB" -> usbPrinterManager.sendBytes(
-                        usbPrinterManager.normalizeStoredAddress(form.address),
-                        usbPrinterManager.buildTestPayload()
-                    )
-                    else -> {
-                        val settings = buildSettingsFromState().copy(
-                            printerMacAddress = form.address,
-                            printerName = form.name
-                        )
-                        printerService.testPrint(settings)
-                    }
-                }
-            }
             _uiState.update {
                 it.copy(
-                    isPrinterBusy = false,
-                    message = result.fold(
-                        onSuccess = { "Test print sent" },
-                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, form.name) }
-                    )
+                    isPrinterBusy = true,
+                    printerDiscoveryMessage = "Sending test print…",
                 )
+            }
+            try {
+                val normalized = form.normalized()
+                val coerced = SunmiInternalPrinter.coerceForStorage(
+                    normalized.address,
+                    normalized.name,
+                    normalized.connectionType,
+                )
+                val result = withContext(Dispatchers.IO) {
+                    if (coerced.connectionType == "SUNMI") {
+                        printerService.warmupConnection(
+                            coerced.address,
+                            coerced.connectionType,
+                        )
+                    }
+                    when {
+                        coerced.connectionType == "SUNMI" ->
+                            printerService.testPrint(
+                                buildSettingsFromState().copy(
+                                    printerMacAddress = coerced.address,
+                                    printerName = coerced.name,
+                                ),
+                                connectionType = coerced.connectionType,
+                            )
+                        coerced.connectionType == "USB" -> usbPrinterManager.sendBytes(
+                            usbPrinterManager.normalizeStoredAddress(coerced.address),
+                            usbPrinterManager.buildTestPayload(),
+                        )
+                        else -> printerService.testPrint(
+                            buildSettingsFromState().copy(
+                                printerMacAddress = coerced.address,
+                                printerName = coerced.name,
+                            ),
+                            connectionType = coerced.connectionType,
+                        )
+                    }
+                }
+                val summary = result.fold(
+                    onSuccess = { "Test print sent" },
+                    onFailure = { err ->
+                        posDiagnosticLogger.logWarn(
+                            "PrinterTest",
+                            "add-dialog type=${coerced.connectionType} address=${coerced.address}",
+                            err,
+                        )
+                        if (coerced.connectionType == "SUNMI") {
+                            posDiagnosticLogger.logSunmiBind(
+                                "test_failed",
+                                err.message ?: err.javaClass.simpleName,
+                            )
+                        }
+                        PrinterUserMessages.fromPrintFailure(appContext, coerced.name, err)
+                    },
+                )
+                _uiState.update {
+                    it.copy(message = summary, printerDiscoveryMessage = summary)
+                }
+            } catch (e: Exception) {
+                posDiagnosticLogger.logWarn("PrinterTest", "add-dialog unexpected", e)
+                val summary = PrinterUserMessages.fromPrintFailure(
+                    appContext,
+                    form.name.ifBlank { form.address },
+                    e,
+                )
+                _uiState.update {
+                    it.copy(message = summary, printerDiscoveryMessage = summary)
+                }
+            } finally {
+                _uiState.update { it.copy(isPrinterBusy = false) }
             }
         }
     }
@@ -906,6 +1157,10 @@ class SettingsViewModel @Inject constructor(
 
     fun updateRetailWeighedCustomEntryEnabled(enabled: Boolean) =
         _uiState.update { it.copy(retailWeighedCustomEntryEnabled = enabled) }
+
+    fun updateRestaurantWeighedCustomEntryEnabled(enabled: Boolean) =
+        _uiState.update { it.copy(restaurantWeighedCustomEntryEnabled = enabled) }
+
     fun updateRetailTakeawayEnabled(enabled: Boolean) = _uiState.update { it.copy(retailTakeawayEnabled = enabled) }
     fun updateRetailDeliveryEnabled(enabled: Boolean) = _uiState.update { it.copy(retailDeliveryEnabled = enabled) }
     fun updateRequireTableForDineIn(enabled: Boolean) = _uiState.update { it.copy(requireTableForDineIn = enabled) }
@@ -1352,10 +1607,36 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun discoverSunmiPrinters() {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(isDiscoveryScanBusy = true, printerDiscoveryMessage = "Loading Sunmi built-in…")
+            }
+            try {
+                val printers = withContext(Dispatchers.IO) {
+                    printerService.discoverSunmiBuiltInPrinters()
+                }
+                _uiState.update {
+                    it.copy(
+                        printers = printers,
+                        printerDiscoveryMessage = "Tap Sunmi built-in — address is ${SunmiInternalPrinter.INTERNAL_ADDRESS}",
+                    )
+                }
+            } catch (e: Exception) {
+                posDiagnosticLogger.logWarn("PrinterDiscover", "sunmi tab", e)
+                _uiState.update {
+                    it.copy(printerDiscoveryMessage = "Sunmi setup failed: ${e.message ?: "unknown error"}")
+                }
+            } finally {
+                _uiState.update { it.copy(isDiscoveryScanBusy = false) }
+            }
+        }
+    }
+
     fun discoverPrinters(hasBluetoothPermission: Boolean) {
         viewModelScope.launch {
             _uiState.update {
-                it.copy(isDiscoveryScanBusy = true, isPrinterBusy = true, printerDiscoveryMessage = "Scanning for devices…")
+                it.copy(isDiscoveryScanBusy = true, printerDiscoveryMessage = "Scanning for devices…")
             }
             try {
                 val printers = withContext(Dispatchers.IO) {
@@ -1376,7 +1657,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(printerDiscoveryMessage = "Bluetooth scan failed: ${e.message ?: "unknown error"}")
                 }
             } finally {
-                _uiState.update { it.copy(isDiscoveryScanBusy = false, isPrinterBusy = false) }
+                _uiState.update { it.copy(isDiscoveryScanBusy = false) }
             }
         }
     }
@@ -1386,7 +1667,6 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isDiscoveryScanBusy = true,
-                    isPrinterBusy = true,
                     printerDiscoveryMessage = "Scanning Wi-Fi network…",
                 )
             }
@@ -1415,7 +1695,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(printerDiscoveryMessage = "Network scan failed: ${e.message ?: "unknown error"}")
                 }
             } finally {
-                _uiState.update { it.copy(isDiscoveryScanBusy = false, isPrinterBusy = false) }
+                _uiState.update { it.copy(isDiscoveryScanBusy = false) }
             }
         }
     }
@@ -1430,7 +1710,6 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isDiscoveryScanBusy = true,
-                    isPrinterBusy = true,
                     printerDiscoveryMessage = "Checking $trimmed…",
                 )
             }
@@ -1457,7 +1736,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(printerDiscoveryMessage = "Connection check failed: ${e.message ?: "unknown error"}")
                 }
             } finally {
-                _uiState.update { it.copy(isDiscoveryScanBusy = false, isPrinterBusy = false) }
+                _uiState.update { it.copy(isDiscoveryScanBusy = false) }
             }
         }
     }
@@ -1526,29 +1805,38 @@ class SettingsViewModel @Inject constructor(
     fun testPrint() {
         viewModelScope.launch {
             _uiState.update { it.copy(isPrinterBusy = true) }
-            val settings = buildSettingsFromState()
-            val result = withContext(Dispatchers.IO) {
-                printerService.testPrint(settings)
-            }
-            _uiState.update {
-                it.copy(
-                    isPrinterBusy = false,
-                    message = result.fold(
-                        onSuccess = {
-                            if (BluetoothPrinterService.isSimulated(settings.printerMacAddress)) {
-                                "Test print sent to simulated printer (see Logcat)"
-                            } else {
-                                "Test print sent"
+            try {
+                val settings = buildSettingsFromState()
+                val result = withContext(Dispatchers.IO) {
+                    printerService.testPrint(settings)
+                }
+                _uiState.update {
+                    it.copy(
+                        message = result.fold(
+                            onSuccess = {
+                                if (BluetoothPrinterService.isSimulated(settings.printerMacAddress)) {
+                                    "Test print sent to simulated printer (see Logcat)"
+                                } else {
+                                    "Test print sent"
+                                }
+                            },
+                            onFailure = { err ->
+                                posDiagnosticLogger.logWarn(
+                                    "PrinterTest",
+                                    "legacy settings address=${settings.printerMacAddress}",
+                                    err,
+                                )
+                                PrinterUserMessages.fromPrintFailure(
+                                    appContext,
+                                    settings.printerName ?: settings.printerMacAddress,
+                                    err,
+                                )
                             }
-                        },
-                        onFailure = {
-                            PrinterUserMessages.fromPrintFailure(
-                                appContext,
-                                settings.printerName ?: settings.printerMacAddress
-                            )
-                        }
+                        )
                     )
-                )
+                }
+            } finally {
+                _uiState.update { it.copy(isPrinterBusy = false) }
             }
         }
     }
@@ -1556,23 +1844,33 @@ class SettingsViewModel @Inject constructor(
     fun testUsbPrint(address: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isPrinterBusy = true) }
-            val normalized = usbPrinterManager.normalizeStoredAddress(address)
-            val result = withContext(Dispatchers.IO) {
-                usbPrinterManager.sendBytes(normalized, usbPrinterManager.buildTestPayload())
-            }
-            _uiState.update {
-                it.copy(
-                    isPrinterBusy = false,
-                    message = result.fold(
-                        onSuccess = { "USB test print sent" },
-                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, normalized) }
+            try {
+                val normalized = usbPrinterManager.normalizeStoredAddress(address)
+                val result = withContext(Dispatchers.IO) {
+                    usbPrinterManager.sendBytes(normalized, usbPrinterManager.buildTestPayload())
+                }
+                _uiState.update {
+                    it.copy(
+                        message = result.fold(
+                            onSuccess = { "USB test print sent" },
+                            onFailure = { err ->
+                                PrinterUserMessages.fromPrintFailure(appContext, normalized, err)
+                            }
+                        )
                     )
-                )
+                }
+            } finally {
+                _uiState.update { it.copy(isPrinterBusy = false) }
             }
         }
     }
 
     fun displayPrinterAddress(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity): String {
+        if (printer.connectionType.equals("SUNMI", ignoreCase = true) ||
+            com.chaslay.pos.printer.SunmiInternalPrinter.isInternalAddress(printer.address)
+        ) {
+            return com.chaslay.pos.printer.SunmiInternalPrinter.INTERNAL_ADDRESS
+        }
         return if (printer.connectionType == "USB") {
             usbPrinterManager.formatAddressForDisplay(printer.address)
         } else {
@@ -1583,31 +1881,64 @@ class SettingsViewModel @Inject constructor(
     fun testSavedPrinter(printer: com.chaslay.pos.data.local.entity.PrinterConfigEntity) {
         viewModelScope.launch {
             _uiState.update { it.copy(isPrinterBusy = true) }
-            val result = withContext(Dispatchers.IO) {
-                if (printer.connectionType == "USB") {
-                    usbPrinterManager.sendBytes(
-                        usbPrinterManager.normalizeStoredAddress(printer.address),
-                        usbPrinterManager.buildTestPayload()
-                    )
-                } else {
-                    printerService.testPrint(
-                        buildSettingsFromState().copy(
-                            printerMacAddress = printer.address,
-                            printerName = printer.name
+            try {
+                val coerced = SunmiInternalPrinter.coerceForStorage(
+                    printer.address,
+                    printer.name,
+                    printer.connectionType,
+                )
+                val result = withContext(Dispatchers.IO) {
+                    when {
+                        coerced.connectionType.equals("SUNMI", ignoreCase = true) ||
+                            SunmiInternalPrinter.isInternalAddress(coerced.address) -> {
+                            printerService.warmupConnection(coerced.address, "SUNMI")
+                            printerService.testPrint(
+                                buildSettingsFromState().copy(
+                                    printerMacAddress = coerced.address,
+                                    printerName = coerced.name,
+                                ),
+                                connectionType = "SUNMI",
+                            )
+                        }
+                        coerced.connectionType == "USB" -> usbPrinterManager.sendBytes(
+                            usbPrinterManager.normalizeStoredAddress(coerced.address),
+                            usbPrinterManager.buildTestPayload(),
+                        )
+                        else ->
+                            printerService.testPrint(
+                                buildSettingsFromState().copy(
+                                    printerMacAddress = coerced.address,
+                                    printerName = coerced.name,
+                                ),
+                                connectionType = coerced.connectionType,
+                            )
+                    }
+                }
+                _uiState.update {
+                    it.copy(
+                        message = result.fold(
+                            onSuccess = { "Test print sent to ${coerced.name}" },
+                            onFailure = { err ->
+                                posDiagnosticLogger.logWarn(
+                                    "PrinterTest",
+                                    "saved id=${printer.id} type=${coerced.connectionType} address=${coerced.address}",
+                                    err,
+                                )
+                                if (coerced.connectionType.equals("SUNMI", ignoreCase = true)) {
+                                    posDiagnosticLogger.logSunmiBind(
+                                        "test_failed",
+                                        err.message ?: err.javaClass.simpleName,
+                                    )
+                                }
+                                PrinterUserMessages.fromPrintFailure(appContext, coerced.name, err)
+                            },
                         )
                     )
                 }
+                refreshPrinterConnectionState()
+            } finally {
+                _uiState.update { it.copy(isPrinterBusy = false) }
             }
-            _uiState.update {
-                it.copy(
-                    isPrinterBusy = false,
-                    message = result.fold(
-                        onSuccess = { "Test print sent to ${printer.name}" },
-                        onFailure = { PrinterUserMessages.fromPrintFailure(appContext, printer.name) }
-                    )
-                )
-            }
-            refreshPrinterConnectionState()
         }
     }
 
@@ -1618,9 +1949,9 @@ class SettingsViewModel @Inject constructor(
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 printerService.routeEndOfDayReport(settings, report)
             }.onSuccess { _uiState.update { it.copy(message = "End of day report printed") } }
-                .onFailure {
+                .onFailure { err ->
                     _uiState.update {
-                        it.copy(message = PrinterUserMessages.fromPrintFailure(appContext))
+                        it.copy(message = PrinterUserMessages.fromPrintFailure(appContext, cause = err))
                     }
                 }
         }
@@ -1676,6 +2007,12 @@ class SettingsViewModel @Inject constructor(
                 com.chaslay.pos.util.PosLocalPrefs.saveRetailWeighedCustomEntryEnabled(
                     appContext,
                     settings.retailWeighedCustomEntryEnabled
+                )
+            }
+            if (settings.restaurantWeighedCustomEntryEnabled != previous.restaurantWeighedCustomEntryEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveRestaurantWeighedCustomEntryEnabled(
+                    appContext,
+                    settings.restaurantWeighedCustomEntryEnabled
                 )
             }
             if (settings.courseSendMode != previous.courseSendMode) {
@@ -1775,6 +2112,7 @@ class SettingsViewModel @Inject constructor(
             retailTakeawayEnabled = state.retailTakeawayEnabled,
             retailDeliveryEnabled = state.retailDeliveryEnabled,
             retailWeighedCustomEntryEnabled = state.retailWeighedCustomEntryEnabled,
+            restaurantWeighedCustomEntryEnabled = state.restaurantWeighedCustomEntryEnabled,
             reservationsEnabled = state.reservationsEnabled,
             requireTableForDineIn = state.requireTableForDineIn,
             trackCoversFromSeatingPlan = state.trackCoversFromSeatingPlan,

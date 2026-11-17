@@ -146,7 +146,11 @@ import androidx.compose.material.icons.filled.Send
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Search
 import com.chaslay.pos.ui.orderhistory.OrderHistoryScreen
+import com.chaslay.pos.ui.layout.PosCompactLayoutSplash
+import com.chaslay.pos.ui.layout.rememberPosCompactLayoutSettled
+import com.chaslay.pos.ui.layout.rememberUsePosCompactPortraitLayout
 import com.chaslay.pos.ui.navigation.AppRoute
+import com.chaslay.pos.ui.pos.compact.CompactPosScreen
 import com.chaslay.pos.receipt.ReceiptQrGenerator
 import androidx.compose.ui.draw.clip
 import java.text.SimpleDateFormat
@@ -202,6 +206,8 @@ fun PosScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val loggedInUserName by viewModel.loggedInUserName.collectAsStateWithLifecycle()
     val posMenuDesign by viewModel.posMenuDesign.collectAsStateWithLifecycle()
+    val compactLayoutPref by viewModel.posCompactLayoutPreference.collectAsStateWithLifecycle()
+    val useCompactPortraitLayout = rememberUsePosCompactPortraitLayout(compactLayoutPref)
     val isModernMenuDesign = posMenuDesign.isModern
     val activity = LocalContext.current as? Activity
     val context = LocalContext.current
@@ -550,6 +556,22 @@ fun PosScreen(
         return
     }
 
+    val compactLayoutSettled = rememberPosCompactLayoutSettled()
+    if (!compactLayoutSettled) {
+        PosCompactLayoutSplash()
+        return
+    }
+
+    if (useCompactPortraitLayout) {
+        CompactPosScreen(
+            state = state,
+            loggedInUserName = loggedInUserName,
+            userAccess = userAccess,
+            viewModel = viewModel,
+            onNavigate = onNavigate,
+            onOrderHistory = { onNavigate(AppRoute.OrderHistory.route) },
+        )
+    } else {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -812,7 +834,7 @@ fun PosScreen(
                             gridColumns = state.productGridColumns,
                             sortAlpha = state.productGridSortAlpha,
                             sortBestseller = state.productGridSortBestseller,
-                            showProductImagesPref = true,
+                            showProductImagesPref = state.productGridShowImages,
                             isGiftCardCategory = state.isGiftCardCategory,
                             membershipEnabled = state.giftCardsEnabled &&
                                 state.giftCardSettings?.membershipEnabled == true,
@@ -857,6 +879,7 @@ fun PosScreen(
                 }
             }
         }
+    }
     }
 
     if (state.showTablePicker && isTableServiceEnabled) {

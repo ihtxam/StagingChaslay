@@ -22,6 +22,9 @@ val adyenEnv = (adyenLocalProps.getProperty("adyenEnv") ?: "test").lowercase()
 val hasAdyenTestKey = adyenLocalProps.getProperty("adyenSdkApiKey").orEmpty().isNotBlank()
 val hasAdyenLiveKey = adyenLocalProps.getProperty("adyenSdkApiKeyLive").orEmpty().isNotBlank()
 val hasAdyenSdk = (adyenEnv == "live" && hasAdyenLiveKey) || hasAdyenTestKey
+val diagnosticStagingUrl = (adyenLocalProps.getProperty("diagnosticApiBaseUrl") ?: "https://app.chaslay.com/")
+    .trim()
+    .let { url -> if (url.endsWith("/")) url else "$url/" }
 
 android {
     namespace = "com.chaslay.pos"
@@ -54,6 +57,9 @@ android {
         }
 
         buildConfigField("String", "LICENSE_API_BASE_URL", "\"https://app.rebornsense.com/\"")
+        buildConfigField("String", "DIAGNOSTIC_API_BASE_URL", "\"https://app.rebornsense.com/\"")
+        // Optional override (e.g. local staging manifest). Empty → LICENSE_API_BASE_URL + /downloads/reborn-pos-android.json
+        buildConfigField("String", "APP_UPDATE_MANIFEST_URL", "\"\"")
         buildConfigField("String", "MERCHANT_DASHBOARD_URL", "\"https://app.rebornsense.com\"")
         buildConfigField("String", "TENANT_SLUG", "\"\"")
         buildConfigField("String", "SYNC_API_KEY", "\"ihtsham_76875hgf755rjgkjh7zrzrhvjhv\"")
@@ -106,6 +112,7 @@ android {
             // R8 + multiDexKeepProguard: keep ChaslayPosApp/Hilt_* in classes.dex for OEM tablets
             // that resolve the manifest Application only from the primary dex at cold start.
             isMinifyEnabled = true
+            buildConfigField("String", "DIAGNOSTIC_API_BASE_URL", "\"$diagnosticStagingUrl\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules-debug.pro",
@@ -219,6 +226,8 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    testImplementation("junit:junit:4.13.2")
 }
 
 /** Copies signed release/debug APKs to Downloads as chaslaypos-<versionName>.apk for phone testing. */
@@ -281,12 +290,21 @@ afterEvaluate {
             if (manifest.isFile) {
                 val builtAt = Instant.now().toString()
                 val text = manifest.readText()
-                val updated = text
+                val versionCode = android.defaultConfig.versionCode
+                var updated = text
                     .replace(Regex("\"version\"\\s*:\\s*\"[^\"]*\""), "\"version\": \"$versionName\"")
                     .replace(
                         Regex("\"builtAt\"\\s*:\\s*\"[^\"]*\"|\"builtAt\"\\s*:\\s*null"),
                         "\"builtAt\": \"$builtAt\"",
                     )
+                updated = if (updated.contains("\"versionCode\"")) {
+                    updated.replace(Regex("\"versionCode\"\\s*:\\s*\\d+"), "\"versionCode\": $versionCode")
+                } else {
+                    updated.replace(
+                        Regex("\"version\"\\s*:\\s*\"[^\"]*\""),
+                        "\"version\": \"$versionName\",\n  \"versionCode\": $versionCode",
+                    )
+                }
                 manifest.writeText(updated)
             }
             logger.lifecycle("Published APK: ${main.absolutePath}")

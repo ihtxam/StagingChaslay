@@ -20,3 +20,8 @@
 # OkHttp 5 App Startup (merged from okhttp-android); loaded via reflection by InitializationProvider.
 -keep class * implements androidx.startup.Initializer { *; }
 -keep class okhttp3.internal.platform.** { *; }
+
+# Sunmi InnerPrinter — SDK invokes callback methods from another process; R8 must not strip/obfuscate them.
+-keep class com.sunmi.peripheral.printer.** { *; }
+-keep class * extends com.sunmi.peripheral.printer.InnerPrinterCallback { *; }
+-keep class com.chaslay.pos.printer.SunmiPrinterServiceHolder { *; }

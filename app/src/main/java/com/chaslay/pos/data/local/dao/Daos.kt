@@ -553,6 +553,9 @@ interface TableFloorDao {
     @Query("SELECT * FROM table_floors WHERE isActive = 1 ORDER BY sortOrder, name")
     suspend fun getAllActive(): List<TableFloorEntity>
 
+    @Query("SELECT COUNT(*) FROM table_floors")
+    suspend fun countAll(): Long
+
     @Query("SELECT * FROM table_floors WHERE remoteId = :remoteId LIMIT 1")
     suspend fun getByRemoteId(remoteId: String): TableFloorEntity?
 
@@ -561,6 +564,17 @@ interface TableFloorDao {
 
     @Update
     suspend fun update(floor: TableFloorEntity)
+
+    @Query("UPDATE table_floors SET isActive = 0 WHERE id = :id")
+    suspend fun deactivate(id: Long)
+
+    @Query(
+        """
+        UPDATE table_floors SET isActive = 0
+        WHERE remoteId IS NOT NULL AND TRIM(remoteId) != ''
+        """
+    )
+    suspend fun deactivateAllPanelSynced()
 }
 
 @Dao
@@ -591,6 +605,17 @@ interface RestaurantTableDao {
 
     @Query("UPDATE restaurant_tables SET isActive = 0 WHERE id = :id")
     suspend fun deactivate(id: Long)
+
+    @Query("UPDATE restaurant_tables SET isActive = 0 WHERE floorId = :floorId")
+    suspend fun deactivateAllOnFloor(floorId: Long)
+
+    @Query(
+        """
+        UPDATE restaurant_tables SET isActive = 0
+        WHERE remoteId IS NOT NULL AND TRIM(remoteId) != ''
+        """
+    )
+    suspend fun deactivateAllPanelSynced()
 }
 
 @Dao

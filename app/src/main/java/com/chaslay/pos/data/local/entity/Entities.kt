@@ -298,6 +298,11 @@ data class BusinessSettingsEntity(
      * When false (default), enter a line total (open-price style) with no scale session.
      */
     val retailWeighedCustomEntryEnabled: Boolean = false,
+    /**
+     * Restaurant — manual weight × CHF/kg for weighed catalog items and Divers misc entry.
+     * When false (default), enter a line total (open-price style) with no scale session.
+     */
+    val restaurantWeighedCustomEntryEnabled: Boolean = false,
     /** When true, dine-in must pick a table; when false, counter ticket (D-001) with dine-in VAT. */
     val requireTableForDineIn: Boolean = true,
     /** Synced from merchant panel — multi-course firing on dine-in tables. */
@@ -329,6 +334,8 @@ data class BusinessSettingsEntity(
     val scaleUsbAddress: String? = null,
     /** Enable cloud + LAN floor sync for waiter devices. */
     val floorSyncEnabled: Boolean = false,
+    /** Pull table plan changes from cloud sync (merchant panel). */
+    val syncTablePlanWithCloud: Boolean = true,
     /** MAIN_POS, WAITER, or STANDARD */
     val floorDeviceRole: String = "STANDARD",
     /** When enabled, staff enter cover count when seating; EOD reports guests served. */

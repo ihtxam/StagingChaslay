@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.chaslay.pos.ui.theme.PosAppearanceLimits
 import com.chaslay.pos.domain.model.AppLanguage
+import com.chaslay.pos.domain.model.PosCompactLayoutPreference
 import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosPermission
 import com.chaslay.pos.domain.model.PosThemeMode
@@ -42,6 +43,7 @@ class SessionManager @Inject constructor(
     private val posDisplayScaleKey = floatPreferencesKey("pos_display_scale")
     private val posTextScaleKey = floatPreferencesKey("pos_text_scale")
     private val posMenuDesignKey = stringPreferencesKey("pos_menu_design")
+    private val posCompactLayoutKey = stringPreferencesKey("pos_compact_layout_preference")
 
     val currentUserId: Flow<Long?> = context.sessionDataStore.data.map { prefs ->
         prefs[userIdKey]
@@ -92,6 +94,11 @@ class SessionManager @Inject constructor(
             PosMenuDesign.fromName(PosLocalPrefs.readPosMenuDesign(context))
         }
     }
+
+    val posCompactLayoutPreference: Flow<PosCompactLayoutPreference> =
+        context.sessionDataStore.data.map { prefs ->
+            PosCompactLayoutPreference.fromName(prefs[posCompactLayoutKey])
+        }
 
     suspend fun saveSession(userId: Long, userName: String, access: UserAccess) {
         authEpoch.incrementAndGet()
@@ -169,6 +176,12 @@ class SessionManager @Inject constructor(
         PosLocalPrefs.savePosMenuDesign(context, design.name)
         context.sessionDataStore.edit { prefs ->
             prefs[posMenuDesignKey] = design.name
+        }
+    }
+
+    suspend fun setPosCompactLayoutPreference(preference: PosCompactLayoutPreference) {
+        context.sessionDataStore.edit { prefs ->
+            prefs[posCompactLayoutKey] = preference.name
         }
     }
 }

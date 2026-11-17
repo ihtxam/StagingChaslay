@@ -98,28 +98,60 @@ class BluetoothPrinterService @Inject constructor(
 
     fun simulatedPrinter(): DiscoveredPrinter = SIMULATED_PRINTER
 
-    fun discoverPrinters(hasBluetoothPermission: Boolean): List<DiscoveredPrinter> {
+    /** Sunmi built-in only — no InnerPrinter bind or classic Bluetooth enumeration. */
+    fun discoverSunmiBuiltInPrinters(): List<DiscoveredPrinter> {
         val printers = mutableListOf(SIMULATED_PRINTER)
-        if (sunmiInternalPrinter.isAvailable()) {
+        if (SunmiInternalPrinter.isSunmiDevice()) {
             printers.add(
                 DiscoveredPrinter(
-                    name = SunmiInternalPrinter.builtInLabel(),
+                    name = SunmiInternalPrinter.builtInPickerLabel(),
+                    address = SunmiInternalPrinter.INTERNAL_ADDRESS,
+                ),
+            )
+        }
+        return printers
+    }
+
+    private fun bondedBluetoothPrinters(timeoutMs: Long): List<DiscoveredPrinter> {
+        val adapter = bluetoothAdapter() ?: return emptyList()
+        if (!adapter.isEnabled) return emptyList()
+        val future = Executors.newSingleThreadExecutor().submit<List<DiscoveredPrinter>> {
+            adapter.bondedDevices.orEmpty()
+                .filterNot { SunmiInternalPrinter.isInternalBluetoothShadow(it.address, it.name) }
+                .map { device ->
+                    DiscoveredPrinter(name = device.name ?: "Unknown", address = device.address)
+                }
+        }
+        return try {
+            future.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+            Log.w(TAG, "bondedDevices timed out after ${timeoutMs}ms")
+            future.cancel(true)
+            emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "bondedDevices read failed", e)
+            emptyList()
+        }
+    }
+
+    fun discoverPrinters(hasBluetoothPermission: Boolean): List<DiscoveredPrinter> {
+        val printers = mutableListOf(SIMULATED_PRINTER)
+        if (SunmiInternalPrinter.isSunmiDevice()) {
+            printers.add(
+                DiscoveredPrinter(
+                    name = SunmiInternalPrinter.builtInPickerLabel(),
                     address = SunmiInternalPrinter.INTERNAL_ADDRESS,
                 ),
             )
         }
         if (!hasBluetoothPermission) return printers
-        return runCatching {
-            val adapter = bluetoothAdapter() ?: return printers
-            if (!adapter.isEnabled) return printers
-            adapter.bondedDevices.orEmpty().mapTo(printers) { device ->
-                DiscoveredPrinter(name = device.name ?: "Unknown", address = device.address)
-            }
-            printers
-        }.getOrElse {
-            Log.w(TAG, "Bluetooth discovery failed", it)
-            printers
+        val bondedTimeout = if (SunmiInternalPrinter.isSunmiDevice()) {
+            SUNMI_BONDED_LIST_TIMEOUT_MS
+        } else {
+            DEFAULT_BONDED_LIST_TIMEOUT_MS
         }
+        printers.addAll(bondedBluetoothPrinters(bondedTimeout))
+        return printers.distinctBy { it.address }
     }
 
     /**
@@ -192,7 +224,11 @@ class BluetoothPrinterService @Inject constructor(
     fun currentLocalIpv4(): String? = localIpAddress()
 
     /** Probes whether a saved printer is reachable right now (USB attached, TCP, or BT socket). */
-    suspend fun probePrinterReachable(address: String, connectionType: String): Boolean =
+    suspend fun probePrinterReachable(
+        address: String,
+        connectionType: String,
+        printerName: String? = null,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             val trimmed = address.trim()
             if (trimmed.isBlank()) return@withContext false
@@ -200,8 +236,10 @@ class BluetoothPrinterService @Inject constructor(
             val type = connectionType.trim().uppercase(Locale.US)
             val reachable = runCatching {
                 when {
-                    usesSunmiInternalRouting(trimmed) || type == "SUNMI" ->
+                    usesSunmiInternalRouting(trimmed, printerName, connectionType) -> {
+                        sunmiInternalPrinter.bindIfNeeded()
                         sunmiInternalPrinter.isAvailable()
+                    }
                     type == "USB" || isUsbAddress(trimmed) -> {
                         val normalized = usbPrinterManager.normalizeStoredAddress(trimmed)
                         when {
@@ -236,6 +274,9 @@ class BluetoothPrinterService @Inject constructor(
         }
 
     private fun reachabilityCacheAddress(address: String, connectionTypeUpper: String): String {
+        if (connectionTypeUpper == "SUNMI" || SunmiInternalPrinter.isInternalAddress(address)) {
+            return SunmiInternalPrinter.INTERNAL_ADDRESS
+        }
         if (connectionTypeUpper == "USB" || isUsbAddress(address)) {
             return usbPrinterManager.normalizeStoredAddress(address)
         }
@@ -247,6 +288,10 @@ class BluetoothPrinterService @Inject constructor(
         if (address.isBlank() || isSimulated(address)) return@withContext
         runCatching {
             when {
+                usesSunmiInternalRouting(address, connectionType = connectionType) -> {
+                    sunmiInternalPrinter.bindIfNeeded()
+                    sunmiInternalPrinter.isAvailable()
+                }
                 connectionType == "USB" || isUsbAddress(address) -> {
                     if (usbPrinterManager.hasPermission(address)) {
                         usbPrinterManager.sendBytes(address, ESC_INIT)
@@ -310,7 +355,14 @@ class BluetoothPrinterService @Inject constructor(
         loyaltyPointsBalance: Int? = null
     ): Result<Unit> {
         val address = settings.printerMacAddress
-        val encoding = textEncodingForAddress(address)
+        val encoding = textEncodingForAddress(address, settings.printerName)
+        val sunmi = usesSunmiInternalRouting(address, settings.printerName)
+        val sunmiQrUrl = if (sunmi && settings.receiptShowQrCode) {
+            transaction.receiptUrl?.takeIf { it.isNotBlank() }
+                ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
+        } else {
+            null
+        }
         val payload = buildEscPosReceipt(
             settings,
             transaction,
@@ -320,19 +372,46 @@ class BluetoothPrinterService @Inject constructor(
             loyaltyPointsEarned = loyaltyPointsEarned,
             loyaltyPointsBalance = loyaltyPointsBalance,
             textEncoding = encoding,
+            suppressQrRaster = sunmi,
         )
-        return sendBytes(address, settings, payload, "Receipt ${transaction.transactionNumber}")
+        return sendBytes(
+            address,
+            settings,
+            payload,
+            "Receipt ${transaction.transactionNumber}",
+            printerName = settings.printerName,
+            sunmiQrUrl = sunmiQrUrl,
+        )
     }
 
-    fun testPrint(settings: BusinessSettingsEntity): Result<Unit> {
-        val encoding = textEncodingForAddress(settings.printerMacAddress)
+    fun testPrint(
+        settings: BusinessSettingsEntity,
+        connectionType: String? = null,
+    ): Result<Unit> {
+        if (usesSunmiInternalRouting(settings.printerMacAddress, settings.printerName, connectionType)) {
+            return sunmiInternalPrinter.printTestPage()
+        }
+        val encoding = textEncodingForAddress(settings.printerMacAddress, settings.printerName, connectionType)
         val payload = buildTestReceipt(settings, encoding)
-        return sendBytes(settings.printerMacAddress, settings, payload, "Test print")
+        return sendBytes(
+            settings.printerMacAddress,
+            settings,
+            payload,
+            "Test print",
+            printerName = settings.printerName,
+            connectionType = connectionType,
+        )
     }
 
     fun openCashDrawer(settings: BusinessSettingsEntity): Result<Unit> {
         val payload = ESC_INIT + byteArrayOf(0x1B, 0x70, 0x00, 0x19, 0xFA.toByte())
-        return sendBytes(settings.printerMacAddress, settings, payload, "Cash drawer")
+        return sendBytes(
+            settings.printerMacAddress,
+            settings,
+            payload,
+            "Cash drawer",
+            printerName = settings.printerName,
+        )
     }
 
     suspend fun routeOpenCashDrawer(settings: BusinessSettingsEntity): Result<Unit> = withContext(Dispatchers.IO) {
@@ -344,7 +423,14 @@ class BluetoothPrinterService @Inject constructor(
         }
         var last: Result<Unit> = Result.success(Unit)
         for (printer in drawerPrinters) {
-            last = sendBytes(printer.address, settings, payload, "Cash drawer ${printer.name}")
+            last = sendBytes(
+                printer.address,
+                settings,
+                payload,
+                "Cash drawer ${printer.name}",
+                printerName = printer.name,
+                connectionType = printer.connectionType,
+            )
         }
         last
     }
@@ -369,9 +455,15 @@ class BluetoothPrinterService @Inject constructor(
                 discountAmount,
                 tipAmount,
                 total,
-                textEncoding = textEncodingForAddress(address),
+                textEncoding = textEncodingForAddress(address, settings.printerName),
             )
-            return@withContext sendBytes(address, settings, payload, "Receipt")
+            return@withContext sendBytes(
+                address,
+                settings,
+                payload,
+                "Receipt",
+                printerName = settings.printerName,
+            )
         }
         val targets = if (singlePrinter) receiptPrinters.take(1) else receiptPrinters
         var last: Result<Unit> = Result.success(Unit)
@@ -385,9 +477,16 @@ class BluetoothPrinterService @Inject constructor(
                 tipAmount,
                 total,
                 lineWidth,
-                textEncoding = textEncodingForAddress(printer.address),
+                textEncoding = textEncodingForAddress(printer.address, printer.name, printer.connectionType),
             )
-            last = sendBytes(printer.address, settings, payload, "Receipt ${printer.name}")
+            last = sendBytes(
+                printer.address,
+                settings,
+                payload,
+                "Receipt ${printer.name}",
+                printerName = printer.name,
+                connectionType = printer.connectionType,
+            )
         }
         last
     }
@@ -420,12 +519,13 @@ class BluetoothPrinterService @Inject constructor(
         sb.appendLine("TOTAL: ${formatMoney(total, settings.currencySymbol)}")
         appendFooter(sb, settings.receiptFooter)
         sb.appendLine("\n\n\n")
-        val encoding = textEncodingForAddress(settings.printerMacAddress)
+        val encoding = textEncodingForAddress(settings.printerMacAddress, settings.printerName)
         return sendBytes(
             settings.printerMacAddress,
             settings,
             encodePayload(sb.toString(), encoding),
             "Preview receipt",
+            printerName = settings.printerName,
         )
     }
 
@@ -455,8 +555,15 @@ class BluetoothPrinterService @Inject constructor(
             sb.appendLine("TOTAL: ${formatMoney(total, settings.currencySymbol)}")
             appendFooter(sb, settings.receiptFooter, lineWidth)
             sb.appendLine("\n\n\n")
-            val encoding = textEncodingForAddress(printer.address)
-            last = sendBytes(printer.address, settings, encodePayload(sb.toString(), encoding), "Preview ${printer.name}")
+            val encoding = textEncodingForAddress(printer.address, printer.name, printer.connectionType)
+            last = sendBytes(
+                printer.address,
+                settings,
+                encodePayload(sb.toString(), encoding),
+                "Preview ${printer.name}",
+                printerName = printer.name,
+                connectionType = printer.connectionType,
+            )
         }
         last
     }
@@ -473,14 +580,27 @@ class BluetoothPrinterService @Inject constructor(
             for (printer in reportPrinters) {
                 val lineWidth = lineWidthFor(printer.paperWidthMm)
                 val payload = buildEndOfDayReport(settings, report, lineWidth, includeProductsSold)
-                last = sendBytes(printer.address, settings, payload, "End of day ${printer.name}")
+                last = sendBytes(
+                    printer.address,
+                    settings,
+                    payload,
+                    "End of day ${printer.name}",
+                    printerName = printer.name,
+                    connectionType = printer.connectionType,
+                )
             }
             return@withContext last
         }
         val legacyAddress = settings.printerMacAddress?.takeIf { it.isNotBlank() }
             ?: return@withContext Result.failure(IllegalStateException("No report printer configured. Add a printer with ENDOFDAY REPORTS enabled."))
         val payload = buildEndOfDayReport(settings, report, LINE_WIDTH_80, includeProductsSold)
-        sendBytes(legacyAddress, settings, payload, "End of day report")
+        sendBytes(
+            legacyAddress,
+            settings,
+            payload,
+            "End of day report",
+            printerName = settings.printerName,
+        )
     }
 
     suspend fun printEndOfDayReport(
@@ -536,12 +656,24 @@ class BluetoothPrinterService @Inject constructor(
             val mac = settings.kitchenPrinterMacAddress
                 ?: settings.printerMacAddress
                 ?: SIMULATED_ADDRESS
-            lastResult = sendBytes(mac, settings, payload, "Kitchen ticket")
+            lastResult = sendBytes(
+                mac,
+                settings,
+                payload,
+                "Kitchen ticket",
+                printerName = settings.kitchenPrinterName ?: settings.printerName,
+            )
         }
         if (posItems.isNotEmpty() && !isFollowUp) {
             val barPayload = buildBarTicket(settings, tableName, round, posItems, lineWidth, products)
             val mac = settings.printerMacAddress ?: SIMULATED_ADDRESS
-            lastResult = sendBytes(mac, settings, barPayload, "Bar ticket")
+            lastResult = sendBytes(
+                mac,
+                settings,
+                barPayload,
+                "Bar ticket",
+                printerName = settings.printerName,
+            )
         }
         return lastResult
     }
@@ -582,7 +714,14 @@ class BluetoothPrinterService @Inject constructor(
             val payload = buildKitchenTicket(
                 settings, tableName, serviceType, round, subset, isFollowUp, message, meta, lineWidth, products
             )
-            last = sendBytes(printer.address, settings, payload, "Kitchen ${printer.name}")
+            last = sendBytes(
+                printer.address,
+                settings,
+                payload,
+                "Kitchen ${printer.name}",
+                printerName = printer.name,
+                connectionType = printer.connectionType,
+            )
             printedAny = true
         }
         if (printedAny) {
@@ -627,7 +766,14 @@ class BluetoothPrinterService @Inject constructor(
         for (printer in receiptPrinters) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
             val payload = buildGiftCardSaleReceipt(settings, code, balance, recipientEmail, holderName, lineWidth)
-            last = sendBytes(printer.address, settings, payload, "Gift card ${printer.name}")
+            last = sendBytes(
+                printer.address,
+                settings,
+                payload,
+                "Gift card ${printer.name}",
+                printerName = printer.name,
+                connectionType = printer.connectionType,
+            )
         }
         last
     }
@@ -643,7 +789,13 @@ class BluetoothPrinterService @Inject constructor(
         val payload = buildGiftCardSaleReceipt(settings, code, balance, recipientEmail, holderName, lineWidth)
         val address = settings.printerMacAddress?.trim().orEmpty()
         if (address.isBlank()) return@withContext Result.failure(IllegalStateException("No receipt printer configured"))
-        sendBytes(address, settings, payload, "Gift card receipt")
+        sendBytes(
+            address,
+            settings,
+            payload,
+            "Gift card receipt",
+            printerName = settings.printerName,
+        )
     }
 
     private fun buildGiftCardSaleReceipt(
@@ -770,6 +922,13 @@ class BluetoothPrinterService @Inject constructor(
         var last: Result<Unit> = Result.success(Unit)
         for (printer in receiptPrinters) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
+            val sunmi = usesSunmiInternalRouting(printer.address, printer.name, printer.connectionType)
+            val sunmiQrUrl = if (sunmi && settings.receiptShowQrCode) {
+                transaction.receiptUrl?.takeIf { it.isNotBlank() }
+                    ?: ReceiptPublicUrls.build(settings.receiptBaseUrl, transaction.id)
+            } else {
+                null
+            }
             val payload = cachedOrBuildEscPosReceipt(
                 useCache = usePayloadCache,
                 transactionId = transaction.id,
@@ -781,15 +940,27 @@ class BluetoothPrinterService @Inject constructor(
                 appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
                 appendAdyenCashierReceipt = appendAdyenCashierReceipt,
                 loyaltyPointsEarned = loyaltyPointsEarned,
-                loyaltyPointsBalance = loyaltyPointsBalance
+                loyaltyPointsBalance = loyaltyPointsBalance,
+                printerName = printer.name,
+                connectionType = printer.connectionType,
             )
-            last = sendBytes(printer.address, settings, payload, "Receipt ${printer.name}")
+            last = sendBytes(
+                printer.address,
+                settings,
+                payload,
+                "Receipt ${printer.name}",
+                printerName = printer.name,
+                connectionType = printer.connectionType,
+                sunmiQrUrl = sunmiQrUrl,
+            )
             if (printer.openCashDrawer) {
                 sendBytes(
                     printer.address,
                     settings,
                     ESC_INIT + byteArrayOf(0x1B, 0x70, 0x00, 0x19, 0xFA.toByte()),
-                    "Cash drawer"
+                    "Cash drawer",
+                    printerName = printer.name,
+                    connectionType = printer.connectionType,
                 )
             }
         }
@@ -823,7 +994,8 @@ class BluetoothPrinterService @Inject constructor(
                 appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
                 appendAdyenCashierReceipt = appendAdyenCashierReceipt,
                 loyaltyPointsEarned = loyaltyPointsEarned,
-                loyaltyPointsBalance = loyaltyPointsBalance
+                loyaltyPointsBalance = loyaltyPointsBalance,
+                printerName = settings.printerName,
             )
         } else {
             for (printer in receiptPrinters) {
@@ -839,7 +1011,9 @@ class BluetoothPrinterService @Inject constructor(
                     appendAdyenCustomerReceipt = appendAdyenCustomerReceipt,
                     appendAdyenCashierReceipt = appendAdyenCashierReceipt,
                     loyaltyPointsEarned = loyaltyPointsEarned,
-                    loyaltyPointsBalance = loyaltyPointsBalance
+                    loyaltyPointsBalance = loyaltyPointsBalance,
+                    printerName = printer.name,
+                    connectionType = printer.connectionType,
                 )
             }
         }
@@ -849,8 +1023,19 @@ class BluetoothPrinterService @Inject constructor(
     /** Pre-opens held BT sockets for receipt printers (express retail skips kitchen warm-up). */
     suspend fun holdReceiptPrinterBluetoothConnections(settings: BusinessSettingsEntity) =
         withContext(Dispatchers.IO) {
-            receiptPrinterAddresses(settings).forEach { address ->
-                holdBluetoothConnectionQuietly(address)
+            val configured = enabledReceiptPrinters()
+            if (configured.isNotEmpty()) {
+                configured.forEach { printer ->
+                    holdBluetoothConnectionQuietly(
+                        printer.address,
+                        printer.name,
+                        printer.connectionType,
+                    )
+                }
+            } else {
+                settings.printerMacAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { address ->
+                    holdBluetoothConnectionQuietly(address, settings.printerName)
+                }
             }
         }
 
@@ -864,8 +1049,13 @@ class BluetoothPrinterService @Inject constructor(
         return settings.printerMacAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { listOf(it) }.orEmpty()
     }
 
-    private fun holdBluetoothConnectionQuietly(mac: String) {
+    private fun holdBluetoothConnectionQuietly(
+        mac: String,
+        printerName: String? = null,
+        connectionType: String? = null,
+    ) {
         if (mac.isBlank() || isSimulated(mac) || isUsbAddress(mac) || isNetworkAddress(mac)) return
+        if (usesSunmiInternalRouting(mac, printerName, connectionType)) return
         if (!printerReachabilityCache.shouldAttemptPrint(mac)) return
         val lockKey = printerReachabilityCache.keyForAddress(mac)
         val lock = sendLocksByAddress.getOrPut(lockKey) { Any() }
@@ -896,7 +1086,7 @@ class BluetoothPrinterService @Inject constructor(
             if (address.isBlank()) {
                 return@withContext Result.failure(IllegalStateException("No receipt printer configured"))
             }
-            val encoding = textEncodingForAddress(address)
+            val encoding = textEncodingForAddress(address, settings.printerName)
             val payload = buildRefundEscPosReceipt(
                 settings,
                 transaction,
@@ -906,12 +1096,18 @@ class BluetoothPrinterService @Inject constructor(
                 lineWidth,
                 textEncoding = encoding,
             )
-            return@withContext sendBytes(address, settings, payload, "Refund receipt")
+            return@withContext sendBytes(
+                address,
+                settings,
+                payload,
+                "Refund receipt",
+                printerName = settings.printerName,
+            )
         }
         var last: Result<Unit> = Result.success(Unit)
         for (printer in receiptPrinters) {
             val lineWidth = lineWidthFor(printer.paperWidthMm)
-            val encoding = textEncodingForAddress(printer.address)
+            val encoding = textEncodingForAddress(printer.address, printer.name, printer.connectionType)
             val payload = buildRefundEscPosReceipt(
                 settings,
                 transaction,
@@ -921,7 +1117,14 @@ class BluetoothPrinterService @Inject constructor(
                 lineWidth,
                 textEncoding = encoding,
             )
-            last = sendBytes(printer.address, settings, payload, "Refund ${printer.name}")
+            last = sendBytes(
+                printer.address,
+                settings,
+                payload,
+                "Refund ${printer.name}",
+                printerName = printer.name,
+                connectionType = printer.connectionType,
+            )
         }
         last
     }
@@ -1013,7 +1216,11 @@ class BluetoothPrinterService @Inject constructor(
         for (printer in targets) {
             val lineWidth = printer?.let { lineWidthFor(it.paperWidthMm) } ?: LINE_WIDTH_80
             val address = printer?.address ?: settings.printerMacAddress
-            val encoding = textEncodingForAddress(address)
+            val encoding = textEncodingForAddress(
+                address,
+                printer?.name ?: settings.printerName,
+                printer?.connectionType,
+            )
             val text = com.chaslay.pos.payment.AdyenPaymentReceiptFormatter.toPlainText(receipt, lineWidth)
             val payload = finalizePayload(
                 text,
@@ -1022,7 +1229,14 @@ class BluetoothPrinterService @Inject constructor(
                 receiptUrl = null,
                 textEncoding = encoding,
             )
-            last = sendBytes(address, settings, payload, "Adyen ${receipt.documentQualifier}")
+            last = sendBytes(
+                address,
+                settings,
+                payload,
+                "Adyen ${receipt.documentQualifier}",
+                printerName = printer?.name ?: settings.printerName,
+                connectionType = printer?.connectionType,
+            )
         }
         last
     }
@@ -1434,6 +1648,7 @@ class BluetoothPrinterService @Inject constructor(
         loyaltyPointsEarned: Int? = null,
         loyaltyPointsBalance: Int? = null,
         textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
+        suppressQrRaster: Boolean = false,
     ): ByteArray {
         val sb = StringBuilder()
         appendEscPosStyleReset(sb)
@@ -1665,6 +1880,7 @@ class BluetoothPrinterService @Inject constructor(
             receiptUrl = qrUrl,
             deliveryDirectionsUrl = deliveryDirectionsUrl,
             textEncoding = textEncoding,
+            suppressQrRaster = suppressQrRaster,
         )
     }
 
@@ -2444,13 +2660,23 @@ class BluetoothPrinterService @Inject constructor(
             EscPosTextEncoding.CP850 -> EscPosEncoder.encode(text)
         }
 
-    private fun textEncodingForAddress(address: String?): EscPosTextEncoding {
-        if (usesSunmiInternalRouting(address)) return EscPosTextEncoding.UTF8
+    private fun textEncodingForAddress(
+        address: String?,
+        printerName: String? = null,
+        connectionType: String? = null,
+    ): EscPosTextEncoding {
+        if (usesSunmiInternalRouting(address, printerName, connectionType)) return EscPosTextEncoding.UTF8
         return EscPosTextEncoding.CP850
     }
 
-    private fun usesSunmiInternalRouting(address: String?): Boolean {
+    private fun usesSunmiInternalRouting(
+        address: String?,
+        printerName: String? = null,
+        connectionType: String? = null,
+    ): Boolean {
+        if (connectionType?.trim().equals("SUNMI", ignoreCase = true)) return true
         if (SunmiInternalPrinter.isInternalAddress(address)) return true
+        if (SunmiInternalPrinter.looksLikeStoredSunmiInnerShadow(address, printerName)) return true
         if (!isUsbAddress(address)) return false
         val normalized = usbPrinterManager.normalizeStoredAddress(address.orEmpty())
         val device = usbPrinterManager.resolveDevice(normalized) ?: return false
@@ -2487,13 +2713,14 @@ class BluetoothPrinterService @Inject constructor(
         receiptUrl: String? = null,
         @Suppress("UNUSED_PARAMETER") deliveryDirectionsUrl: String? = null,
         textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
+        suppressQrRaster: Boolean = false,
     ): ByteArray {
         val scale = settings.receiptBodyTextScale.coerceIn(1, 3)
         val bodyAttrs = encodeEscPosText(escReceiptBodySize(scale), textEncoding)
         val bodyReset = encodeEscPosText(escReceiptBodySizeReset(), textEncoding)
         val body = bodyAttrs + encodeEscPosText(text, textEncoding) + bodyReset
         val qrParts = mutableListOf<ByteArray>()
-        if (settings.receiptShowQrCode && !receiptUrl.isNullOrBlank()) {
+        if (!suppressQrRaster && settings.receiptShowQrCode && !receiptUrl.isNullOrBlank()) {
             qrParts.add(receiptQrRaster(receiptUrl, lineWidth))
         }
         // Delivery directions QR removed — customer receipt shows digital receipt QR only.
@@ -2591,7 +2818,10 @@ class BluetoothPrinterService @Inject constructor(
         mac: String?,
         settings: BusinessSettingsEntity,
         payload: ByteArray,
-        label: String
+        label: String,
+        printerName: String? = null,
+        connectionType: String? = null,
+        sunmiQrUrl: String? = null,
     ): Result<Unit> {
         if (mac.isNullOrBlank()) {
             return Result.failure(IllegalStateException("No printer configured"))
@@ -2609,8 +2839,12 @@ class BluetoothPrinterService @Inject constructor(
         val result: Result<Unit> = synchronized(lock) {
             runCatching {
                 when {
-                    usesSunmiInternalRouting(mac) -> {
+                    usesSunmiInternalRouting(mac, printerName, connectionType) -> {
                         sunmiInternalPrinter.sendRaw(payload).getOrThrow()
+                        val qr = sunmiQrUrl?.trim().orEmpty()
+                        if (qr.isNotBlank()) {
+                            sunmiInternalPrinter.printReceiptQr(qr).getOrThrow()
+                        }
                     }
                     isUsbAddress(mac) -> {
                         val normalized = usbPrinterManager.normalizeStoredAddress(mac)
@@ -2628,7 +2862,9 @@ class BluetoothPrinterService @Inject constructor(
             printerReachabilityCache.markReachable(mac)
         } else {
             printerReachabilityCache.markUnreachable(mac)
-            if (!isUsbAddress(mac) && !isNetworkAddress(mac)) {
+            if (!isUsbAddress(mac) && !isNetworkAddress(mac) &&
+                !usesSunmiInternalRouting(mac, printerName, connectionType)
+            ) {
                 closeHeldBluetooth(printerReachabilityCache.keyForAddress(mac))
             }
         }
@@ -2662,8 +2898,10 @@ class BluetoothPrinterService @Inject constructor(
         appendAdyenCashierReceipt: com.chaslay.pos.payment.AdyenTerminalReceipt?,
         loyaltyPointsEarned: Int?,
         loyaltyPointsBalance: Int?,
+        printerName: String? = null,
+        connectionType: String? = null,
     ): ByteArray {
-        val textEncoding = textEncodingForAddress(printerAddress)
+        val textEncoding = textEncodingForAddress(printerAddress, printerName, connectionType)
         val receiptUrl = transaction.receiptUrl?.takeIf { it.isNotBlank() }
         val cacheKey = escPosReceiptCacheKey(transactionId, printerAddress, lineWidth, receiptUrl, textEncoding)
         if (useCache) {
@@ -2684,6 +2922,7 @@ class BluetoothPrinterService @Inject constructor(
                 return entry.bytes
             }
         }
+        val sunmi = usesSunmiInternalRouting(printerAddress, printerName, connectionType)
         val payload = buildEscPosReceipt(
             settings,
             transaction,
@@ -2694,6 +2933,7 @@ class BluetoothPrinterService @Inject constructor(
             loyaltyPointsEarned,
             loyaltyPointsBalance,
             textEncoding = textEncoding,
+            suppressQrRaster = sunmi,
         )
         if (useCache) {
             escPosReceiptPayloadCache[cacheKey] = CachedEscPosPayload(payload, System.currentTimeMillis())
@@ -3111,6 +3351,9 @@ class BluetoothPrinterService @Inject constructor(
         const val SIMULATED_ADDRESS = "simulated"
         val SIMULATED_PRINTER = DiscoveredPrinter("Simulated (test)", SIMULATED_ADDRESS)
         private const val TAG = "PrinterService"
+        /** Sunmi bondedDevices can block for minutes; cap classic BT listing during printer scan. */
+        private const val SUNMI_BONDED_LIST_TIMEOUT_MS = 1_000L
+        private const val DEFAULT_BONDED_LIST_TIMEOUT_MS = 1_000L
         private const val BT_CONNECT_TIMEOUT_MS = 8_000L
         private const val BT_SOCKET_HOLD_MS = 12_000L
         private const val BT_POST_SEND_SETTLE_MS = 40L

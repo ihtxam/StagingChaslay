@@ -4,6 +4,7 @@ import android.app.Activity
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chaslay.pos.PosBuildFeatures
 import com.chaslay.pos.R
 import com.chaslay.pos.customerdisplay.CustomerDisplayCoordinator
 import com.chaslay.pos.customerdisplay.CustomerDisplayPhase
@@ -56,6 +57,7 @@ import com.chaslay.pos.domain.model.ProductCustomizeState
 import com.chaslay.pos.domain.model.SelectedModifier
 import com.chaslay.pos.domain.model.SelectedAddon
 import com.chaslay.pos.domain.model.ProductVariantModel
+import com.chaslay.pos.domain.model.PosCompactLayoutPreference
 import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosMode
 import com.chaslay.pos.domain.model.PosVirtualCategories
@@ -523,30 +525,36 @@ class PosViewModel @Inject constructor(
     val posMenuDesign: StateFlow<PosMenuDesign> = sessionManager.posMenuDesign
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosMenuDesign.CLASSIC)
 
+    val posCompactLayoutPreference: StateFlow<PosCompactLayoutPreference> =
+        sessionManager.posCompactLayoutPreference
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PosCompactLayoutPreference.AUTO)
+
     private var scaleWeighingSessionActive = false
 
     init {
-        viewModelScope.launch {
-            kotlinx.coroutines.flow.combine(
-                cartManager.cart,
-                settingsRepository.observeSettings(),
-                _uiExtras,
-            ) { cart, settings, extras -> Triple(cart, settings, extras) }
-                .collect { (cart, settings, extras) ->
-                    if (!customerDisplayCoordinator.isCdsActive(settings)) return@collect
-                    runCatching {
-                        customerDisplayCoordinator.publishFromPos(
-                            cart = cart,
-                            settings = settings,
-                            phase = resolveCustomerDisplayPhase(cart, extras),
-                            receiptUrl = extras.receiptPublicUrl,
-                            thankYouTotal = extras.completedTransaction?.total,
-                            checkout = extras.checkoutState,
-                        )
-                    }.onFailure {
-                        Log.w("PosViewModel", "Customer display publish failed", it)
+        if (PosBuildFeatures.SUNMI_LOCAL_CUSTOMER_DISPLAY_ENABLED) {
+            viewModelScope.launch {
+                kotlinx.coroutines.flow.combine(
+                    cartManager.cart,
+                    settingsRepository.observeSettings(),
+                    _uiExtras,
+                ) { cart, settings, extras -> Triple(cart, settings, extras) }
+                    .collect { (cart, settings, extras) ->
+                        if (!customerDisplayCoordinator.isCdsActive(settings)) return@collect
+                        runCatching {
+                            customerDisplayCoordinator.publishFromPos(
+                                cart = cart,
+                                settings = settings,
+                                phase = resolveCustomerDisplayPhase(cart, extras),
+                                receiptUrl = extras.receiptPublicUrl,
+                                thankYouTotal = extras.completedTransaction?.total,
+                                checkout = extras.checkoutState,
+                            )
+                        }.onFailure {
+                            Log.w("PosViewModel", "Customer display publish failed", it)
+                        }
                     }
-                }
+            }
         }
         viewModelScope.launch {
             refreshGiftCardFeature()
@@ -702,20 +710,30 @@ class PosViewModel @Inject constructor(
     private fun isRetailWeighedCustomEntryEnabled(): Boolean =
         cachedSettings.retailWeighedCustomEntryEnabled
 
-    /** USB scale session for weighed dialogs — not used for retail line-total entry (toggle off). */
+    private fun isRestaurantWeighedCustomEntryEnabled(): Boolean =
+        cachedSettings.restaurantWeighedCustomEntryEnabled
+
+    private fun isWeighedCustomEntryEnabled(): Boolean = when {
+        isRetailMode() -> isRetailWeighedCustomEntryEnabled()
+        isRestaurantMode() -> isRestaurantWeighedCustomEntryEnabled()
+        else -> false
+    }
+
+    /** USB scale session for weighed dialogs — not used for line-total entry when custom entry is off. */
     private fun isScaleWeighingCheckoutActive(): Boolean {
         if (!cachedSettings.scaleEnabled || !isScaleConfigured()) return false
-        if (isRestaurantMode()) return true
-        return isRetailMode() && isRetailWeighedCustomEntryEnabled()
+        return isWeighedCustomEntryEnabled()
     }
 
     /**
-     * Weighed-product dialog (CHF/kg × weight). Restaurant mode, or retail when custom weight
-     * entry is enabled and the catalog item has a non-zero price per kg.
+     * Weighed-product dialog (CHF/kg × weight). When custom weight entry is enabled and the catalog
+     * item has a non-zero price per kg (retail), or any weighed item in restaurant mode.
      */
     private fun shouldUseWeighedProductDialog(product: ProductWithVariants): Boolean {
         if (!product.isWeighed || product.isOpenPrice) return false
-        if (isRestaurantMode()) return true
+        if (isRestaurantMode()) {
+            return isRestaurantWeighedCustomEntryEnabled()
+        }
         return isRetailMode() &&
             isRetailWeighedCustomEntryEnabled() &&
             product.price > 0.0
@@ -724,12 +742,12 @@ class PosViewModel @Inject constructor(
     /** Manual line price (PriceKeypad) for open / variable retail items. */
     private fun shouldPromptOpenPrice(product: ProductWithVariants): Boolean {
         if (product.isOpenPrice) return true
-        if (isRetailMode() && product.isWeighed && !shouldUseWeighedProductDialog(product)) return true
+        if (product.isWeighed && !shouldUseWeighedProductDialog(product)) return true
         return false
     }
 
     private fun openMiscPriceEntry() {
-        val useWeighedMisc = !isRetailMode() || isRetailWeighedCustomEntryEnabled()
+        val useWeighedMisc = isWeighedCustomEntryEnabled()
         updateExtras {
             it.copy(
                 selectedCartItemId = null,
@@ -918,6 +936,30 @@ class PosViewModel @Inject constructor(
                     kitchenSentToPrinter = false,
                     orderCommittedForCancel = false,
                     snackbarMessage = appContext.getString(R.string.table_released)
+                )
+            }
+        }
+    }
+
+    /** 8″ compact: clear Sur place chip — detach table, keep cart, default to à emporter. */
+    fun releaseTableForTakeaway() {
+        viewModelScope.launch {
+            persistTableOrderIfNeeded()
+            val cart = cartManager.snapshot()
+            if (cart.tableId != null && cart.isEmpty) {
+                releaseEmptyTableOrderIfNeeded()
+            }
+            cartManager.clearTableContext()
+            if (isRetailMode()) {
+                cartManager.applyRetailSilentDefault()
+            } else {
+                setServiceType(ServiceType.TAKEAWAY)
+            }
+            syncHeldOrderSnapshotIfExists()
+            refreshTables()
+            updateExtras {
+                it.copy(
+                    snackbarMessage = appContext.getString(R.string.table_released),
                 )
             }
         }
@@ -1247,7 +1289,7 @@ class PosViewModel @Inject constructor(
 
     fun beginScaleWeighingSession() {
         val settings = cachedSettings
-        if (isRetailMode() && !settings.retailWeighedCustomEntryEnabled) return
+        if (!isWeighedCustomEntryEnabled()) return
         if (!settings.scaleEnabled) return
         val address = settings.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() } ?: return
         scaleWeighingSessionActive = true

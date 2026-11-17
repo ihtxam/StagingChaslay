@@ -1485,6 +1485,10 @@ class SettingsRepository @Inject constructor(
                 appContext,
                 settings.retailWeighedCustomEntryEnabled
             ),
+            restaurantWeighedCustomEntryEnabled = com.chaslay.pos.util.PosLocalPrefs.applyRestaurantWeighedCustomEntryEnabledIfUserSet(
+                appContext,
+                settings.restaurantWeighedCustomEntryEnabled
+            ),
             courseSendMode = com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(
                 appContext,
                 settings.courseSendMode
@@ -1571,6 +1575,15 @@ class SettingsRepository @Inject constructor(
         } else {
             settings.retailWeighedCustomEntryEnabled
         }
+        val restaurantWeighedEntry =
+            if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetRestaurantWeighedCustomEntryEnabled(appContext)) {
+                com.chaslay.pos.util.PosLocalPrefs.applyRestaurantWeighedCustomEntryEnabledIfUserSet(
+                    appContext,
+                    settings.restaurantWeighedCustomEntryEnabled
+                )
+            } else {
+                settings.restaurantWeighedCustomEntryEnabled
+            }
         val courseSend = if (com.chaslay.pos.util.PosLocalPrefs.hasUserSetCourseSendMode(appContext)) {
             com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(appContext, settings.courseSendMode)
         } else {
@@ -1592,6 +1605,7 @@ class SettingsRepository @Inject constructor(
                 expressEnabled = expressCheckout,
                 retailCashTenderDialogEnabled = retailCashDialog,
                 retailWeighedCustomEntryEnabled = retailWeighedEntry,
+                restaurantWeighedCustomEntryEnabled = restaurantWeighedEntry,
                 courseSendMode = courseSend
             )
         )
@@ -2615,6 +2629,19 @@ class TableOrderRepository @Inject constructor(
                 sortOrder = sortOrder
             )
         )
+    }
+
+    suspend fun renameFloor(floorId: Long, name: String) {
+        val floor = floorDao.getAllActive().find { it.id == floorId } ?: return
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        floorDao.update(floor.copy(name = trimmed))
+    }
+
+    suspend fun deleteFloor(floorId: Long) {
+        tableDao.deactivateAllOnFloor(floorId)
+        floorPlanElementDao.getByFloor(floorId).forEach { floorPlanElementDao.delete(it.id) }
+        floorDao.deactivate(floorId)
     }
 
     suspend fun getTablesForFloor(floorId: Long): List<RestaurantTableEntity> =

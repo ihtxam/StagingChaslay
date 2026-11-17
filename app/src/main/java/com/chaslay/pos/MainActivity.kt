@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -47,6 +48,8 @@ import com.chaslay.pos.ui.theme.ProvideVectronTheme
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.posCanvasBackground
 import com.chaslay.pos.ui.ImmersiveMode
+import com.chaslay.pos.update.AppUpdateCoordinator
+import com.chaslay.pos.update.AppUpdateDialog
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -62,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var tapToPayEngine: TapToPayEngine
     @Inject lateinit var usbPrinterManager: UsbPrinterManager
     @Inject lateinit var customerDisplayCoordinator: CustomerDisplayCoordinator
+    @Inject lateinit var appUpdateCoordinator: AppUpdateCoordinator
 
     private var kioskFullscreenEnabled by mutableStateOf(true)
 
@@ -127,7 +131,16 @@ class MainActivity : AppCompatActivity() {
             val licenseState by licenseRepository.uiState.collectAsStateWithLifecycle(
                 initialValue = com.chaslay.pos.domain.model.LicenseUiState()
             )
+            val appUpdateDialog by appUpdateCoordinator.dialogState.collectAsStateWithLifecycle()
             val darkTheme = themeMode == PosThemeMode.DARK
+
+            val licenseReady = licenseState.gateState == LicenseGateState.ALLOWED ||
+                licenseState.gateState == LicenseGateState.TRIAL
+            LaunchedEffect(licenseReady) {
+                if (licenseReady) {
+                    appUpdateCoordinator.checkForUpdate(manual = false)
+                }
+            }
 
             ChaslayPosTheme(darkTheme = darkTheme) {
                 ProvidePosAppearanceScale(
@@ -173,6 +186,18 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 }
+                AppUpdateDialog(
+                    state = appUpdateDialog,
+                    onUpdateNow = { appUpdateCoordinator.startDownload(this@MainActivity) },
+                    onLater = appUpdateCoordinator::dismissOffer,
+                    onDismissError = appUpdateCoordinator::dismissDialog,
+                    onOpenInstallPermission = {
+                        appUpdateCoordinator.openInstallPermissionSettings(this@MainActivity)
+                    },
+                    onRetryInstallPermission = {
+                        appUpdateCoordinator.retryAfterInstallPermission(this@MainActivity)
+                    },
+                )
             }
         }
     }

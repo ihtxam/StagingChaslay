@@ -14,6 +14,7 @@ import com.chaslay.pos.domain.model.FloorConnectionMode
 import com.chaslay.pos.domain.model.FloorDeviceRole
 import com.chaslay.pos.domain.model.CourseSendMode
 import com.chaslay.pos.domain.model.PosMode
+import com.chaslay.pos.domain.model.PosCompactLayoutPreference
 import com.chaslay.pos.domain.model.PosMenuDesign
 import com.chaslay.pos.domain.model.PosThemeMode
 import com.chaslay.pos.domain.model.UserAccess
@@ -113,9 +114,11 @@ import androidx.compose.foundation.BorderStroke
 fun SettingsScreen(
     userAccess: UserAccess = UserAccess.FULL_ACCESS,
     onCancel: () -> Unit = {},
+    useCompactNav: Boolean = false,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var compactSectionOpen by remember { mutableStateOf(!useCompactNav) }
     val ui = posUiColors()
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
@@ -158,11 +161,18 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.shareDiagnosticsIntent.collect { intent ->
+            context.startActivity(intent)
+        }
+    }
+
     LaunchedEffect(state.selectedSection) {
         when (state.selectedSection) {
             SettingsSection.PRINTERS -> viewModel.refreshPrinterConnectionState()
             SettingsSection.SCALE -> viewModel.refreshScaleConnectionState()
             SettingsSection.GENERAL -> viewModel.refreshPlatformAboutFromCloud()
+            SettingsSection.DIAGNOSTICS -> viewModel.refreshDiagnosticsPanel()
             else -> Unit
         }
     }
@@ -175,10 +185,13 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(ui.canvas)
     ) {
+        if (!useCompactNav || !compactSectionOpen) {
         Column(
             modifier = Modifier
-                .width(248.dp)
-                .fillMaxHeight()
+                .then(
+                    if (useCompactNav) Modifier.fillMaxWidth().fillMaxHeight()
+                    else Modifier.width(248.dp).fillMaxHeight()
+                )
                 .background(posUiColors().surface)
                 .border(1.dp, posUiColors().border)
                 .padding(8.dp)
@@ -216,7 +229,10 @@ fun SettingsScreen(
                             color = if (selected) posUiColors().primaryBorder else Color.Transparent,
                             shape = PosShapes.Medium,
                         )
-                        .clickable { viewModel.selectSection(section) }
+                        .clickable {
+                            viewModel.selectSection(section)
+                            if (useCompactNav) compactSectionOpen = true
+                        }
                         .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
                     Row(
@@ -259,11 +275,14 @@ fun SettingsScreen(
             }
         }
         }
+        }
+        if (!useCompactNav || compactSectionOpen) {
         if (showTablesDesigner) {
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .imePadding()
                     .padding(horizontal = PosDimens.Space3, vertical = PosDimens.Space2)
             ) {
                 SettingsPageHeader(
@@ -321,6 +340,14 @@ fun SettingsScreen(
                 .fillMaxHeight()
                 .imePadding()
         ) {
+            if (useCompactNav && compactSectionOpen) {
+                TextButton(
+                    onClick = { compactSectionOpen = false },
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(stringResource(R.string.compact_pos_settings_back), fontWeight = FontWeight.SemiBold)
+                }
+            }
             SettingsShellHeader(
                 onCancel = onCancel,
                 onSave = viewModel::saveSettings,
@@ -855,6 +882,19 @@ fun SettingsScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
+        if (state.posMode == PosMode.RESTAURANT) {
+            SettingSwitch(
+                stringResource(R.string.pos_restaurant_weighed_custom_entry),
+                state.restaurantWeighedCustomEntryEnabled,
+                viewModel::updateRestaurantWeighedCustomEntryEnabled
+            )
+            Text(
+                stringResource(R.string.pos_restaurant_weighed_custom_entry_hint),
+                fontSize = 12.sp,
+                color = posUiColors().textSecondary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         SettingSwitch(stringResource(R.string.scale_enabled), state.scaleEnabled, viewModel::updateScaleEnabled)
         state.scaleUsbAddress?.trim()?.takeIf { it.isNotEmpty() }?.let { selectedAddress ->
             val needsPermission = state.scaleUsbDeviceAttached && !state.scaleUsbHasPermission
@@ -1122,6 +1162,28 @@ fun SettingsScreen(
                     )
                 }
             }
+            SettingsSectionCard(
+                title = stringResource(R.string.compact_pos_layout_title),
+                subtitle = stringResource(R.string.compact_pos_layout_help),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.posCompactLayoutPreference == PosCompactLayoutPreference.AUTO,
+                        onClick = { viewModel.updatePosCompactLayoutPreference(PosCompactLayoutPreference.AUTO) },
+                        label = { Text(stringResource(R.string.compact_pos_layout_auto)) },
+                    )
+                    FilterChip(
+                        selected = state.posCompactLayoutPreference == PosCompactLayoutPreference.ON,
+                        onClick = { viewModel.updatePosCompactLayoutPreference(PosCompactLayoutPreference.ON) },
+                        label = { Text(stringResource(R.string.compact_pos_layout_on)) },
+                    )
+                    FilterChip(
+                        selected = state.posCompactLayoutPreference == PosCompactLayoutPreference.OFF,
+                        onClick = { viewModel.updatePosCompactLayoutPreference(PosCompactLayoutPreference.OFF) },
+                        label = { Text(stringResource(R.string.compact_pos_layout_off)) },
+                    )
+                }
+            }
             SettingsSectionCard(title = stringResource(R.string.pos_display_scale_title)) {
                 AppearanceScaleRow(
                     title = stringResource(R.string.pos_display_scale_title),
@@ -1169,7 +1231,22 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.LICENSE) {
-            LicenseSettingsSection(platformAboutHtml = state.platformAboutHtml)
+            val appUpdateChecking by viewModel.appUpdateChecking.collectAsStateWithLifecycle()
+            LicenseSettingsSection(
+                platformAboutHtml = state.platformAboutHtml,
+                onCheckForAppUpdate = viewModel::checkForAppUpdate,
+                isCheckingForAppUpdate = appUpdateChecking,
+            )
+        }
+
+        if (state.selectedSection == SettingsSection.DIAGNOSTICS) {
+            SettingsDiagnosticsSection(
+                state = state,
+                onUpload = viewModel::uploadDiagnosticsToSupport,
+                onShare = viewModel::shareDiagnosticsLogs,
+                onClearCrashFiles = viewModel::clearCrashLogs,
+                onSelectCrashLog = viewModel::selectCrashLog,
+            )
         }
 
         if (state.selectedSection == SettingsSection.GENERAL) {
@@ -1181,6 +1258,7 @@ fun SettingsScreen(
 
         // Sticky Save — always visible (not under system nav / not lost in scroll).
         if (state.selectedSection != SettingsSection.LICENSE &&
+            state.selectedSection != SettingsSection.DIAGNOSTICS &&
             state.selectedSection != SettingsSection.PRINTERS &&
             state.selectedSection != SettingsSection.RECEIPTS &&
             state.selectedSection != SettingsSection.PAYMENTS &&
@@ -1203,6 +1281,7 @@ fun SettingsScreen(
         }
         }
         } // end non-tables content
+        }
     }
 
     if (state.showCloudLoginDialog) {
@@ -1265,6 +1344,7 @@ fun SettingsScreen(
             usbDevices = state.usbDevices,
             linkCategories = state.linkCategories,
             initialForm = state.editingPrinter?.toForm(),
+            editingPrinterId = state.editingPrinter?.id,
             isEdit = state.editingPrinter != null,
             isBusy = state.isPrinterBusy,
             isScanBusy = state.isDiscoveryScanBusy,
@@ -1281,6 +1361,7 @@ fun SettingsScreen(
                     viewModel.discoverPrinters(hasBluetoothPermission)
                 }
             },
+            onScanSunmi = viewModel::discoverSunmiPrinters,
             onScanUsb = viewModel::discoverUsbDevices,
             onRequestUsbPermission = viewModel::requestUsbPermission,
             onScanNetwork = viewModel::discoverNetworkPrinters,

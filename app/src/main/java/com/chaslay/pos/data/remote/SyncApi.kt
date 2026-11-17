@@ -22,6 +22,7 @@ import com.chaslay.pos.data.remote.dto.VerifyStaffPinRequest
 import com.chaslay.pos.data.remote.dto.VerifyStaffPinResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -71,7 +72,10 @@ interface SyncApi {
     suspend fun ackOrder(@Path("id") id: String): AckResponse
 
     @POST("v1/sync/diagnostic-report")
-    suspend fun postDiagnosticReport(@Body body: DiagnosticReportRequest): AckResponse
+    suspend fun postDiagnosticReport(
+        @Header("X-Api-Key") apiKey: String,
+        @Body body: DiagnosticReportRequest,
+    ): AckResponse
 
     @GET("v1/sync/reports/profit-margin")
     suspend fun profitMarginReport(

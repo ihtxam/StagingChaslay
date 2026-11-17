@@ -3,6 +3,7 @@ package com.chaslay.pos.ui.components
 import androidx.annotation.DrawableRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Description
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TableRestaurant
 import java.text.Normalizer
 import java.util.Locale
 import androidx.compose.material3.Icon
@@ -49,7 +51,8 @@ fun settingsSectionIconRes(section: SettingsSection): Int? = when (section) {
     SettingsSection.USERS_ACCOUNTS -> R.drawable.ic_pos_settings_users_roles
     SettingsSection.APPEARANCE -> R.drawable.ic_pos_settings_appearance
     SettingsSection.LICENSE -> R.drawable.ic_pos_settings_licence
-    SettingsSection.TABLES -> null
+    SettingsSection.TABLES -> R.drawable.ic_pos_settings_tables
+    SettingsSection.DIAGNOSTICS -> R.drawable.ic_pos_settings_general
 }
 
 /** Classic-layout sidebar: bundled Material icons (no ic_pos_* decode). */
@@ -64,7 +67,8 @@ fun settingsSectionMaterialIcon(section: SettingsSection): ImageVector? = when (
     SettingsSection.USERS_ACCOUNTS -> Icons.Outlined.Person
     SettingsSection.APPEARANCE -> Icons.Outlined.Palette
     SettingsSection.LICENSE -> Icons.Outlined.Badge
-    SettingsSection.TABLES -> null
+    SettingsSection.TABLES -> Icons.Outlined.TableRestaurant
+    SettingsSection.DIAGNOSTICS -> Icons.Outlined.BugReport
 }
 
 @DrawableRes

@@ -128,6 +128,26 @@ val MIGRATION_57_58 = object : Migration(57, 58) {
     }
 }
 
+val MIGRATION_58_59 = object : Migration(58, 59) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        if (!businessSettingsColumnExists(db, "syncTablePlanWithCloud")) {
+            db.execSQL(
+                "ALTER TABLE business_settings ADD COLUMN syncTablePlanWithCloud INTEGER NOT NULL DEFAULT 1"
+            )
+        }
+    }
+}
+
+val MIGRATION_59_60 = object : Migration(59, 60) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        if (!businessSettingsColumnExists(db, "restaurantWeighedCustomEntryEnabled")) {
+            db.execSQL(
+                "ALTER TABLE business_settings ADD COLUMN restaurantWeighedCustomEntryEnabled INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
+}
+
 private fun businessSettingsColumnExists(db: SupportSQLiteDatabase, column: String): Boolean {
     db.query("PRAGMA table_info(business_settings)").use { cursor ->
         val nameIndex = cursor.getColumnIndex("name")

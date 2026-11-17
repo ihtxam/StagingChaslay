@@ -93,7 +93,7 @@ import com.chaslay.pos.data.local.entity.UserEntity
         CustomerEntity::class,
         ReservationEntity::class
     ],
-    version = 58,
+    version = 60,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

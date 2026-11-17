@@ -2,6 +2,7 @@ package com.chaslay.pos.customerdisplay
 
 import android.content.Context
 import android.util.Log
+import com.chaslay.pos.PosBuildFeatures
 import com.chaslay.pos.data.local.entity.BusinessSettingsEntity
 import com.chaslay.pos.domain.model.CartSummary
 import com.chaslay.pos.domain.model.adjustTaxForOrderDiscount
@@ -46,6 +47,7 @@ class CustomerDisplayCoordinator @Inject constructor(
 
     /** Cheap check for PosViewModel / till hot path — no I/O, no display bind, no state build. */
     fun isCdsActive(settings: BusinessSettingsEntity): Boolean {
+        if (!PosBuildFeatures.SUNMI_LOCAL_CUSTOMER_DISPLAY_ENABLED) return false
         if (!settings.cdsEnabled) return false
         if (settings.cdsAccessToken.trim().isEmpty()) return false
         if (localTargetUnavailable) return false
@@ -114,6 +116,9 @@ class CustomerDisplayCoordinator @Inject constructor(
     }
 
     private suspend fun brandingFor(settings: BusinessSettingsEntity): CustomerDisplayBranding {
+        if (!PosBuildFeatures.SUNMI_LOCAL_CUSTOMER_DISPLAY_ENABLED) {
+            return CustomerDisplayBranding(merchantName = settings.businessName)
+        }
         val key = "${settings.cdsAccessToken}|${settings.cdsMerchantSlug}|${settings.businessName}|${settings.logoUri}"
         if (cachedBranding != null && brandingSettingsKey == key) {
             return cachedBranding!!

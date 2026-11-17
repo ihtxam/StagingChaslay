@@ -34,6 +34,8 @@ private const val KEY_RETAIL_CASH_DIALOG_USER_SET = "retail_cash_tender_dialog_u
 private const val KEY_RETAIL_CASH_DIALOG_VALUE = "retail_cash_tender_dialog_value"
 private const val KEY_RETAIL_WEIGHED_ENTRY_USER_SET = "retail_weighed_custom_entry_user_set"
 private const val KEY_RETAIL_WEIGHED_ENTRY_VALUE = "retail_weighed_custom_entry_value"
+private const val KEY_RESTAURANT_WEIGHED_ENTRY_USER_SET = "restaurant_weighed_custom_entry_user_set"
+private const val KEY_RESTAURANT_WEIGHED_ENTRY_VALUE = "restaurant_weighed_custom_entry_value"
 private const val KEY_COURSE_SEND_MODE_USER_SET = "course_send_mode_user_set"
 private const val KEY_COURSE_SEND_MODE_VALUE = "course_send_mode_value"
 private const val KEY_AFTER_SALE_GO_TO_ORDERS = "after_sale_go_to_orders"
@@ -217,6 +219,22 @@ object PosLocalPrefs {
         val p = prefs(context)
         if (!p.getBoolean(KEY_RETAIL_WEIGHED_ENTRY_USER_SET, false)) return current
         return p.getBoolean(KEY_RETAIL_WEIGHED_ENTRY_VALUE, current)
+    }
+
+    fun saveRestaurantWeighedCustomEntryEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_RESTAURANT_WEIGHED_ENTRY_USER_SET, true)
+            .putBoolean(KEY_RESTAURANT_WEIGHED_ENTRY_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetRestaurantWeighedCustomEntryEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_RESTAURANT_WEIGHED_ENTRY_USER_SET, false)
+
+    fun applyRestaurantWeighedCustomEntryEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_RESTAURANT_WEIGHED_ENTRY_USER_SET, false)) return current
+        return p.getBoolean(KEY_RESTAURANT_WEIGHED_ENTRY_VALUE, current)
     }
 
     fun saveCourseSendMode(context: Context, mode: String) {

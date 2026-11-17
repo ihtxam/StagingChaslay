@@ -1,5 +1,6 @@
 -keep class com.chaslay.pos.data.local.entity.** { *; }
 -keep class com.chaslay.pos.data.remote.dto.** { *; }
+-keep class com.chaslay.pos.update.AppUpdateManifest { *; }
 -keep interface com.chaslay.pos.data.remote.** { *; }
 -keepattributes Signature
 -keepattributes *Annotation*
@@ -24,3 +25,9 @@
 # OkHttp 5 App Startup (merged from okhttp-android); loaded via reflection by InitializationProvider.
 -keep class * implements androidx.startup.Initializer { *; }
 -keep class okhttp3.internal.platform.** { *; }
+
+# Sunmi InnerPrinter — bind callbacks must survive release minify.
+-keep class com.sunmi.peripheral.printer.** { *; }
+-keep class * extends com.sunmi.peripheral.printer.InnerPrinterCallback { *; }
+-keep class com.chaslay.pos.printer.SunmiPrinterServiceHolder { *; }
+-keep class com.chaslay.pos.printer.SunmiInternalPrinter { *; }

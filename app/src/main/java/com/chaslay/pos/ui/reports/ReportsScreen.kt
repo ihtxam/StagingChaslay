@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,27 +49,75 @@ import com.chaslay.pos.ui.reports.ProfitMarginRow
 import com.chaslay.pos.ui.reports.ProfitBreakdown
 import com.chaslay.pos.domain.model.EndOfDayReport
 import com.chaslay.pos.domain.model.formatMoneyAmount
+import com.chaslay.pos.ui.pos.compact.CompactPosColors
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosShapes
 import java.util.Locale
 
+private data class ReportTab(val labelRes: Int)
+
+private val reportTabs = listOf(
+    ReportTab(R.string.end_of_day),
+    ReportTab(R.string.sales_report),
+    ReportTab(R.string.product_sales),
+    ReportTab(R.string.user_performance),
+    ReportTab(R.string.reports_tab_profit),
+)
+
 @Composable
-fun ReportsScreen(viewModel: ReportsViewModel = hiltViewModel()) {
+fun ReportsScreen(
+    useCompactPortrait: Boolean = false,
+    viewModel: ReportsViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val currency by viewModel.currencySymbol.collectAsStateWithLifecycle()
     var tab by remember { mutableIntStateOf(0) }
+    val canvasBg = if (useCompactPortrait) CompactPosColors.Bg else posUiColors().canvas
 
-    Column(modifier = Modifier.fillMaxSize().background(posUiColors().canvas)) {
-        TabRow(
-            selectedTabIndex = tab,
-            containerColor = posUiColors().surface,
-            contentColor = PosColors.Primary,
-        ) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.end_of_day)) })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.sales_report)) })
-            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(stringResource(R.string.product_sales)) })
-            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text(stringResource(R.string.user_performance)) })
-            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text(stringResource(R.string.reports_tab_profit)) })
+    Column(modifier = Modifier.fillMaxSize().background(canvasBg)) {
+        if (useCompactPortrait) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .background(CompactPosColors.Surface)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                reportTabs.forEachIndexed { index, entry ->
+                    FilterChip(
+                        selected = tab == index,
+                        onClick = { tab = index },
+                        label = {
+                            Text(
+                                stringResource(entry.labelRes),
+                                fontSize = 12.sp,
+                                fontWeight = if (tab == index) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = CompactPosColors.Teal,
+                            selectedLabelColor = Color.White,
+                            containerColor = CompactPosColors.ActionCellBg,
+                            labelColor = CompactPosColors.Ink,
+                        ),
+                    )
+                }
+            }
+        } else {
+            TabRow(
+                selectedTabIndex = tab,
+                containerColor = posUiColors().surface,
+                contentColor = PosColors.Primary,
+            ) {
+                reportTabs.forEachIndexed { index, entry ->
+                    Tab(
+                        selected = tab == index,
+                        onClick = { tab = index },
+                        text = { Text(stringResource(entry.labelRes)) },
+                    )
+                }
+            }
         }
 
         when (tab) {

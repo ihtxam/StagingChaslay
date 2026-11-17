@@ -31,7 +31,11 @@ import com.chaslay.pos.R
 import com.chaslay.pos.domain.model.UserAccess
 import com.chaslay.pos.ui.menu.MenuHubScreen
 import com.chaslay.pos.ui.reports.ReportsScreen
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chaslay.pos.ui.layout.rememberUsePosCompactPortraitLayout
 import com.chaslay.pos.ui.settings.SettingsScreen
+import com.chaslay.pos.ui.settings.SettingsViewModel
 import com.chaslay.pos.ui.theme.posUiColors
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.vectronColors
@@ -47,10 +51,13 @@ private val AccentTeal = Color(0xFF00897B)
 @Composable
 fun AdminHubScreen(
     userAccess: UserAccess,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val colors = vectronColors()
     val ui = posUiColors()
+    val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val useCompactSettingsNav = rememberUsePosCompactPortraitLayout(settingsState.posCompactLayoutPreference)
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabIds = remember(userAccess) {
         buildList {
@@ -118,9 +125,10 @@ fun AdminHubScreen(
             AdminTabId.SETTINGS -> SettingsScreen(
                 userAccess = userAccess,
                 onCancel = onBack,
+                useCompactNav = useCompactSettingsNav,
             )
-            AdminTabId.PRODUCTS -> MenuHubScreen()
-            AdminTabId.REPORTS -> ReportsScreen()
+            AdminTabId.PRODUCTS -> MenuHubScreen(useCompactPortrait = useCompactSettingsNav)
+            AdminTabId.REPORTS -> ReportsScreen(useCompactPortrait = useCompactSettingsNav)
         }
     }
 }

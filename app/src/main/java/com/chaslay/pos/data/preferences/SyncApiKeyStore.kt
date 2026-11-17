@@ -33,7 +33,10 @@ class SyncApiKeyStore @Inject constructor(
         return key.ifBlank { BuildConfig.SYNC_API_KEY.trim() }
     }
 
-    fun hasKey(): Boolean = current().isNotBlank()
+    /** Prefer blocking DataStore read so outbound sync/diagnostic calls never omit the key on first use. */
+    fun resolvedKey(): String = currentBlocking().trim().ifBlank { BuildConfig.SYNC_API_KEY.trim() }
+
+    fun hasKey(): Boolean = resolvedKey().isNotBlank()
 
     suspend fun setKey(key: String?) {
         val trimmed = key?.trim().orEmpty()

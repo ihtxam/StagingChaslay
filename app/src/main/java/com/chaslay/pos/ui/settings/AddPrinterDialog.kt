@@ -38,6 +38,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +56,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.chaslay.pos.R
 import com.chaslay.pos.data.local.entity.PrinterConfigEntity
 import com.chaslay.pos.printer.DiscoveredPrinter
+import com.chaslay.pos.printer.SunmiInternalPrinter
 import com.chaslay.pos.ui.theme.PosColors
 import com.chaslay.pos.ui.theme.PosShapes
 import java.util.UUID
@@ -82,11 +84,13 @@ fun AddPrinterDialog(
     usbDevices: List<com.chaslay.pos.printer.UsbPrinterDevice> = emptyList(),
     linkCategories: List<PrinterLinkCategory> = emptyList(),
     initialForm: AddPrinterForm? = null,
+    editingPrinterId: String? = null,
     isEdit: Boolean = false,
     isBusy: Boolean = false,
     isScanBusy: Boolean = false,
     statusMessage: String? = null,
     onScan: () -> Unit,
+    onScanSunmi: () -> Unit = onScan,
     onScanUsb: () -> Unit = {},
     onRequestUsbPermission: (String) -> Unit = {},
     onScanNetwork: (String) -> Unit = {},
@@ -95,15 +99,48 @@ fun AddPrinterDialog(
     onSave: (AddPrinterForm) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var form by remember(initialForm) { mutableStateOf(initialForm ?: AddPrinterForm()) }
+    var form by remember(editingPrinterId) { mutableStateOf(initialForm ?: AddPrinterForm()) }
     var showLinkDialog by remember { mutableStateOf(false) }
+    var formFeedback by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(form.connectionType, form.address) {
+        if (form.connectionType == "SUNMI" &&
+            !SunmiInternalPrinter.isInternalAddress(form.address)
+        ) {
+            form = form.copy(
+                address = SunmiInternalPrinter.INTERNAL_ADDRESS,
+                name = form.name.ifBlank { SunmiInternalPrinter.builtInLabel() },
+            )
+        }
+    }
     val scanResults = when (form.connectionType) {
         "WIFI" -> networkPrinters
-        "BLUETOOTH" -> discoveredPrinters
+        "BLUETOOTH", "SUNMI" -> {
+            val fromDiscovery = discoveredPrinters
+            if (form.connectionType == "SUNMI" && SunmiInternalPrinter.isSunmiDevice()) {
+                val builtIn = DiscoveredPrinter(
+                    name = SunmiInternalPrinter.builtInPickerLabel(),
+                    address = SunmiInternalPrinter.INTERNAL_ADDRESS,
+                )
+                if (fromDiscovery.any { SunmiInternalPrinter.isInternalAddress(it.address) }) {
+                    fromDiscovery
+                } else {
+                    listOf(builtIn) + fromDiscovery
+                }
+            } else {
+                fromDiscovery
+            }
+        }
         else -> emptyList()
     }
-    val connectionTypes = listOf("BLUETOOTH", "WIFI", "USB")
-    val canSave = form.address.trim().isNotBlank()
+    val connectionTypes = if (SunmiInternalPrinter.isSunmiDevice()) {
+        listOf("SUNMI", "BLUETOOTH", "WIFI", "USB")
+    } else {
+        listOf("BLUETOOTH", "WIFI", "USB")
+    }
+    val canSave = when (form.connectionType) {
+        "SUNMI" -> true
+        else -> form.address.trim().isNotBlank()
+    }
     val scanButtonsEnabled = !isScanBusy
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -135,7 +172,7 @@ fun AddPrinterDialog(
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
-                statusMessage?.takeIf { it.isNotBlank() }?.let { msg ->
+                listOfNotNull(statusMessage, formFeedback).filter { it.isNotBlank() }.forEach { msg ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
@@ -151,7 +188,16 @@ fun AddPrinterDialog(
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { form = form.copy(connectionType = type) },
+                                .clickable {
+                                    form = when (type) {
+                                        "SUNMI" -> form.copy(
+                                            connectionType = type,
+                                            address = SunmiInternalPrinter.INTERNAL_ADDRESS,
+                                            name = form.name.ifBlank { SunmiInternalPrinter.builtInLabel() },
+                                        )
+                                        else -> form.copy(connectionType = type)
+                                    }
+                                },
                             shape = RoundedCornerShape(10.dp),
                             color = if (selected) PosColors.Primary else posUiColors().surfaceMuted
                         ) {
@@ -182,6 +228,7 @@ fun AddPrinterDialog(
                             when (form.connectionType) {
                                 "USB" -> onScanUsb()
                                 "WIFI" -> onScanNetwork(form.address)
+                                "SUNMI" -> onScanSunmi()
                                 else -> onScan()
                             }
                         }
@@ -195,6 +242,7 @@ fun AddPrinterDialog(
                                     when (form.connectionType) {
                                         "USB" -> stringResource(R.string.select_usb_device)
                                         "WIFI" -> stringResource(R.string.scan_network)
+                                        "SUNMI" -> stringResource(R.string.scan_for_devices)
                                         else -> stringResource(R.string.scan_for_devices)
                                     }
                                 )
@@ -244,23 +292,52 @@ fun AddPrinterDialog(
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 scanResults.take(20).forEach { printer ->
+                                    val selected = isScanRowSelected(form, printer)
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                form = form.copy(
-                                                    connectionType = form.connectionType,
-                                                    name = form.name.ifBlank { printer.name },
-                                                    address = printer.address
-                                                )
+                                                val pickSunmi = SunmiInternalPrinter.isInternalAddress(printer.address) ||
+                                                    SunmiInternalPrinter.isInternalBluetoothShadow(
+                                                        printer.address,
+                                                        printer.name,
+                                                    )
+                                                form = if (pickSunmi) {
+                                                    form.copy(
+                                                        connectionType = "SUNMI",
+                                                        address = SunmiInternalPrinter.INTERNAL_ADDRESS,
+                                                        name = SunmiInternalPrinter.builtInLabel(),
+                                                    )
+                                                } else {
+                                                    val conn = when (form.connectionType) {
+                                                        "SUNMI" -> "BLUETOOTH"
+                                                        else -> form.connectionType
+                                                    }
+                                                    form.copy(
+                                                        connectionType = conn,
+                                                        name = form.name.ifBlank { printer.name },
+                                                        address = printer.address,
+                                                    )
+                                                }
+                                                formFeedback = if (pickSunmi) {
+                                                    "Selected Sunmi built-in — address ${SunmiInternalPrinter.INTERNAL_ADDRESS}"
+                                                } else {
+                                                    "Selected ${printer.name}"
+                                                }
                                             },
                                         shape = RoundedCornerShape(10.dp),
-                                        color = posUiColors().surfaceSubtle
+                                        color = if (selected) posUiColors().successSubtle else posUiColors().surfaceSubtle,
+                                        border = if (selected) {
+                                            androidx.compose.foundation.BorderStroke(1.dp, PosColors.Success)
+                                        } else {
+                                            null
+                                        },
                                     ) {
                                         Text(
                                             "${printer.name} (${printer.address})",
                                             modifier = Modifier.padding(12.dp),
-                                            fontSize = 12.sp
+                                            fontSize = 12.sp,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                         )
                                     }
                                 }
@@ -275,13 +352,16 @@ fun AddPrinterDialog(
                                     when (form.connectionType) {
                                         "USB" -> "Select a USB printer above"
                                         "WIFI" -> "IP address (e.g. 192.168.1.50)"
+                                        "SUNMI" -> SunmiInternalPrinter.INTERNAL_ADDRESS
                                         else -> "MAC address (e.g. 10:23:81:4C:5F:6F)"
                                     }
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            readOnly = form.connectionType == "USB" && form.address.startsWith("usb:")
+                            readOnly = (form.connectionType == "USB" && form.address.startsWith("usb:")) ||
+                                (form.connectionType == "SUNMI" &&
+                                    SunmiInternalPrinter.isInternalAddress(form.address))
                         )
                         if (form.connectionType == "WIFI" && form.address.trim().isNotBlank()) {
                             OutlinedButton(
@@ -365,7 +445,13 @@ fun AddPrinterDialog(
                         Text(stringResource(R.string.discard_changes), color = PosColors.Danger)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { onTestPrint(form.normalized()) }) {
+                        OutlinedButton(
+                            onClick = {
+                                formFeedback = "Sending test print…"
+                                onTestPrint(form.normalized())
+                            },
+                            enabled = !isBusy,
+                        ) {
                             Icon(Icons.Default.Print, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(stringResource(R.string.print_test_page))
@@ -582,24 +668,40 @@ fun PrinterConfigEntity.toForm(): AddPrinterForm = AddPrinterForm(
 fun AddPrinterForm.normalized(): AddPrinterForm {
     val addr = address.trim()
     val resolvedAddress = when (connectionType) {
+        "SUNMI" -> addr.ifBlank { SunmiInternalPrinter.INTERNAL_ADDRESS }
         "USB" -> addr
         else -> {
             val host = addr.substringBefore(':').trim()
             if (host.matches(IPV4_REGEX)) host else addr
         }
     }
-    val resolvedName = name.trim().ifBlank {
-        when (connectionType) {
-            "WIFI" -> "Wi-Fi printer ($resolvedAddress)"
+    val coerced = SunmiInternalPrinter.coerceForStorage(resolvedAddress, name, connectionType)
+    val resolvedName = coerced.name.ifBlank {
+        when (coerced.connectionType) {
+            "SUNMI" -> SunmiInternalPrinter.builtInLabel()
+            "WIFI" -> "Wi-Fi printer (${coerced.address})"
             "USB" -> "USB printer"
             else -> "Bluetooth printer"
         }
     }
-    return copy(name = resolvedName, address = resolvedAddress)
+    return copy(
+        name = resolvedName,
+        address = coerced.address,
+        connectionType = coerced.connectionType,
+    )
 }
 
 private val IPV4_REGEX =
     Regex("^(?:25[0-5]|2[0-4]\\d|1?\\d{1,2})(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d{1,2})){3}$")
+
+private fun isScanRowSelected(form: AddPrinterForm, printer: DiscoveredPrinter): Boolean {
+    val picked = form.normalized()
+    if (SunmiInternalPrinter.isInternalAddress(printer.address)) {
+        return SunmiInternalPrinter.isInternalAddress(picked.address) ||
+            picked.connectionType.equals("SUNMI", ignoreCase = true)
+    }
+    return picked.address.trim().equals(printer.address.trim(), ignoreCase = true)
+}
 
 fun AddPrinterForm.toEntity(sortOrder: Int = 0): PrinterConfigEntity = normalized().let { form ->
     PrinterConfigEntity(

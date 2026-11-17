@@ -4,6 +4,7 @@
     package="com.chaslay.pos">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -109,4 +110,11 @@
             </intent-filter>
         </receiver>
     </application>
+
+    <!-- Sunmi InnerPrinter bind targets (Android 11+ package visibility). -->
+    <queries>
+        <package android:name="woyou.aidlservice.jiuiv5" />
+        <package android:name="com.sunmi.extprinterservice" />
+        <package android:name="com.sunmi.printerhelper" />
+    </queries>
 </manifest>

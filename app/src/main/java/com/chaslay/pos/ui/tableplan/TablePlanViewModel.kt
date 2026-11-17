@@ -57,7 +57,7 @@ class TablePlanViewModel @Inject constructor(
                 floors.any { it.id == id }
             } ?: floors.firstOrNull()?.id ?: 1L
             var tables = tableOrderRepository.getTablesForFloor(floorId)
-            if (!isCloudManagedFloor(floors, floorId, tables) && tablesAreClustered(tables)) {
+            if (tablesAreClustered(tables)) {
                 tableOrderRepository.autoLayoutFloor(floorId)
                 tables = tableOrderRepository.getTablesForFloor(floorId)
             }
@@ -68,7 +68,6 @@ class TablePlanViewModel @Inject constructor(
                     selectedFloorId = floorId,
                     tables = tables,
                     elements = elements,
-                    message = null
                 )
             }
         }
@@ -101,7 +100,7 @@ class TablePlanViewModel @Inject constructor(
         viewModelScope.launch {
             val floors = tableOrderRepository.getAllFloors()
             var tables = tableOrderRepository.getTablesForFloor(floorId)
-            if (!isCloudManagedFloor(floors, floorId, tables) && tablesAreClustered(tables)) {
+            if (tablesAreClustered(tables)) {
                 tableOrderRepository.autoLayoutFloor(floorId)
                 tables = tableOrderRepository.getTablesForFloor(floorId)
             }
@@ -232,7 +231,14 @@ class TablePlanViewModel @Inject constructor(
         viewModelScope.launch {
             tableOrderRepository.deleteTable(tableId)
             reload()
-            _uiState.update { it.copy(showEditDialog = false, message = "Table removed") }
+            _uiState.update {
+                it.copy(
+                    selectedTableId = null,
+                    selectedElementId = null,
+                    showEditDialog = false,
+                    message = "Table removed",
+                )
+            }
         }
     }
 
@@ -321,12 +327,7 @@ class TablePlanViewModel @Inject constructor(
     }
 
     fun autoLayout() {
-        val floors = _uiState.value.floors
         val floorId = _uiState.value.selectedFloorId
-        if (isCloudManagedFloor(floors, floorId, _uiState.value.tables)) {
-            _uiState.update { it.copy(message = "This floor is managed in the merchant panel") }
-            return
-        }
         viewModelScope.launch {
             tableOrderRepository.autoLayoutFloor(floorId)
             reload()
@@ -334,13 +335,36 @@ class TablePlanViewModel @Inject constructor(
         }
     }
 
-    private fun isCloudManagedFloor(
-        floors: List<TableFloorEntity>,
-        floorId: Long,
-        tables: List<RestaurantTableEntity>
-    ): Boolean {
-        val floor = floors.find { it.id == floorId }
-        return !floor?.remoteId.isNullOrBlank() || tables.any { !it.remoteId.isNullOrBlank() }
+    fun renameSelectedFloor(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            _uiState.update { it.copy(message = "Enter a floor name") }
+            return
+        }
+        val floorId = _uiState.value.selectedFloorId
+        viewModelScope.launch {
+            tableOrderRepository.renameFloor(floorId, trimmed)
+            _uiState.update { it.copy(newFloorName = "") }
+            reload()
+        }
+    }
+
+    fun deleteSelectedFloor() {
+        val floorId = _uiState.value.selectedFloorId
+        viewModelScope.launch {
+            tableOrderRepository.deleteFloor(floorId)
+            val remaining = tableOrderRepository.getAllFloors()
+            val nextFloorId = remaining.firstOrNull()?.id
+            _uiState.update {
+                it.copy(
+                    selectedFloorId = nextFloorId ?: floorId,
+                    selectedTableId = null,
+                    selectedElementId = null,
+                )
+            }
+            reload()
+            _uiState.update { it.copy(message = "Floor removed") }
+        }
     }
 
     fun clearMessage() = _uiState.update { it.copy(message = null) }

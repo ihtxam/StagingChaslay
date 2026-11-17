@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -143,9 +145,11 @@ fun TablePlanDesignerContent(
     val ui = posUiColors()
     val context = LocalContext.current
     val selectedFloor = state.floors.find { it.id == state.selectedFloorId }
-    val isCloudManaged = !selectedFloor?.remoteId.isNullOrBlank() ||
-        state.tables.any { !it.remoteId.isNullOrBlank() }
     var zoom by remember { mutableStateOf(1f) }
+    var renameFloorName by remember(state.selectedFloorId) {
+        mutableStateOf(selectedFloor?.name.orEmpty())
+    }
+    var showFloorRenameDialog by remember { mutableStateOf(false) }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
@@ -168,9 +172,42 @@ fun TablePlanDesignerContent(
     val totalCovers = state.tables.sumOf { it.seatCapacity }
     val referenceCapacity = state.tables.firstOrNull()?.seatCapacity ?: 4
 
+    if (showFloorRenameDialog && selectedFloor != null) {
+        AlertDialog(
+            onDismissRequest = { showFloorRenameDialog = false },
+            title = { Text(stringResource(R.string.rename_floor)) },
+            text = {
+                OutlinedTextField(
+                    value = renameFloorName,
+                    onValueChange = { renameFloorName = it },
+                    label = { Text(stringResource(R.string.new_floor_name)) },
+                    singleLine = true,
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.renameSelectedFloor(renameFloorName)
+                        showFloorRenameDialog = false
+                    }
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFloorRenameDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
+            .imePadding()
             .background(colors.background)
             .padding(horizontal = PosDimens.Space2, vertical = PosDimens.Space2)
     ) {
@@ -200,7 +237,6 @@ fun TablePlanDesignerContent(
             }
             Button(
                 onClick = viewModel::addTable,
-                enabled = !isCloudManaged,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                 contentPadding = ButtonDefaults.ContentPadding,
                 shape = PosShapes.Medium
@@ -214,23 +250,32 @@ fun TablePlanDesignerContent(
                 onValueChange = viewModel::updateNewFloorName,
                 label = { Text(stringResource(R.string.new_floor_name), fontSize = 11.sp) },
                 singleLine = true,
-                enabled = !isCloudManaged,
                 colors = fieldColors,
                 modifier = Modifier.width(168.dp),
                 shape = PosShapes.Medium
             )
             OutlinedButton(
                 onClick = viewModel::addFloor,
-                enabled = !isCloudManaged,
                 shape = PosShapes.Medium,
                 border = BorderStroke(1.dp, ui.border)
             ) {
                 Text(stringResource(R.string.add_floor), fontSize = 12.sp)
             }
-        }
-
-        if (isCloudManaged) {
-            CloudReadOnlyBanner(text = stringResource(R.string.table_plan_cloud_managed))
+            if (selectedFloor != null) {
+                OutlinedButton(
+                    onClick = {
+                        renameFloorName = selectedFloor.name
+                        showFloorRenameDialog = true
+                    },
+                    shape = PosShapes.Medium,
+                    border = BorderStroke(1.dp, ui.border)
+                ) {
+                    Text(stringResource(R.string.rename_floor), fontSize = 12.sp)
+                }
+                TextButton(onClick = viewModel::deleteSelectedFloor) {
+                    Text(stringResource(R.string.delete_floor), fontSize = 12.sp)
+                }
+            }
         }
 
         Text(
@@ -334,7 +379,13 @@ fun TablePlanDesignerContent(
                             table = table,
                             selected = selected,
                             zoom = zoom,
-                            onClick = { viewModel.selectTable(table.id) }
+                            onClick = {
+                                if (state.selectedTableId == table.id) {
+                                    viewModel.openEditSelectedTable()
+                                } else {
+                                    viewModel.selectTable(table.id)
+                                }
+                            }
                         )
                     }
                 }
@@ -378,7 +429,7 @@ fun TablePlanDesignerContent(
             TableEditBottomPanel(
                 state = state,
                 fieldColors = fieldColors,
-                readOnlyLayout = true,
+                readOnlyLayout = false,
                 onClose = viewModel::clearSelection,
                 onNameChange = viewModel::updateEditName,
                 onSeatsChange = viewModel::updateEditSeats,
@@ -392,6 +443,7 @@ fun TablePlanDesignerContent(
                 onDeleteElement = viewModel::deleteSelectedElement,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .imePadding()
                     .padding(top = 8.dp)
             )
         }
@@ -417,7 +469,7 @@ fun TablePlanDesignerContent(
                 color = colors.textSecondary,
                 modifier = Modifier.weight(1f).padding(end = 8.dp)
             )
-            if (!isCloudManaged && state.selectedTableId != null) {
+            if (state.selectedTableId != null) {
                 Button(
                     onClick = viewModel::saveSelectedTable,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
