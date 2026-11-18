@@ -111,6 +111,12 @@ deploy_staging_github() {
 }
 
 deploy_production_webhook() {
+  # shellcheck source=scripts/production-service-hours.sh
+  source "$ROOT/scripts/production-service-hours.sh"
+  if production_service_hours_active; then
+    echo "ERROR: $(production_service_hours_message())"
+    exit 1
+  fi
   echo "=== Production deploy via webhook (app.rebornsense.com) ==="
   local env_file="${PRODUCTION_WEBHOOK_ENV_FILE:-}"
   local url="${DEPLOY_WEBHOOK_URL:-https://app.rebornsense.com/internal/git-deploy}"
@@ -138,6 +144,12 @@ deploy_production_webhook() {
 }
 
 deploy_production_github() {
+  # shellcheck source=scripts/production-service-hours.sh
+  source "$ROOT/scripts/production-service-hours.sh"
+  if production_service_hours_active; then
+    echo "ERROR: $(production_service_hours_message())"
+    exit 1
+  fi
   echo "=== Production deploy (app.rebornsense.com) ==="
   if [[ "${DEPLOY_USE_WEBHOOK:-1}" == "1" ]]; then
     deploy_production_webhook

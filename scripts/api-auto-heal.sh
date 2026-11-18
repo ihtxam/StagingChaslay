@@ -77,7 +77,14 @@ restart_stack() {
   docker ps -aq --filter "name=${DEPLOY_STACK}-api" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
   dc up -d db 2>/dev/null || true
   sleep 5
-  dc up -d --force-recreate api dashboard caddy 2>/dev/null || dc up -d api caddy 2>/dev/null || true
+  # During venue service hours, only bounce API + Caddy (avoid dashboard/POS shell recycle).
+  # shellcheck disable=SC1091
+  source "$(dirname "$0")/production-service-hours.sh" 2>/dev/null || true
+  if declare -F production_service_hours_active >/dev/null 2>&1 && production_service_hours_active; then
+    dc up -d --force-recreate api caddy 2>/dev/null || dc up -d api caddy 2>/dev/null || true
+  else
+    dc up -d --force-recreate api dashboard caddy 2>/dev/null || dc up -d api caddy 2>/dev/null || true
+  fi
   sleep 20
   if probe_ok; then
     echo "$LOG_PREFIX restart recovered health"

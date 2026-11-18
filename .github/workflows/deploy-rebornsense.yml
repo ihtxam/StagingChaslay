@@ -20,6 +20,12 @@ on:
         description: Branch to deploy (default main — use after staging sign-off)
         type: string
         default: main
+      force_during_service_hours:
+        description: >-
+          Allow deploy during Europe/Zurich service hours (11:00–23:00).
+          Leave off for routine releases — use night window instead.
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-rebornsense-production
@@ -27,10 +33,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  service-hours-guard:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - name: Block push deploy during restaurant service hours (Europe/Zurich)
+        run: |
+          set -euo pipefail
+          hour="$(TZ=Europe/Zurich date +%H)"
+          echo "Europe/Zurich local hour: $hour"
+          if [ "$hour" -ge 11 ] && [ "$hour" -lt 23 ]; then
+            echo "::error::Push-triggered production deploy is blocked during service hours (11:00–23:00 Europe/Zurich)."
+            echo "Use workflow_dispatch with force_during_service_hours only for emergencies."
+            exit 1
+          fi
+          echo "Outside service hours — deploy may proceed."
+
+  deploy:
+    needs: service-hours-guard
+    if: always() && (needs.service-hours-guard.result == 'success' || needs.service-hours-guard.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Block manual deploy during service hours unless forced
+        if: github.event_name == 'workflow_dispatch' && inputs.force_during_service_hours != true
+        run: |
+          set -euo pipefail
+          hour="$(TZ=Europe/Zurich date +%H)"
+          echo "Europe/Zurich local hour: $hour"
+          if [ "$hour" -ge 11 ] && [ "$hour" -lt 23 ]; then
+            echo "::error::Manual deploy blocked during service hours (11:00–23:00 Europe/Zurich)."
+            echo "Re-run workflow_dispatch with force_during_service_hours=true for emergencies."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
 
       - name: Fetch latest RebornPOS Windows installer
         id: fetch_installer

@@ -111,4 +111,12 @@ pre_deploy_sanity_check() {
   abort_if_production_wipe_attempt
   assert_staging_only_db_reset
   assert_production_postgres_preserved
+  if deploy_stack_is_production; then
+    # shellcheck source=../production-service-hours.sh
+    source "$(dirname "${BASH_SOURCE[0]}")/../production-service-hours.sh"
+    if production_service_hours_active; then
+      echo "ERROR: PRODUCTION DEPLOY ABORTED — $(production_service_hours_message())"
+      exit 1
+    fi
+  fi
 }

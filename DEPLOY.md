@@ -94,6 +94,12 @@ bash scripts/agent-deploy.sh production   # triggers Deploy to Rebornsense workf
 
 Pushing to `rebornSense` `main` **only deploys staging** (sync → StagingChaslay → `app.chaslay.com`). Production does **not** run until you ask.
 
+### Production quiet hours (Europe/Zurich)
+
+Routine production deploys are **blocked 11:00–23:00** Europe/Zurich (service time at live venues). During that window, pushes that touch `.deploy/rebornsense-production`, the deploy webhook, and `scripts/agent-deploy.sh production` refuse to run. Emergency override only: `FORCE_PRODUCTION_DEPLOY=1` on the server or GitHub Actions **workflow_dispatch** with **force_during_service_hours**.
+
+After 23:00 or before 11:00, deploys proceed as usual. Scheduled API auto-heal still runs, but during service hours it restarts **API + Caddy only** (not the dashboard/POS static bundle) to limit login blips.
+
 | Environment | Repo | Server | Path | How it deploys |
 |-------------|------|--------|------|----------------|
 | Chaslay test/staging | [StagingChaslay](https://github.com/ihtxam/StagingChaslay) | `116.202.26.15` | `/root/StagingChaslay` | Auto on push to `main` in StagingChaslay (usually via sync workflow) |

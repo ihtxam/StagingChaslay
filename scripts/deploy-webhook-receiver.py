@@ -27,6 +27,7 @@ import subprocess
 import sys
 import threading
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -120,6 +121,17 @@ def should_deploy(payload: dict[str, Any]) -> tuple[bool, str]:
                     return True, f"trigger file {path}"
 
     return False, "no deploy trigger paths in push"
+
+
+def production_service_hours_active(*, force: bool = False) -> bool:
+    if force:
+        return False
+    if cfg("DEPLOY_STACK", "rebornsense") != "rebornsense":
+        return False
+    start = int(cfg("PRODUCTION_SERVICE_HOUR_START", "11") or "11")
+    end = int(cfg("PRODUCTION_SERVICE_HOUR_END", "23") or "23")
+    hour = datetime.now(ZoneInfo("Europe/Zurich")).hour
+    return start <= hour < end
 
 
 _deploy_lock = threading.Lock()
@@ -244,6 +256,13 @@ class DeployWebhookHandler(BaseHTTPRequestHandler):
         if not ok:
             log(f"IGNORE {reason}")
             self._accept(reason, queued=False)
+            return
+
+        force = bool(payload.get("force_during_service_hours")) or os.environ.get("FORCE_PRODUCTION_DEPLOY") == "1"
+        if production_service_hours_active(force=force):
+            msg = "deploy deferred: Europe/Zurich service hours (11:00–23:00)"
+            log(f"DEFER {reason} — {msg}")
+            self._accept(msg, queued=False)
             return
 
         threading.Thread(target=run_deploy, args=(reason,), daemon=True).start()
