@@ -130,3 +130,5 @@
 # Deploy 2026-11-18T07:40:12Z — vatEnabled master toggle
 
 # Deploy 2026-11-18T08:15:00Z — PROD: rebuild dashboard dist (Settings-Db97EEOj, index-D5YR8DHu) — Facturer la TVA toggle
+
+# Deploy 2026-11-18T08:18:00Z — PROD: vat_enabled migration + dashboard dist on main (a11ffb95)

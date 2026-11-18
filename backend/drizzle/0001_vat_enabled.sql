@@ -1,0 +1,1 @@
+ALTER TABLE "merchants" ADD COLUMN "vat_enabled" boolean DEFAULT true NOT NULL;
