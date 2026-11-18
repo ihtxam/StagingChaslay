@@ -126,3 +126,5 @@
 # Deploy 2026-11-18T06:57:21Z — fix(pos): honor 0% VAT on receipts (main @ 6c5ac8a0)
 
 # Deploy 2026-11-18T07:09:44Z — fix(pos): vat 0 master switch (main)
+
+# Deploy 2026-11-18T07:40:12Z — vatEnabled master toggle
