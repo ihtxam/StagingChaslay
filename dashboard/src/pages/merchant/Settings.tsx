@@ -1624,10 +1624,16 @@ export default function Settings() {
     e.preventDefault();
     if (!settings) return;
     const includeTax = tab === 'taxes';
-    const vatRate = parseTaxRateForSave(settings.vatRate);
-    const taxTakeawayRate = parseTaxRateForSave(settings.taxTakeawayRate);
-    const taxDineInRate = parseTaxRateForSave(settings.taxDineInRate);
-    const taxDeliveryRate = parseTaxRateForSave(settings.taxDeliveryRate);
+    let vatRate = parseTaxRateForSave(settings.vatRate);
+    let taxTakeawayRate = parseTaxRateForSave(settings.taxTakeawayRate);
+    let taxDineInRate = parseTaxRateForSave(settings.taxDineInRate);
+    let taxDeliveryRate = parseTaxRateForSave(settings.taxDeliveryRate);
+    if (includeTax && (merchantTaxExemptMode(settings) || vatRate === 0)) {
+      vatRate = 0;
+      taxTakeawayRate = 0;
+      taxDineInRate = 0;
+      taxDeliveryRate = 0;
+    }
     if (
       includeTax &&
       [vatRate, taxTakeawayRate, taxDineInRate, taxDeliveryRate].some((rate) => rate === null)

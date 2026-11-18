@@ -104,6 +104,7 @@ export function channelTaxRateFromMerchant(
   channel?: string | null
 ): number {
   const vat = merchant.vatRate;
+  if (taxRateValue(vat) === 0) return 0;
   const ch = String(channel || 'takeaway').toLowerCase().replace(/-/g, '_');
   if (ch === 'dine_in') return resolvePosTaxRate(merchant.taxDineInRate, vat, 8.1);
   if (ch === 'delivery') {

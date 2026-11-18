@@ -33,3 +33,14 @@ test('delivery explicit 0 does not fall back to Swiss takeaway default', () => {
   };
   assert.equal(channelTaxRateFromMerchant(merchant, 'delivery'), 0);
 });
+
+test('default vat 0% overrides stale channel rates', () => {
+  const merchant = {
+    vatRate: '0',
+    taxTakeawayRate: '2.6',
+    taxDineInRate: '8.1',
+    taxDeliveryRate: '2.6',
+  };
+  assert.equal(channelTaxRateFromMerchant(merchant, 'takeaway'), 0);
+  assert.equal(merchantChargesVat(merchant), false);
+});

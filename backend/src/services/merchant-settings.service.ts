@@ -1094,12 +1094,14 @@ export class MerchantSettingsService {
     },
     channel: FulfillmentChannel = "takeaway"
   ): number {
-    const fallback = merchant.vatRate != null ? parseFloat(String(merchant.vatRate)) : 0;
     const pick = (v?: string | number | null) => {
       if (v === undefined || v === null || v === "") return null;
       const n = parseFloat(String(v));
       return Number.isFinite(n) ? n : null;
     };
+    const vatResolved = pick(merchant.vatRate);
+    if (vatResolved === 0) return 0;
+    const fallback = vatResolved ?? (merchant.vatRate != null ? parseFloat(String(merchant.vatRate)) : 0);
     if (channel === "in_store") return pick(merchant.taxTakeawayRate) ?? fallback;
     if (channel === "dine_in") return pick(merchant.taxDineInRate) ?? fallback;
     if (channel === "delivery") return pick(merchant.taxDeliveryRate) ?? fallback;
