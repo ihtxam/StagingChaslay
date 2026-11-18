@@ -128,3 +128,5 @@
 # Deploy 2026-11-18T07:09:44Z — fix(pos): vat 0 master switch (main)
 
 # Deploy 2026-11-18T07:40:12Z — vatEnabled master toggle
+
+# Deploy 2026-11-18T08:15:00Z — PROD: rebuild dashboard dist (Settings-Db97EEOj, index-D5YR8DHu) — Facturer la TVA toggle
