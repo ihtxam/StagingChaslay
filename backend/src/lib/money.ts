@@ -39,10 +39,12 @@ export function resolveOrderListTaxRate(opts: {
   channelTaxRate?: number;
 }): number | undefined {
   const channelRate = Number(opts.channelTaxRate);
-  if (opts.taxIncludedInPrice === true && Number.isFinite(channelRate) && channelRate > 0) {
+  if (opts.taxIncludedInPrice === true) {
+    if (!Number.isFinite(channelRate) || channelRate <= 0) return 0;
     return channelRate;
   }
-  return impliedVatRatePercent(opts.subtotal, opts.taxAmount);
+  if (!Number.isFinite(channelRate) || channelRate <= 0) return 0;
+  return impliedVatRatePercent(opts.subtotal, opts.taxAmount) ?? 0;
 }
 
 /** Round to nearest 0.05 CHF. */

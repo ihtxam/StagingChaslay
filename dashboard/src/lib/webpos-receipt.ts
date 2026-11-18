@@ -4991,6 +4991,7 @@ export function resolveReceiptTaxRateForOrder(
     vatIncludedInPrice?: boolean;
   }
 ): number {
+  if (opts?.merchantTax?.vatEnabled === false) return 0;
   if (opts?.merchantTax && !merchantChargesVat(opts.merchantTax)) {
     return 0;
   }

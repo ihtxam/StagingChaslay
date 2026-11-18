@@ -3,6 +3,7 @@
 --
 --   psql "$DATABASE_URL" -f backend/sql/ensure-merchant-columns-drift.sql
 
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS vat_enabled boolean NOT NULL DEFAULT true;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS auth_epoch integer NOT NULL DEFAULT 0;
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS custom_domain_pending varchar(255);
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS custom_domain_dns_status varchar(20) DEFAULT 'none';

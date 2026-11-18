@@ -92,6 +92,7 @@ export function resolvePosTaxRate(
 }
 
 export type MerchantChannelTaxSettings = {
+  vatEnabled?: boolean | null;
   vatRate?: string | number | null;
   taxTakeawayRate?: string | number | null;
   taxDineInRate?: string | number | null;
@@ -103,6 +104,7 @@ export function channelTaxRateFromMerchant(
   merchant: MerchantChannelTaxSettings,
   channel?: string | null
 ): number {
+  if (merchant.vatEnabled === false) return 0;
   const vat = merchant.vatRate;
   if (taxRateValue(vat) === 0) return 0;
   const ch = String(channel || 'takeaway').toLowerCase().replace(/-/g, '_');
@@ -118,6 +120,7 @@ export function channelTaxRateFromMerchant(
 
 /** True when every configured channel rate resolves to 0% (merchant does not charge VAT). */
 export function merchantChargesVat(merchant: MerchantChannelTaxSettings): boolean {
+  if (merchant.vatEnabled === false) return false;
   return (
     channelTaxRateFromMerchant(merchant, 'takeaway') > 0 ||
     channelTaxRateFromMerchant(merchant, 'dine_in') > 0 ||

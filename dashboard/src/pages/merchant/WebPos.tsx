@@ -1893,6 +1893,7 @@ export default function WebPos({ appMode = true }: { appMode?: boolean }) {
     () =>
       merchant
         ? {
+            vatEnabled: merchant.vatEnabled,
             vatRate: merchant.vatRate,
             taxTakeawayRate: merchant.taxTakeawayRate,
             taxDineInRate: merchant.taxDineInRate,

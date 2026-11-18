@@ -205,6 +205,7 @@ interface SettingsData {
   taxTakeawayRate?: string | null;
   taxDineInRate?: string | null;
   taxDeliveryRate?: string | null;
+  vatEnabled?: boolean;
   taxIncludedInPrice?: boolean;
   vatAfterDiscount?: boolean;
   slug?: string | null;
@@ -559,6 +560,7 @@ function resolvedTaxRateForUi(
 }
 
 function merchantTaxExemptMode(settings: SettingsData): boolean {
+  if (settings.vatEnabled === false) return true;
   const rates = [
     parseTaxRateForSave(settings.vatRate),
     parseTaxRateForSave(resolvedTaxRateForUi(settings.taxTakeawayRate, settings.vatRate)),
@@ -1628,7 +1630,13 @@ export default function Settings() {
     let taxTakeawayRate = parseTaxRateForSave(settings.taxTakeawayRate);
     let taxDineInRate = parseTaxRateForSave(settings.taxDineInRate);
     let taxDeliveryRate = parseTaxRateForSave(settings.taxDeliveryRate);
-    if (includeTax && (merchantTaxExemptMode(settings) || vatRate === 0)) {
+    const vatEnabled = settings.vatEnabled !== false;
+    if (includeTax && !vatEnabled) {
+      vatRate = 0;
+      taxTakeawayRate = 0;
+      taxDineInRate = 0;
+      taxDeliveryRate = 0;
+    } else if (includeTax && (merchantTaxExemptMode(settings) || vatRate === 0)) {
       vatRate = 0;
       taxTakeawayRate = 0;
       taxDineInRate = 0;
@@ -1653,6 +1661,7 @@ export default function Settings() {
         vatNumber: settings.vatNumber,
         ...(includeTax
           ? {
+              vatEnabled,
               vatRate,
               taxTakeawayRate,
               taxDineInRate,
@@ -2505,28 +2514,43 @@ export default function Settings() {
                 }
               />
               <Section id="taxes-rates" icon={Percent} accent={settingsDash.warning} title={t('taxRates')} description={t('taxRatesHint')} highlight={isSectionHighlight('taxes-rates')}>
-                <label className="mb-4 flex cursor-pointer items-start gap-2.5 rounded-md border border-[var(--border)] px-3 py-2.5 text-sm">
+                <label
+                  className={`mb-4 flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
+                    settings.vatEnabled !== false
+                      ? 'border-[var(--border)]'
+                      : 'border-[var(--text)] bg-[var(--bg-muted)]'
+                  }`}
+                >
                   <input
                     type="checkbox"
-                    className="mt-0.5"
-                    checked={merchantTaxExemptMode(settings)}
+                    className="mt-1 h-4 w-4"
+                    checked={settings.vatEnabled !== false}
                     onChange={(e) => {
-                      if (!e.target.checked) return;
+                      const on = e.target.checked;
                       setSettings({
                         ...settings,
-                        vatRate: '0',
-                        taxTakeawayRate: '0',
-                        taxDineInRate: '0',
-                        taxDeliveryRate: '0',
+                        vatEnabled: on,
+                        ...(on
+                          ? {}
+                          : {
+                              vatRate: '0',
+                              taxTakeawayRate: '0',
+                              taxDineInRate: '0',
+                              taxDeliveryRate: '0',
+                            }),
                       });
                     }}
                   />
                   <span>
-                    <span className="font-medium block">{t('taxVatExempt')}</span>
-                    <span className="text-xs muted">{t('taxVatExemptHint')}</span>
+                    <span className="font-semibold block">{t('taxVatChargeToggle')}</span>
+                    <span className="text-xs muted">
+                      {settings.vatEnabled !== false ? t('taxVatChargeToggleOn') : t('taxVatChargeToggleOff')}
+                    </span>
                   </span>
                 </label>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div
+                  className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${settings.vatEnabled === false ? 'opacity-50 pointer-events-none' : ''}`}
+                >
                   <Field label={`${t('defaultVatRate')} (%)`}>
                     <input
                       className="input"

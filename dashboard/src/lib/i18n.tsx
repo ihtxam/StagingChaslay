@@ -3637,6 +3637,10 @@ const en: Dict = {
   taxVatExempt: 'Business does not charge VAT',
   taxVatExemptHint:
     'Sets all channel rates to 0%. POS, shop, and receipts will not add, calculate, or print VAT lines.',
+  taxVatChargeToggle: 'Charge VAT on sales',
+  taxVatChargeToggleOn: 'VAT is added or shown on receipts according to the rates below.',
+  taxVatChargeToggleOff:
+    'VAT is off. POS, shop, and receipts will not add, calculate, or print tax — rates below are ignored.',
   taxPriceMode: 'Price display',
   taxPriceModeHint: 'Whether menu prices already include VAT or tax is added at checkout.',
   taxIncludedInPrice: 'VAT included in prices',
@@ -9015,6 +9019,10 @@ const fr: Dict = {
   taxVatExempt: 'Établissement sans TVA',
   taxVatExemptHint:
     'Met tous les taux à 0 %. La caisse, la boutique et les reçus n’ajoutent ni n’affichent de TVA.',
+  taxVatChargeToggle: 'Facturer la TVA',
+  taxVatChargeToggleOn: 'La TVA est appliquée selon les taux ci-dessous.',
+  taxVatChargeToggleOff:
+    'TVA désactivée. Caisse, boutique et reçus sans taxe — les taux ci-dessous sont ignorés.',
   taxPriceMode: 'Affichage des prix',
   taxPriceModeHint: 'Les prix du menu incluent-ils la TVA ou est-elle ajoutée au checkout ?',
   taxIncludedInPrice: 'TVA incluse dans les prix',
@@ -14278,6 +14286,10 @@ const de: Dict = {
   taxVatExempt: 'Keine MwSt.-Berechnung',
   taxVatExemptHint:
     'Setzt alle Kanalsätze auf 0 %. Kasse, Shop und Belege berechnen und drucken keine MwSt.',
+  taxVatChargeToggle: 'MwSt. berechnen',
+  taxVatChargeToggleOn: 'MwSt. wird nach den Sätzen unten berechnet und auf Belegen ausgewiesen.',
+  taxVatChargeToggleOff:
+    'MwSt. aus. Kasse, Shop und Belege ohne Steuer — Sätze unten werden ignoriert.',
   taxPriceMode: 'Preisanzeige',
   taxPriceModeHint: 'Enthalten Menüpreise die MWSt. oder wird sie beim Checkout addiert?',
   taxIncludedInPrice: 'MWSt. im Preis enthalten',

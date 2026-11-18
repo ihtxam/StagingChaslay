@@ -538,6 +538,7 @@ export class ChaslayCompatService {
         email: merchant.email,
         address: addressParts.join(", ") || null,
         vat_number: merchant.vatNumber || null,
+        vat_enabled: (merchant as { vatEnabled?: boolean }).vatEnabled !== false,
         vat_rate: Number(merchant.vatRate || 0),
         tax_takeaway_rate: Number(merchant.taxTakeawayRate || merchant.vatRate || 0),
         tax_dine_in_rate: Number(merchant.taxDineInRate || merchant.vatRate || 0),

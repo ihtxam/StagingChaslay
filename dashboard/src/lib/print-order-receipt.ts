@@ -158,13 +158,18 @@ export async function printMerchantOrderReceipt(
   }
 ): Promise<void> {
   const merchantTax = {
+    vatEnabled: opts.merchant.vatEnabled,
     vatRate: opts.merchant.vatRate,
     taxTakeawayRate: opts.merchant.taxTakeawayRate,
     taxDineInRate: opts.merchant.taxDineInRate,
     taxDeliveryRate: opts.merchant.taxDeliveryRate,
   };
   const fallbackRate =
-    opts.merchant.vatRate != null ? Number(opts.merchant.vatRate) : 8.1;
+    opts.merchant.vatEnabled === false
+      ? 0
+      : opts.merchant.vatRate != null
+        ? Number(opts.merchant.vatRate)
+        : 8.1;
   const receiptPayload = posOrderToWebPosReceipt(order, {
     businessName: opts.merchant.name || APP_NAME,
     address: opts.merchant.address || undefined,

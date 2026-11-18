@@ -321,6 +321,7 @@ type Props = {
   taxIncludedInPrice?: boolean;
   vatAfterDiscount?: boolean;
   merchantTax?: {
+    vatEnabled?: boolean | null;
     vatRate?: string | number | null;
     taxTakeawayRate?: string | number | null;
     taxDineInRate?: string | number | null;
@@ -2497,7 +2498,6 @@ export default function WebPosOrdersPanel({
                       merchantTax={merchantTax}
                       taxIncludedInPrice={taxIncludedInPrice}
                       vatAfterDiscount={vatAfterDiscount}
-                      merchantTax={merchantTax}
                       compact
                     />
                   </div>

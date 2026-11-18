@@ -257,6 +257,7 @@ export class MerchantSettingsService {
       taxTakeawayRate: merchant.taxTakeawayRate,
       taxDineInRate: merchant.taxDineInRate,
       taxDeliveryRate: merchant.taxDeliveryRate,
+      vatEnabled: (merchant as { vatEnabled?: boolean }).vatEnabled !== false,
       taxIncludedInPrice: merchant.taxIncludedInPrice === true,
       vatAfterDiscount: merchant.vatAfterDiscount !== false,
       slug: merchant.slug,
@@ -485,6 +486,7 @@ export class MerchantSettingsService {
       taxTakeawayRate?: number;
       taxDineInRate?: number;
       taxDeliveryRate?: number;
+      vatEnabled?: boolean;
       taxIncludedInPrice?: boolean;
       vatAfterDiscount?: boolean;
       slug?: string;
@@ -622,6 +624,7 @@ export class MerchantSettingsService {
       const rate = incomingTaxRateOrPreserve(effective.taxDeliveryRate, "taxDeliveryRate");
       if (rate !== undefined) patch.taxDeliveryRate = rate;
     }
+    if (effective.vatEnabled !== undefined) patch.vatEnabled = !!effective.vatEnabled;
     if (effective.taxIncludedInPrice !== undefined) patch.taxIncludedInPrice = !!effective.taxIncludedInPrice;
     if (effective.vatAfterDiscount !== undefined) patch.vatAfterDiscount = !!effective.vatAfterDiscount;
     if (effective.shopEnabled !== undefined) patch.shopEnabled = !!effective.shopEnabled;
@@ -1087,6 +1090,7 @@ export class MerchantSettingsService {
 
   static channelTaxRate(
     merchant: {
+      vatEnabled?: boolean | null;
       vatRate?: string | number | null;
       taxTakeawayRate?: string | number | null;
       taxDineInRate?: string | number | null;
@@ -1094,6 +1098,7 @@ export class MerchantSettingsService {
     },
     channel: FulfillmentChannel = "takeaway"
   ): number {
+    if (merchant.vatEnabled === false) return 0;
     const pick = (v?: string | number | null) => {
       if (v === undefined || v === null || v === "") return null;
       const n = parseFloat(String(v));

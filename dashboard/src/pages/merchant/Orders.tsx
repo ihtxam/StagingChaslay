@@ -459,6 +459,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
     city?: string;
     phone?: string;
     vatNumber?: string;
+    vatEnabled?: boolean;
     vatRate?: string;
     taxTakeawayRate?: string | number | null;
     taxDineInRate?: string | number | null;
@@ -516,6 +517,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
         city: s.city,
         phone: s.phone,
         vatNumber: s.vatNumber,
+        vatEnabled: s.vatEnabled,
         vatRate: s.vatRate,
         taxTakeawayRate: s.taxTakeawayRate,
         taxDineInRate: s.taxDineInRate,
@@ -1490,6 +1492,7 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   merchantTax={
                     merchant
                       ? {
+                          vatEnabled: merchant.vatEnabled,
                           vatRate: merchant.vatRate,
                           taxTakeawayRate: merchant.taxTakeawayRate,
                           taxDineInRate: merchant.taxDineInRate,
@@ -1499,16 +1502,6 @@ export default function Orders({ invoiceLedger = false }: { invoiceLedger?: bool
                   }
                   taxIncludedInPrice={merchant?.taxIncludedInPrice === true}
                   vatAfterDiscount={merchant?.vatAfterDiscount !== false}
-                  merchantTax={
-                    merchant
-                      ? {
-                          vatRate: merchant.vatRate,
-                          taxTakeawayRate: merchant.taxTakeawayRate,
-                          taxDineInRate: merchant.taxDineInRate,
-                          taxDeliveryRate: merchant.taxDeliveryRate,
-                        }
-                      : undefined
-                  }
                 />
                 {Number(selected.refundAmount || 0) > 0 ? (
                   <p className="mt-1 text-right text-xs font-semibold text-rose-700 tabular-nums">
