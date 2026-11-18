@@ -122,3 +122,5 @@
 # Deploy 2026-10-27T23:48:00Z — PROD retry: Navigate off /merchant/pos when leaving POS app mode (demo backoffice)
 # Deploy 2026-10-28T00:00:00Z — PROD trigger: receipt header #901 + backoffice shell fix (#903 merged)
 # Deploy 2026-10-26T06:20:00Z — URGENT: lazy schema bootstrap default, stop ensureAllMerchantSchema cache wipe (07:08 outage)
+
+# Deploy 2026-11-18T06:57:21Z — fix(pos): honor 0% VAT on receipts (main @ 6c5ac8a0)
