@@ -124,3 +124,5 @@
 # Deploy 2026-10-26T06:20:00Z — URGENT: lazy schema bootstrap default, stop ensureAllMerchantSchema cache wipe (07:08 outage)
 
 # Deploy 2026-11-18T06:57:21Z — fix(pos): honor 0% VAT on receipts (main @ 6c5ac8a0)
+
+# Deploy 2026-11-18T07:09:44Z — fix(pos): vat 0 master switch (main)
