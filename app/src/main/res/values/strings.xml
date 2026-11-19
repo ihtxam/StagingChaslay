@@ -46,7 +46,7 @@
     <string name="settings_section_users">Users &amp; Roles</string>
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_section_diagnostics">Diagnostics</string>
-    <string name="diagnostics_page_subtitle">Upload or share POS logs for Sunmi print and support (debug → staging app.chaslay.com).</string>
+    <string name="diagnostics_page_subtitle">Upload or share POS logs for Sunmi print and support. Debug builds post to staging (app.chaslay.com); a 401 there is normal without a staging sync key. Release builds use DIAGNOSTIC_API_BASE_URL (same host as LICENSE_API_BASE_URL by default).</string>
     <string name="diagnostics_upload_to_support">Upload logs to support</string>
     <string name="diagnostics_share_logs">Share logs</string>
     <string name="diagnostics_last_upload">Last upload</string>
@@ -57,6 +57,7 @@
     <string name="diagnostics_upload_sent">Diagnostics uploaded.</string>
     <string name="diagnostics_upload_failed">Upload failed.</string>
     <string name="diagnostics_uploading">Uploading…</string>
+    <string name="login_upload_logs">Upload logs</string>
     <string name="diagnostics_session_log">Session trace (Sunmi bind/print)</string>
     <string name="diagnostics_crash_files">Saved crash/error files</string>
     <string name="diagnostics_clear_local_logs">Clear local crash files</string>
@@ -64,6 +65,7 @@
     <string name="diagnostics_share_chooser">Share POS logs</string>
     <string name="diagnostics_api_host">Diagnostic API: %1$s</string>
     <string name="settings_section_license">License</string>
+    <string name="settings_section_update">Update</string>
     <string name="online_settings_title">Online settings</string>
     <string name="online_settings_open">Open online settings</string>
     <string name="online_settings_hint">When online, open the same merchant panel settings used by Reborn. Offline, use the local screens below.</string>
@@ -410,6 +412,9 @@
     <string name="orders_tab_all">All</string>
     <string name="orders_tab_reservation">Reservation</string>
     <string name="nav_reservations">Bookings</string>
+    <string name="nav_update">Update</string>
+    <string name="app_update_installed_version">Installed version</string>
+    <string name="app_update_screen_hint">Tap Check for updates to download a newer APK from the server when one is available.</string>
     <string name="reservations_title">Bookings</string>
     <string name="reservations_filter_today">Today</string>
     <string name="reservations_filter_future">Upcoming</string>

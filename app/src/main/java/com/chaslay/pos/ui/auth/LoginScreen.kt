@@ -23,12 +23,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -83,6 +88,13 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(state.diagnosticsUploadMessage) {
+        val message = state.diagnosticsUploadMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.clearDiagnosticsUploadMessage()
+    }
 
     LaunchedEffect(state.isLoggedIn) {
         if (state.isLoggedIn) onLoggedIn()
@@ -170,6 +182,23 @@ fun LoginScreen(
     ) {
         val isWide = maxWidth >= WIDE_LAYOUT_BREAKPOINT
 
+        LoginUploadLogsButton(
+            inProgress = state.diagnosticsUploadInProgress,
+            onClick = viewModel::uploadDiagnosticsFromLogin,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp),
+        )
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        ) { data ->
+            Snackbar(snackbarData = data)
+        }
+
         if (isWide) {
             Row(modifier = Modifier.fillMaxSize()) {
                 BrandHero(
@@ -255,6 +284,45 @@ fun LoginScreen(
                 )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LoginUploadLogsButton(
+    inProgress: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = !inProgress,
+        modifier = modifier,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+        if (inProgress) {
+            CircularProgressIndicator(
+                modifier = Modifier.height(18.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.CloudUpload,
+                contentDescription = null,
+                tint = PosColors.Primary,
+            )
+        }
+        Text(
+            text = stringResource(
+                if (inProgress) R.string.diagnostics_uploading else R.string.login_upload_logs
+            ),
+            color = PosColors.Primary,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+        )
         }
     }
 }

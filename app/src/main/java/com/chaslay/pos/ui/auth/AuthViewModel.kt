@@ -13,8 +13,15 @@ import com.chaslay.pos.sync.MenuSyncMode
 import com.chaslay.pos.sync.MenuSyncRepository
 import com.chaslay.pos.sync.PosSessionRepository
 import com.chaslay.pos.sync.SyncService
+import com.chaslay.pos.debug.CrashLogger
+import com.chaslay.pos.debug.DiagnosticLogUploader
+import com.chaslay.pos.debug.RemoteDiagnosticUploader
+import com.chaslay.pos.data.repository.TableOrderRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.chaslay.pos.sync.TerminalSyncRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +37,9 @@ data class AuthUiState(
     val errorMessage: String? = null,
     val pinSetupUserName: String? = null,
     val pinSetupStep: PinSetupStep = PinSetupStep.ENTER,
-    val pinSetupLength: Int = 0
+    val pinSetupLength: Int = 0,
+    val diagnosticsUploadInProgress: Boolean = false,
+    val diagnosticsUploadMessage: String? = null,
 )
 
 enum class PinSetupStep { ENTER, CONFIRM }
@@ -43,7 +52,12 @@ class AuthViewModel @Inject constructor(
     private val syncService: SyncService,
     private val posSessionRepository: PosSessionRepository,
     private val terminalSyncRepository: TerminalSyncRepository,
-    private val syncApiKeyStore: SyncApiKeyStore
+    private val syncApiKeyStore: SyncApiKeyStore,
+    private val crashLogger: CrashLogger,
+    private val remoteDiagnosticUploader: RemoteDiagnosticUploader,
+    private val diagnosticLogUploader: DiagnosticLogUploader,
+    private val tableOrderRepository: TableOrderRepository,
+    @ApplicationContext private val appContext: android.content.Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -230,6 +244,8 @@ class AuthViewModel @Inject constructor(
             posSessionRepository.registerAfterLogin(session.user.id.toString(), session.user.name, access)
         }
         posSessionRepository.startHeartbeat(viewModelScope)
+        crashLogger.flushPendingUploads()
+        remoteDiagnosticUploader.scheduleSessionDiagnosticUpload()
         if (syncApiKeyStore.hasKey()) {
             runCatching { terminalSyncRepository.syncTerminals() }
                 .onFailure { Log.w("AuthViewModel", "Pre-login checkout sync failed", it) }
@@ -243,8 +259,40 @@ class AuthViewModel @Inject constructor(
                 menuSyncRepository.syncMenu(MenuSyncMode.REPLACE)
                 syncService.syncAll(force = true)
             }.onFailure { Log.w("AuthViewModel", "Post-login menu sync failed", it) }
+            runCatching {
+                tableOrderRepository.reconcileFloorPlanForNewMerchant(merchantChanged)
+            }.onFailure { Log.w("AuthViewModel", "Post-login floor plan reconcile failed", it) }
+        } else if (merchantChanged) {
+            runCatching {
+                tableOrderRepository.reconcileFloorPlanForNewMerchant(merchantChanged = true)
+            }.onFailure { Log.w("AuthViewModel", "Floor plan reconcile failed", it) }
         }
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun uploadDiagnosticsFromLogin() {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(diagnosticsUploadInProgress = true, diagnosticsUploadMessage = null)
+            }
+            val result = withContext(Dispatchers.IO) {
+                diagnosticLogUploader.uploadPendingLogs()
+                remoteDiagnosticUploader.uploadSupportBundle(manual = true)
+            }
+            val msg = if (result.isSuccess) {
+                appContext.getString(com.chaslay.pos.R.string.diagnostics_upload_sent)
+            } else {
+                result.exceptionOrNull()?.message
+                    ?: appContext.getString(com.chaslay.pos.R.string.diagnostics_upload_failed)
+            }
+            _uiState.update {
+                it.copy(diagnosticsUploadInProgress = false, diagnosticsUploadMessage = msg)
+            }
+        }
+    }
+
+    fun clearDiagnosticsUploadMessage() {
+        _uiState.update { it.copy(diagnosticsUploadMessage = null) }
     }
 
     fun logout() {

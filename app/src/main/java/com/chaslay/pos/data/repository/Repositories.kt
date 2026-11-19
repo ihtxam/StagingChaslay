@@ -1492,7 +1492,15 @@ class SettingsRepository @Inject constructor(
             courseSendMode = com.chaslay.pos.util.PosLocalPrefs.applyCourseSendModeIfUserSet(
                 appContext,
                 settings.courseSendMode
-            )
+            ),
+            terminalEnabled = com.chaslay.pos.util.PosLocalPrefs.applyTerminalTenderEnabledIfUserSet(
+                appContext,
+                settings.terminalEnabled
+            ),
+            adyenTerminalEnabled = com.chaslay.pos.util.PosLocalPrefs.applyAdyenTerminalEnabledIfUserSet(
+                appContext,
+                settings.adyenTerminalEnabled
+            ),
         )
     }
 
@@ -2672,6 +2680,48 @@ class TableOrderRepository @Inject constructor(
     }
 
     /** Import floor plans + table positions from merchant panel sync bootstrap. */
+    suspend fun isBundledDemoFloorPlan(): Boolean {
+        val floors = floorDao.getAllActive()
+        val tables = tableDao.getAllActive()
+        return com.chaslay.pos.data.local.DefaultFloorPlanSeeder.isBundledDemoFloorPlan(floors, tables)
+    }
+
+    /** Drop panel-synced floors/tables left from a previous merchant binding. */
+    suspend fun clearStalePanelSyncedFloorPlan() {
+        floorDao.deactivateAllPanelSynced()
+        tableDao.deactivateAllPanelSynced()
+    }
+
+    /** Remove bundled seed floors (Main Floor, Patio, etc.) but keep user-created custom floors. */
+    suspend fun purgeBundledLocalFloors() {
+        val floors = floorDao.getAllActive()
+        floors.filter {
+            it.remoteId.isNullOrBlank() &&
+                com.chaslay.pos.data.local.DefaultFloorPlanSeeder.isBundledFloorName(it.name)
+        }.forEach { deleteFloor(it.id) }
+    }
+
+    suspend fun ensureDefaultFloorPlanIfEmpty() {
+        if (floorDao.getAllActive().isNotEmpty()) return
+        com.chaslay.pos.data.local.DefaultFloorPlanSeeder.seedWithRoom(floorDao, tableDao)
+    }
+
+    suspend fun replaceBundledFloorPlanWithDefaults() {
+        if (!isBundledDemoFloorPlan() && floorDao.getAllActive().isNotEmpty()) return
+        purgeBundledLocalFloors()
+        ensureDefaultFloorPlanIfEmpty()
+    }
+
+    suspend fun reconcileFloorPlanForNewMerchant(merchantChanged: Boolean) {
+        if (merchantChanged) {
+            clearStalePanelSyncedFloorPlan()
+        }
+        if (isBundledDemoFloorPlan() || floorDao.getAllActive().isEmpty()) {
+            purgeBundledLocalFloors()
+            ensureDefaultFloorPlanIfEmpty()
+        }
+    }
+
     suspend fun importFloorPlansFromSync(plans: List<com.chaslay.pos.data.remote.dto.SyncFloorPlanDto>): Int {
         if (plans.isEmpty()) return 0
         var upserted = 0

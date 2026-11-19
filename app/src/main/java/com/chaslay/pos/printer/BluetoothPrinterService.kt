@@ -575,7 +575,18 @@ class BluetoothPrinterService @Inject constructor(
             var last: Result<Unit> = Result.success(Unit)
             for (printer in reportPrinters) {
                 val lineWidth = lineWidthFor(printer.paperWidthMm)
-                val payload = buildEndOfDayReport(settings, report, lineWidth, includeProductsSold)
+                val encoding = textEncodingForAddress(
+                    printer.address,
+                    printer.name,
+                    printer.connectionType,
+                )
+                val payload = buildEndOfDayReport(
+                    settings,
+                    report,
+                    lineWidth,
+                    includeProductsSold,
+                    encoding,
+                )
                 last = sendBytes(
                     printer.address,
                     settings,
@@ -589,7 +600,18 @@ class BluetoothPrinterService @Inject constructor(
         }
         val legacyAddress = settings.printerMacAddress?.takeIf { it.isNotBlank() }
             ?: return@withContext Result.failure(IllegalStateException("No report printer configured. Add a printer with ENDOFDAY REPORTS enabled."))
-        val payload = buildEndOfDayReport(settings, report, LINE_WIDTH_80, includeProductsSold)
+        val encoding = textEncodingForAddress(
+            legacyAddress,
+            settings.printerName,
+            null,
+        )
+        val payload = buildEndOfDayReport(
+            settings,
+            report,
+            LINE_WIDTH_80,
+            includeProductsSold,
+            encoding,
+        )
         sendBytes(
             legacyAddress,
             settings,
@@ -1853,15 +1875,6 @@ class BluetoothPrinterService @Inject constructor(
         }
         appendFooter(sb, settings.receiptFooter, lineWidth, settings.businessName)
         val qrUrl = receiptQrTarget(settings, transaction)
-        if (qrUrl != null) {
-            sb.appendLine(center(sepDash(lineWidth), lineWidth))
-            val caption = if (qrUrl == settings.normalizedGoogleReviewUrl()) {
-                labels.scanGoogleReview
-            } else {
-                labels.scanDigitalReceipt
-            }
-            sb.appendLine(center(caption, lineWidth))
-        }
         val deliveryDirectionsUrl = deliveryDirectionsUrlForTransaction(settings, transaction, lineWidth, sb)
         com.chaslay.pos.payment.AdyenPaymentReceiptStorage.appendable(appendAdyenCustomerReceipt)
             ?.takeIf { settings.adyenReceiptDigitalOnly != true }
@@ -1890,7 +1903,8 @@ class BluetoothPrinterService @Inject constructor(
         settings: BusinessSettingsEntity,
         report: EndOfDayReport,
         lineWidth: Int = LINE_WIDTH_80,
-        includeProductsSold: Boolean = true
+        includeProductsSold: Boolean = true,
+        textEncoding: EscPosTextEncoding = EscPosTextEncoding.CP850,
     ): ByteArray {
         val labels = ReceiptPrintLanguage.labelsFor(context, settings)
         val sym = settings.currencySymbol
@@ -2061,7 +2075,7 @@ class BluetoothPrinterService @Inject constructor(
         }
         appendEscPosStyleReset(sb)
         sb.appendLine("\n\n\n")
-        return encodePayload(sb.toString())
+        return encodePayload(sb.toString(), textEncoding)
     }
 
     private fun appendEscPosStyleReset(sb: StringBuilder) {
@@ -2699,6 +2713,22 @@ class BluetoothPrinterService @Inject constructor(
     private fun paperCutCommand(feedLines: Int = 4): ByteArray =
         byteArrayOf(0x1B, 0x64, feedLines.coerceIn(0, 255).toByte()) + ESC_CUT
 
+    /** Drop the trailing ESC d n + GS V so a following QR is not printed after a long feed. */
+    private fun stripTrailingPaperCut(data: ByteArray): ByteArray {
+        var end = data.size
+        if (end >= 3 &&
+            data[end - 3] == 0x1D.toByte() &&
+            data[end - 2] == 0x56.toByte() &&
+            (data[end - 1] == 0x00.toByte() || data[end - 1] == 0x01.toByte() || data[end - 1] == 0x30.toByte())
+        ) {
+            end -= 3
+        }
+        if (end >= 3 && data[end - 3] == 0x1B.toByte() && data[end - 2] == 0x64.toByte()) {
+            end -= 3
+        }
+        return if (end == data.size) data else data.copyOf(end)
+    }
+
     private fun finalizePayload(
         text: String,
         settings: BusinessSettingsEntity,
@@ -2848,10 +2878,14 @@ class BluetoothPrinterService @Inject constructor(
             runCatching {
                 when {
                     usesSunmiInternalRouting(mac, printerName, connectionType) -> {
-                        sunmiInternalPrinter.sendRaw(payload).getOrThrow()
                         val qr = sunmiQrUrl?.trim().orEmpty()
                         if (qr.isNotBlank()) {
+                            // Cut/feed in the ESC/POS payload would run before the SDK QR and leave a blank band.
+                            sunmiInternalPrinter.sendRaw(stripTrailingPaperCut(payload), finishPaper = false)
+                                .getOrThrow()
                             sunmiInternalPrinter.printReceiptQr(qr).getOrThrow()
+                        } else {
+                            sunmiInternalPrinter.sendRaw(payload).getOrThrow()
                         }
                     }
                     isUsbAddress(mac) -> {

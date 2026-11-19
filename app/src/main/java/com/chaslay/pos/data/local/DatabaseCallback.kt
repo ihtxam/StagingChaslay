@@ -1,6 +1,7 @@
 package com.chaslay.pos.data.local
 
 import android.content.Context
+import android.util.Log
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.chaslay.pos.data.preferences.SyncPreferences
@@ -16,20 +17,27 @@ class DatabaseCallback(
 
     override fun onOpen(db: SupportSQLiteDatabase) {
         super.onOpen(db)
+        runCatching { runOnOpenMaintenance(db) }
+            .onFailure { Log.e(TAG, "Database onOpen maintenance failed — continuing with best-effort open", it) }
+    }
+
+    private fun runOnOpenMaintenance(db: SupportSQLiteDatabase) {
         wipeLegacyOrderDataIfNeeded(db)
         val prefs = context.getSharedPreferences("pos_migrations", Context.MODE_PRIVATE)
         val menuCloudSynced =
             SyncPreferences.hasRemoteMenuSync(context) || hasCloudSyncedCatalog(db)
         if (!menuCloudSynced) {
-            if (count(db, "categories") == 0L || count(db, "products") == 0L) {
-                SushiSakeCatalogSeeder.seed(db)
-            } else if (
-                !prefs.getBoolean("sushi_migration_v1", false) &&
-                SushiSakeCatalogSeeder.isLegacySoupDemo(db)
-            ) {
-                SushiSakeCatalogSeeder.replaceCatalog(db)
-                prefs.edit().putBoolean("sushi_migration_v1", true).apply()
-            }
+            runCatching {
+                if (count(db, "categories") == 0L || count(db, "products") == 0L) {
+                    SushiSakeCatalogSeeder.seed(db)
+                } else if (
+                    !prefs.getBoolean("sushi_migration_v1", false) &&
+                    SushiSakeCatalogSeeder.isLegacySoupDemo(db)
+                ) {
+                    SushiSakeCatalogSeeder.replaceCatalog(db)
+                    prefs.edit().putBoolean("sushi_migration_v1", true).apply()
+                }
+            }.onFailure { Log.w(TAG, "Catalog seed/migration skipped", it) }
         }
         if (count(db, "roles") == 0L) {
             seedRoles(db)
@@ -40,12 +48,8 @@ class DatabaseCallback(
         if (count(db, "business_settings") == 0L) {
             seedSettings(db)
         }
-        if (count(db, "restaurant_tables") == 0L) {
-            seedTables(db)
-        }
-        if (count(db, "table_floors") == 0L) {
-            seedTableFloors(db)
-        }
+        migrateLegacyBundledFloorPlanIfNeeded(db, prefs)
+        seedOrRepairFloorPlan(db)
         if (count(db, "discount_presets") == 0L) {
             seedDiscountPresets(db)
         }
@@ -56,14 +60,91 @@ class DatabaseCallback(
             seedCustomers(db)
         }
         migrateDemoStaffPinsIfNeeded(db, prefs)
+        runCatching {
+            db.execSQL(
+                """
+                UPDATE products
+                SET stockQuantity = 50, lowStockThreshold = 5
+                WHERE stockQuantity IS NULL AND isOpenPrice = 0
+                """.trimIndent()
+            )
+            fixCorruptedProductNames(db)
+        }.onFailure { Log.w(TAG, "Product name repair skipped", it) }
+    }
+
+    /**
+     * Demo floor seed used to run when [restaurant_tables] was empty even if the merchant
+     * already had real floors — that re-injected 20 demo tables and could desync plans.
+     * Only seed demo data when both floors and tables are empty; otherwise repair orphans.
+     */
+    /** One-time: drop legacy Main Floor / Patio 20-table demo in favour of Salle / Terrace. */
+    private fun migrateLegacyBundledFloorPlanIfNeeded(
+        db: SupportSQLiteDatabase,
+        prefs: android.content.SharedPreferences,
+    ) {
+        if (prefs.getBoolean("default_floor_plan_v2", false)) return
+        val floors = mutableListOf<Pair<Long, String>>()
+        db.query("SELECT id, name FROM table_floors WHERE isActive = 1").use { cursor ->
+            while (cursor.moveToNext()) {
+                floors += cursor.getLong(0) to cursor.getString(1).orEmpty()
+            }
+        }
+        val hasRemoteFloor = db.query(
+            "SELECT COUNT(*) FROM table_floors WHERE isActive = 1 AND remoteId IS NOT NULL AND TRIM(remoteId) != ''"
+        ).use { c ->
+            c.moveToFirst() && c.getLong(0) > 0L
+        }
+        if (hasRemoteFloor) {
+            prefs.edit().putBoolean("default_floor_plan_v2", true).apply()
+            return
+        }
+        val legacyNames = floors.map { it.second.trim() }.toSet()
+        val isLegacyMainPatio = legacyNames.contains("Main Floor") && legacyNames.contains("Patio")
+        val tableCount = count(db, "restaurant_tables")
+        if (!isLegacyMainPatio && tableCount <= 10L) {
+            prefs.edit().putBoolean("default_floor_plan_v2", true).apply()
+            return
+        }
+        if (!isLegacyMainPatio && tableCount > 10L) {
+            prefs.edit().putBoolean("default_floor_plan_v2", true).apply()
+            return
+        }
+        db.execSQL("DELETE FROM floor_plan_elements")
+        db.execSQL("DELETE FROM restaurant_tables")
+        db.execSQL("DELETE FROM table_floors")
+        DefaultFloorPlanSeeder.seedSql(db)
+        prefs.edit().putBoolean("default_floor_plan_v2", true).apply()
+    }
+
+    private fun seedOrRepairFloorPlan(db: SupportSQLiteDatabase) {
+        val floorCount = count(db, "table_floors")
+        val tableCount = count(db, "restaurant_tables")
+        when {
+            floorCount == 0L && tableCount == 0L -> {
+                seedTableFloors(db)
+                seedTables(db)
+            }
+            floorCount == 0L && tableCount > 0L -> {
+                seedTableFloors(db)
+                repairOrphanTableFloorIds(db)
+            }
+            floorCount > 0L && tableCount == 0L -> {
+                // Merchant cleared tables — do not inject demo tables over a custom floor plan.
+            }
+            else -> repairOrphanTableFloorIds(db)
+        }
+    }
+
+    private fun repairOrphanTableFloorIds(db: SupportSQLiteDatabase) {
         db.execSQL(
             """
-            UPDATE products
-            SET stockQuantity = 50, lowStockThreshold = 5
-            WHERE stockQuantity IS NULL AND isOpenPrice = 0
+            UPDATE restaurant_tables
+            SET floorId = (
+                SELECT id FROM table_floors WHERE isActive = 1 ORDER BY sortOrder, id LIMIT 1
+            )
+            WHERE floorId NOT IN (SELECT id FROM table_floors)
             """.trimIndent()
         )
-        fixCorruptedProductNames(db)
     }
 
     /** Repair catalog names saved with broken encoding (Snacké, Thon Ø50, etc.). */
@@ -216,7 +297,7 @@ class DatabaseCallback(
                 1, '${q("Sushi Sake")}', '', '${q("17 Rue Cheneau-de-Bourg, 1003 Lausanne")}', '+41 79 621 39 37', 'noreply@rebornsense.com', '',
                 'CHF', 'CHF', 'fr',
                 0, 0, '', '', '',
-                1,
+                0,
                 8.1, 2.6, 'TAKEAWAY', 'RESTAURANT',
                 'https://pay.rebornsense.com/receipt',
                 '${q("Sushi Sake")}', '${q("Merci!")}', '', ''
@@ -226,31 +307,11 @@ class DatabaseCallback(
     }
 
     private fun seedTableFloors(db: SupportSQLiteDatabase) {
-        listOf(
-            Triple(1L, "Main Floor", 1),
-            Triple(2L, "Patio", 2)
-        ).forEach { (id, name, order) ->
-            db.execSQL(
-                "INSERT OR IGNORE INTO table_floors (id, name, sortOrder, isActive) VALUES ($id, '${q(name)}', $order, 1)"
-            )
-        }
+        DefaultFloorPlanSeeder.seedSql(db)
     }
 
     private fun seedTables(db: SupportSQLiteDatabase) {
-        (1..20).forEach { number ->
-            val col = (number - 1) % 5
-            val row = (number - 1) / 5
-            val planX = 0.08f + col * 0.17f
-            val planY = 0.12f + row * 0.16f
-            val floorId = if (number <= 12) 1 else 2
-            db.execSQL(
-                """
-                INSERT OR IGNORE INTO restaurant_tables
-                (id, name, sortOrder, isActive, floorId, seatCapacity, planX, planY, planWidth, planHeight, shape, rotation)
-                VALUES ($number, '${q("Table $number")}', $number, 1, $floorId, 4, $planX, $planY, 0.12, 0.12, 'ROUND', 0)
-                """.trimIndent()
-            )
-        }
+        // Tables are inserted together with floors in [DefaultFloorPlanSeeder.seedSql].
     }
 
     private fun seedDiscountPresets(db: SupportSQLiteDatabase) {
@@ -369,5 +430,9 @@ class DatabaseCallback(
     private fun hash(value: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         return digest.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+    }
+
+    companion object {
+        private const val TAG = "DatabaseCallback"
     }
 }

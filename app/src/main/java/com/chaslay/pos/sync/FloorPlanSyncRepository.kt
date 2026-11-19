@@ -24,7 +24,13 @@ class FloorPlanSyncRepository @Inject constructor(
             val plans = bootstrap.floorPlans
             syncPreferences.setReservedTableIds(bootstrap.reservedTableIds)
             if (plans.isEmpty()) {
-                return FloorPlanSyncResult(message = "No floor plans in cloud")
+                tableOrderRepository.clearStalePanelSyncedFloorPlan()
+                if (tableOrderRepository.isBundledDemoFloorPlan()) {
+                    tableOrderRepository.replaceBundledFloorPlanWithDefaults()
+                } else {
+                    tableOrderRepository.ensureDefaultFloorPlanIfEmpty()
+                }
+                return FloorPlanSyncResult(message = "No floor plans in cloud — local defaults applied")
             }
             val count = tableOrderRepository.importFloorPlansFromSync(plans)
             FloorPlanSyncResult(tables = count, floors = plans.size, message = "Synced $count tables from panel")
