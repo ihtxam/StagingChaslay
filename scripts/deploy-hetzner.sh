@@ -926,6 +926,13 @@ if [[ "$DEPLOY_STACK" == "chaslay" ]]; then
 else
   export VITE_DEPLOY_RING=production
 fi
+# Re-run API orphan cleanup after image builds — long builds can leave hash-prefixed
+# siblings that block `compose up` recreate (Deploy #336).
+docker ps -aq --filter "name=${migrate_project}-api" | xargs -r docker rm -f 2>/dev/null || true
+while IFS= read -r orphan_api; do
+  [[ -z "$orphan_api" ]] && continue
+  docker rm -f "$orphan_api" 2>/dev/null || true
+done < <(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E "(^|_)${migrate_project}-api-" || true)
 dc up -d --build --remove-orphans db api dashboard caddy
 # Dashboard JS/CSS are baked into the image tag :latest — compose can keep an old
 # container running after `docker build` updates the image (stale index-*.js on prod).
