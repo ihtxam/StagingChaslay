@@ -134,3 +134,5 @@
 # Deploy 2026-11-18T08:18:00Z — PROD: vat_enabled migration + dashboard dist on main (a11ffb95)
 
 # Deploy 2026-11-19T23:50:00Z — PROD: login network-error copy + service-hours guards + dist rebuild
+
+# Deploy 2026-11-19T23:56:00Z — fix deploy script bash syntax (production_service_hours_message)

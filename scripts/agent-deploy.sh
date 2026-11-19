@@ -114,7 +114,7 @@ deploy_production_webhook() {
   # shellcheck source=scripts/production-service-hours.sh
   source "$ROOT/scripts/production-service-hours.sh"
   if production_service_hours_active; then
-    echo "ERROR: $(production_service_hours_message())"
+    echo "ERROR: $(production_service_hours_message)"
     exit 1
   fi
   echo "=== Production deploy via webhook (app.rebornsense.com) ==="
@@ -147,7 +147,7 @@ deploy_production_github() {
   # shellcheck source=scripts/production-service-hours.sh
   source "$ROOT/scripts/production-service-hours.sh"
   if production_service_hours_active; then
-    echo "ERROR: $(production_service_hours_message())"
+    echo "ERROR: $(production_service_hours_message)"
     exit 1
   fi
   echo "=== Production deploy (app.rebornsense.com) ==="

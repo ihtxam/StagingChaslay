@@ -115,7 +115,7 @@ pre_deploy_sanity_check() {
     # shellcheck source=../production-service-hours.sh
     source "$(dirname "${BASH_SOURCE[0]}")/../production-service-hours.sh"
     if production_service_hours_active; then
-      echo "ERROR: PRODUCTION DEPLOY ABORTED — $(production_service_hours_message())"
+      echo "ERROR: PRODUCTION DEPLOY ABORTED — $(production_service_hours_message)"
       exit 1
     fi
   fi
