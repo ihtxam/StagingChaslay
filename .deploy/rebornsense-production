@@ -132,3 +132,5 @@
 # Deploy 2026-11-18T08:15:00Z — PROD: rebuild dashboard dist (Settings-Db97EEOj, index-D5YR8DHu) — Facturer la TVA toggle
 
 # Deploy 2026-11-18T08:18:00Z — PROD: vat_enabled migration + dashboard dist on main (a11ffb95)
+
+# Deploy 2026-11-19T23:50:00Z — PROD: login network-error copy + service-hours guards + dist rebuild

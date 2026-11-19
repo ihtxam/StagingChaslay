@@ -58,6 +58,10 @@ function loginErrorMessage(
     message?: string;
     code?: string;
   };
+  // WiFi / DNS failures are often classified as deploy blips — show a connection hint on login.
+  if (isLoginNetworkError(error)) {
+    return t('loginNetworkError');
+  }
   if (isLoginApiUnavailable(error) || isDeployBlip(error)) {
     return t('systemUpdateWait');
   }
