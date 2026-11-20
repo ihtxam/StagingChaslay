@@ -4,8 +4,6 @@ set -euo pipefail
 
 DEPLOY_STACK="${DEPLOY_STACK:-chaslay}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/lib/deploy-production-guard.sh"
 STAGING_DEPLOY_PATH="/root/StagingChaslay"
 STAGING_DEPLOY_KEY="${STAGING_DEPLOY_KEY:-/root/.ssh/staging_chaslay_deploy}"
 STAGING_GITHUB_SSH_HOST="${STAGING_GITHUB_SSH_HOST:-github.com-staging-chaslay}"
@@ -36,8 +34,15 @@ resolve_repo_dir() {
   fi
 }
 
+# Load guards from the repo tree on disk *after* git sync — sourcing stale
+# scripts/lib/deploy-production-guard.sh before pull blocked staging deploy (#823).
+load_deploy_guards() {
+  # shellcheck disable=SC1091
+  source "$REPO_DIR/scripts/lib/deploy-production-guard.sh"
+  pre_deploy_sanity_check
+}
+
 resolve_repo_dir
-pre_deploy_sanity_check
 SECRETS_DIR="${CHASLAY_SECRETS_DIR:-/root/chaslay-secrets}"
 
 # CADDYFILE must be exported before ANY docker compose command (compose defaults to chaslay).
@@ -470,6 +475,8 @@ if [[ "${DEPLOY_POST_PULL:-}" != "1" ]]; then
   echo "=== Re-executing updated deploy script ==="
   exec env DEPLOY_POST_PULL=1 bash "$REPO_DIR/scripts/deploy-hetzner.sh"
 fi
+
+load_deploy_guards
 
 ensure_env_production
 ln -sfn "$ENV_FILE" "$REPO_DIR/.env.production"

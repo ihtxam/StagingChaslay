@@ -181,4 +181,9 @@ jobs:
               echo "Add ${staging_key}.pub to https://github.com/ihtxam/StagingChaslay/settings/keys"
               echo "Or add private key as rebornSense secret STAGING_CHASLAY_DEPLOY_KEY"
             fi
+            if [[ -d "$DEPLOY_PATH/.git" ]]; then
+              cd "$DEPLOY_PATH"
+              git fetch --prune origin main
+              git reset --hard origin/main
+            fi
             bash "$DEPLOY_PATH/scripts/deploy-hetzner.sh"
