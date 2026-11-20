@@ -40,6 +40,10 @@ private const val KEY_COURSE_SEND_MODE_USER_SET = "course_send_mode_user_set"
 private const val KEY_COURSE_SEND_MODE_VALUE = "course_send_mode_value"
 private const val KEY_AFTER_SALE_GO_TO_ORDERS = "after_sale_go_to_orders"
 private const val KEY_POS_MENU_DESIGN = "pos_menu_design"
+private const val KEY_ADYEN_TERMINAL_USER_SET = "adyen_terminal_enabled_user_set"
+private const val KEY_ADYEN_TERMINAL_VALUE = "adyen_terminal_enabled_value"
+private const val KEY_TERMINAL_TENDER_USER_SET = "terminal_tender_enabled_user_set"
+private const val KEY_TERMINAL_TENDER_VALUE = "terminal_tender_enabled_value"
 
 object PosLocalPrefs {
     private fun prefs(context: Context) =
@@ -107,6 +111,38 @@ object PosLocalPrefs {
         val p = prefs(context)
         if (!p.getBoolean(KEY_TABLES_USER_SET, false)) return current
         return p.getBoolean(KEY_TABLES_VALUE, current)
+    }
+
+    fun saveAdyenTerminalEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_ADYEN_TERMINAL_USER_SET, true)
+            .putBoolean(KEY_ADYEN_TERMINAL_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetAdyenTerminalEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ADYEN_TERMINAL_USER_SET, false)
+
+    fun applyAdyenTerminalEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_ADYEN_TERMINAL_USER_SET, false)) return current
+        return p.getBoolean(KEY_ADYEN_TERMINAL_VALUE, current)
+    }
+
+    fun saveTerminalTenderEnabled(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_TERMINAL_TENDER_USER_SET, true)
+            .putBoolean(KEY_TERMINAL_TENDER_VALUE, value)
+            .apply()
+    }
+
+    fun hasUserSetTerminalTenderEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_TERMINAL_TENDER_USER_SET, false)
+
+    fun applyTerminalTenderEnabledIfUserSet(context: Context, current: Boolean): Boolean {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_TERMINAL_TENDER_USER_SET, false)) return current
+        return p.getBoolean(KEY_TERMINAL_TENDER_VALUE, current)
     }
 
     fun saveRetailDineInEnabled(context: Context, value: Boolean) {

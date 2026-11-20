@@ -67,6 +67,17 @@ class RemoteDiagnosticUploader @Inject constructor(
         }
     }
 
+    /** After PIN login — short support bundle in background (does not block UI). */
+    fun scheduleSessionDiagnosticUpload() {
+        if (!syncApiKeyStore.hasKey()) return
+        scope.launch {
+            val result = runCatching { uploadSupportBundle(manual = false) }
+            if (result.isFailure) {
+                DiagnosticUploadWorkScheduler.enqueueRetry(context)
+            }
+        }
+    }
+
     fun flushPendingCrashFiles(onEach: (Boolean) -> Unit = {}) {
         scope.launch {
             val dir = File(context.filesDir, "crashes")

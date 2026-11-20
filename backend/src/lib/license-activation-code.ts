@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 /** Canonical alphanumeric form of a POS activation / license code. */
 export function compactActivationCode(code: string): string {
   return String(code ?? "")
@@ -6,7 +8,16 @@ export function compactActivationCode(code: string): string {
     .replace(/[^A-Z0-9]/g, "");
 }
 
-/** Reborn short codes are 12 hex chars grouped as XXXX-XXXX-XXXX. */
+/**
+ * New POS activation codes are 6 digits (example 482913).
+ * Digits only — no letters, so there is no O/0 or I/1 mix-up.
+ * Already-issued 12-character codes are left unchanged; lookup still accepts them.
+ */
+export function generateSixDigitLicenseCode(): string {
+  return crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+/** Older issued codes are 12 hex chars grouped as XXXX-XXXX-XXXX. New codes are 6 digits and are not regrouped. */
 export function formatShortActivationCode(compact: string): string {
   const c = compactActivationCode(compact);
   if (c.length === 12) {

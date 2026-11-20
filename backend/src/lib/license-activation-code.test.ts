@@ -9,6 +9,7 @@ import {
   formatShortActivationCode,
   isPlaceholderDeviceId,
   isUnusedIssuedDevice,
+  generateSixDigitLicenseCode,
   normalizeActivationCode,
 } from "./license-activation-code";
 
@@ -21,6 +22,10 @@ assert.equal(formatShortActivationCode("1758D6DDEF5A"), "1758-D6DD-EF5A");
 assert.equal(normalizeActivationCode("1758D6DDEF5A"), "1758-D6DD-EF5A");
 assert.equal(normalizeActivationCode("1758 d6dd ef5a"), "1758-D6DD-EF5A");
 assert.equal(normalizeActivationCode("1758-D6DD-EF5A"), "1758-D6DD-EF5A");
+assert.equal(normalizeActivationCode("482913"), "482913");
+for (let i = 0; i < 20; i++) {
+  assert.match(generateSixDigitLicenseCode(), /^\d{6}$/);
+}
 
 const keys = activationCodeLookupKeys("1758 d6dd ef5a");
 assert.ok(keys.includes("1758-D6DD-EF5A"));

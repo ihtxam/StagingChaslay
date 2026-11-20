@@ -31,6 +31,7 @@ import com.chaslay.pos.ui.auth.LoginScreen
 import com.chaslay.pos.ui.demo.DemoModeBanner
 import com.chaslay.pos.ui.demo.DemoModeViewModel
 import com.chaslay.pos.ui.ongoing.OngoingOrdersScreen
+import com.chaslay.pos.ui.appupdate.AppUpdateScreen
 import com.chaslay.pos.ui.reservations.ReservationsScreen
 import com.chaslay.pos.ui.orderhistory.OrderHistoryScreen
 import com.chaslay.pos.ui.pos.PosScreen
@@ -43,6 +44,7 @@ sealed class AppRoute(val route: String) {
     data object OrderHistory : AppRoute("order_history")
     data object OngoingOrders : AppRoute("ongoing_orders")
     data object Reservations : AppRoute("reservations")
+    data object Update : AppRoute("app_update")
 }
 
 @Composable
@@ -150,6 +152,11 @@ fun ChaslayNavHost(
                 composable(AppRoute.Reservations.route) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         ReservationsScreen(onBack = { navController.popBackStack() })
+                    }
+                }
+                composable(AppRoute.Update.route) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AppUpdateScreen(onBack = { navController.popBackStack() })
                     }
                 }
                 if (userAccess.canAccessSettings() || userAccess.canManageProducts() || userAccess.canAccessReports()) {

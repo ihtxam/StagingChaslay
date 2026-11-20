@@ -138,3 +138,5 @@
 # Deploy 2026-11-19T23:50:00Z — PROD: login network-error copy + service-hours guards + dist rebuild
 
 # Deploy 2026-11-19T23:56:00Z — fix deploy script bash syntax (production_service_hours_message)
+
+# Deploy 2026-11-20T00:10:00Z — fix(login): PIN screen upload logs bottom-start; Sunmi reports, diagnostics, licensing

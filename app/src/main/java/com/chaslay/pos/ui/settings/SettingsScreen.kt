@@ -98,6 +98,8 @@ import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
+import com.chaslay.pos.ui.appupdate.AppUpdatePanel
+import com.chaslay.pos.ui.appupdate.AppUpdateViewModel
 import com.chaslay.pos.ui.license.LicenseSettingsSection
 import com.chaslay.pos.ui.components.PosVectorIcon
 import com.chaslay.pos.ui.components.settingsSectionIconRes
@@ -172,7 +174,7 @@ fun SettingsScreen(
             SettingsSection.PRINTERS -> viewModel.refreshPrinterConnectionState()
             SettingsSection.SCALE -> viewModel.refreshScaleConnectionState()
             SettingsSection.GENERAL -> viewModel.refreshPlatformAboutFromCloud()
-            SettingsSection.DIAGNOSTICS -> viewModel.refreshDiagnosticsPanel()
+            SettingsSection.LICENSE -> viewModel.refreshDiagnosticsPanel()
             else -> Unit
         }
     }
@@ -1231,21 +1233,24 @@ fun SettingsScreen(
         }
 
         if (state.selectedSection == SettingsSection.LICENSE) {
-            val appUpdateChecking by viewModel.appUpdateChecking.collectAsStateWithLifecycle()
-            LicenseSettingsSection(
-                platformAboutHtml = state.platformAboutHtml,
-                onCheckForAppUpdate = viewModel::checkForAppUpdate,
-                isCheckingForAppUpdate = appUpdateChecking,
-            )
-        }
-
-        if (state.selectedSection == SettingsSection.DIAGNOSTICS) {
+            LicenseSettingsSection(platformAboutHtml = state.platformAboutHtml)
+            Spacer(modifier = Modifier.height(16.dp))
             SettingsDiagnosticsSection(
                 state = state,
+                showPageHeader = false,
                 onUpload = viewModel::uploadDiagnosticsToSupport,
                 onShare = viewModel::shareDiagnosticsLogs,
                 onClearCrashFiles = viewModel::clearCrashLogs,
                 onSelectCrashLog = viewModel::selectCrashLog,
+            )
+        }
+
+        if (state.selectedSection == SettingsSection.UPDATE) {
+            val appUpdateViewModel: AppUpdateViewModel = hiltViewModel()
+            val appUpdateChecking by appUpdateViewModel.isChecking.collectAsStateWithLifecycle()
+            AppUpdatePanel(
+                isChecking = appUpdateChecking,
+                onCheckForUpdate = appUpdateViewModel::checkForUpdate,
             )
         }
 
@@ -1258,7 +1263,7 @@ fun SettingsScreen(
 
         // Sticky Save — always visible (not under system nav / not lost in scroll).
         if (state.selectedSection != SettingsSection.LICENSE &&
-            state.selectedSection != SettingsSection.DIAGNOSTICS &&
+            state.selectedSection != SettingsSection.UPDATE &&
             state.selectedSection != SettingsSection.PRINTERS &&
             state.selectedSection != SettingsSection.RECEIPTS &&
             state.selectedSection != SettingsSection.PAYMENTS &&

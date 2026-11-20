@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -186,8 +187,9 @@ fun LoginScreen(
             inProgress = state.diagnosticsUploadInProgress,
             onClick = viewModel::uploadDiagnosticsFromLogin,
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(12.dp),
+                .align(Alignment.BottomStart)
+                .navigationBarsPadding()
+                .padding(start = 12.dp, bottom = 12.dp, end = 12.dp),
         )
 
         SnackbarHost(

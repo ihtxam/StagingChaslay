@@ -152,17 +152,35 @@ class TerminalSyncRepository @Inject constructor(
         // device never survived a sync or a restart.
         if (settings.paymentMethodsManagedByCloud) {
             config.methods?.let { methods ->
+                val terminalFromCloud = methods.terminal
                 merged = merged.copy(
                     expressEnabled = methods.express,
                     cashEnabled = methods.cash,
                     cardEnabled = methods.card,
-                    terminalEnabled = methods.terminal,
-                    adyenTerminalEnabled = methods.terminal,
+                    terminalEnabled = PosLocalPrefs.applyTerminalTenderEnabledIfUserSet(
+                        appContext,
+                        terminalFromCloud
+                    ),
+                    adyenTerminalEnabled = PosLocalPrefs.applyAdyenTerminalEnabledIfUserSet(
+                        appContext,
+                        terminalFromCloud
+                    ),
                     invoiceEnabled = methods.invoice,
                 )
             }
             merged = merged.copy(tapToPayEnabled = config.tapToPayEnabled)
         }
+
+        merged = merged.copy(
+            terminalEnabled = PosLocalPrefs.applyTerminalTenderEnabledIfUserSet(
+                appContext,
+                merged.terminalEnabled
+            ),
+            adyenTerminalEnabled = PosLocalPrefs.applyAdyenTerminalEnabledIfUserSet(
+                appContext,
+                merged.adyenTerminalEnabled
+            ),
+        )
 
         // coursesEnabled is managed in POS Settings ? General (not overwritten by panel sync).
 

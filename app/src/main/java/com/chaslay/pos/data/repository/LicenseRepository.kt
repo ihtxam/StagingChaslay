@@ -96,7 +96,7 @@ class LicenseRepository @Inject constructor(
 
     suspend fun lookup(code: String): Result<String?> = withContext(Dispatchers.IO) {
         val trimmed = code.trim().uppercase().replace("[^A-Z0-9-]".toRegex(), "")
-        if (trimmed.length < 8) {
+        if (trimmed.length < 6) {
             return@withContext Result.success(null)
         }
         runCatching {

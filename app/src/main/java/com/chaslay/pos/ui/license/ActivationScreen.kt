@@ -63,8 +63,6 @@ import com.chaslay.pos.ui.theme.posUiColors
 @Composable
 fun LicenseSettingsSection(
     platformAboutHtml: String = "",
-    onCheckForAppUpdate: (() -> Unit)? = null,
-    isCheckingForAppUpdate: Boolean = false,
     viewModel: LicenseViewModel = hiltViewModel(),
 ) {
     val license by viewModel.licenseState.collectAsStateWithLifecycle()
@@ -156,22 +154,6 @@ fun LicenseSettingsSection(
                 BuildConfig.VERSION_CODE,
             ),
         )
-        if (onCheckForAppUpdate != null) {
-            Spacer(modifier = Modifier.height(10.dp))
-            OutlinedButton(
-                onClick = onCheckForAppUpdate,
-                enabled = !isCheckingForAppUpdate,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    if (isCheckingForAppUpdate) {
-                        stringResource(R.string.app_update_checking)
-                    } else {
-                        stringResource(R.string.app_update_check)
-                    },
-                )
-            }
-        }
     }
     Spacer(modifier = Modifier.height(12.dp))
     SettingsSectionCard(

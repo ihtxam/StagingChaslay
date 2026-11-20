@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { getDb, schema } from "@/db";
 import { eq, and, desc, lt, gt, asc, inArray } from "drizzle-orm";
 import { LicensingService } from "./licensing.service";
@@ -7,6 +6,7 @@ import {
   normalizeChaslayDeviceId,
 } from "./chaslay-compat.service";
 import { withLicenseSchemaRetry } from "@/lib/ensure-licenses-schema";
+import { generateSixDigitLicenseCode } from "@/lib/license-activation-code";
 
 function asDate(value: Date | string | null | undefined): Date | null {
   if (!value) return null;
@@ -74,8 +74,7 @@ export async function attachLicenseRelations<
 }
 
 function formatActivationCode(): string {
-  const raw = crypto.randomBytes(6).toString("hex").toUpperCase();
-  return raw.match(/.{1,4}/g)?.join("-") ?? raw;
+  return generateSixDigitLicenseCode();
 }
 
 export class LicenseAdminService {
@@ -173,9 +172,9 @@ export class LicenseAdminService {
       expiresAt = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
     }
 
-    // Reborn-style short activation code (easier to type on tablet)
+    // 6-digit activation code (easier to read on the till). Older XXXX-XXXX-XXXX keys still activate.
     let licenseKey = formatActivationCode();
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 12; i++) {
       const taken = await db.query.licenses.findFirst({
         where: eq(schema.licenses.licenseKey, licenseKey),
       });
@@ -332,8 +331,7 @@ export class LicenseAdminService {
         expiresAt = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
       }
 
-      // Generate license code
-      const licenseKey = LicensingService.generateLicenseCode(
+      const licenseKey = await LicensingService.allocateLicenseCode(
         merchantId,
         device.deviceId,
         expiresAt.getFullYear()

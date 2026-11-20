@@ -2,6 +2,7 @@ package com.chaslay.pos.update
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import com.chaslay.pos.BuildConfig
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,6 +27,10 @@ class AppUpdateCoordinator @Inject constructor(
     private val gson: Gson,
     private val preferences: AppUpdatePreferences,
 ) {
+    private companion object {
+        const val TAG = "AppUpdate"
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _dialogState = MutableStateFlow<AppUpdateDialogState?>(null)
     val dialogState: StateFlow<AppUpdateDialogState?> = _dialogState.asStateFlow()
@@ -43,45 +48,67 @@ class AppUpdateCoordinator @Inject constructor(
         scope.launch {
             _isChecking.value = true
             try {
-                val manifest = fetchManifest() ?: run {
-                    if (manual) {
-                        _dialogState.value = AppUpdateDialogState.Error(
-                            appContext.getString(com.chaslay.pos.R.string.app_update_check_failed),
-                        )
+                when (val fetched = fetchManifest()) {
+                    is ManifestFetchResult.Failure -> {
+                        Log.w(TAG, "Manifest fetch failed: ${fetched.detail}")
+                        if (manual) {
+                            _dialogState.value = AppUpdateDialogState.Error(
+                                manualCheckFailedMessage(fetched.detail),
+                            )
+                        }
+                        return@launch
                     }
-                    return@launch
-                }
-                val remoteCode = manifest.versionCode
-                val localCode = BuildConfig.VERSION_CODE
-                if (remoteCode == null || remoteCode <= localCode) {
-                    if (manual) {
-                        _dialogState.value = AppUpdateDialogState.Error(
-                            appContext.getString(com.chaslay.pos.R.string.app_update_none),
+                    is ManifestFetchResult.Success -> {
+                        val manifest = fetched.manifest
+                        val remoteCode = manifest.versionCode
+                        val localCode = BuildConfig.VERSION_CODE
+                        if (remoteCode == null || remoteCode <= localCode) {
+                            if (manual) {
+                                _dialogState.value = AppUpdateDialogState.Error(
+                                    appContext.getString(com.chaslay.pos.R.string.app_update_none),
+                                )
+                            }
+                            return@launch
+                        }
+                        if (!manual && remoteCode <= preferences.dismissedVersionCode()) return@launch
+                        val apkUrl = AppUpdateUrls.resolveApkUrl(manifest)
+                        if (apkUrl.isNullOrBlank()) {
+                            val detail =
+                                "manifest versionCode=$remoteCode but no downloadUrl/apkFile (base=${BuildConfig.LICENSE_API_BASE_URL})"
+                            Log.w(TAG, detail)
+                            if (manual) {
+                                _dialogState.value = AppUpdateDialogState.Error(
+                                    manualCheckFailedMessage(detail),
+                                )
+                            }
+                            return@launch
+                        }
+                        val offer = AppUpdateOffer(
+                            versionName = manifest.version?.trim().orEmpty().ifBlank { remoteCode.toString() },
+                            versionCode = remoteCode,
+                            apkUrl = apkUrl,
                         )
+                        pendingOffer = offer
+                        _dialogState.value = AppUpdateDialogState.Offer(offer)
                     }
-                    return@launch
                 }
-                if (!manual && remoteCode <= preferences.dismissedVersionCode()) return@launch
-                val apkUrl = AppUpdateUrls.resolveApkUrl(manifest)
-                if (apkUrl.isNullOrBlank()) {
-                    if (manual) {
-                        _dialogState.value = AppUpdateDialogState.Error(
-                            appContext.getString(com.chaslay.pos.R.string.app_update_check_failed),
-                        )
-                    }
-                    return@launch
+            } catch (e: Exception) {
+                Log.e(TAG, "checkForUpdate failed", e)
+                if (manual) {
+                    _dialogState.value = AppUpdateDialogState.Error(
+                        manualCheckFailedMessage("${e.javaClass.simpleName}: ${e.message}"),
+                    )
                 }
-                val offer = AppUpdateOffer(
-                    versionName = manifest.version?.trim().orEmpty().ifBlank { remoteCode.toString() },
-                    versionCode = remoteCode,
-                    apkUrl = apkUrl,
-                )
-                pendingOffer = offer
-                _dialogState.value = AppUpdateDialogState.Offer(offer)
             } finally {
                 _isChecking.value = false
             }
         }
+    }
+
+    private fun manualCheckFailedMessage(detail: String?): String {
+        val base = appContext.getString(com.chaslay.pos.R.string.app_update_check_failed)
+        if (!BuildConfig.DEBUG || detail.isNullOrBlank()) return base
+        return "$base\n\n[debug] $detail"
     }
 
     fun dismissOffer() {
@@ -129,20 +156,42 @@ class AppUpdateCoordinator @Inject constructor(
         AppUpdateInstaller.openUnknownSourcesSettings(activity)
     }
 
-    private suspend fun fetchManifest(): AppUpdateManifest? = withContext(Dispatchers.IO) {
+    private sealed class ManifestFetchResult {
+        data class Success(val manifest: AppUpdateManifest) : ManifestFetchResult()
+        data class Failure(val detail: String) : ManifestFetchResult()
+    }
+
+    private suspend fun fetchManifest(): ManifestFetchResult = withContext(Dispatchers.IO) {
+        val url = AppUpdateUrls.manifestUrl()
         val request = Request.Builder()
-            .url(AppUpdateUrls.manifestUrl())
+            .url(url)
             .header("Cache-Control", "no-cache")
             .get()
             .build()
-        runCatching {
+        try {
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
                 val body = response.body?.string().orEmpty()
-                if (body.isBlank()) return@withContext null
-                gson.fromJson(body, AppUpdateManifest::class.java)
+                if (!response.isSuccessful) {
+                    val snippet = body.trim().take(80).ifBlank { "(empty)" }
+                    return@withContext ManifestFetchResult.Failure(
+                        "HTTP ${response.code} for $url — $snippet",
+                    )
+                }
+                if (body.isBlank()) {
+                    return@withContext ManifestFetchResult.Failure("empty response body for $url")
+                }
+                try {
+                    val manifest = gson.fromJson(body, AppUpdateManifest::class.java)
+                    ManifestFetchResult.Success(manifest)
+                } catch (e: Exception) {
+                    ManifestFetchResult.Failure(
+                        "JSON parse (${e.message}) for $url — ${body.trim().take(120)}",
+                    )
+                }
             }
-        }.getOrNull()
+        } catch (e: Exception) {
+            ManifestFetchResult.Failure("${e.javaClass.simpleName}: ${e.message} for $url")
+        }
     }
 
     private fun downloadApk(offer: AppUpdateOffer): Result<File> = runCatching {

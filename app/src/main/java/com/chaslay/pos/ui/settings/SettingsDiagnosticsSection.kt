@@ -33,11 +33,14 @@ fun SettingsDiagnosticsSection(
     onShare: () -> Unit,
     onClearCrashFiles: () -> Unit,
     onSelectCrashLog: (String) -> Unit,
+    showPageHeader: Boolean = true,
 ) {
-    SettingsPageHeader(
-        title = stringResource(R.string.settings_section_diagnostics),
-        subtitle = stringResource(R.string.diagnostics_page_subtitle),
-    )
+    if (showPageHeader) {
+        SettingsPageHeader(
+            title = stringResource(R.string.settings_section_diagnostics),
+            subtitle = stringResource(R.string.diagnostics_page_subtitle),
+        )
+    }
 
     SettingsSectionCard(
         title = stringResource(R.string.diagnostics_last_upload),

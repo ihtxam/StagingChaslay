@@ -8,6 +8,7 @@
 
 -keep class com.chaslay.pos.data.local.entity.** { *; }
 -keep class com.chaslay.pos.data.remote.dto.** { *; }
+-keep class com.chaslay.pos.update.AppUpdateManifest { *; }
 -keep interface com.chaslay.pos.data.remote.** { *; }
 
 -keepclassmembers class * {

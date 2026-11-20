@@ -33,6 +33,7 @@
     <string name="settings_section_appearance">Aspetto</string>
     <string name="settings_section_diagnostics">Diagnostica</string>
     <string name="settings_section_license">Licenza</string>
+    <string name="settings_section_update">Aggiornamento</string>
     <string name="online_settings_title">Impostazioni online</string>
     <string name="online_settings_open">Apri impostazioni online</string>
     <string name="online_settings_hint">Online apre lo stesso pannello merchant di Reborn. Offline usa le schermate locali sotto.</string>

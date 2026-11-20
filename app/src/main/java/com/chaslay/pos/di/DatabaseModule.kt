@@ -1,7 +1,10 @@
 package com.chaslay.pos.di
 
 import android.content.Context
+import android.util.Log
 import androidx.room.Room
+import com.chaslay.pos.data.local.DATABASE_NAME
+import com.chaslay.pos.data.local.deleteLocalDatabaseFiles
 import com.chaslay.pos.data.local.AppDatabase
 import com.chaslay.pos.data.local.MIGRATION_50_51
 import com.chaslay.pos.data.local.MIGRATION_51_52
@@ -48,24 +51,40 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, "food_truck_pos.db")
-            .addCallback(DatabaseCallback(context))
-            .addMigrations(
-                MIGRATION_50_51,
-                MIGRATION_51_52,
-                MIGRATION_52_53,
-                MIGRATION_53_54,
-                MIGRATION_54_55,
-                MIGRATION_55_56,
-                MIGRATION_56_57,
-                MIGRATION_57_58,
-                MIGRATION_58_59,
-                MIGRATION_59_60,
-                MIGRATION_60_61,
-            )
-            .fallbackToDestructiveMigration()
-            .build()
+    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
+        fun buildDatabase(): AppDatabase =
+            Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
+                .addCallback(DatabaseCallback(context))
+                .addMigrations(
+                    MIGRATION_50_51,
+                    MIGRATION_51_52,
+                    MIGRATION_52_53,
+                    MIGRATION_53_54,
+                    MIGRATION_54_55,
+                    MIGRATION_55_56,
+                    MIGRATION_56_57,
+                    MIGRATION_57_58,
+                    MIGRATION_58_59,
+                    MIGRATION_59_60,
+                    MIGRATION_60_61,
+                )
+                .fallbackToDestructiveMigration()
+                .build()
+
+        return try {
+            val db = buildDatabase()
+            db.openHelper.writableDatabase
+            db
+        } catch (first: Throwable) {
+            Log.e(TAG, "Database open failed — deleting local DB and retrying once", first)
+            runCatching { deleteLocalDatabaseFiles(context, DATABASE_NAME) }
+            val db = buildDatabase()
+            db.openHelper.writableDatabase
+            db
+        }
+    }
+
+    private const val TAG = "DatabaseModule"
 
     @Provides fun provideRoleDao(db: AppDatabase): RoleDao = db.roleDao()
     @Provides fun provideUserDao(db: AppDatabase): UserDao = db.userDao()

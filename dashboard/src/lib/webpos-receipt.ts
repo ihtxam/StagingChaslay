@@ -652,7 +652,7 @@ export function generateGiftCardSaleReceiptText(
   r += thin + '\n';
   r += centerLine(L.giftCardScanRedeem, width) + '\n';
   r += sep + '\n';
-  r += guestReceiptFooterLines(tx.footer, tx.businessName, L.thankYou).trim() + '\n\n\n';
+  r += guestReceiptFooterLines(tx.footer, tx.businessName, L.thankYou).trim() + '\n';
   return r;
 }
 

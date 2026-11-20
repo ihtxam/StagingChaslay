@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.TableRestaurant
 import java.text.Normalizer
 import java.util.Locale
@@ -51,6 +52,7 @@ fun settingsSectionIconRes(section: SettingsSection): Int? = when (section) {
     SettingsSection.USERS_ACCOUNTS -> R.drawable.ic_pos_settings_users_roles
     SettingsSection.APPEARANCE -> R.drawable.ic_pos_settings_appearance
     SettingsSection.LICENSE -> R.drawable.ic_pos_settings_licence
+    SettingsSection.UPDATE -> R.drawable.ic_pos_settings_general
     SettingsSection.TABLES -> R.drawable.ic_pos_settings_tables
     SettingsSection.DIAGNOSTICS -> R.drawable.ic_pos_settings_general
 }
@@ -67,6 +69,7 @@ fun settingsSectionMaterialIcon(section: SettingsSection): ImageVector? = when (
     SettingsSection.USERS_ACCOUNTS -> Icons.Outlined.Person
     SettingsSection.APPEARANCE -> Icons.Outlined.Palette
     SettingsSection.LICENSE -> Icons.Outlined.Badge
+    SettingsSection.UPDATE -> Icons.Outlined.SystemUpdate
     SettingsSection.TABLES -> Icons.Outlined.TableRestaurant
     SettingsSection.DIAGNOSTICS -> Icons.Outlined.BugReport
 }

@@ -94,6 +94,7 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
     USERS_ACCOUNTS(R.string.settings_section_users),
     APPEARANCE(R.string.settings_section_appearance),
     LICENSE(R.string.settings_section_license),
+    UPDATE(R.string.settings_section_update),
     DIAGNOSTICS(R.string.settings_section_diagnostics);
 
     companion object {
@@ -106,6 +107,7 @@ enum class SettingsSection(@StringRes val titleRes: Int) {
                 SettingsSection.TABLES -> restaurantMode
                 SettingsSection.FLOOR_DEVICES ->
                     restaurantMode && com.chaslay.pos.PosBuildFeatures.FLOOR_AND_WAITERS_NAV_VISIBLE
+                SettingsSection.DIAGNOSTICS -> false
                 else -> true
             }
         }
@@ -489,7 +491,7 @@ class SettingsViewModel @Inject constructor(
                 if (granted) refreshScaleConnectionState()
             }
         }
-        if (resolved == SettingsSection.DIAGNOSTICS) {
+        if (resolved == SettingsSection.LICENSE) {
             refreshDiagnosticsPanel()
         }
     }
@@ -1467,7 +1469,20 @@ class SettingsViewModel @Inject constructor(
     fun updateTapToPay(enabled: Boolean) = _uiState.update {
         it.copy(tapToPayEnabled = enabled, paymentMethodsManagedByCloud = false)
     }
-    fun updateAdyenEnabled(enabled: Boolean) = _uiState.update { it.copy(adyenTerminalEnabled = enabled) }
+    fun updateAdyenEnabled(enabled: Boolean) {
+        com.chaslay.pos.util.PosLocalPrefs.saveAdyenTerminalEnabled(appContext, enabled)
+        com.chaslay.pos.util.PosLocalPrefs.saveTerminalTenderEnabled(
+            appContext,
+            enabled || _uiState.value.terminalEnabled
+        )
+        _uiState.update {
+            it.copy(
+                adyenTerminalEnabled = enabled,
+                terminalEnabled = enabled || it.terminalEnabled,
+                paymentMethodsManagedByCloud = false,
+            )
+        }
+    }
     fun updateAdyenTerminalId(value: String) = _uiState.update { it.copy(adyenTerminalId = value) }
     fun updateAdyenApiKey(value: String) = _uiState.update { it.copy(adyenApiKey = value) }
     fun updateAdyenClientId(value: String) = _uiState.update { it.copy(adyenClientId = value) }
@@ -1518,8 +1533,11 @@ class SettingsViewModel @Inject constructor(
     fun updateCardEnabled(enabled: Boolean) = _uiState.update {
         it.copy(cardEnabled = enabled, paymentMethodsManagedByCloud = false)
     }
-    fun updateTerminalEnabled(enabled: Boolean) = _uiState.update {
-        it.copy(terminalEnabled = enabled, paymentMethodsManagedByCloud = false)
+    fun updateTerminalEnabled(enabled: Boolean) {
+        com.chaslay.pos.util.PosLocalPrefs.saveTerminalTenderEnabled(appContext, enabled)
+        _uiState.update {
+            it.copy(terminalEnabled = enabled, paymentMethodsManagedByCloud = false)
+        }
     }
     fun updateExpressEnabled(enabled: Boolean) = _uiState.update {
         it.copy(expressEnabled = enabled, paymentMethodsManagedByCloud = false)
@@ -2028,6 +2046,18 @@ class SettingsViewModel @Inject constructor(
             }
             if (settings.courseSendMode != previous.courseSendMode) {
                 com.chaslay.pos.util.PosLocalPrefs.saveCourseSendMode(appContext, settings.courseSendMode)
+            }
+            if (settings.adyenTerminalEnabled != previous.adyenTerminalEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveAdyenTerminalEnabled(
+                    appContext,
+                    settings.adyenTerminalEnabled
+                )
+            }
+            if (settings.terminalEnabled != previous.terminalEnabled) {
+                com.chaslay.pos.util.PosLocalPrefs.saveTerminalTenderEnabled(
+                    appContext,
+                    settings.terminalEnabled
+                )
             }
             settingsRepository.saveSettings(settings)
             currentSettings = settings

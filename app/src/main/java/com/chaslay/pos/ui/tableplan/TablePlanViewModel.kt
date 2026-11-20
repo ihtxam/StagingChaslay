@@ -1,5 +1,6 @@
 package com.chaslay.pos.ui.tableplan
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaslay.pos.data.local.entity.FloorPlanElementEntity
@@ -51,26 +52,38 @@ class TablePlanViewModel @Inject constructor(
 
     fun reload() {
         viewModelScope.launch {
-            runCatching { floorPlanSyncRepository.syncFloorPlans() }
-            val floors = tableOrderRepository.getAllFloors()
-            val floorId = _uiState.value.selectedFloorId.takeIf { id ->
-                floors.any { it.id == id }
-            } ?: floors.firstOrNull()?.id ?: 1L
-            var tables = tableOrderRepository.getTablesForFloor(floorId)
-            if (tablesAreClustered(tables)) {
-                tableOrderRepository.autoLayoutFloor(floorId)
-                tables = tableOrderRepository.getTablesForFloor(floorId)
-            }
-            val elements = tableOrderRepository.getFloorElements(floorId)
-            _uiState.update {
-                it.copy(
-                    floors = floors,
-                    selectedFloorId = floorId,
-                    tables = tables,
-                    elements = elements,
-                )
+            runCatching {
+                runCatching { floorPlanSyncRepository.syncFloorPlans() }
+                val floors = tableOrderRepository.getAllFloors()
+                val floorId = _uiState.value.selectedFloorId.takeIf { id ->
+                    floors.any { it.id == id }
+                } ?: floors.firstOrNull()?.id ?: 1L
+                var tables = tableOrderRepository.getTablesForFloor(floorId)
+                if (tablesAreClustered(tables)) {
+                    tableOrderRepository.autoLayoutFloor(floorId)
+                    tables = tableOrderRepository.getTablesForFloor(floorId)
+                }
+                val elements = tableOrderRepository.getFloorElements(floorId)
+                _uiState.update {
+                    it.copy(
+                        floors = floors,
+                        selectedFloorId = floorId,
+                        tables = tables,
+                        elements = elements,
+                        message = null,
+                    )
+                }
+            }.onFailure { error ->
+                Log.w(TAG, "Table plan reload failed", error)
+                _uiState.update {
+                    it.copy(message = "Could not load floor plan — restart the app or try again")
+                }
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "TablePlanViewModel"
     }
 
     private fun tablesAreClustered(tables: List<RestaurantTableEntity>): Boolean {

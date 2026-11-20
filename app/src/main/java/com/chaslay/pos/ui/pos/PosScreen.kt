@@ -1167,6 +1167,7 @@ fun PosScreen(
         PriceKeypadDialog(
             title = product.name,
             currencySymbol = state.currencySymbol,
+            layoutDiversWide = true,
             onConfirm = viewModel::addOpenPriceProduct,
             onDismiss = viewModel::dismissDialogs
         )
@@ -1326,6 +1327,14 @@ private fun OdooPosNavBar(
                 badgeCount = pendingOnlineOrderCount,
                 onClick = { onTabSelected(PosMainTab.ORDERS) }
             )
+            if (showReservationsNav) {
+                PosBottomTabChip(
+                    label = stringResource(R.string.nav_reservations),
+                    icon = Icons.Default.CalendarToday,
+                    selected = false,
+                    onClick = onReservationsNav,
+                )
+            }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1350,14 +1359,6 @@ private fun OdooPosNavBar(
                     icon = Icons.Default.History,
                     selected = false,
                     onClick = onOrderHistory,
-                )
-            }
-            if (showReservationsNav) {
-                PosBottomTabChip(
-                    label = stringResource(R.string.nav_reservations),
-                    icon = Icons.Default.CalendarToday,
-                    selected = false,
-                    onClick = onReservationsNav,
                 )
             }
         }

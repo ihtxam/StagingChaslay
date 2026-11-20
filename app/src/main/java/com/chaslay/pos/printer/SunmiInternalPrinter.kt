@@ -34,7 +34,7 @@ class SunmiInternalPrinter @Inject constructor(
         return connected
     }
 
-    fun sendRaw(data: ByteArray): Result<Unit> {
+    fun sendRaw(data: ByteArray, finishPaper: Boolean = true): Result<Unit> {
         serviceHolder.rebindIfDisconnected()
         bindIfNeeded()
         val service = serviceHolder.getService()
@@ -67,11 +67,13 @@ class SunmiInternalPrinter @Inject constructor(
                 append(" head=")
                 append(prefixHex)
             }
-            runCatching { service.lineWrap(3, null) }
-            if (payloadHasCutCommand(data)) {
-                runCatching { service.cutPaper(null) }
-            } else {
-                runCatching { service.autoOutPaper(null) }
+            if (finishPaper) {
+                runCatching { service.lineWrap(3, null) }
+                if (payloadHasCutCommand(data)) {
+                    runCatching { service.cutPaper(null) }
+                } else {
+                    runCatching { service.autoOutPaper(null) }
+                }
             }
             Log.d(TAG, msg)
             posDiagnosticLogger.logSunmiPrint("sendRaw", msg)
@@ -122,7 +124,8 @@ class SunmiInternalPrinter @Inject constructor(
         return runCatching {
             service.setAlignment(1, null)
             service.printQRCode(trimmed, 4, 1, null)
-            service.lineWrap(2, null)
+            service.lineWrap(1, null)
+            runCatching { service.cutPaper(null) }
             service.setAlignment(0, null)
             posDiagnosticLogger.logSunmiPrint("receiptQr", "len=${trimmed.length}")
         }.onFailure { t ->

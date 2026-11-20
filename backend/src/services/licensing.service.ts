@@ -1,7 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDb, schema } from "@/db";
 import { eq, and, lt, gt, inArray, sql } from "drizzle-orm";
-import { activationCodeLookupKeys, compactActivationCode } from "@/lib/license-activation-code";
+import {
+  activationCodeLookupKeys,
+  compactActivationCode,
+  generateSixDigitLicenseCode,
+} from "@/lib/license-activation-code";
 
 export class LicensingService {
   /**
@@ -15,14 +19,33 @@ export class LicensingService {
   }
 
   /**
-   * Generate a license code
-   * Format: {MERCHANT_ID}-{DEVICE_ID}-{RANDOM_KEY}-{EXPIRY_YEAR}
+   * Generate a license code. New codes are 6 digits.
+   * merchantId, deviceId, and expiryYear are kept so existing callers stay source-compatible;
+   * the code itself is a random key stored on the license row.
    */
-  static generateLicenseCode(merchantId: string, deviceId: string, expiryYear: number): string {
-    const merchantPart = merchantId.substring(0, 6).toUpperCase();
-    const devicePart = deviceId.substring(0, 6).toUpperCase();
-    const randomKey = uuidv4().substring(0, 8).toUpperCase();
-    return `${merchantPart}-${devicePart}-${randomKey}-${expiryYear}`;
+  static generateLicenseCode(
+    _merchantId: string,
+    _deviceId: string,
+    _expiryYear: number
+  ): string {
+    return generateSixDigitLicenseCode();
+  }
+
+  /** Retry so a 6-digit code does not collide with one already stored. */
+  static async allocateLicenseCode(
+    merchantId: string,
+    deviceId: string,
+    expiryYear: number
+  ): Promise<string> {
+    const db = getDb();
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const licenseKey = this.generateLicenseCode(merchantId, deviceId, expiryYear);
+      const taken = await db.query.licenses.findFirst({
+        where: eq(schema.licenses.licenseKey, licenseKey),
+      });
+      if (!taken) return licenseKey;
+    }
+    throw new Error("Could not allocate a unique license code");
   }
 
   /**
@@ -69,7 +92,11 @@ export class LicensingService {
       if (merchant.status === "active" && !merchant.trialEndsAt) {
         const now = new Date();
         const trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
-        const licenseKey = this.generateLicenseCode(merchantId, deviceId, trialEndsAt.getFullYear());
+        const licenseKey = await this.allocateLicenseCode(
+          merchantId,
+          deviceId,
+          trialEndsAt.getFullYear()
+        );
 
         license = await db
           .insert(schema.licenses)
@@ -252,7 +279,11 @@ export class LicensingService {
       // Generate new license code
       const now = new Date();
       const expiresAt = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-      const licenseKey = this.generateLicenseCode(merchantId, deviceId, expiresAt.getFullYear());
+      const licenseKey = await this.allocateLicenseCode(
+        merchantId,
+        deviceId,
+        expiresAt.getFullYear()
+      );
 
       // Create new license
       const license = await db

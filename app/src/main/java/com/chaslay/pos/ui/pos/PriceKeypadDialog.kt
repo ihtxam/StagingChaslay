@@ -59,26 +59,78 @@ fun PriceKeypadDialog(
     currencySymbol: String,
     initialValue: String = "",
     confirmLabel: String = stringResource(R.string.add_to_cart),
-    /** ~2× layout for tablet readability (e.g. Divers / misc). */
+    /** ~2× layout for tablet readability (e.g. retail misc). */
     layoutExpanded: Boolean = false,
+    /** Match [MiscDiversDialog] width, keypad, and type scale (e.g. open-price items). */
+    layoutDiversWide: Boolean = false,
     showScaleHint: Boolean = false,
     onConfirm: (Double) -> Unit,
     onDismiss: () -> Unit
 ) {
     var buffer by remember { mutableStateOf(initialValue) }
 
-    val keyRowHeight = if (layoutExpanded) 56.dp else KeyRowHeight
-    val keySpacing = if (layoutExpanded) 6.dp else KeySpacing
-    val actionColumnWidth = if (layoutExpanded) 88.dp else ActionColumnWidth
+    val keyRowHeight = when {
+        layoutDiversWide -> 44.dp
+        layoutExpanded -> 56.dp
+        else -> KeyRowHeight
+    }
+    val keySpacing = when {
+        layoutDiversWide || layoutExpanded -> 6.dp
+        else -> KeySpacing
+    }
+    val actionColumnWidth = when {
+        layoutDiversWide -> 72.dp
+        layoutExpanded -> 88.dp
+        else -> ActionColumnWidth
+    }
     val enterKeyHeight = keyRowHeight * 2 + keySpacing
-    val dialogMinWidth = if (layoutExpanded) 440.dp else 220.dp
-    val dialogMaxWidth = if (layoutExpanded) 560.dp else 280.dp
-    val dialogWidthFraction = if (layoutExpanded) 0.62f else 0.46f
-    val titleSize = if (layoutExpanded) 20.sp else 15.sp
-    val subtitleSize = if (layoutExpanded) 13.sp else 11.sp
-    val displaySize = if (layoutExpanded) 26.sp else 18.sp
-    val buttonHeight = if (layoutExpanded) 52.dp else 40.dp
-    val contentPadding = if (layoutExpanded) 20.dp else 12.dp
+    val dialogMinWidth = when {
+        layoutDiversWide -> 580.dp
+        layoutExpanded -> 440.dp
+        else -> 220.dp
+    }
+    val dialogMaxWidth = when {
+        layoutDiversWide -> 880.dp
+        layoutExpanded -> 560.dp
+        else -> 280.dp
+    }
+    val dialogWidthFraction = when {
+        layoutDiversWide -> 0.84f
+        layoutExpanded -> 0.62f
+        else -> 0.46f
+    }
+    val dialogCorner = if (layoutDiversWide) 16.dp else 14.dp
+    val dialogElevation = if (layoutDiversWide) 10.dp else 8.dp
+    val titleSize = when {
+        layoutDiversWide -> 16.sp
+        layoutExpanded -> 20.sp
+        else -> 15.sp
+    }
+    val subtitleSize = when {
+        layoutDiversWide -> 12.sp
+        layoutExpanded -> 13.sp
+        else -> 11.sp
+    }
+    val displaySize = when {
+        layoutDiversWide -> 24.sp
+        layoutExpanded -> 26.sp
+        else -> 18.sp
+    }
+    val buttonHeight = when {
+        layoutDiversWide -> 48.dp
+        layoutExpanded -> 52.dp
+        else -> 40.dp
+    }
+    val contentPadding = when {
+        layoutDiversWide -> 16.dp
+        layoutExpanded -> 20.dp
+        else -> 12.dp
+    }
+    val sectionSpacing = when {
+        layoutDiversWide -> 12.dp
+        layoutExpanded -> 12.dp
+        else -> 8.dp
+    }
 
     fun appendKey(key: String) {
         buffer = when (key) {
@@ -103,34 +155,63 @@ fun PriceKeypadDialog(
         Surface(
             modifier = Modifier
                 .widthIn(min = dialogMinWidth, max = dialogMaxWidth)
-                .fillMaxWidth(dialogWidthFraction),
-            shape = RoundedCornerShape(14.dp),
+                .fillMaxWidth(dialogWidthFraction)
+                .then(
+                    if (layoutDiversWide) {
+                        Modifier.border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(dialogCorner))
+                    } else {
+                        Modifier
+                    }
+                ),
+            shape = RoundedCornerShape(dialogCorner),
             color = Color.White,
-            shadowElevation = 8.dp
+            shadowElevation = dialogElevation
         ) {
             Column(
                 modifier = Modifier
                     .padding(contentPadding)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(if (layoutExpanded) 12.dp else 8.dp)
+                verticalArrangement = Arrangement.spacedBy(sectionSpacing)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = titleSize)
-                    Text(subtitle, fontSize = subtitleSize, color = Color.Gray)
+                    Text(
+                        title,
+                        fontWeight = if (layoutDiversWide) FontWeight.SemiBold else FontWeight.Bold,
+                        fontSize = titleSize
+                    )
+                    Text(
+                        subtitle,
+                        fontSize = subtitleSize,
+                        color = if (layoutDiversWide) Color(0xFF78716C) else Color.Gray
+                    )
                 }
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.5.dp, Color(0xFF9CA3AF), RoundedCornerShape(10.dp))
-                        .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .border(
+                            if (layoutDiversWide) 1.dp else 1.5.dp,
+                            if (layoutDiversWide) Color(0xFFE5E7EB) else Color(0xFF9CA3AF),
+                            RoundedCornerShape(if (layoutDiversWide) 12.dp else 10.dp)
+                        )
+                        .background(
+                            Color(if (layoutDiversWide) 0xFFFAFAF9 else 0xFFF8FAFC),
+                            RoundedCornerShape(if (layoutDiversWide) 12.dp else 10.dp)
+                        )
+                        .padding(
+                            horizontal = if (layoutDiversWide) 14.dp else 10.dp,
+                            vertical = if (layoutDiversWide) 10.dp else 8.dp
+                        )
                 ) {
                     Text(
-                        text = if (buffer.isEmpty()) "$currencySymbol 0.00" else "$currencySymbol $buffer",
+                        text = if (buffer.isEmpty()) {
+                            if (layoutDiversWide) "$currencySymbol 0" else "$currencySymbol 0.00"
+                        } else {
+                            "$currencySymbol $buffer"
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = if (layoutDiversWide) FontWeight.SemiBold else FontWeight.Bold,
                         fontSize = displaySize
                     )
                 }
@@ -238,7 +319,7 @@ fun PriceKeypadDialog(
                         Text(
                             stringResource(R.string.cancel),
                             fontWeight = FontWeight.Bold,
-                            fontSize = if (layoutExpanded) 14.sp else 12.sp
+                            fontSize = if (layoutDiversWide || layoutExpanded) 14.sp else 12.sp
                         )
                     }
                     Button(
@@ -253,7 +334,7 @@ fun PriceKeypadDialog(
                             confirmLabel,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
-                            fontSize = if (layoutExpanded) 14.sp else 12.sp
+                            fontSize = if (layoutDiversWide || layoutExpanded) 14.sp else 12.sp
                         )
                     }
                 }
@@ -275,11 +356,19 @@ private fun PriceKey(
         highlight -> VectronColors.CashGreen
         else -> VectronColors.KeypadButton
     }
+    val corner = if (keyHeight >= 44.dp) 8.dp else 4.dp
     Box(
         modifier = modifier
             .height(keyHeight)
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(corner))
             .background(bg)
+            .then(
+                if (keyHeight >= 44.dp) {
+                    Modifier.border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(corner))
+                } else {
+                    Modifier
+                }
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

@@ -151,7 +151,9 @@ val MIGRATION_59_60 = object : Migration(59, 60) {
 val MIGRATION_60_61 = object : Migration(60, 61) {
     override fun migrate(db: SupportSQLiteDatabase) {
         if (!businessSettingsColumnExists(db, "receiptGoogleReviewsUrl")) {
-            db.execSQL("ALTER TABLE business_settings ADD COLUMN receiptGoogleReviewsUrl TEXT")
+            db.execSQL(
+                "ALTER TABLE business_settings ADD COLUMN receiptGoogleReviewsUrl TEXT NOT NULL DEFAULT ''"
+            )
         }
         if (!businessSettingsColumnExists(db, "receiptShowGoogleReviewQr")) {
             db.execSQL(

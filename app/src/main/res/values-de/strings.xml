@@ -33,6 +33,7 @@
     <string name="settings_section_appearance">Darstellung</string>
     <string name="settings_section_diagnostics">Diagnose</string>
     <string name="settings_section_license">Lizenz</string>
+    <string name="settings_section_update">Update</string>
     <string name="online_settings_title">Online-Einstellungen</string>
     <string name="online_settings_open">Online-Einstellungen öffnen</string>
     <string name="online_settings_hint">Online denselben Händler-Panel wie Reborn öffnen. Offline die lokalen Bildschirme unten nutzen.</string>
